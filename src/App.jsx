@@ -2,13 +2,13 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { Home, Users, CalendarDays } from "lucide-react"
 
-// ✅ localStorage 버전 제거
+// ⛔ localStorage 버전 제거
 // import { loadDB, saveDB } from "./lib/storage"
 
 import {
   listPlayers, upsertPlayer, deletePlayer, subscribePlayers,
   loadDB, saveDB, subscribeDB,
-  setRoomId
+  // setRoomId, // 필요 시 룸 아이디 변경에 사용
 } from "./services/storage.service"
 
 import { mkPlayer } from "./lib/players"
@@ -23,24 +23,23 @@ import MatchPlanner from "./pages/MatchPlanner"
 
 export default function App() {
   const [tab, setTab] = useState("dashboard") // 'dashboard' | 'players' | 'planner'
-  // Supabase 기준으로 관리
   const [db, setDb] = useState({ players: [], matches: [] })
   const [selectedPlayerId, setSelectedPlayerId] = useState(null)
 
-  // (선택) 룸 아이디를 .env나 URL 쿼리로 바꾸고 싶으면 여기서 세팅하세요.
+  // (선택) 여러 방(룸) 운영 시 .env나 URL로 받아 setRoomId("your-room-id")
   // setRoomId('semihan-lite-room-1')
 
-  // ✅ 최초 로드 + 실시간 구독(선수/매치)
+  // ✅ 최초 로드 + 실시간 구독
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
         const playersFromDB = await listPlayers()
-        const appdb = await loadDB() // { players:[], matches:[] } 구조(여기선 matches만 사용)
+        const shared = await loadDB() // { players:[], matches:[] }
         if (!mounted) return
-        setDb({ players: playersFromDB, matches: appdb.matches || [] })
+        setDb({ players: playersFromDB, matches: shared.matches || [] })
       } catch (e) {
-        console.error('[App] initial load failed', e)
+        console.error("[App] initial load failed", e)
       }
     })()
 
@@ -67,79 +66,58 @@ export default function App() {
     return { count: cnt, goals: goalsProxy, attendance: attendanceProxy }
   }, [players])
 
-  /* ---------------- 선수 관련 핸들러 (Supabase 연동) ---------------- */
+  /* ---------------- 선수 핸들러 (Supabase) ---------------- */
   async function handleCreatePlayer() {
     const p = mkPlayer("새 선수", "MF")
-    // 낙관적 업데이트
-    setDb((prev) => ({ ...prev, players: [p, ...(prev.players || [])] }))
+    setDb(prev => ({ ...prev, players: [p, ...(prev.players || [])] })) // 낙관적
     setSelectedPlayerId(p.id)
     notify("새 선수를 추가했습니다.")
-    try {
-      await upsertPlayer(p)
-    } catch (e) {
-      console.error('[createPlayer] upsert failed', e)
-    }
+    try { await upsertPlayer(p) } catch (e) { console.error(e) }
   }
 
   async function handleUpdatePlayer(next) {
-    setDb((prev) => ({
+    setDb(prev => ({
       ...prev,
-      players: (prev.players || []).map((x) => (x.id === next.id ? next : x)),
+      players: (prev.players || []).map(x => x.id === next.id ? next : x),
     }))
-    try {
-      await upsertPlayer(next)
-    } catch (e) {
-      console.error('[updatePlayer] upsert failed', e)
-    }
+    try { await upsertPlayer(next) } catch (e) { console.error(e) }
   }
 
   async function handleDeletePlayer(id) {
-    setDb((prev) => ({ ...prev, players: (prev.players || []).filter((p) => p.id !== id) }))
+    setDb(prev => ({ ...prev, players: (prev.players || []).filter(p => p.id !== id) }))
     if (selectedPlayerId === id) setSelectedPlayerId(null)
-    try {
-      await deletePlayer(id)
-      notify("선수를 삭제했습니다.")
-    } catch (e) {
-      console.error('[deletePlayer] failed', e)
-    }
+    try { await deletePlayer(id); notify("선수를 삭제했습니다.") } catch (e) { console.error(e) }
   }
 
   function handleImportPlayers(list) {
-    // 여러 명 일괄 업서트 (간단히 Promise.all)
     const safe = Array.isArray(list) ? list : []
-    setDb(prev => ({ ...prev, players: safe })) // 화면 즉시 갱신
+    setDb(prev => ({ ...prev, players: safe }))
     Promise.all(safe.map(upsertPlayer))
       .then(() => notify("선수 목록을 가져왔습니다."))
-      .catch((e) => console.error('[importPlayers] failed', e))
+      .catch(console.error)
     setSelectedPlayerId(null)
   }
 
   function handleResetPlayers() {
-    // 별도 리셋 규칙이 없다면, DB 기준으로 다시 불러오기
     ;(async () => {
-      try {
-        const fresh = await listPlayers()
-        setDb(prev => ({ ...prev, players: fresh }))
-        setSelectedPlayerId(null)
-        notify("선수 목록을 리셋했습니다.")
-      } catch (e) {
-        console.error('[resetPlayers] failed', e)
-      }
+      const fresh = await listPlayers()
+      setDb(prev => ({ ...prev, players: fresh }))
+      setSelectedPlayerId(null)
+      notify("선수 목록을 리셋했습니다.")
     })()
   }
 
-  /* ---------------- 매치 관련 핸들러 (appdb JSON) ---------------- */
+  /* ---------------- 매치 핸들러 (공유 JSON: appdb) ---------------- */
   function handleSaveMatch(match) {
-    const nextMatches = [...(db.matches || []), match]
-    setDb((prev) => ({ ...prev, matches: nextMatches }))
-    // appdb(JSON)에 저장
-    saveDB({ players: [], matches: nextMatches })
+    const next = [...(db.matches || []), match]
+    setDb(prev => ({ ...prev, matches: next }))
+    saveDB({ players: [], matches: next })
   }
 
   function handleDeleteMatch(id) {
-    const nextMatches = (db.matches || []).filter((m) => m.id !== id)
-    setDb((prev) => ({ ...prev, matches: nextMatches }))
-    saveDB({ players: [], matches: nextMatches })
+    const next = (db.matches || []).filter(m => m.id !== id)
+    setDb(prev => ({ ...prev, matches: next }))
+    saveDB({ players: [], matches: next })
     notify("매치를 삭제했습니다.")
   }
 
@@ -220,10 +198,7 @@ export default function App() {
             <li>정회원은 자동으로 배지가 표시됩니다.</li>
             <li>선수 저장 시 이름/멤버십은 필수입니다.</li>
             <li>프로필은 이름 첫 글자 이니셜 아바타로 표시됩니다.</li>
-            <li>
-              매치 플래너에서 장소를 선택하거나 커스텀 입력 후 “구글 맵에서 열기”로
-              확인하세요.
-            </li>
+            <li>매치 플래너에서 장소 프리셋 또는 자유 입력을 이용하세요.</li>
           </ul>
         </Card>
       </footer>
