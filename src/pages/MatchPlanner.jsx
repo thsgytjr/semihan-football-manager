@@ -1,7 +1,7 @@
 // src/pages/MatchPlanner.jsx
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Card from '../components/Card'
-import { mkMatch, decideMode, splitKTeams, determineConfig, hydrateMatch } from '../lib/match'
+import { mkMatch, decideMode, splitKTeams, hydrateMatch } from '../lib/match'
 import { downloadJSON } from '../utils/io'
 import { overall } from '../lib/players'
 
@@ -10,25 +10,57 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
   const [attendeeIds, setAttendeeIds] = useState([])
   const [criterion, setCriterion] = useState('overall')
 
-  const [selectionMode, setSelectionMode] = useState('auto') // 'auto' | '9v9' | '11v11'
-  const [teamCount, setTeamCount] = useState(null)           // null = 추천 기본값
+  // 간편 팀 수 드롭다운 (2~10팀)
+  const [teamCount, setTeamCount] = useState(2)
 
-  // 장소 상태
-  const [locationPreset, setLocationPreset] = useState('coppell-west') // 'coppell-west' | 'indoor-soccer-zone' | 'other'
+  // 표시 옵션
+  const [hideOVR, setHideOVR] = useState(false)
+
+  // 팀 내 랜덤 오더: 버튼 클릭 시에만 셔플되도록 "시드"를 저장
+  const [shuffleSeed, setShuffleSeed] = useState(0)
+
+  // 장소
+  const [locationPreset, setLocationPreset] = useState('coppell-west')
   const [locationName, setLocationName] = useState('Coppell Middle School - West')
   const [locationAddress, setLocationAddress] = useState('2701 Ranch Trail, Coppell, TX 75019')
 
+  // 수동 편집 상태(드래그앤드롭 결과 보관). null이면 자동 배정 결과 사용
+  const [manualTeams, setManualTeams] = useState(null)
+
+  // 드래그 상태 UI용
+  const [dragOverTeam, setDragOverTeam] = useState(null)
+  const dragDataRef = useRef({ fromTeam: null, playerId: null })
+
   const count = attendeeIds.length
   const autoSuggestion = decideMode(count)
-  const { mode, teams } = determineConfig(count, selectionMode, teamCount)
+  const mode = autoSuggestion.mode
+  const teams = Math.max(2, Math.min(10, Number(teamCount) || 2))
 
   const attendees = useMemo(()=> players.filter(p=> attendeeIds.includes(p.id)), [players, attendeeIds])
-  const split = useMemo(()=> splitKTeams(attendees, teams, criterion), [attendees, teams, criterion])
+
+  // 자동 배정
+  const autoSplit = useMemo(()=> splitKTeams(attendees, teams, criterion), [attendees, teams, criterion])
+
+  // 자동 배정 변경 시 수동 편집 초기화
+  useEffect(()=>{
+    setManualTeams(null)
+    setShuffleSeed(0)
+  }, [attendees, teams, criterion])
+
+  // 미리보기용 팀 배열: 수동 편집 > 셔플 > 자동
+  const previewTeams = useMemo(()=>{
+    let base = manualTeams ?? autoSplit.teams
+    if (!manualTeams && shuffleSeed) {
+      base = base.map(list => seededShuffle(list, shuffleSeed + list.length))
+    }
+    return base
+  }, [manualTeams, autoSplit.teams, shuffleSeed])
 
   function toggle(id){
     setAttendeeIds(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id])
   }
 
+  // 저장/Export는 항상 "현재 미리보기 결과(previewTeams)" 기준
   function save(){
     const match = mkMatch({
       id: crypto.randomUUID?.() || String(Date.now()),
@@ -36,70 +68,103 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
       attendeeIds,
       criterion,
       players,
-      selectionMode,
-      teamCount,
-      location: {
-        preset: locationPreset,
-        name: locationName,
-        address: locationAddress,
-      },
+      selectionMode: 'manual',
+      teamCount: teams,
+      location: { preset: locationPreset, name: locationName, address: locationAddress },
+      mode,
+      // 참고용: 저장 시점 팀 구성도 함께 넣어두면 나중에 복원 용이
+      snapshot: previewTeams.map(t => t.map(p => p.id)),
     })
     onSaveMatch(match)
   }
 
   function exportTeams(){
-    // GK 제외 합계/평균도 함께 내보내기
-    const sumsNoGK = split.teams.map(list =>
+    const sumsNoGK = previewTeams.map(list =>
       list.filter(p => (p.position || p.pos) !== 'GK').reduce((a, p) => a + (p.ovr ?? overall(p)), 0)
     )
     const avgsNoGK = sumsNoGK.map((sum, i) => {
-      const cnt = split.teams[i].filter(p => (p.position || p.pos) !== 'GK').length
+      const cnt = previewTeams[i].filter(p => (p.position || p.pos) !== 'GK').length
       return cnt ? Math.round(sum / cnt) : 0
     })
 
     const payload = {
       dateISO, mode, teamCount: teams, criterion,
-      selectionMode,
-      location: {
-        preset: locationPreset,
-        name: locationName,
-        address: locationAddress,
-      },
-      teams: split.teams.map(t => t.map(p => ({
+      selectionMode: 'manual',
+      location: { preset: locationPreset, name: locationName, address: locationAddress },
+      teams: previewTeams.map(t => t.map(p => ({
         id: p.id, name: p.name, pos: p.position, ovr: (p.ovr ?? overall(p))
       }))),
-      sums: split.sums,           // 원래 합계(참고용)
-      sumsNoGK,                   // GK 제외 합계
-      avgsNoGK,                   // GK 제외 평균
+      sums: autoSplit.sums, // 참고용 원본
+      sumsNoGK,
+      avgsNoGK,
     }
     downloadJSON(payload, `match_${dateISO.replace(/[:T]/g,'-')}.json`)
   }
 
-  useEffect(()=>{
-    if (teamCount === null) {
-      if (selectionMode === '11v11') setTeamCount(2)
-      else if (selectionMode === '9v9') setTeamCount(3)
-      else setTeamCount(null)
-    }
-  }, [selectionMode]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  function onChangeTeams(val){
-    if (val === '' || val === null) { setTeamCount(null); return }
-    const n = Math.max(2, Math.min(8, Math.floor(Number(val))))
-    setTeamCount(Number.isFinite(n) ? n : null)
-  }
-
   const allSelected = attendeeIds.length === players.length && players.length > 0
   function toggleSelectAll(){
-    if (allSelected) {
-      setAttendeeIds([]) // 모두 해제
-    } else {
-      setAttendeeIds(players.map(p => p.id)) // 모두 선택
-    }
+    if (allSelected) setAttendeeIds([])
+    else setAttendeeIds(players.map(p => p.id))
+  }
+
+  function reshuffleTeams(){
+    setShuffleSeed((Date.now() ^ Math.floor(Math.random()*0xffffffff)) >>> 0)
+    // 수동 편집 중이면 그 배열을 섞어줌
+    setManualTeams(prev => {
+      if (!prev) return prev
+      const seed = (Date.now() ^ Math.floor(Math.random()*0xffffffff)) >>> 0
+      return prev.map(list => seededShuffle(list, seed + list.length))
+    })
+  }
+
+  // ---- Drag & Drop handlers ----
+  function onDragStart(e, fromTeamIdx, playerId){
+    dragDataRef.current = { fromTeam: fromTeamIdx, playerId }
+    e.dataTransfer.setData('text/plain', JSON.stringify(dragDataRef.current))
+    e.dataTransfer.effectAllowed = 'move'
+  }
+  function onDragOverTeam(e, teamIdx){
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverTeam(teamIdx)
+  }
+  function onDragLeaveTeam(e, teamIdx){
+    if (dragOverTeam === teamIdx) setDragOverTeam(null)
+  }
+  function onDropToTeam(e, toTeamIdx){
+    e.preventDefault()
+    setDragOverTeam(null)
+    let data = dragDataRef.current
+    try {
+      const raw = e.dataTransfer.getData('text/plain')
+      if (raw) data = JSON.parse(raw)
+    } catch {}
+    const { fromTeam, playerId } = data || {}
+    if (playerId == null || fromTeam == null || toTeamIdx == null) return
+    if (fromTeam === toTeamIdx) return
+
+    const current = manualTeams ?? autoSplit.teams
+    const player = current[fromTeam].find(p => p.id === playerId)
+    if (!player) return
+
+    // 중복 방지
+    if (current[toTeamIdx].some(p => p.id === playerId)) return
+
+    const next = current.map(list => list.slice())
+    // remove from source
+    next[fromTeam] = next[fromTeam].filter(p => p.id !== playerId)
+    // append to target
+    next[toTeamIdx] = [...next[toTeamIdx], player]
+    setManualTeams(next)
+  }
+
+  function resetManual(){
+    setManualTeams(null)
+    setShuffleSeed(0)
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr_420px]">
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_520px]">
       <Card title="매치 설정"
         right={
           <div className="flex items-center gap-2">
@@ -156,55 +221,64 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
               </select>
 
               {locationPreset !== 'other' ? (
-                <div className="text-xs text-gray-500">
-                  주소: {locationAddress}
-                </div>
+                <div className="text-xs text-gray-500">주소: {locationAddress}</div>
               ) : (
                 <div className="grid gap-2 sm:grid-cols-2">
-                  <input
-                    className="rounded border border-gray-300 bg-white px-3 py-2 text-sm"
-                    placeholder="장소 이름"
-                    value={locationName}
-                    onChange={(e)=>setLocationName(e.target.value)}
-                  />
-                  <input
-                    className="rounded border border-gray-300 bg-white px-3 py-2 text-sm"
-                    placeholder="주소"
-                    value={locationAddress}
-                    onChange={(e)=>setLocationAddress(e.target.value)}
-                  />
+                  <input className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="장소 이름" value={locationName} onChange={(e)=>setLocationName(e.target.value)} />
+                  <input className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="주소" value={locationAddress} onChange={(e)=>setLocationAddress(e.target.value)} />
                 </div>
               )}
             </div>
           </div>
 
-          {/* 모드 / 팀 수 */}
+          {/* 팀 수 드롭다운 (2~10) */}
           <div className="grid items-center gap-2 sm:grid-cols-[120px_1fr]">
-            <label className="text-sm text-gray-600">모드/팀수</label>
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2">
-                <ModeButton label="Auto" active={selectionMode==='auto'} onClick={()=>setSelectionMode('auto')} />
-                <ModeButton label="9:9" active={selectionMode==='9v9'} onClick={()=>setSelectionMode('9v9')} />
-                <ModeButton label="11:11" active={selectionMode==='11v11'} onClick={()=>setSelectionMode('11v11')} />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">팀 수</span>
-                <input
-                  type="number"
-                  min={2}
-                  max={8}
-                  placeholder={selectionMode==='auto' ? String(autoSuggestion.teams) : (selectionMode==='11v11' ? '2' : '3')}
-                  value={teamCount ?? ''}
-                  onChange={(e)=>onChangeTeams(e.target.value)}
-                  className="w-20 rounded border border-gray-300 bg-white px-2 py-1"
-                  title="비워두면 Auto/모드 기본값 사용 (2~8)"
-                />
-                <span className="text-xs text-gray-500">적용: {mode} · {teams}팀</span>
-              </div>
+            <label className="text-sm text-gray-600">팀 수</label>
+            <div className="flex items-center gap-3">
+              <select
+                className="rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+                value={teams}
+                onChange={(e)=> setTeamCount(Number(e.target.value))}
+                title="2~10팀까지 선택"
+              >
+                {Array.from({length:9}, (_,i)=> i+2).map(n=>(
+                  <option key={n} value={n}>{n}팀</option>
+                ))}
+              </select>
+              <span className="text-xs text-gray-500">적용: {mode} · {teams}팀</span>
             </div>
           </div>
 
-          {/* 참석자 — 모두선택 버튼 추가 + GK OVR 숨김 유지 */}
+          {/* 표시/정렬/편집 */}
+          <div className="grid items-center gap-2 sm:grid-cols-[120px_1fr]">
+            <label className="text-sm text-gray-600">표시/정렬</label>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={hideOVR} onChange={(e)=>setHideOVR(e.target.checked)} />
+                OVR 숨기기
+              </label>
+              <button
+                type="button"
+                onClick={reshuffleTeams}
+                className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-100"
+                title="팀 내 선수 순서를 랜덤으로 재배열"
+              >
+                팀 내 랜덤 오더
+              </button>
+              {manualTeams && (
+                <button
+                  type="button"
+                  onClick={resetManual}
+                  className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-100"
+                  title="수동 편집을 초기 상태로 되돌리기"
+                >
+                  수동 편집 초기화
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 참석자 */}
           <div className="grid items-start gap-2 sm:grid-cols-[120px_1fr]">
             <label className="text-sm text-gray-600 flex items-center gap-2">
               참석 ({attendeeIds.length}명)
@@ -228,9 +302,11 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                 >
                   <input type="checkbox" checked={attendeeIds.includes(p.id)} onChange={()=>toggle(p.id)} />
                   <InitialAvatar id={p.id} name={p.name} size={24} />
-                  <span className="text-sm">{p.name} {(p.position||p.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}</span>
-                  {(p.position || p.pos) !== 'GK' && (
-                    <span className="text-xs text-gray-500">OVR {p.ovr ?? overall(p)}</span>
+                  <span className="text-sm min-w-0 flex-1 truncate">
+                    {p.name} {(p.position||p.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}
+                  </span>
+                  {!hideOVR && (p.position || p.pos) !== 'GK' && (
+                    <span className="text-xs text-gray-500 shrink-0">OVR {p.ovr ?? overall(p)}</span>
                   )}
                 </label>
               ))}
@@ -246,16 +322,29 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
 
       <div className="grid gap-4">
         <Card
-          title="팀 배정 미리보기"
+          title="팀 배정 미리보기 (드래그하여 팀 간 이동 가능)"
           right={
             <div className="text-xs text-gray-500">
               기준: {criterion} · <span className="font-medium">GK는 평균 계산에 포함되지 않습니다</span>
             </div>
           }
         >
-          <div className={`grid gap-4 ${teams>=3 ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
-            {split.teams.map((list, i)=>(
-              <TeamPreview key={i} idx={i} list={list} />
+          <div
+            className="grid gap-4"
+            style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}
+          >
+            {previewTeams.map((list, i)=>(
+              <TeamPreview
+                key={i}
+                idx={i}
+                list={list}
+                hideOVR={hideOVR}
+                dragOver={dragOverTeam === i}
+                onDragOverTeam={(e)=>onDragOverTeam(e,i)}
+                onDragLeaveTeam={(e)=>onDragLeaveTeam(e,i)}
+                onDropToTeam={(e)=>onDropToTeam(e,i)}
+                onDragStartItem={onDragStart}
+              />
             ))}
           </div>
         </Card>
@@ -269,7 +358,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
           ) : (
             <ul className="space-y-2">
               {matches.map(m => {
-                const hydrated = hydrateMatch(m, players) // {teams: [...], sums: [...] (원본)
+                const hydrated = hydrateMatch(m, players)
                 return (
                   <li key={m.id} className="rounded border border-gray-200 bg-white p-3">
                     <div className="mb-2 flex items-center justify-between">
@@ -279,7 +368,10 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                       </div>
                       <button className="text-xs text-red-600" onClick={()=> onDeleteMatch(m.id)}>삭제</button>
                     </div>
-                    <div className={`grid gap-3 ${m.teamCount>=3 ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+                    <div
+                      className="grid gap-3"
+                      style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}
+                    >
                       {hydrated.teams.map((list, i)=>{
                         const kit = kitForTeam(i)
                         const nonGKs = list.filter(p => (p.position || p.pos) !== 'GK')
@@ -290,19 +382,20 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                             <div className={`mb-1 flex items-center justify-between px-2 py-1 text-xs ${kit.headerClass}`}>
                               <span>팀 {i+1}</span>
                               <span className="opacity-80">
-                                {kit.label} · {list.length}명 · 합계 {sumNoGK} · 평균 {avgNoGK}
+                                {kit.label} · {list.length}명 · <b>팀파워</b> {sumNoGK} · 평균 {avgNoGK}
                               </span>
                             </div>
                             <ul className="space-y-1 p-2 pt-0 text-sm">
                               {list.map(p=>(
-                                <li key={p.id} className="flex items-center justify-between border-t border-gray-100 pt-1 first:border-0 first:pt-0">
-                                  <span className="flex items-center gap-2">
+                                <li key={p.id} className="flex items-center justify-between gap-2 border-t border-gray-100 pt-1 first:border-0 first:pt-0">
+                                  <span className="flex items-center gap-2 min-w-0 flex-1">
                                     <InitialAvatar id={p.id} name={p.name} size={24} />
-                                    {p.name} {(p.position||p.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}
+                                    <span className="truncate">
+                                      {p.name} {(p.position||p.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}
+                                    </span>
                                   </span>
-                                  {/* GK는 OVR 숨김, 그 외 표기 */}
-                                  {(p.position||p.pos)!=='GK' && (
-                                    <span className="text-gray-500">OVR {p.ovr ?? overall(p)}</span>
+                                  {!hideOVR && (p.position||p.pos)!=='GK' && (
+                                    <span className="text-gray-500 shrink-0">OVR {p.ovr ?? overall(p)}</span>
                                   )}
                                 </li>
                               ))}
@@ -323,64 +416,89 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
   )
 }
 
-function ModeButton({ label, active, onClick }){
-  return (
-    <button
-      onClick={onClick}
-      className={`rounded px-3 py-1 text-sm border transition ${
-        active ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-      }`}
-      aria-pressed={active}
-    >
-      {label}
-    </button>
-  )
+/* --- 유니폼 규칙: 10가지 고정 팔레트(중복 없음) --- */
+function kitForTeam(idx){
+  const kits = [
+    { label: '화이트', headerClass: 'bg-white text-stone-800 border-b border-stone-300' },
+    { label: '블랙',   headerClass: 'bg-stone-900 text-white border-b border-stone-900' },
+    { label: '블루',   headerClass: 'bg-blue-600 text-white border-b border-blue-700' },
+    { label: '레드',   headerClass: 'bg-red-600 text-white border-b border-red-700' },
+    { label: '그린',   headerClass: 'bg-emerald-600 text-white border-b border-emerald-700' },
+    { label: '퍼플',   headerClass: 'bg-violet-600 text-white border-b border-violet-700' },
+    { label: '오렌지', headerClass: 'bg-orange-500 text-white border-b border-orange-600' },
+    { label: '티얼',   headerClass: 'bg-teal-600 text-white border-b border-teal-700' },
+    { label: '핑크',   headerClass: 'bg-pink-600 text-white border-b border-pink-700' },
+    { label: '옐로',   headerClass: 'bg-yellow-400 text-stone-900 border-b border-yellow-500' },
+  ]
+  return kits[idx % kits.length]
 }
 
-/* --- 유니폼 규칙: 팀1=화이트, 팀2=블랙, 팀3=블루(있으면), 그 외 그레이 --- */
-function kitForTeam(idx){
-  switch (idx) {
-    case 0: return { label: '화이트', headerClass: 'bg-white text-stone-800 border-b border-stone-300' }
-    case 1: return { label: '블랙',   headerClass: 'bg-stone-900 text-white border-b border-stone-900' }
-    case 2: return { label: '블루',   headerClass: 'bg-blue-600 text-white border-b border-blue-700' }
-    default:return { label: '그레이',  headerClass: 'bg-stone-400 text-white border-b border-stone-500' }
+// 시드 기반 셔플 (Fisher–Yates + mulberry32)
+function seededShuffle(arr, seed = 1){
+  const a = [...arr]
+  const rand = mulberry32(seed >>> 0)
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
+}
+function mulberry32(a){
+  return function(){
+    let t = (a += 0x6D2B79F5)
+    t = Math.imul(t ^ (t >>> 15), t | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
 }
 
-function TeamPreview({ idx, list }){
+/* === 팀 카드 컴포넌트 (드래그 대상/드롭 타겟) === */
+function TeamPreview({ idx, list, hideOVR, dragOver, onDragOverTeam, onDragLeaveTeam, onDropToTeam, onDragStartItem }){
   const kit = kitForTeam(idx)
   const nonGKs = list.filter(p => (p.position || p.pos) !== 'GK')
   const sumNoGK = nonGKs.reduce((a,p)=> a + (p.ovr ?? overall(p)), 0)
   const avgNoGK = nonGKs.length ? Math.round(sumNoGK / nonGKs.length) : 0
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white">
+    <div
+      className={`rounded-lg border bg-white transition ${dragOver ? 'border-emerald-500 ring-2 ring-emerald-200' : 'border-gray-200'}`}
+      onDragOver={onDragOverTeam}
+      onDragLeave={onDragLeaveTeam}
+      onDrop={onDropToTeam}
+    >
       <div className={`mb-1 flex items-center justify-between px-3 py-2 text-xs ${kit.headerClass}`}>
         <div className="font-semibold">팀 {idx+1}</div>
         <div className="opacity-80">
-          {kit.label} · {list.length}명 · 합계 {sumNoGK} · 평균 {avgNoGK}
+          {kit.label} · {list.length}명 · <b>팀파워</b> {sumNoGK} · 평균 {avgNoGK}
         </div>
       </div>
       <ul className="space-y-1 px-3 pb-3 text-sm">
         {list.map(p=>(
-          <li key={p.id} className="flex items-center justify-between border-t border-gray-100 pt-1 first:border-0 first:pt-0">
-            <span className="flex items-center gap-2">
+          <li
+            key={p.id}
+            className="flex items-center justify-between gap-2 border-t border-gray-100 pt-1 first:border-0 first:pt-0 cursor-move"
+            draggable
+            onDragStart={(e)=>onDragStartItem(e, idx, p.id)}
+            title="다른 팀 카드로 끌어서 이동"
+          >
+            <span className="flex items-center gap-2 min-w-0 flex-1">
               <InitialAvatar id={p.id} name={p.name} size={24} />
-              {p.name} {(p.position||p.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}
+              <span className="truncate">
+                {p.name} {(p.position||p.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}
+              </span>
             </span>
-            {/* GK는 OVR 숨김, 그 외 표기 */}
-            {(p.position||p.pos)!=='GK' && (
-              <span className="text-gray-500">OVR {p.ovr ?? overall(p)}</span>
+            {!hideOVR && (p.position||p.pos)!=='GK' && (
+              <span className="text-gray-500 shrink-0">OVR {p.ovr ?? overall(p)}</span>
             )}
           </li>
         ))}
-        {list.length===0 && <li className="text-xs text-gray-400">선택된 인원이 없습니다.</li>}
+        {list.length===0 && <li className="text-xs text-gray-400">팀원 없음 — 여기에 드래그해서 추가</li>}
       </ul>
     </div>
   )
 }
 
-/* --- PlayersPage와 일치하는 컨셉: 이니셜 아바타(배경색은 id 기반 고정) --- */
+/* --- PlayersPage와 동일한 이니셜 아바타 --- */
 function InitialAvatar({ id, name, size = 24 }) {
   const initial = (name || "?").trim().charAt(0)?.toUpperCase() || "?"
   const color = "#" + stringToColor(String(id || "seed"))
