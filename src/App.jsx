@@ -18,7 +18,7 @@ export default function App() {
   const [db, setDb] = useState(loadDB())
   const [selectedPlayerId, setSelectedPlayerId] = useState(null)
 
-  // ✅ 로컬스토리지에 저장
+  // ✅ localStorage에 저장
   useEffect(() => saveDB(db), [db])
 
   const players = db.players || []
@@ -52,7 +52,7 @@ export default function App() {
   function handleDeletePlayer(id) {
     setDb((prev) => ({ ...prev, players: prev.players.filter((p) => p.id !== id) }))
     if (selectedPlayerId === id) setSelectedPlayerId(null)
-    // 삭제 노티는 PlayersPage 내부에서 표시
+    // 삭제 알림은 PlayersPage에서 처리
   }
 
   function handleImportPlayers(list) {
@@ -155,7 +155,10 @@ export default function App() {
             <li>정회원은 자동으로 배지가 표시됩니다.</li>
             <li>선수 저장 시 이름/멤버십은 필수입니다.</li>
             <li>프로필은 이름 첫 글자 이니셜 아바타로 표시됩니다.</li>
-            <li>매치 플래너에서 장소를 선택하거나 커스텀 입력 후 “구글 맵에서 열기”로 확인하세요.</li>
+            <li>
+              매치 플래너에서 장소를 선택하거나 커스텀 입력 후 “구글 맵에서 열기”로
+              확인하세요.
+            </li>
           </ul>
         </Card>
       </footer>
