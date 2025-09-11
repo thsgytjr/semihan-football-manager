@@ -1,5 +1,6 @@
 // src/pages/PlayersPage.jsx
 import React, { useMemo, useState, useEffect } from "react"
+import { FaCheckCircle } from "react-icons/fa" // react-icons에서 메달 아이콘 추가
 import { notify } from "../components/Toast"
 import { overall } from "../lib/players"
 import { STAT_KEYS } from "../lib/constants" // ✅ 전역 키 사용
@@ -177,9 +178,8 @@ export default function PlayersPage({
             <h3 className="text-base font-semibold">선수 편집</h3>
             <div className="flex items-center gap-2 text-xs text-stone-600">
               {badgeNote}
-              <span className="inline-flex items-center justify-center rounded bg-emerald-500 px-2 py-0.5 text-[11px] text-white">
-                ⭐
-              </span>
+              <FaCheckCircle className="ml-2 inline-flex items-center gap-1 text-emerald-500 text-sm" />
+         
             </div>
           </div>
 
@@ -339,15 +339,15 @@ export default function PlayersPage({
                   {p.name || "이름없음"}
                   {/* ✅ 오버럴 뱃지 (전역 overall) */}
                   <span className="inline-flex items-center rounded bg-stone-800 px-2 py-0.5 text-[11px] text-white">
-                    OVR&nbsp;{overall(p)}
+                  OVR&nbsp;{overall(p)}
                   </span>
                 </div>
                 <div className="text-xs text-stone-500">
                   {(p.membership || "미지정").trim()}
                   {p.membership === "정회원" && (
-                    <span className="ml-2 inline-flex items-center justify-center rounded bg-emerald-500 px-2 py-0.5 text-[11px] text-white">
-                      ⭐
-                    </span>
+                    <span className="ml-2 inline-flex items-center gap-1 text-emerald-500">
+                    <FaCheckCircle className="text-sm" />
+                  </span>
                   )}
                 </div>
               </div>
