@@ -54,9 +54,6 @@ export default function Dashboard({ totals, players, onCreate }) {
         <div className="mt-3 text-sm text-gray-600">
           최근 4경기 기준 추천: <b>{suggested.mode}</b> · <b>{suggested.teams}팀</b>
         </div>
-        <div className="mt-4 flex justify-center">
-          <button onClick={onCreate} className="rounded-md bg-emerald-500 px-4 py-2 font-semibold text-white">+ 선수 추가</button>
-        </div>
       </Card>
 
       {/* 참석 추이 라인차트 */}
