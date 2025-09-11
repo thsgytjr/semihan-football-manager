@@ -315,12 +315,6 @@ export default function PlayersPage({
           <h2 className="text-lg font-semibold">선수 목록</h2>
           <div className="flex gap-2">
             <button
-              onClick={onReset}
-              className="rounded-md border border-stone-300 bg-white px-3 py-2 text-sm hover:bg-stone-100"
-            >
-              리셋
-            </button>
-            <button
               onClick={onCreate}
               className="rounded-md bg-emerald-500 px-3 py-2 text-sm text-white hover:bg-emerald-600"
             >
