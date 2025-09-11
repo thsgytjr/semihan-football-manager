@@ -343,7 +343,7 @@ export default function PlayersPage({
                   </span>
                 </div>
                 <div className="text-xs text-stone-500">
-                  {p.membership || "미지정"}
+                  {(p.membership || "미지정").trim()}
                   {p.membership === "정회원" && (
                     <span className="ml-2 inline-flex items-center justify-center rounded bg-emerald-500 px-2 py-0.5 text-[11px] text-white">
                       ⭐
