@@ -40,13 +40,13 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
   // 지금 화면의 팀 배열을 항상 들고 있는 ref
   const latestTeamsRef = useRef([])
 
-  // 포메이션 에디터(저장본 전용)
+  // 저장본 포메이션 에디터(전체화면)
   const [editorOpen,setEditorOpen]=useState(false)
   const [editingTeamIdx,setEditingTeamIdx]=useState(0)
   const [editingMatchId, setEditingMatchId] = useState(null)
   const [editorPlayers, setEditorPlayers] = useState([])
 
-  // 저장본 유튜브 링크
+  // 저장본 유튜브 링크(매치 단위 관리)
   const [videoDrafts, setVideoDrafts] = useState({})
   const handleVideoInput = (matchId, val) => setVideoDrafts(d => ({ ...d, [matchId]: val }))
   const addVideoLink = (m) => {
@@ -67,7 +67,18 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
   const attendees=useMemo(()=>players.filter(p=>attendeeIds.includes(p.id)),[players,attendeeIds])
   const autoSplit=useMemo(()=>splitKTeams(attendees,teams,criterion),[attendees,teams,criterion])
 
-  useEffect(()=>{ setManualTeams(null); setShuffleSeed(0) },[attendees,teams,criterion])
+  // ✅ 자동 초기화 스킵 플래그 (불러오기 시 덮어씀 방지)
+  const skipAutoResetRef = useRef(false)
+
+  // 참석자/팀수/기준 변경 시 수동 편집 초기화 (단, 불러오기 직후는 스킵)
+  useEffect(()=>{
+    if (skipAutoResetRef.current) {
+      skipAutoResetRef.current = false
+      return
+    }
+    setManualTeams(null)
+    setShuffleSeed(0)
+  },[attendees,teams,criterion])
 
   const previewTeams=useMemo(()=>{
     let base=manualTeams??autoSplit.teams
@@ -194,6 +205,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
     })
   }
 
+  // 저장본 포메이션 에디터 오픈(팀별)
   const openEditorSaved = (match, i) => {
     const hydrated = hydrateMatch(match, players) // ✅ snapshot 우선 복원
     setFormations(Array.isArray(match.formations) ? match.formations.slice() : [])
@@ -224,6 +236,52 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
 
   // 표시 제어: 일반 사용자는 OVR 항상 숨김
   const showOVR = isAdmin && !hideOVR
+
+  // ✅ 저장된 매치를 현재 팀배정 화면으로 불러오기 (스냅샷/포메이션/좌표 포함)
+  function loadSavedIntoPlanner(match){
+    if(!match) return
+    // 불러오기로 인해 연쇄적으로 발생하는 초기화를 1회 스킵
+    skipAutoResetRef.current = true
+
+    const hydrated = hydrateMatch(match, players) // teams: Player[][] (snapshot 우선)
+    const teamsArr = hydrated.teams || []
+    if(teamsArr.length === 0){
+      notify('불러올 팀 구성이 없습니다.')
+      return
+    }
+
+    // 참석자/팀수/기준/장소/날짜 동기화
+    const newAttendeeIds = teamsArr.flat().map(p => p.id)
+    setAttendeeIds(newAttendeeIds)
+    setTeamCount(teamsArr.length)
+    if (match.criterion) setCriterion(match.criterion)
+    if (match.location) {
+      setLocationPreset(match.location.preset || 'other')
+      setLocationName(match.location.name || '')
+      setLocationAddress(match.location.address || '')
+    }
+    if (match.dateISO) setDateISO(match.dateISO.slice(0,16))
+    setShuffleSeed(0)
+
+    // 수동 팀 구성 고정
+    setManualTeams(teamsArr)
+    latestTeamsRef.current = teamsArr
+
+    // 포메이션/필드 배치 복원 (없으면 자동)
+    const baseFormations = Array.isArray(match.formations) && match.formations.length === teamsArr.length
+      ? match.formations.slice()
+      : teamsArr.map(list => recommendFormation({ count:list.length, mode: match.mode || '11v11', positions: countPositions(list) }))
+    setFormations(baseFormations)
+
+    const baseBoard =
+      Array.isArray(match.board) && match.board.length === teamsArr.length
+        ? match.board.map(a => Array.isArray(a) ? a.slice() : [])
+        : teamsArr.map((list, i) => assignToFormation({ players:list, formation: baseFormations[i] || '4-3-3' }))
+
+    setPlacedByTeam(baseBoard)
+
+    notify('저장된 매치를 팀배정에 불러왔습니다 ✅')
+  }
 
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_600px]">
@@ -396,10 +454,15 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
               return (
                 <li key={m.id} className="rounded border border-gray-200 bg-white p-3">
                   <div className="mb-2 flex items-center justify-between">
-                    <div className="text-sm"><b>{m.dateISO.replace('T',' ')}</b> · {m.mode} · {m.teamCount}팀 · 참석 {m.attendeeIds.length}명{m.location?.name?<> · 장소 {m.location.name}</>:null}</div>
-                    {isAdmin && <button className="text-xs text-red-600" onClick={()=>onDeleteMatch(m.id)}>삭제</button>}
+                    <div className="text-sm"><b>{m.dateISO.replace('T',' ')}</b> · {m.mode} · {m.teamCount}팀 · 참석 {attendeesCount(m)}명{m.location?.name?<> · 장소 {m.location.name}</>:null}</div>
+                    <div className="flex items-center gap-2">
+                      <button className="text-xs rounded border border-gray-300 bg-white px-2 py-1"
+                        onClick={()=>loadSavedIntoPlanner(m)}>팀배정에 로드</button>
+                      {isAdmin && <button className="text-xs text-red-600" onClick={()=>onDeleteMatch(m.id)}>삭제</button>}
+                    </div>
                   </div>
 
+                  {/* 팀 테이블(읽기용) + 팀별 포메이션 편집 버튼 */}
                   <div className="grid grid-cols-2 gap-2 sm:gap-3">
                     {hydrated.teams.map((list,i)=>{
                       const kit=kitForTeam(i)
@@ -410,11 +473,15 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                         <div key={i} className="space-y-2 rounded border border-gray-200">
                           <div className={`mb-1 flex items-center justify-between px-2 py-1 text-xs ${kit.headerClass}`}>
                             <span>팀 {i+1}</span>
-                            {isAdmin && <span className="opacity-80">{kit.label} · {list.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</span>}
-                            {!isAdmin && <span className="opacity-80">{kit.label} · {list.length}명</span>}
-                          </div>
-                          <div className="px-2 pb-2">
-                            <button className="rounded border border-gray-300 bg-white px-2 py-1 text-xs" onClick={()=>openEditorSaved(m, i)}>포메이션 편집</button>
+                            <div className="flex items-center gap-2">
+                              {isAdmin && <span className="opacity-80 hidden sm:inline">{kit.label} · {list.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</span>}
+                              {!isAdmin && <span className="opacity-80 hidden sm:inline">{kit.label} · {list.length}명</span>}
+                              {/* 🔧 이 팀 포메이션 편집 */}
+                              <button
+                                className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-100"
+                                onClick={()=>openEditorSaved(m, i)}
+                              >이 팀 포메이션</button>
+                            </div>
                           </div>
                           <ul className="space-y-1 p-2 pt-0 text-sm">
                             {list.map(p=>(
@@ -433,7 +500,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                     })}
                   </div>
 
-                  {/* 유튜브 링크 */}
+                  {/* 🎥 유튜브 링크 — ✅ 매치 단위로 1회만 표시(중복 제거) */}
                   <div className="mt-3 space-y-2">
                     <div className="text-xs font-semibold text-gray-600">🎥 유튜브 링크</div>
                     {(m.videos && m.videos.length > 0) ? (
@@ -450,10 +517,12 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                     ) : (
                       <div className="text-xs text-gray-500">등록된 링크가 없습니다.</div>
                     )}
-                    <div className="flex items-center gap-2">
-                      <input className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="https://youtu.be/... 또는 https://www.youtube.com/watch?v=..." value={videoDrafts[m.id] || ''} onChange={e=>handleVideoInput(m.id, e.target.value)} />
-                      <button className="whitespace-nowrap rounded border border-gray-300 bg-white px-3 py-2 text-sm" onClick={()=>addVideoLink(m)}>추가</button>
-                    </div>
+                    {isAdmin && (
+                      <div className="flex items-center gap-2">
+                        <input className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="https://youtu.be/... 또는 https://www.youtube.com/watch?v=..." value={videoDrafts[m.id] || ''} onChange={e=>handleVideoInput(m.id, e.target.value)} />
+                        <button className="whitespace-nowrap rounded border border-gray-300 bg-white px-3 py-2 text-sm" onClick={()=>addVideoLink(m)}>추가</button>
+                      </div>
+                    )}
                   </div>
                 </li>
               )
@@ -462,7 +531,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
         </Card>
       </div>
 
-      {/* 포메이션 에디터(저장본 전용) */}
+      {/* 포메이션 에디터(저장본 전용, 팀별로 열리도록) */}
       {editorOpen && (
         <FullscreenModal onClose={closeEditor}>
           <div className="flex items-center justify-between mb-3">
@@ -512,6 +581,12 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
       )}
     </div>
   )
+}
+
+function attendeesCount(m){
+  if(Array.isArray(m?.snapshot) && m.snapshot.length) return m.snapshot.flat().length
+  if(Array.isArray(m?.attendeeIds)) return m.attendeeIds.length
+  return 0
 }
 
 function Row({label,children}){return(

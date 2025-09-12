@@ -101,7 +101,7 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
       </Card>
 
       {/* 저장된 매치 + 팀 테이블(읽기 전용) + 🎥유튜브 링크 표시 */}
-      <Card title="저장된 매치 (팀 구성 & 유튜브 링크)">
+      <Card title="매치 히스토리">
         {totalMatches === 0 ? (
           <div className="text-sm text-gray-500">저장된 매치가 없습니다.</div>
         ) : (
