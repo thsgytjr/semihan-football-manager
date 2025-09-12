@@ -1,96 +1,19 @@
 // src/pages/PlayersPage.jsx
 import React, { useMemo, useState, useEffect } from "react"
-import { FaCheckCircle } from "react-icons/fa" // react-icons에서 메달 아이콘 추가
+import { FaCheckCircle } from "react-icons/fa"
 import { notify } from "../components/Toast"
 import { overall } from "../lib/players"
-import { STAT_KEYS } from "../lib/constants" // ✅ 전역 키 사용
+import { STAT_KEYS } from "../lib/constants"
+
+// ✅ 새로 분리된 공용 컴포넌트/유틸
+import InitialAvatar from "../components/InitialAvatar"
+import RadarHexagon from "../components/RadarHexagon"
+import { ensureStatsObject, clampStat } from "../lib/stats"
 
 // 라이트 전용 폼 클래스
 const FIELD =
   "w-full bg-white text-stone-800 placeholder-stone-400 border border-stone-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
 const DROPDOWN = FIELD + " appearance-none"
-
-/* === 아바타 (id 기반 색상) === */
-function InitialAvatar({ id, name, size = 36 }) {
-  const initial = (name || "?").trim().charAt(0).toUpperCase()
-  const color = "#" + stringToColor(String(id || "seed"))
-  const style = { width: size, height: size, fontSize: Math.max(12, size * 0.5), backgroundColor: color }
-  return (
-    <div className="flex items-center justify-center rounded-full text-white font-semibold select-none" style={style}>
-      {initial}
-    </div>
-  )
-}
-function stringToColor(str) {
-  let hash = 0
-  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash)
-  return ((hash >>> 0).toString(16) + "000000").substring(0, 6)
-}
-
-/* === 스탯 보정/정규화 유틸 === */
-function clampStat(n) {
-  const v = Math.floor(Number(n) || 0)
-  return Math.max(0, Math.min(100, v)) // ✅ 0–100 통일
-}
-function ensureStatsObject(stats) {
-  const out = { ...(stats || {}) }
-  for (const k of STAT_KEYS) {
-    const v = Number.isFinite(out[k]) ? Number(out[k]) : 50
-    out[k] = clampStat(v)
-  }
-  return out
-}
-
-/* === 6각형 레이더 차트 (SVG) === */
-function RadarHexagon({ size = 260, stats = ensureStatsObject({}), gridLevels = 4 }) {
-  const padding = 16
-  const cx = size / 2
-  const cy = size / 2
-  const radius = (size / 2) - padding
-
-  const angleFor = (i) => (-90 + (360 / STAT_KEYS.length) * i) * (Math.PI / 180)
-  const pointAt = (ratio, i) => {
-    const a = angleFor(i)
-    return [cx + ratio * radius * Math.cos(a), cy + ratio * radius * Math.sin(a)]
-  }
-
-  const grids = Array.from({ length: gridLevels }, (_, lvl) => {
-    const r = (lvl + 1) / gridLevels
-    const pts = STAT_KEYS.map((_, i) => pointAt(r, i)).map(([x, y]) => `${x},${y}`).join(" ")
-    return <polygon key={lvl} points={pts} fill="none" className="stroke-stone-300" />
-  })
-
-  const axes = STAT_KEYS.map((k, i) => {
-    const [x, y] = pointAt(1, i)
-    return <line key={k} x1={cx} y1={cy} x2={x} y2={y} className="stroke-stone-300" />
-  })
-
-  const values = STAT_KEYS.map((k, i) => {
-    const ratio = clampStat(stats[k]) / 100 // ✅ 0–100 기준
-    return pointAt(ratio, i)
-  })
-  const valuePoints = values.map(([x, y]) => `${x},${y}`).join(" ")
-
-  const labels = STAT_KEYS.map((k, i) => {
-    const [x, y] = pointAt(1.12, i)
-    return (
-      <text key={k} x={x} y={y} textAnchor="middle" dominantBaseline="middle" className="fill-stone-600 text-[10px]">
-        {k}
-      </text>
-    )
-  })
-
-  return (
-    <svg width="100%" height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Player Stats Radar">
-      <g className="[&_*]:transition-all">
-        {grids}
-        {axes}
-        <polygon points={valuePoints} className="fill-emerald-400/30 stroke-emerald-500" />
-        {labels}
-      </g>
-    </svg>
-  )
-}
 
 export default function PlayersPage({
   players,
@@ -158,12 +81,17 @@ export default function PlayersPage({
   function requestDelete(id, name) {
     setConfirm({ open: true, id, name: name || "" })
   }
-  function confirmDelete() {
-    if (confirm.id) {
-      onDelete(confirm.id)
-      notify("선수를 삭제했습니다.")
+  async function confirmDelete() {
+    try {
+      if (confirm.id) {
+        await onDelete(confirm.id) // App 쪽에서 성공 토스트 처리
+      }
+    } catch (e) {
+      notify("삭제에 실패했습니다. 다시 시도해 주세요.") // 실패시에만 알림
+      console.error(e)
+    } finally {
+      setConfirm({ open: false, id: null, name: "" })
     }
-    setConfirm({ open: false, id: null, name: "" })
   }
   function cancelDelete() {
     setConfirm({ open: false, id: null, name: "" })
@@ -179,7 +107,6 @@ export default function PlayersPage({
             <div className="flex items-center gap-2 text-xs text-stone-600">
               {badgeNote}
               <FaCheckCircle className="ml-2 inline-flex items-center gap-1 text-emerald-500 text-sm" />
-         
             </div>
           </div>
 
@@ -238,7 +165,7 @@ export default function PlayersPage({
                   <div className="order-1 md:order-2">
                     <RadarHexagon size={260} stats={draft.stats} />
                   </div>
-                </div>  
+                </div>
               </div>
 
               {/* 2) 기본 정보 */}
@@ -337,17 +264,16 @@ export default function PlayersPage({
               <div className="flex-1">
                 <div className="font-medium text-stone-800 flex items-center gap-2">
                   {p.name || "이름없음"}
-                  {/* ✅ 오버럴 뱃지 (전역 overall) */}
                   <span className="inline-flex items-center rounded bg-stone-800 px-2 py-0.5 text-[11px] text-white">
-                  OVR&nbsp;{overall(p)}
+                    OVR&nbsp;{overall(p)}
                   </span>
                 </div>
                 <div className="text-xs text-stone-500">
                   {(p.membership || "미지정").trim()}
                   {p.membership === "정회원" && (
                     <span className="ml-2 inline-flex items-center gap-1 text-emerald-500">
-                    <FaCheckCircle className="text-sm" />
-                  </span>
+                      <FaCheckCircle className="text-sm" />
+                    </span>
                   )}
                 </div>
               </div>

@@ -2,13 +2,9 @@
 import React, { useEffect, useMemo, useState } from "react"
 import { Home, Users, CalendarDays } from "lucide-react"
 
-// ⛔ localStorage 버전 제거
-// import { loadDB, saveDB } from "./lib/storage"
-
 import {
   listPlayers, upsertPlayer, deletePlayer, subscribePlayers,
   loadDB, saveDB, subscribeDB,
-  // setRoomId, // 필요 시 룸 아이디 변경에 사용
 } from "./services/storage.service"
 
 import { mkPlayer } from "./lib/players"
@@ -25,9 +21,6 @@ export default function App() {
   const [tab, setTab] = useState("dashboard") // 'dashboard' | 'players' | 'planner'
   const [db, setDb] = useState({ players: [], matches: [] })
   const [selectedPlayerId, setSelectedPlayerId] = useState(null)
-
-  // (선택) 여러 방(룸) 운영 시 .env나 URL로 받아 setRoomId("your-room-id")
-  // setRoomId('semihan-lite-room-1')
 
   // ✅ 최초 로드 + 실시간 구독
   useEffect(() => {
@@ -121,6 +114,16 @@ export default function App() {
     notify("매치를 삭제했습니다.")
   }
 
+  // ✅ 저장된 매치 업데이트(포메이션/좌표 재저장)
+  function handleUpdateMatch(id, patch) {
+    const next = (db.matches || []).map(m =>
+      m.id === id ? { ...m, ...patch } : m
+    )
+    setDb(prev => ({ ...prev, matches: next }))
+    saveDB({ players: [], matches: next })
+    notify("매치를 업데이트했습니다.")
+  }
+
   return (
     <div className="min-h-screen bg-stone-100 text-stone-800 antialiased leading-relaxed">
       <ToastHub />
@@ -187,6 +190,7 @@ export default function App() {
             matches={matches}
             onSaveMatch={handleSaveMatch}
             onDeleteMatch={handleDeleteMatch}
+            onUpdateMatch={handleUpdateMatch}   // ⬅️ 추가
           />
         )}
       </main>
