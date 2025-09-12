@@ -126,8 +126,8 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
                     )}
                   </div>
 
-                  {/* 팀 멤버 카드 (모바일: 세로 스택 · 데스크톱: 2열) */}
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {/* 팀 멤버 카드 (항상 2열 · 모바일도 side-by-side) */}
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
                     {teams.map((list, i) => {
                       const kit = kitForTeam(i)
                       const nonGK = list.filter(p => (p.position || p.pos) !== 'GK')
