@@ -275,31 +275,125 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
 
       {/* 오른쪽: 팀 배정 미리보기 — ⚠️ 포메이션 프리뷰 완전 제거 */}
       <div className="grid gap-4">
-        <Card title="팀 배정 미리보기 (드래그 & 드랍 커스텀 가능)"
-          right={<div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">기준: {criterion} · <span className="font-medium">GK 평균 제외</span></div>}>
-          <Toolbar hideOVR={hideOVR} setHideOVR={setHideOVR}
-            reshuffleTeams={()=>{const seed=(Date.now()^Math.floor(Math.random()*0xffffffff))>>>0;setShuffleSeed(seed);setManualTeams(prev=>(prev??autoSplit.teams).map(l=>seededShuffle(l,seed+l.length)))}}
-            sortTeamsByOVR={(order='desc')=>{
-              const base=manualTeams??previewTeams
-              setManualTeams(base.map(list=>list.slice().sort((a,b)=>{const A=a.ovr??overall(a),B=b.ovr??overall(b);return order==='asc'?A-B:B-A})))
-            }}
-            resetManual={()=>{setManualTeams(null);setShuffleSeed(0)}}
-            manualTeams={manualTeams}
-          />
+      <Card title="팀 배정 미리보기 (드래그 & 드랍 커스텀 가능)"
+  right={
+    <div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
+      기준: {criterion} · <span className="font-medium">GK 평균 제외</span>
+    </div>
+  }
+>
+{/* Toolbar with OVR 숨기기 and 랜덤 섞기 */}
+<Toolbar
+  hideOVR={hideOVR}
+  setHideOVR={setHideOVR}
+  reshuffleTeams={() => {
+    const seed = (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
+    setShuffleSeed(seed);
+    setManualTeams((prev) =>
+      (prev ?? autoSplit.teams).map((list) =>
+        seededShuffle(list, seed + list.length)
+      )
+    );
+  }}
+  sortTeamsByOVR={(order = "desc") => {
+    const base = manualTeams ?? previewTeams;
+    setManualTeams(
+      base.map((list) =>
+        list.slice().sort((a, b) => {
+          const A = a.ovr ?? overall(a),
+            B = b.ovr ?? overall(b);
+          return order === "asc" ? A - B : B - A;
+        })
+      )
+    );
+  }}
+  resetManual={() => {
+    setManualTeams(null);
+    setShuffleSeed(0);
+  }}
+  manualTeams={manualTeams}
+/>
 
-          <DndContext sensors={sensors} collisionDetection={pointerWithin}
-            onDragStart={onDragStartHandler} onDragCancel={onDragCancel} onDragEnd={onDragEndHandler}>
-            <div className="grid gap-4" style={{gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))'}}>
-              {previewTeams.map((list,i)=>(
-                <div key={i} className="space-y-2">
-                  <TeamColumn teamIndex={i} labelKit={kitForTeam(i)} players={list} hideOVR={hideOVR} />
-                  {/* ⛔️ 포메이션 프리뷰/버튼 제거 */}
-                </div>
-              ))}
-            </div>
-            <DragOverlay>{activePlayerId? <DragGhost player={players.find(p=>String(p.id)===String(activePlayerId))} hideOVR={hideOVR}/>:null}</DragOverlay>
-          </DndContext>
-        </Card>
+{/* 랜덤 섞기 버튼 바로 옆에 추가 */}
+<div className="mb-3 flex flex-wrap items-center gap-2">
+  <button
+    type="button"
+    aria-pressed={hideOVR}
+    onClick={() => setHideOVR((v) => !v)}
+    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ${
+      hideOVR
+        ? "border-emerald-500 text-emerald-700 bg-emerald-50"
+        : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
+    }`}
+  >
+    <span
+      className={`inline-block h-2.5 w-2.5 rounded-full ${
+        hideOVR ? "bg-emerald-500" : "bg-gray-300"
+      }`}
+    ></span>
+    OVR 숨기기
+  </button>
+
+  <button
+    onClick={() => {
+      setManualTeams((prev) =>
+        (prev ?? previewTeams).map((list) =>
+          list.slice().sort(() => Math.random() - 0.5)
+        )
+      );
+    }}
+    className="flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 px-5 py-2 text-white text-sm font-medium shadow-lg hover:from-blue-600 hover:to-indigo-600 hover:shadow-xl transition-all duration-300"
+  >
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      strokeWidth={2}
+      stroke="currentColor"
+      className="h-5 w-5"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4.5 19.5l15-15m-15 0l15 15"
+      />
+    </svg>
+    랜덤 섞기
+  </button>
+</div>
+
+  <DndContext
+    sensors={sensors}
+    collisionDetection={pointerWithin}
+    onDragStart={onDragStartHandler}
+    onDragCancel={onDragCancel}
+    onDragEnd={onDragEndHandler}
+  >
+    <div
+      className="grid gap-4"
+      style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}
+    >
+      {previewTeams.map((list, i) => (
+        <div key={i} className="space-y-2">
+          <TeamColumn
+            teamIndex={i}
+            labelKit={kitForTeam(i)}
+            players={list}
+            hideOVR={hideOVR}
+          />
+        </div>
+      ))}
+    </div>
+    <DragOverlay>
+      {activePlayerId ? (
+        <DragGhost
+          player={players.find((p) => String(p.id) === String(activePlayerId))}
+          hideOVR={hideOVR}
+        />
+      ) : null}
+    </DragOverlay>
+  </DndContext>
+</Card>
 
         {/* 저장된 매치: 프리뷰 없이 '포메이션 편집' 버튼만 제공 + 툴바 + 유튜브 링크 관리 */}
         <Card
@@ -481,11 +575,8 @@ function Toolbar({hideOVR,setHideOVR,reshuffleTeams,sortTeamsByOVR,resetManual,m
   return (
     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" aria-pressed={hideOVR} onClick={()=>setHideOVR(v=>!v)}
-          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ${hideOVR?'border-emerald-500 text-emerald-700 bg-emerald-50':'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'}`}>
-          <span className={`inline-block h-2.5 w-2.5 rounded-full ${hideOVR?'bg-emerald-500':'bg-gray-300'}`}></span>OVR 숨기기
-        </button>
-        <span className="mx-1 hidden sm:inline-block h-5 w-px bg-gray-200" />
+    
+     
       </div>
     </div>
   )
