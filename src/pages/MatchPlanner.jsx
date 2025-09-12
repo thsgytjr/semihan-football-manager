@@ -1,5 +1,5 @@
 // src/pages/MatchPlanner.jsx
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import Card from '../components/Card'
 import { mkMatch, decideMode, splitKTeams, hydrateMatch } from '../lib/match'
 import { downloadJSON } from '../utils/io'
@@ -14,9 +14,9 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
-// ✅ 공용 컴포넌트/유틸 (리팩터 결과물)
 import InitialAvatar from '../components/InitialAvatar'
-import MiniPitch from '../components/pitch/MiniPitch'
+// ❌ 미리보기/저장본 카드에서 포메이션 프리뷰는 제거하므로 MiniPitch 불필요
+// import MiniPitch from '../components/pitch/MiniPitch'
 import FreePitch from '../components/pitch/FreePitch'
 import { assignToFormation, recommendFormation, countPositions } from '../lib/formation'
 import { seededShuffle } from '../utils/random'
@@ -33,23 +33,39 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
   const [locationName,setLocationName]=useState('Coppell Middle School - West')
   const [locationAddress,setLocationAddress]=useState('2701 Ranch Trail, Coppell, TX 75019')
 
-  // 팀 배정/보드 (라이브 미리보기용)
+  // 팀 배정/보드 상태
   const [manualTeams,setManualTeams]=useState(null)
   const [activePlayerId,setActivePlayerId]=useState(null)
   const [activeFromTeam,setActiveFromTeam]=useState(null)
+
+  // 포메이션/좌표 — UI에선 숨기지만 저장/로드를 위해 유지
   const [formations,setFormations]=useState([])      // string[]
   const [placedByTeam,setPlacedByTeam]=useState([])  // Array<Array<{id,name,role,x,y}>>
 
-  // 풀스크린 편집 모달
+  // 풀스크린 포메이션 편집 모달(저장본 전용)
   const [editorOpen,setEditorOpen]=useState(false)
   const [editingTeamIdx,setEditingTeamIdx]=useState(0)
-
-  // ✅ 저장본 편집 컨텍스트
-  const [editorMode, setEditorMode] = useState('live') // 'live' | 'saved'
   const [editingMatchId, setEditingMatchId] = useState(null)
   const [editorPlayers, setEditorPlayers] = useState([]) // 모달 내 FreePitch에 공급할 팀별 선수 배열
 
-  const count=attendeeIds.length, autoSuggestion=decideMode(count), mode=autoSuggestion.mode
+  // 저장된 매치: 유튜브 링크 간편 입력 상태
+  const [videoDrafts, setVideoDrafts] = useState({}) // { [matchId]: 'https://youtu.be/...' }
+  const handleVideoInput = (matchId, val) => setVideoDrafts(d => ({ ...d, [matchId]: val }))
+  const addVideoLink = (m) => {
+    const url = (videoDrafts[m.id] || '').trim()
+    if (!url) return
+    const next = [ ...(m.videos || []), url ]
+    onUpdateMatch(m.id, { videos: next })
+    setVideoDrafts(d => ({ ...d, [m.id]: '' }))
+  }
+  const removeVideoLink = (m, idx) => {
+    const next = (m.videos || []).filter((_, i) => i !== idx)
+    onUpdateMatch(m.id, { videos: next })
+  }
+
+  const count=attendeeIds.length
+  const autoSuggestion=decideMode(count)
+  const mode=autoSuggestion.mode
   const teams=Math.max(2,Math.min(10,Number(teamCount)||2))
   const attendees=useMemo(()=>players.filter(p=>attendeeIds.includes(p.id)),[players,attendeeIds])
   const autoSplit=useMemo(()=>splitKTeams(attendees,teams,criterion),[attendees,teams,criterion])
@@ -62,7 +78,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
     return base
   },[manualTeams,autoSplit.teams,shuffleSeed])
 
-  // init / preserve board & formations per team (라이브용)
+  // 팀별 기본 포메이션/좌표 (UI는 숨김)
   useEffect(()=>{
     setFormations(prev=>{
       const next=[...previewTeams].map((list,i)=>{
@@ -90,25 +106,33 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
     onSaveMatch(mkMatch({
       id:crypto.randomUUID?.()||String(Date.now()),
       dateISO, attendeeIds, criterion, players, selectionMode:'manual',
-      teamCount:teams, location:{preset:locationPreset,name:locationName,address:locationAddress},
-      mode, snapshot:previewTeams.map(t=>t.map(p=>p.id)),
-      board: placedByTeam, formations
+      teamCount:teams,
+      location:{preset:locationPreset,name:locationName,address:locationAddress},
+      mode,
+      snapshot:previewTeams.map(t=>t.map(p=>p.id)),
+      board: placedByTeam,
+      formations,
+      videos: [] // ✅ 새 매치는 기본적으로 빈 배열로 시작
     }))
   }
   function exportTeams(){
     const sumsNoGK=previewTeams.map(list=>list.filter(p=>(p.position||p.pos)!=='GK').reduce((a,p)=>a+(p.ovr??overall(p)),0))
     const avgsNoGK=sumsNoGK.map((sum,i)=>{const n=previewTeams[i].filter(p=>(p.position||p.pos)!=='GK').length;return n?Math.round(sum/n):0})
-    downloadJSON({dateISO,mode,teamCount:teams,criterion,selectionMode:'manual',
-      location:{preset:locationPreset,name:locationName,address:locationAddress},
-      teams:previewTeams.map(t=>t.map(p=>({id:p.id,name:p.name,pos:p.position,ovr:p.ovr??overall(p)}))),
-      sums:autoSplit.sums,sumsNoGK,avgsNoGK, formations, board: placedByTeam
-    },`match_${dateISO.replace(/[:T]/g,'-')}.json`)
+    downloadJSON(
+      {
+        dateISO,mode,teamCount:teams,criterion,selectionMode:'manual',
+        location:{preset:locationPreset,name:locationName,address:locationAddress},
+        teams:previewTeams.map(t=>t.map(p=>({id:p.id,name:p.name,pos:p.position,ovr:p.ovr??overall(p)}))),
+        sums:autoSplit.sums,sumsNoGK,avgsNoGK, formations, board: placedByTeam
+      },
+      `match_${dateISO.replace(/[:T]/g,'-')}.json`
+    )
   }
 
   const allSelected=attendeeIds.length===players.length&&players.length>0
   const toggleSelectAll=()=>allSelected?setAttendeeIds([]):setAttendeeIds(players.map(p=>p.id))
 
-  /* ───────────────  Team list DnD (disabled when editor open) ─────────────── */
+  /* ───────────────  Team list DnD  ─────────────── */
   const sensors=useSensors(
     useSensor(PointerSensor,{activationConstraint:{distance:4}}),
     useSensor(TouchSensor,{activationConstraint:{delay:120,tolerance:6}})
@@ -128,7 +152,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
     next[to].splice(overId.startsWith('team-')?next[to].length:(overIdx>=0?overIdx:next[to].length),0,moving)
     setManualTeams(next); setActiveFromTeam(null)
 
-    // reflect on boards
+    // 보드 반영(저장용 데이터)
     setPlacedByTeam(prev=>{
       const arr=Array.isArray(prev)?[...prev]:[]
       // to
@@ -151,22 +175,12 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
     })
   }
 
-  // ── 풀스크린 편집: 라이브 / 저장본 오픈
-  const openEditorLive = (i) => {
-    setEditorMode('live')
-    setEditingMatchId(null)
-    setEditorPlayers(previewTeams) // 현재 미리보기의 팀 배열
-    setEditingTeamIdx(i)
-    setEditorOpen(true)
-  }
+  // 저장본을 모달로 열기 (프리뷰는 제거)
   const openEditorSaved = (match, i) => {
-    const hydrated = hydrateMatch(match, players) // 저장 당시 스냅샷을 최신 선수 정보로 매핑
-    // 저장된 formations/board를 작업 버퍼에 로드
+    const hydrated = hydrateMatch(match, players)
     setFormations(Array.isArray(match.formations) ? match.formations.slice() : [])
     setPlacedByTeam(Array.isArray(match.board) ? match.board.map(a => Array.isArray(a) ? a.slice() : []) : [])
     setEditorPlayers(hydrated.teams || [])
-
-    setEditorMode('saved')
     setEditingMatchId(match.id)
     setEditingTeamIdx(i)
     setEditorOpen(true)
@@ -177,8 +191,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
     setFormations(prev=>{ const copy=[...prev]; copy[i]=f; return copy })
     setPlacedByTeam(prev=>{
       const copy=Array.isArray(prev)?[...prev]:[]
-      const srcTeams = editorMode === 'saved' ? editorPlayers : previewTeams
-      copy[i]=assignToFormation({players:srcTeams[i]||[],formation:f})
+      copy[i]=assignToFormation({players:editorPlayers[i]||[],formation:f})
       return copy
     })
   }
@@ -186,8 +199,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
     setPlacedByTeam(prev=>{
       const copy=Array.isArray(prev)?[...prev]:[]
       const f=formations[i]||'4-3-3'
-      const srcTeams = editorMode === 'saved' ? editorPlayers : previewTeams
-      copy[i]=assignToFormation({players:srcTeams[i]||[],formation:f})
+      copy[i]=assignToFormation({players:editorPlayers[i]||[],formation:f})
       return copy
     })
   }
@@ -196,10 +208,6 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_600px]">
       <Card title="매치 설정"
         right={<div className="flex items-center gap-2">
-          <select className="rounded border border-gray-300 bg-white px-2 py-1 text-sm" value={criterion} onChange={e=>setCriterion(e.target.value)}>
-            <option value="overall">전체</option><option value="attack">공격</option><option value="defense">수비</option><option value="pace">스피드</option>
-          </select>
-          <span className="rounded bg-emerald-50 px-2 py-1 text-xs text-emerald-700">추천 {autoSuggestion.mode} · {autoSuggestion.teams}팀</span>
         </div>}
       >
         <div className="grid gap-4">
@@ -236,14 +244,14 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
               <select className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" value={teams} onChange={e=>setTeamCount(Number(e.target.value))}>
                 {Array.from({length:9},(_,i)=>i+2).map(n=><option key={n} value={n}>{n}팀</option>)}
               </select>
-              <span className="text-xs text-gray-500">적용: {mode} · {teams}팀</span>
             </div>
           </Row>
 
           <Row label={<span className="flex items-center gap-2">참석 ({attendeeIds.length}명)
             <button type="button" onClick={toggleSelectAll}
               className="ml-2 rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-100">
-              {allSelected?'모두 해제':'모두 선택'}</button></span>}>
+              {allSelected?'모두 해제':'모두 선택'}</button>
+              </span>}>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
               {players.map(p=>(
                 <label key={p.id} className={`flex items-center gap-2 rounded border px-3 py-2 ${attendeeIds.includes(p.id)?'border-emerald-400 bg-emerald-50':'border-gray-200 bg-white hover:bg-gray-50'}`}>
@@ -265,7 +273,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
         </div>
       </Card>
 
-      {/* 오른쪽: 팀 미리보기 */}
+      {/* 오른쪽: 팀 배정 미리보기 — ⚠️ 포메이션 프리뷰 완전 제거 */}
       <div className="grid gap-4">
         <Card title="팀 배정 미리보기 (드래그 & 드랍 커스텀 가능)"
           right={<div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">기준: {criterion} · <span className="font-medium">GK 평균 제외</span></div>}>
@@ -279,38 +287,29 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
             manualTeams={manualTeams}
           />
 
-          {!editorOpen && (
-            <DndContext sensors={sensors} collisionDetection={pointerWithin}
-              onDragStart={onDragStartHandler} onDragCancel={onDragCancel} onDragEnd={onDragEndHandler}>
-              <div className="grid gap-4" style={{gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))'}}>
-                {previewTeams.map((list,i)=>(
-                  <div key={i} className="space-y-2">
-                    <TeamColumn teamIndex={i} labelKit={kitForTeam(i)} players={list} hideOVR={hideOVR} />
-                    <MiniPitch
-                      players={list}
-                      placed={Array.isArray(placedByTeam[i])?placedByTeam[i]:[]}
-                      height={150}
-                      onEdit={()=>openEditorLive(i)}   // ⬅️ 라이브 편집
-                      formation={formations[i]||'4-3-3'}
-                      mode={mode}
-                    />
-                  </div>
-                ))}
-              </div>
-              <DragOverlay>{activePlayerId? <DragGhost player={players.find(p=>String(p.id)===String(activePlayerId))} hideOVR={hideOVR}/>:null}</DragOverlay>
-            </DndContext>
-          )}
+          <DndContext sensors={sensors} collisionDetection={pointerWithin}
+            onDragStart={onDragStartHandler} onDragCancel={onDragCancel} onDragEnd={onDragEndHandler}>
+            <div className="grid gap-4" style={{gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))'}}>
+              {previewTeams.map((list,i)=>(
+                <div key={i} className="space-y-2">
+                  <TeamColumn teamIndex={i} labelKit={kitForTeam(i)} players={list} hideOVR={hideOVR} />
+                  {/* ⛔️ 포메이션 프리뷰/버튼 제거 */}
+                </div>
+              ))}
+            </div>
+            <DragOverlay>{activePlayerId? <DragGhost player={players.find(p=>String(p.id)===String(activePlayerId))} hideOVR={hideOVR}/>:null}</DragOverlay>
+          </DndContext>
         </Card>
 
-        {/* 저장된 매치: 읽기/편집 겸용 */}
+        {/* 저장된 매치: 프리뷰 없이 '포메이션 편집' 버튼만 제공 + 툴바 + 유튜브 링크 관리 */}
         <Card
-          title="저장된 매치 (최신 선수 이름으로 하이드레이트, 좌표는 저장값)"
+          title="저장된 매치"
           right={<div className="text-xs text-gray-500"><span className="font-medium">GK 평균 제외</span></div>}
         >
           {matches.length===0 ? <div className="text-sm text-gray-500">저장된 매치가 없습니다.</div> :
           <ul className="space-y-2">
             {matches.map(m=>{
-              const hydrated=hydrateMatch(m,players) // 최신 이름/포지션 매핑
+              const hydrated=hydrateMatch(m,players)
               return (
                 <li key={m.id} className="rounded border border-gray-200 bg-white p-3">
                   <div className="mb-2 flex items-center justify-between">
@@ -318,19 +317,13 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                     <button className="text-xs text-red-600" onClick={()=>onDeleteMatch(m.id)}>삭제</button>
                   </div>
 
-                  <div className="grid gap-3" style={{gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))'}}>
+                  {/* 팀 표: 모바일에서도 항상 2열 고정 */}
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
                     {hydrated.teams.map((list,i)=>{
                       const kit=kitForTeam(i)
                       const non=list.filter(p=>(p.position||p.pos)!=='GK')
                       const sum=non.reduce((a,p)=>a+(p.ovr??overall(p)),0)
                       const avg=non.length?Math.round(sum/non.length):0
-
-                      const formation = Array.isArray(m.formations) ? (m.formations[i] || '4-3-3') : '4-3-3'
-                      // 저장된 좌표를 최신 이름으로 보정
-                      const placed = (Array.isArray(m.board?.[i]) ? m.board[i] : []).map(slot=>{
-                        const latest = players.find(pp => String(pp.id) === String(slot.id))
-                        return latest ? { ...slot, name: latest.name, role: (latest.position || latest.pos) || slot.role } : slot
-                      })
 
                       return (
                         <div key={i} className="space-y-2 rounded border border-gray-200">
@@ -339,23 +332,13 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                             <span className="opacity-80">{kit.label} · {list.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</span>
                           </div>
 
-                          <div className="px-2">
-                            <MiniPitch
-                              placed={placed}
-                              height={150}
-                              onEdit={()=>openEditorSaved(m, i)}   // ⬅️ 저장본 편집
-                              formation={formation}
-                              mode={m.mode}
-                            />
-                            <div className="mt-1 flex items-center justify-between text-[11px] text-gray-500">
-                              <span>저장된 포메이션: <b>{formation}</b></span>
-                              <button
-                                className="rounded border border-gray-300 bg-white px-2 py-1"
-                                onClick={()=>openEditorSaved(m, i)}
-                              >
-                                포메이션 편집
-                              </button>
-                            </div>
+                          <div className="px-2 pb-2">
+                            <button
+                              className="rounded border border-gray-300 bg-white px-2 py-1 text-xs"
+                              onClick={()=>openEditorSaved(m, i)}
+                            >
+                              포메이션 편집
+                            </button>
                           </div>
 
                           {/* 팀원 리스트 */}
@@ -375,6 +358,52 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                       )
                     })}
                   </div>
+
+                  {/* 🎥 유튜브 링크 간편 관리 섹션 */}
+                  <div className="mt-3 space-y-2">
+                    <div className="text-xs font-semibold text-gray-600">🎥 유튜브 링크</div>
+
+                    {(m.videos && m.videos.length > 0) ? (
+                      <ul className="flex flex-wrap gap-2">
+                        {m.videos.map((url, idx) => (
+                          <li key={idx} className="flex items-center gap-2">
+                            <a
+                              href={url}
+                              target="_blank" rel="noreferrer"
+                              className="max-w-[220px] truncate rounded border border-gray-300 bg-white px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
+                              title={url}
+                            >
+                              {url}
+                            </a>
+                            <button
+                              className="text-[11px] text-red-600"
+                              onClick={()=>removeVideoLink(m, idx)}
+                              title="삭제"
+                            >
+                              삭제
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="text-xs text-gray-500">등록된 링크가 없습니다.</div>
+                    )}
+
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+                        placeholder="https://youtu.be/... 또는 https://www.youtube.com/watch?v=..."
+                        value={videoDrafts[m.id] || ''}
+                        onChange={e=>handleVideoInput(m.id, e.target.value)}
+                      />
+                      <button
+                        className="whitespace-nowrap rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+                        onClick={()=>addVideoLink(m)}
+                      >
+                        추가
+                      </button>
+                    </div>
+                  </div>
                 </li>
               )
             })}
@@ -382,7 +411,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
         </Card>
       </div>
 
-      {/* ───────────────  풀스크린 포메이션 에디터  ─────────────── */}
+      {/* ───────────────  풀스크린 포메이션 에디터 (저장본 전용)  ─────────────── */}
       {editorOpen && (
         <FullscreenModal onClose={closeEditor}>
           <div className="flex items-center justify-between mb-3">
@@ -400,29 +429,27 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
               </select>
               <button onClick={()=>autoPlaceTeam(editingTeamIdx)} className="rounded bg-emerald-500 px-3 py-1 text-sm font-semibold text-white">자동 배치</button>
 
-              {editorMode==='saved' && (
-                <button
-                  onClick={()=>{
-                    onUpdateMatch(editingMatchId, { formations, board: placedByTeam })
-                    setEditorOpen(false)
-                  }}
-                  className="rounded bg-stone-900 px-3 py-1 text-sm font-semibold text-white"
-                >
-                  저장
-                </button>
-              )}
+              <button
+                onClick={()=>{
+                  onUpdateMatch(editingMatchId, { formations, board: placedByTeam })
+                  setEditorOpen(false)
+                }}
+                className="rounded bg-stone-900 px-3 py-1 text-sm font-semibold text-white"
+              >
+                저장
+              </button>
 
               <button onClick={closeEditor} className="rounded border border-gray-300 bg-white px-3 py-1 text-sm">닫기</button>
             </div>
           </div>
           <div className="mb-2 text-xs text-gray-500">
-            컨텍스트: <b>{editorMode==='saved' ? '저장본 편집' : '현재 미리보기'}</b>
+            컨텍스트: <b>저장본 편집</b>
             &nbsp;·&nbsp; 팀: <b>{editingTeamIdx+1}</b>
             &nbsp;·&nbsp; 포메이션: <b>{formations[editingTeamIdx]||'4-3-3'}</b>
-            &nbsp;·&nbsp; 인원: <b>{(editorPlayers[editingTeamIdx]||previewTeams[editingTeamIdx]||[]).length}명</b>
+            &nbsp;·&nbsp; 인원: <b>{(editorPlayers[editingTeamIdx]||[]).length}명</b>
           </div>
           <FreePitch
-            players={(editorMode==='saved' ? (editorPlayers[editingTeamIdx]||[]) : (previewTeams[editingTeamIdx]||[]))}
+            players={(editorPlayers[editingTeamIdx]||[])}
             placed={Array.isArray(placedByTeam[editingTeamIdx])?placedByTeam[editingTeamIdx]:[]}
             setPlaced={(nextOrUpdater)=>{
               setPlacedByTeam(prev=>{
@@ -459,10 +486,6 @@ function Toolbar({hideOVR,setHideOVR,reshuffleTeams,sortTeamsByOVR,resetManual,m
           <span className={`inline-block h-2.5 w-2.5 rounded-full ${hideOVR?'bg-emerald-500':'bg-gray-300'}`}></span>OVR 숨기기
         </button>
         <span className="mx-1 hidden sm:inline-block h-5 w-px bg-gray-200" />
-        <button type="button" onClick={reshuffleTeams} className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm hover:bg-gray-50"><span className="text-base">🎲</span> 랜덤</button>
-        <button type="button" onClick={()=>sortTeamsByOVR('asc')} className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm hover:bg-gray-50"><span className="text-base">⬆️</span> OVR</button>
-        <button type="button" onClick={()=>sortTeamsByOVR('desc')} className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm hover:bg-gray-50"><span className="text-base">⬇️</span> OVR</button>
-        {manualTeams && <button type="button" onClick={resetManual} className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 shadow-sm hover:bg-gray-50"><span className="text-base">↺</span> 초기화</button>}
       </div>
     </div>
   )
