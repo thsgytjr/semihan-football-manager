@@ -1,4 +1,3 @@
-// src/pages/MatchPlanner.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Card from '../components/Card'
 import { mkMatch, decideMode, splitKTeams, hydrateMatch } from '../lib/match'
@@ -19,12 +18,12 @@ import FreePitch from '../components/pitch/FreePitch'
 import { assignToFormation, recommendFormation, countPositions } from '../lib/formation'
 import { seededShuffle } from '../utils/random'
 
-export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMatch, onUpdateMatch }){
+export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMatch, onUpdateMatch, isAdmin }){
   const [dateISO,setDateISO]=useState(()=>new Date().toISOString().slice(0,16))
   const [attendeeIds,setAttendeeIds]=useState([])
   const [criterion,setCriterion]=useState('overall')
   const [teamCount,setTeamCount]=useState(2)
-  const [hideOVR,setHideOVR]=useState(false)
+  const [hideOVR,setHideOVR]=useState(false) // Admin만 토글 가능(일반 사용자는 항상 숨김)
   const [shuffleSeed,setShuffleSeed]=useState(0)
 
   const [locationPreset,setLocationPreset]=useState('coppell-west')
@@ -103,8 +102,9 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
 
   const toggle=id=>setAttendeeIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id])
 
-  // 저장: "지금 보이는 그대로" 스냅샷 저장
+  // 저장: "지금 보이는 그대로" 스냅샷 저장 (Admin만)
   function save(){
+    if(!isAdmin){ notify('Admin만 가능합니다.'); return }
     const baseTeams = (latestTeamsRef.current && latestTeamsRef.current.length)
       ? latestTeamsRef.current
       : previewTeams
@@ -134,13 +134,14 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
   }
 
   function exportTeams(){
+    if(!isAdmin){ notify('Admin만 가능합니다.'); return }
     const sumsNoGK=previewTeams.map(list=>list.filter(p=>(p.position||p.pos)!=='GK').reduce((a,p)=>a+(p.ovr??overall(p)),0))
     const avgsNoGK=sumsNoGK.map((sum,i)=>{const n=previewTeams[i].filter(p=>(p.position||p.pos)!=='GK').length;return n?Math.round(sum/n):0})
     downloadJSON(
       {
         dateISO,mode,teamCount:teams,criterion,selectionMode:'manual',
         location:{preset:locationPreset,name:locationName,address:locationAddress},
-        teams:previewTeams.map(t=>t.map(p=>({id:p.id,name:p.name,pos:p.position,ovr:p.ovr??overall(p)}))),
+        teams:previewTeams.map(t=>t.map(p=>({id:p.id,name:p.name,pos:p.position}))), // 비관리자 노출 고려: OVR 제외
         sums:autoSplit.sums,sumsNoGK,avgsNoGK, formations, board: placedByTeam
       },
       `match_${dateISO.replace(/[:T]/g,'-')}.json`
@@ -221,6 +222,9 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
     })
   }
 
+  // 표시 제어: 일반 사용자는 OVR 항상 숨김
+  const showOVR = isAdmin && !hideOVR
+
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_600px]">
       <Card title="매치 설정">
@@ -274,15 +278,19 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                   <span className="text-sm flex-1 whitespace-normal break-words">
                     {p.name} {(p.position||p.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}
                   </span>
-                  {!hideOVR && (p.position||p.pos)!=='GK' && <span className="text-xs text-gray-500 shrink-0">OVR {p.ovr??overall(p)}</span>}
+                  {showOVR && (p.position||p.pos)!=='GK' && <span className="text-xs text-gray-500 shrink-0">OVR {p.ovr??overall(p)}</span>}
                 </label>
               ))}
             </div>
           </Row>
 
           <div className="flex gap-2">
-            <button onClick={save} className="rounded bg-emerald-500 px-4 py-2 text-white font-semibold">매치 저장</button>
-            <button onClick={exportTeams} className="rounded border border-gray-300 bg-white px-4 py-2 text-gray-700">라인업 Export</button>
+            {isAdmin && (
+              <button onClick={save} className="rounded bg-emerald-500 px-4 py-2 text-white font-semibold">매치 저장</button>
+            )}
+            {isAdmin && (
+              <button onClick={exportTeams} className="rounded border border-gray-300 bg-white px-4 py-2 text-gray-700">라인업 Export</button>
+            )}
           </div>
         </div>
       </Card>
@@ -296,6 +304,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
           </div>}
         >
           <Toolbar
+            isAdmin={isAdmin}
             hideOVR={hideOVR}
             setHideOVR={setHideOVR}
             reshuffleTeams={() => {
@@ -323,18 +332,20 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
           />
 
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              aria-pressed={hideOVR}
-              onClick={() => setHideOVR((v) => !v)}
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ${
-                hideOVR ? "border-emerald-500 text-emerald-700 bg-emerald-50"
-                        : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
-              }`}
-            >
-              <span className={`inline-block h-2.5 w-2.5 rounded-full ${hideOVR ? "bg-emerald-500" : "bg-gray-300"}`}></span>
-              OVR 숨기기
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                aria-pressed={hideOVR}
+                onClick={() => setHideOVR((v) => !v)}
+                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ${
+                  hideOVR ? "border-emerald-500 text-emerald-700 bg-emerald-50"
+                          : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
+                }`}
+              >
+                <span className={`inline-block h-2.5 w-2.5 rounded-full ${hideOVR ? "bg-emerald-500" : "bg-gray-300"}`}></span>
+                OVR 숨기기
+              </button>
+            )}
 
             <button
               onClick={() => {
@@ -364,13 +375,13 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
             <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
               {previewTeams.map((list, i) => (
                 <div key={i} className="space-y-2">
-                  <TeamColumn teamIndex={i} labelKit={kitForTeam(i)} players={list} hideOVR={hideOVR} />
+                  <TeamColumn teamIndex={i} labelKit={kitForTeam(i)} players={list} showOVR={showOVR} isAdmin={isAdmin} />
                 </div>
               ))}
             </div>
             <DragOverlay>
               {activePlayerId ? (
-                <DragGhost player={players.find(p => String(p.id) === String(activePlayerId))} hideOVR={hideOVR} />
+                <DragGhost player={players.find(p => String(p.id) === String(activePlayerId))} showOVR={showOVR} />
               ) : null}
             </DragOverlay>
           </DndContext>
@@ -386,7 +397,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                 <li key={m.id} className="rounded border border-gray-200 bg-white p-3">
                   <div className="mb-2 flex items-center justify-between">
                     <div className="text-sm"><b>{m.dateISO.replace('T',' ')}</b> · {m.mode} · {m.teamCount}팀 · 참석 {m.attendeeIds.length}명{m.location?.name?<> · 장소 {m.location.name}</>:null}</div>
-                    <button className="text-xs text-red-600" onClick={()=>onDeleteMatch(m.id)}>삭제</button>
+                    {isAdmin && <button className="text-xs text-red-600" onClick={()=>onDeleteMatch(m.id)}>삭제</button>}
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 sm:gap-3">
@@ -399,7 +410,8 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                         <div key={i} className="space-y-2 rounded border border-gray-200">
                           <div className={`mb-1 flex items-center justify-between px-2 py-1 text-xs ${kit.headerClass}`}>
                             <span>팀 {i+1}</span>
-                            <span className="opacity-80">{kit.label} · {list.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</span>
+                            {isAdmin && <span className="opacity-80">{kit.label} · {list.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</span>}
+                            {!isAdmin && <span className="opacity-80">{kit.label} · {list.length}명</span>}
                           </div>
                           <div className="px-2 pb-2">
                             <button className="rounded border border-gray-300 bg-white px-2 py-1 text-xs" onClick={()=>openEditorSaved(m, i)}>포메이션 편집</button>
@@ -411,7 +423,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                                   <InitialAvatar id={p.id} name={p.name} size={24} />
                                   <span className="truncate">{p.name} {(p.position||p.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}</span>
                                 </span>
-                                {!hideOVR && (p.position||p.pos)!=='GK' && <span className="text-gray-500 shrink-0">OVR {p.ovr??overall(p)}</span>}
+                                {showOVR && (p.position||p.pos)!=='GK' && <span className="text-gray-500 shrink-0">OVR {p.ovr??overall(p)}</span>}
                               </li>
                             ))}
                             {list.length===0 && <li className="px-1 py-1 text-xs text-gray-400">팀원 없음</li>}
@@ -431,7 +443,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                             <a href={url} target="_blank" rel="noreferrer" className="max-w-[220px] truncate rounded border border-gray-300 bg-white px-2 py-1 text-xs text-blue-600 hover:bg-blue-50" title={url}>
                               {url}
                             </a>
-                            <button className="text-[11px] text-red-600" onClick={()=>removeVideoLink(m, idx)} title="삭제">삭제</button>
+                            {isAdmin && <button className="text-[11px] text-red-600" onClick={()=>removeVideoLink(m, idx)} title="삭제">삭제</button>}
                           </li>
                         ))}
                       </ul>
@@ -507,37 +519,49 @@ function Row({label,children}){return(
     <label className="mt-1 text-sm text-gray-600">{label}</label><div>{children}</div>
   </div>
 )}
-function Toolbar({hideOVR,setHideOVR,reshuffleTeams,sortTeamsByOVR,resetManual,manualTeams}){
+function Toolbar({isAdmin,hideOVR,setHideOVR,reshuffleTeams,sortTeamsByOVR,resetManual,manualTeams}){
   return (
     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={reshuffleTeams} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">시드로 섞기</button>
-        <button onClick={()=>sortTeamsByOVR('desc')} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">팀 OVR 내림차순</button>
-        <button onClick={()=>sortTeamsByOVR('asc')} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">팀 OVR 오름차순</button>
-        <button onClick={resetManual} disabled={!manualTeams} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">수동 편집 초기화</button>
+        {isAdmin && (
+          <>
+            <button onClick={()=>sortTeamsByOVR('desc')} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">팀 OVR 내림차순</button>
+            <button onClick={()=>sortTeamsByOVR('asc')} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">팀 OVR 오름차순</button>
+            <button onClick={resetManual} disabled={!manualTeams} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">수동 편집 초기화</button>
+          </>
+        )}
+        {!isAdmin && (
+          <button onClick={resetManual} disabled={!manualTeams} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">수동 편집 초기화</button>
+        )}
       </div>
     </div>
   )
 }
-function TeamColumn({ teamIndex,labelKit,players,hideOVR }){
+function TeamColumn({ teamIndex,labelKit,players,showOVR,isAdmin }){
   const id=`team-${teamIndex}`; const { setNodeRef,isOver }=useDroppable({ id })
   const non=players.filter(p=>(p.position||p.pos)!=='GK'), sum=non.reduce((a,p)=>a+(p.ovr??overall(p)),0), avg=non.length?Math.round(sum/non.length):0
   return (
     <div ref={setNodeRef} className={`rounded-lg border bg-white transition ${isOver?'border-emerald-500 ring-2 ring-emerald-200':'border-gray-200'}`}>
       <div className={`mb-1 flex items-center justify-between px-3 py-2 text-xs ${labelKit.headerClass}`}>
-        <div className="font-semibold">팀 {teamIndex+1}</div><div className="opacity-80">{labelKit.label} · {players.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</div>
+        <div className="font-semibold">팀 {teamIndex+1}</div>
+        {isAdmin ? (
+          <div className="opacity-80">{labelKit.label} · {players.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</div>
+        ) : (
+          <div className="opacity-80">{labelKit.label} · {players.length}명</div>
+        )}
       </div>
       <SortableContext id={id} items={players.map(p=>String(p.id))} strategy={verticalListSortingStrategy}>
         <ul className="space-y-1 px-3 pb-3 text-sm min-h-[44px]">
           {isOver && <li className="rounded border-2 border-dashed border-emerald-400/70 bg-emerald-50/40 px-2 py-1 text-xs text-emerald-700">여기에 드롭</li>}
-          {players.map(p=><PlayerRow key={p.id} player={p} hideOVR={hideOVR} />)}
+          {players.map(p=><PlayerRow key={p.id} player={p} showOVR={showOVR} />)}
           {players.length===0 && !isOver && <li className="text-xs text-gray-400">팀원 없음 — 이 카드로 드래그해서 추가</li>}
         </ul>
       </SortableContext>
     </div>
   )
 }
-function PlayerRow({ player,hideOVR }){
+function PlayerRow({ player,showOVR }){
   const { attributes,listeners,setNodeRef,transform,transition,isDragging }=useSortable({ id:String(player.id) })
   const style={ transform:CSS.Transform.toString(transform), transition,
     opacity: isDragging ? 0.7 : 1, boxShadow:isDragging?'0 6px 18px rgba(0,0,0,.12)':undefined,
@@ -550,17 +574,17 @@ function PlayerRow({ player,hideOVR }){
         <InitialAvatar id={player.id} name={player.name} size={24} />
         <span className="whitespace-normal break-words">{player.name} {(player.position||player.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}</span>
       </span>
-      {!hideOVR && (player.position||player.pos)!=='GK' && <span className="text-gray-500 text-xs shrink-0">OVR {player.ovr??overall(player)}</span>}
+      {showOVR && (player.position||player.pos)!=='GK' && <span className="text-gray-500 text-xs shrink-0">OVR {player.ovr??overall(player)}</span>}
     </li>
   )
 }
-function DragGhost({ player,hideOVR }){
+function DragGhost({ player,showOVR }){
   if(!player) return null
   return (
     <div className="rounded-full border border-emerald-300 bg-white px-3 py-1.5 shadow-xl text-sm flex items-center gap-2 scale-[1.04]" style={{filter:'drop-shadow(0 8px 20px rgba(0,0,0,.18))'}}>
       <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white text-[11px]">⇆</span>
       <span className="font-medium">{player.name}</span>
-      {!hideOVR && (player.position||player.pos)!=='GK' && <span className="text-gray-500">OVR {player.ovr??overall(player)}</span>}
+      {showOVR && (player.position||player.pos)!=='GK' && <span className="text-gray-500">OVR {player.ovr??overall(player)}</span>}
     </div>
   )
 }

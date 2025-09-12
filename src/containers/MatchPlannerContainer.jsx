@@ -1,10 +1,9 @@
-// src/containers/MatchPlannerContainer.jsx
 import { useEffect, useState } from 'react'
 import MatchPlanner from '../pages/MatchPlanner'
 import { saveMatch, updateMatch, deleteMatch, listMatches } from '../lib/matches.service'
 
 // props: players 배열을 부모에서 내려주면 됩니다.
-export default function MatchPlannerContainer({ players }) {
+export default function MatchPlannerContainer({ players, isAdmin }) {
   const [matches, setMatches] = useState([])
 
   useEffect(() => {
@@ -19,6 +18,7 @@ export default function MatchPlannerContainer({ players }) {
   }, [])
 
   const onSaveMatch = async (matchObj) => {
+    if(!isAdmin){ alert('Admin만 가능합니다.'); return }
     try {
       const row = await saveMatch(matchObj)
       setMatches(prev => [row, ...prev])
@@ -39,6 +39,7 @@ export default function MatchPlannerContainer({ players }) {
   }
 
   const onDeleteMatch = async (id) => {
+    if(!isAdmin){ alert('Admin만 가능합니다.'); return }
     try {
       await deleteMatch(id)
       setMatches(prev => prev.filter(m => m.id !== id))
@@ -55,6 +56,7 @@ export default function MatchPlannerContainer({ players }) {
       onSaveMatch={onSaveMatch}
       onUpdateMatch={onUpdateMatch}
       onDeleteMatch={onDeleteMatch}
+      isAdmin={isAdmin}
     />
   )
 }

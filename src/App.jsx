@@ -1,4 +1,3 @@
-// src/App.jsx
 import React, { useEffect, useMemo, useState } from "react"
 import { Home, Users, CalendarDays } from "lucide-react"
 
@@ -17,10 +16,31 @@ import Dashboard from "./pages/Dashboard"
 import PlayersPage from "./pages/PlayersPage"
 import MatchPlanner from "./pages/MatchPlanner"
 
+// ✅ 간편 Admin(공유 비밀번호) — 로컬 저장
+const ADMIN_PASS = import.meta.env.VITE_ADMIN_PASSWORD || "letmein"
+
 export default function App() {
   const [tab, setTab] = useState("dashboard") // 'dashboard' | 'players' | 'planner'
   const [db, setDb] = useState({ players: [], matches: [] })
   const [selectedPlayerId, setSelectedPlayerId] = useState(null)
+  const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem("isAdmin") === "1")
+
+  function adminLogin() {
+    const input = prompt("Admin 비밀번호를 입력하세요")
+    if (!input) return
+    if (input === ADMIN_PASS) {
+      localStorage.setItem("isAdmin", "1")
+      setIsAdmin(true)
+      notify("Admin 모드 활성화")
+    } else {
+      notify("비밀번호가 올바르지 않습니다.")
+    }
+  }
+  function adminLogout() {
+    localStorage.removeItem("isAdmin")
+    setIsAdmin(false)
+    notify("Admin 모드 해제")
+  }
 
   // ✅ 최초 로드 + 실시간 구독
   useEffect(() => {
@@ -49,18 +69,17 @@ export default function App() {
   const players = db.players || []
   const matches = db.matches || []
 
-  // ✅ 대시보드 요약
+  // ✅ 대시보드 요약(간단)
   const totals = useMemo(() => {
     const cnt = players.length
-    const goalsProxy = Math.round(
-      players.reduce((a, p) => a + (p.stats?.Shooting || 0) * 0.1, 0)
-    )
+    const goalsProxy = Math.round(players.reduce((a, p) => a + (p.stats?.Shooting || 0) * 0.1, 0))
     const attendanceProxy = Math.round(60 + players.length * 2)
     return { count: cnt, goals: goalsProxy, attendance: attendanceProxy }
   }, [players])
 
-  /* ---------------- 선수 핸들러 (Supabase) ---------------- */
+  /* ---------------- 선수 핸들러 ---------------- */
   async function handleCreatePlayer() {
+    if (!isAdmin) return notify("Admin만 가능합니다.")
     const p = mkPlayer("새 선수", "MF")
     setDb(prev => ({ ...prev, players: [p, ...(prev.players || [])] })) // 낙관적
     setSelectedPlayerId(p.id)
@@ -69,6 +88,7 @@ export default function App() {
   }
 
   async function handleUpdatePlayer(next) {
+    if (!isAdmin) return notify("Admin만 가능합니다.")
     setDb(prev => ({
       ...prev,
       players: (prev.players || []).map(x => x.id === next.id ? next : x),
@@ -77,12 +97,14 @@ export default function App() {
   }
 
   async function handleDeletePlayer(id) {
+    if (!isAdmin) return notify("Admin만 가능합니다.")
     setDb(prev => ({ ...prev, players: (prev.players || []).filter(p => p.id !== id) }))
     if (selectedPlayerId === id) setSelectedPlayerId(null)
     try { await deletePlayer(id); notify("선수를 삭제했습니다.") } catch (e) { console.error(e) }
   }
 
   function handleImportPlayers(list) {
+    if (!isAdmin) return notify("Admin만 가능합니다.")
     const safe = Array.isArray(list) ? list : []
     setDb(prev => ({ ...prev, players: safe }))
     Promise.all(safe.map(upsertPlayer))
@@ -92,6 +114,7 @@ export default function App() {
   }
 
   function handleResetPlayers() {
+    if (!isAdmin) return notify("Admin만 가능합니다.")
     ;(async () => {
       const fresh = await listPlayers()
       setDb(prev => ({ ...prev, players: fresh }))
@@ -102,26 +125,28 @@ export default function App() {
 
   /* ---------------- 매치 핸들러 (공유 JSON: appdb) ---------------- */
   function handleSaveMatch(match) {
+    if (!isAdmin) return notify("Admin만 가능합니다.")
     const next = [...(db.matches || []), match]
     setDb(prev => ({ ...prev, matches: next }))
     saveDB({ players: [], matches: next })
   }
 
   function handleDeleteMatch(id) {
+    if (!isAdmin) return notify("Admin만 가능합니다.")
     const next = (db.matches || []).filter(m => m.id !== id)
     setDb(prev => ({ ...prev, matches: next }))
     saveDB({ players: [], matches: next })
     notify("매치를 삭제했습니다.")
   }
 
-  // ✅ 저장된 매치 업데이트(포메이션/좌표 재저장)
+  // ✅ 저장된 매치 업데이트(포메이션/좌표/경기기록 재저장)
   function handleUpdateMatch(id, patch) {
     const next = (db.matches || []).map(m =>
       m.id === id ? { ...m, ...patch } : m
     )
     setDb(prev => ({ ...prev, matches: next }))
     saveDB({ players: [], matches: next })
-    notify("매치를 업데이트했습니다.")
+    notify("업데이트되었습니다.")
   }
 
   return (
@@ -137,25 +162,40 @@ export default function App() {
               semihan-football-manager
             </h1>
           </div>
-          <nav className="flex gap-1">
+          <nav className="flex gap-1 items-center">
             <TabButton
               icon={<Home size={16} />}
               label="대시보드"
               onClick={() => setTab("dashboard")}
               active={tab === "dashboard"}
             />
-            <TabButton
-              icon={<Users size={16} />}
-              label="선수 관리"
-              onClick={() => setTab("players")}
-              active={tab === "players"}
-            />
-            <TabButton
-              icon={<CalendarDays size={16} />}
-              label="매치 플래너"
-              onClick={() => setTab("planner")}
-              active={tab === "planner"}
-            />
+            {isAdmin && (
+              <TabButton
+                icon={<Users size={16} />}
+                label="선수 관리"
+                onClick={() => setTab("players")}
+                active={tab === "players"}
+              />
+            )}
+            {isAdmin && (
+              <TabButton
+                icon={<CalendarDays size={16} />}
+                label="매치 플래너"
+                onClick={() => setTab("planner")}
+                active={tab === "planner"}
+              />
+            )}
+            <div className="ml-2 pl-2 border-l border-stone-300">
+              {isAdmin ? (
+                <button onClick={adminLogout} className="rounded px-3 py-1.5 text-sm bg-stone-900 text-white">
+                  Admin 로그아웃
+                </button>
+              ) : (
+                <button onClick={adminLogin} className="rounded px-3 py-1.5 text-sm border border-stone-300 bg-white">
+                  Admin 로그인
+                </button>
+              )}
+            </div>
           </nav>
         </div>
       </header>
@@ -167,11 +207,12 @@ export default function App() {
             totals={totals}
             players={players}
             matches={matches}
-            onCreate={handleCreatePlayer}
+            isAdmin={isAdmin}
+            onUpdateMatch={handleUpdateMatch}   // ⬅️ 경기 후 골/어시 입력 저장
           />
         )}
 
-        {tab === "players" && (
+        {tab === "players" && isAdmin && (
           <PlayersPage
             players={players}
             selectedId={selectedPlayerId}
@@ -184,25 +225,24 @@ export default function App() {
           />
         )}
 
-        {tab === "planner" && (
+        {tab === "planner" && isAdmin && (
           <MatchPlanner
             players={players}
             matches={matches}
             onSaveMatch={handleSaveMatch}
             onDeleteMatch={handleDeleteMatch}
-            onUpdateMatch={handleUpdateMatch}   // ⬅️ 추가
+            onUpdateMatch={handleUpdateMatch}
+            isAdmin={isAdmin}
           />
         )}
       </main>
 
-      {/* 푸터 */}
+      {/* 푸터(간소화) */}
       <footer className="mx-auto mt-10 max-w-6xl px-4 pb-8">
         <Card title="도움말">
           <ul className="list-disc pl-5 text-sm text-stone-600">
-            <li>정회원은 자동으로 배지가 표시됩니다.</li>
-            <li>선수 저장 시 이름/멤버십은 필수입니다.</li>
-            <li>프로필은 이름 첫 글자 이니셜 아바타로 표시됩니다.</li>
-            <li>매치 플래너에서 장소 프리셋 또는 자유 입력을 이용하세요.</li>
+            <li>대시보드: 저장된 매치 열람, 공격포인트(골/어시/경기수) 트래킹</li>
+            <li>매치플래너: Admin 전용</li>
           </ul>
         </Card>
       </footer>
