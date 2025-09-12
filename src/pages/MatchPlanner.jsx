@@ -14,7 +14,9 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 
-/* ─ Formation helpers (내장) ─ */
+/* ──────────────────────────────────────────────────────────────────────────
+   Formation helpers
+   ────────────────────────────────────────────────────────────────────────── */
 const TEMPLATES={
   '4-3-3':[[92,[50]],[75,[12,35,65,88]],[55,[25,50,75]],[35,[20,50,80]]],
   '4-4-2':[[92,[50]],[75,[12,35,65,88]],[55,[15,40,60,85]],[35,[40,60]]],
@@ -35,37 +37,45 @@ const recommendFormation=({count,mode='auto',positions={}})=>{
   if(medium) return (positions.FW||0)>=3?'3-2-3':'3-3-2'
   return '2-3-1'
 }
+// 상단 어딘가에 함께 두면 좋아요
+const POS_RANK = { GK: 0, DF: 1, MF: 2, FW: 3 }
+const getPosRank = (p) => POS_RANK[(p.position || p.pos) || 'FW'] || 3
+
+// 교체본
 const assignToFormation = ({ players, formation }) => {
-  const g = gridOf(formation) || []; // g가 undefined일 경우 빈 배열로 초기화
-  const slots = g.flatMap(([y, xs]) => xs.map((x) => ({ x, y })));
+  const g = gridOf(formation) || []
+  const slots = g.flatMap(([y, xs]) => xs.map((x) => ({ x, y })))
 
-  const order = [...players].sort(
-    (a, b) =>
-      ({ GK: 0, DF: 1, MF: 2, FW: 3 }[(a.position || a.pos) || 'FW'] -
-      { GK: 0, DF: 1, MF: 2, FW: 3 }[(b.position || b.pos) || 'FW'])
-  );
+  // 포지션 우선순위로 정렬 (GK→DF→MF→FW)
+  const order = [...players].sort((a, b) => getPosRank(a) - getPosRank(b))
 
-  const last = g[0] || { 0: 92, 1: [50] }; // 기본값 추가
-  const gkSlots = (last[1] || [50]).map((x) => ({
-    x,
-    y: last[0] ?? 92, // 안전하게 last[0] 참조
-  }));
+  // 마지막 라인(보통 GK 라인) 정보 확보
+  // g는 [[y,[x...]], ...] 형태이므로 첫 요소가 없으면 기본값 사용
+  const last = Array.isArray(g[0]) ? g[0] : [92, [50]]
+  const lastY = Array.isArray(last) ? last[0] : 92
+  const lastXs = Array.isArray(last) ? last[1] : [50]
 
-  let field = 0,
-    gkUsed = 0;
+  // GK 슬롯들 (골키퍼 라인에 배치)
+  const gkSlots = (lastXs || [50]).map((x) => ({ x, y: (lastY != null ? lastY : 92) }))
+
+  let field = 0, gkUsed = 0
 
   return order.map((p) => {
-    const role = (p.position || p.pos) || 'FW';
-    if (role === 'GK' && gkUsed < gkSlots.length) {
-      const s = gkSlots[gkUsed++];
-      return { id: p.id, name: p.name, role, x: s.x, y: s.y };
-    }
-    const s = slots[field++] || slots[slots.length - 1] || { x: 50, y: 60 }; // 기본값 추가
-    return { id: p.id, name: p.name, role, x: s.x, y: s.y };
-  });
-};
+    const role = (p.position || p.pos) || 'FW'
 
-/* ─ 메인 ─ */
+    if (role === 'GK' && gkUsed < gkSlots.length) {
+      const s = gkSlots[gkUsed++]
+      return { id: p.id, name: p.name, role, x: s.x, y: s.y }
+    }
+
+    const s = slots[field++] || slots[slots.length - 1] || { x: 50, y: 60 }
+    return { id: p.id, name: p.name, role, x: s.x, y: s.y }
+  })
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Main
+   ────────────────────────────────────────────────────────────────────────── */
 export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMatch }){
   const [dateISO,setDateISO]=useState(()=>new Date().toISOString().slice(0,16))
   const [attendeeIds,setAttendeeIds]=useState([])
@@ -80,10 +90,11 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
   const [activePlayerId,setActivePlayerId]=useState(null)
   const [activeFromTeam,setActiveFromTeam]=useState(null)
 
-  // 필드 포메이션 상태
-  const [formation,setFormation]=useState('4-3-3')
-  const [selectedTeamIdx,setSelectedTeamIdx]=useState(0)
-  const [boardPlaced,setBoardPlaced]=useState([])
+  // per-team formation + field placement
+  const [formations,setFormations]=useState([])      // string[]
+  const [placedByTeam,setPlacedByTeam]=useState([])  // Array<Array<placed>>
+  const [editorOpen,setEditorOpen]=useState(false)
+  const [editingTeamIdx,setEditingTeamIdx]=useState(0)
 
   const count=attendeeIds.length, autoSuggestion=decideMode(count), mode=autoSuggestion.mode
   const teams=Math.max(2,Math.min(10,Number(teamCount)||2))
@@ -98,47 +109,60 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
     return base
   },[manualTeams,autoSplit.teams,shuffleSeed])
 
-  const currentTeam=previewTeams[selectedTeamIdx]??[]
+  // init / preserve board & formations per team
   useEffect(()=>{
-    const pos=countPositions(currentTeam)
-    const f=recommendFormation({count:currentTeam.length,mode,positions:pos})
-    setFormation(f)
-    setBoardPlaced(assignToFormation({players:currentTeam,formation:f}))
-  },[currentTeam,mode])
+    setFormations(prev=>{
+      const next=[...previewTeams].map((list,i)=>{
+        if(prev[i]) return prev[i]
+        return recommendFormation({count:list.length,mode,positions:countPositions(list)})
+      })
+      return next
+    })
+    setPlacedByTeam(prev=>{
+      const prevArr=Array.isArray(prev)?prev:[]
+      const next=previewTeams.map((list,i)=>{
+        const existed=Array.isArray(prevArr[i])?prevArr[i]:[]
+        const byId=new Map(existed.map(p=>[String(p.id),p]))
+        const base=assignToFormation({players:list,formation:(formations[i]||recommendFormation({count:list.length,mode,positions:countPositions(list)}))})
+        return base.map(d=>byId.get(String(d.id))||d)
+      })
+      return next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[previewTeams,mode])
 
-  function toggle(id){ setAttendeeIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id]) }
+  const toggle=id=>setAttendeeIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id])
+
   function save(){
     onSaveMatch(mkMatch({
       id:crypto.randomUUID?.()||String(Date.now()),
       dateISO, attendeeIds, criterion, players, selectionMode:'manual',
       teamCount:teams, location:{preset:locationPreset,name:locationName,address:locationAddress},
-      mode, snapshot:previewTeams.map(t=>t.map(p=>p.id))
+      mode, snapshot:previewTeams.map(t=>t.map(p=>p.id)),
+      board: placedByTeam, formations
     }))
   }
   function exportTeams(){
     const sumsNoGK=previewTeams.map(list=>list.filter(p=>(p.position||p.pos)!=='GK').reduce((a,p)=>a+(p.ovr??overall(p)),0))
     const avgsNoGK=sumsNoGK.map((sum,i)=>{const n=previewTeams[i].filter(p=>(p.position||p.pos)!=='GK').length;return n?Math.round(sum/n):0})
-    downloadJSON({
-      dateISO,mode,teamCount:teams,criterion,selectionMode:'manual',
+    downloadJSON({dateISO,mode,teamCount:teams,criterion,selectionMode:'manual',
       location:{preset:locationPreset,name:locationName,address:locationAddress},
       teams:previewTeams.map(t=>t.map(p=>({id:p.id,name:p.name,pos:p.position,ovr:p.ovr??overall(p)}))),
-      sums:autoSplit.sums,sumsNoGK,avgsNoGK
+      sums:autoSplit.sums,sumsNoGK,avgsNoGK, formations, board: placedByTeam
     },`match_${dateISO.replace(/[:T]/g,'-')}.json`)
   }
 
   const allSelected=attendeeIds.length===players.length&&players.length>0
-  function toggleSelectAll(){ allSelected?setAttendeeIds([]):setAttendeeIds(players.map(p=>p.id)) }
+  const toggleSelectAll=()=>allSelected?setAttendeeIds([]):setAttendeeIds(players.map(p=>p.id))
 
-  // 팀 칼럼 DnD
+  /* ───────────────  Team list DnD (disabled when editor open) ─────────────── */
   const sensors=useSensors(
     useSensor(PointerSensor,{activationConstraint:{distance:4}}),
     useSensor(TouchSensor,{activationConstraint:{delay:120,tolerance:6}})
   )
-  function findTeamIndexByItemId(itemId){
-    return previewTeams.findIndex(list=>list.some(p=>String(p.id)===String(itemId)))
-  }
-  function onDragStartHandler(e){ setActivePlayerId(e.active.id); setActiveFromTeam(findTeamIndexByItemId(e.active.id)); document.body.classList.add('cursor-grabbing') }
-  function onDragCancel(){ setActivePlayerId(null); setActiveFromTeam(null); document.body.classList.remove('cursor-grabbing') }
+  const findTeamIndexByItemId=(itemId)=>previewTeams.findIndex(list=>list.some(p=>String(p.id)===String(itemId)))
+  const onDragStartHandler=e=>{ setActivePlayerId(e.active.id); setActiveFromTeam(findTeamIndexByItemId(e.active.id)); document.body.classList.add('cursor-grabbing') }
+  const onDragCancel=()=>{ setActivePlayerId(null); setActiveFromTeam(null); document.body.classList.remove('cursor-grabbing') }
   function onDragEndHandler(e){
     const {active,over}=e; setActivePlayerId(null); document.body.classList.remove('cursor-grabbing'); if(!over) return
     const from=activeFromTeam, overId=String(over.id)
@@ -150,6 +174,49 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
     const overIdx=next[to].findIndex(p=>String(p.id)===overId)
     next[to].splice(overId.startsWith('team-')?next[to].length:(overIdx>=0?overIdx:next[to].length),0,moving)
     setManualTeams(next); setActiveFromTeam(null)
+
+    // reflect on boards
+    setPlacedByTeam(prev=>{
+      const arr=Array.isArray(prev)?[...prev]:[]
+      // to
+      {
+        const list=next[to]
+        const existed=Array.isArray(arr[to])?arr[to]:[]
+        const byId=new Map(existed.map(p=>[String(p.id),p]))
+        const base=assignToFormation({players:list,formation:formations[to]||'4-3-3'})
+        arr[to]=base.map(d=>byId.get(String(d.id))||d)
+      }
+      // from
+      {
+        const listFrom=next[from]
+        const existedFrom=Array.isArray(arr[from])?arr[from]:[]
+        const byIdFrom=new Map(existedFrom.map(p=>[String(p.id),p]))
+        const baseFrom=assignToFormation({players:listFrom,formation:formations[from]||'4-3-3'})
+        arr[from]=baseFrom.map(d=>byIdFrom.get(String(d.id))||d)
+      }
+      return arr
+    })
+  }
+
+  // modal controls
+  const openEditor=i=>{ setEditingTeamIdx(i); setEditorOpen(true) }
+  const closeEditor=()=> setEditorOpen(false)
+
+  const setTeamFormation=(i,f)=>{
+    setFormations(prev=>{ const copy=[...prev]; copy[i]=f; return copy })
+    setPlacedByTeam(prev=>{
+      const copy=Array.isArray(prev)?[...prev]:[]
+      copy[i]=assignToFormation({players:previewTeams[i]||[],formation:f})
+      return copy
+    })
+  }
+  const autoPlaceTeam=i=>{
+    setPlacedByTeam(prev=>{
+      const copy=Array.isArray(prev)?[...prev]:[]
+      const f=formations[i]||'4-3-3'
+      copy[i]=assignToFormation({players:previewTeams[i]||[],formation:f})
+      return copy
+    })
   }
 
   return (
@@ -225,46 +292,46 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
         </div>
       </Card>
 
-      {/* 우측: 포메이션 보드 + 팀 미리보기 */}
+      {/* 오른쪽: 팀 미리보기 */}
       <div className="grid gap-4">
-        <Card title="포메이션 추천 & 필드 보드(BETA)"
-          right={<div className="flex items-center gap-2">
-            <div className="hidden md:flex rounded border border-gray-300 overflow-hidden">
-              {previewTeams.map((_,i)=><button key={i} className={`px-2 py-1 text-xs ${i===selectedTeamIdx?'bg-emerald-500 text-white':'bg-white text-gray-700'}`} onClick={()=>setSelectedTeamIdx(i)}>팀{i+1}</button>)}
-            </div>
-            <select className="rounded border border-gray-300 bg-white px-2 py-1 text-sm" value={formation} onChange={e=>setFormation(e.target.value)}>
-              <option value="4-3-3">4-3-3</option><option value="4-4-2">4-4-2</option>
-              <option value="3-5-2">3-5-2</option><option value="3-3-2">9v9 · 3-3-2</option>
-              <option value="3-2-3">9v9 · 3-2-3</option><option value="2-3-1">7v7 · 2-3-1</option>
-            </select>
-            <button onClick={()=>setBoardPlaced(assignToFormation({players:currentTeam,formation}))}
-              className="rounded bg-emerald-500 px-3 py-1 text-sm font-semibold text-white">자동 배치</button>
-          </div>}
-        >
-          <div className="mb-2 text-xs text-gray-500">
-            선택팀: <b>팀 {selectedTeamIdx+1}</b> · 모드: <b>{mode}</b> · 추천: <b>{formation}</b> · 인원: <b>{currentTeam.length}명</b>
-          </div>
-          <FreePitch players={currentTeam} placed={boardPlaced} setPlaced={setBoardPlaced} />
-          <div className="mt-2 text-xs text-gray-500">* 필드 자유 배치 · GK는 하단 골키퍼 존(80~98%)만 이동 가능</div>
-        </Card>
-
         <Card title="팀 배정 미리보기 (드래그 & 드랍 커스텀 가능)"
           right={<div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">기준: {criterion} · <span className="font-medium">GK 평균 제외</span></div>}>
           <Toolbar hideOVR={hideOVR} setHideOVR={setHideOVR}
-                   reshuffleTeams={()=>{const seed=(Date.now()^Math.floor(Math.random()*0xffffffff))>>>0;setShuffleSeed(seed);setManualTeams(prev=>(prev??autoSplit.teams).map(l=>seededShuffle(l,seed+l.length)))}}
-                   sortTeamsByOVR={(order='desc')=>{
-                     const base=manualTeams??previewTeams
-                     setManualTeams(base.map(list=>list.slice().sort((a,b)=>{const A=a.ovr??overall(a),B=b.ovr??overall(b);return order==='asc'?A-B:B-A})))
-                   }}
-                   resetManual={()=>{setManualTeams(null);setShuffleSeed(0)}}
-                   manualTeams={manualTeams}/>
-          <DndContext sensors={sensors} collisionDetection={pointerWithin}
-            onDragStart={onDragStartHandler} onDragCancel={onDragCancel} onDragEnd={onDragEndHandler}>
-            <div className="grid gap-4" style={{gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))'}}>
-              {previewTeams.map((list,i)=><TeamColumn key={i} teamIndex={i} labelKit={kitForTeam(i)} players={list} hideOVR={hideOVR} />)}
-            </div>
-            <DragOverlay>{activePlayerId? <DragGhost player={players.find(p=>String(p.id)===String(activePlayerId))} hideOVR={hideOVR}/>:null}</DragOverlay>
-          </DndContext>
+            reshuffleTeams={()=>{const seed=(Date.now()^Math.floor(Math.random()*0xffffffff))>>>0;setShuffleSeed(seed);setManualTeams(prev=>(prev??autoSplit.teams).map(l=>seededShuffle(l,seed+l.length)))}}
+            sortTeamsByOVR={(order='desc')=>{
+              const base=manualTeams??previewTeams
+              setManualTeams(base.map(list=>list.slice().sort((a,b)=>{const A=a.ovr??overall(a),B=b.ovr??overall(b);return order==='asc'?A-B:B-A})))
+            }}
+            resetManual={()=>{setManualTeams(null);setShuffleSeed(0)}}
+            manualTeams={manualTeams}
+          />
+
+          {/* 모달 열려있으면 외부 DnD 완전 비활성화 */}
+          {!editorOpen && (
+            <DndContext sensors={sensors} collisionDetection={pointerWithin}
+              onDragStart={onDragStartHandler} onDragCancel={onDragCancel} onDragEnd={onDragEndHandler}>
+              <div className="grid gap-4" style={{gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))'}}>
+                {previewTeams.map((list,i)=>(
+                  <div key={i} className="space-y-2">
+                    <TeamColumn teamIndex={i} labelKit={kitForTeam(i)} players={list} hideOVR={hideOVR} />
+                    {/* 미니 포메이션 프리뷰 */}
+                    <MiniPitch
+                      players={list}
+                      placed={Array.isArray(placedByTeam[i])?placedByTeam[i]:[]}
+                      height={150}
+                      onEdit={()=>openEditor(i)}
+                      formation={formations[i]||'4-3-3'}
+                      mode={mode}
+                    />
+                  </div>
+                ))}
+              </div>
+              <DragOverlay>{activePlayerId? <DragGhost player={players.find(p=>String(p.id)===String(activePlayerId))} hideOVR={hideOVR}/>:null}</DragOverlay>
+            </DndContext>
+          )}
+
+          {/* 모달이 열려있을 때도 리스트 자체는 보여주고 싶다면 위 DnDContext 밖에
+              TeamColumn들을 한번 더 드로우하면 되지만, UX상 중복되어 생략함 */}
         </Card>
 
         <Card title="저장된 매치 (최신 선수 정보 반영)" right={<div className="text-xs text-gray-500"><span className="font-medium">GK 평균 제외</span></div>}>
@@ -309,32 +376,129 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
           </ul>}
         </Card>
       </div>
+
+      {/* ───────────────  풀스크린 포메이션 에디터  ─────────────── */}
+      {editorOpen && (
+        <FullscreenModal onClose={closeEditor}>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold">팀 {editingTeamIdx+1} · 포메이션 편집</h3>
+            <div className="flex items-center gap-2">
+              <select className="rounded border border-gray-300 bg-white px-2 py-1 text-sm"
+                value={formations[editingTeamIdx]||'4-3-3'}
+                onChange={e=>setTeamFormation(editingTeamIdx, e.target.value)}>
+                <option value="4-3-3">4-3-3</option>
+                <option value="4-4-2">4-4-2</option>
+                <option value="3-5-2">3-5-2</option>
+                <option value="3-3-2">9v9 · 3-3-2</option>
+                <option value="3-2-3">9v9 · 3-2-3</option>
+                <option value="2-3-1">7v7 · 2-3-1</option>
+              </select>
+              <button onClick={()=>autoPlaceTeam(editingTeamIdx)} className="rounded bg-emerald-500 px-3 py-1 text-sm font-semibold text-white">자동 배치</button>
+              <button onClick={closeEditor} className="rounded border border-gray-300 bg-white px-3 py-1 text-sm">닫기</button>
+            </div>
+          </div>
+          <div className="mb-2 text-xs text-gray-500">
+            모드: <b>{mode}</b> · 현재 포메이션: <b>{formations[editingTeamIdx]||'4-3-3'}</b> · 인원: <b>{(previewTeams[editingTeamIdx]||[]).length}명</b>
+          </div>
+          <FreePitch
+            players={previewTeams[editingTeamIdx]||[]}
+            placed={Array.isArray(placedByTeam[editingTeamIdx])?placedByTeam[editingTeamIdx]:[]}
+            setPlaced={(nextOrUpdater)=>{
+              setPlacedByTeam(prev=>{
+                const copy = Array.isArray(prev) ? [...prev] : []
+                const current = Array.isArray(copy[editingTeamIdx]) ? copy[editingTeamIdx] : []
+                const resolved = (typeof nextOrUpdater === 'function')
+                  ? nextOrUpdater(current)   // 함수형 업데이트 지원
+                  : nextOrUpdater            // 배열 그대로
+                copy[editingTeamIdx] = Array.isArray(resolved) ? resolved : []
+                return copy
+              })
+            }}
+            height={620}
+/>
+
+          <div className="mt-2 text-xs text-gray-500">* 필드 자유 배치 · GK는 하단 골키퍼 존(80~98%)만 이동 가능</div>
+        </FullscreenModal>
+      )}
     </div>
   )
 }
 
-/* ─ 자유 드래그 필드(아바타 통일, GK 제한) ─ */
+/* ──────────────────────────────────────────────────────────────────────────
+   Mini field (preview)
+   ────────────────────────────────────────────────────────────────────────── */
+function MiniPitch({players,placed,height=150,onEdit,formation,mode}){
+  const nodes = Array.isArray(placed) ? placed : []
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white">
+      <div className="flex items-center justify-between px-2 py-1 text-xs text-gray-600">
+        <span>추천 {mode} · {formation}</span>
+        <button onClick={onEdit} className="rounded bg-stone-900 px-2 py-1 text-[11px] font-medium text-white">풀스크린/편집</button>
+      </div>
+      <div className="relative overflow-hidden rounded-md" style={{height}}>
+        <div className="absolute inset-0" style={{background:'#0a7e2a'}} />
+        <PitchLinesClean/>
+        {nodes.map(p=>(
+          <div key={p.id}
+            className="absolute -translate-x-1/2 -translate-y-1/2"
+            style={{left:`${p.x}%`, top:`${p.y}%`}}
+            title={`${p.name} (${p.role})`}>
+            <InitialAvatar id={p.id} name={p.name} size={20}/>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Fullscreen modal
+   ────────────────────────────────────────────────────────────────────────── */
+function FullscreenModal({children,onClose}){
+  useEffect(()=>{
+    const onEsc=(e)=>{ if(e.key==='Escape') onClose() }
+    document.addEventListener('keydown',onEsc)
+    document.body.style.overflow='hidden'
+    return ()=>{ document.removeEventListener('keydown',onEsc); document.body.style.overflow='' }
+  },[onClose])
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose}/>
+      <div className="absolute inset-2 md:inset-6 xl:inset-12 rounded-2xl bg-white shadow-2xl p-3 md:p-4 overflow-auto">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   FreePitch (fullscreen) — isolated DnD ids with "pitch:" prefix
+   ────────────────────────────────────────────────────────────────────────── */
 function FreePitch({players,placed,setPlaced,height=560}){
   const wrapRef=useRef(null)
+  const safePlaced=Array.isArray(placed)?placed:[]
 
-  // players 변경 시 기존 좌표 유지하며 merge
+  // keep positions across player list changes
   useEffect(()=>{
-    const byId=new Map(placed.map(p=>[String(p.id),p]))
-    const next=assignToFormation({players,formation:'4-3-3'}).map(d=>byId.get(String(d.id))||d)
+    const byId=new Map(safePlaced.map(p=>[String(p.id),p]))
+    const base=assignToFormation({players,formation:'4-3-3'})
+    const next=base.map(d=>byId.get(String(d.id))||d)
     setPlaced(next)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   },[players])
 
   function onEnd(e){
     const {active,delta}=e; if(!active||!wrapRef.current) return
+    const pid = String(active.id).replace(/^pitch:/,'') // detach prefix
     setPlaced(prev=>{
-      const i=prev.findIndex(p=>String(p.id)===String(active.id)); if(i<0) return prev
+      const prevArr=Array.isArray(prev)?prev:[]
+      const i=prevArr.findIndex(p=>String(p.id)===pid); if(i<0) return prevArr
       const rect=wrapRef.current.getBoundingClientRect()
-      const cur=prev[i], curX=cur.x/100*rect.width, curY=cur.y/100*rect.height
+      const cur=prevArr[i], curX=cur.x/100*rect.width, curY=cur.y/100*rect.height
       let nx=clamp(curX+delta.x, 18, rect.width-18)
       let ny=clamp(curY+delta.y, 18, rect.height-18)
       if((cur.role||'').toUpperCase()==='GK') ny=clamp(ny, rect.height*0.80, rect.height*0.98)
-      const next=prev.slice()
+      const next=prevArr.slice()
       next[i]={...cur, x:pct(nx/rect.width*100), y:pct(ny/rect.height*100)}
       return next
     })
@@ -342,9 +506,9 @@ function FreePitch({players,placed,setPlaced,height=560}){
 
   return (
     <div ref={wrapRef} className="relative rounded-xl overflow-hidden" style={{height,background:'#0a7e2a'}}>
-      <PitchLines/>
+      <PitchLinesClean/>
       <DndContext onDragEnd={onEnd}>
-        {placed.map(p=><FieldDot key={p.id} data={p}/>)}
+        {safePlaced.map(p=><FieldDot key={p.id} data={p}/>)}
         <DragOverlay/>
       </DndContext>
       <div className="absolute right-2 top-2 rounded bg-black/40 text-white text-[11px] px-2 py-1">필드 자유 배치 · GK 하단 존</div>
@@ -352,33 +516,30 @@ function FreePitch({players,placed,setPlaced,height=560}){
   )
 }
 function FieldDot({ data }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: String(data.id) });
+  // prefix to avoid collision with outer DnD
+  const { attributes, listeners, setNodeRef, transform, isDragging } =
+    useDraggable({ id: `pitch:${String(data.id)}` })
   const style = {
     transform: CSS.Translate.toString(transform),
     left: `calc(${data.x}% - 18px)`,
     top: `calc(${data.y}% - 18px)`,
-  };
-
+  }
   return (
-    <div
-      ref={setNodeRef}
-      {...attributes}
-      {...listeners}
+    <div ref={setNodeRef} {...attributes} {...listeners}
       className={`absolute flex flex-col items-center ${isDragging ? 'opacity-80' : ''}`}
-      style={style}
-      title={`${data.name} (${data.role})`}
-    >
-      {/* 아바타 */}
+      style={style} title={`${data.name} (${data.role})`}>
       <InitialAvatar id={data.id} name={data.name} size={36} />
-      {/* 이름과 포지션 */}
       <div className="mt-1 text-center text-xs text-white">
         <div className="font-semibold">{data.name}</div>
+        <div className="text-gray-300">{data.role}</div>
       </div>
     </div>
-  );
+  )
 }
 
-/* ─ 팀 배정 미리보기 구성요소 ─ */
+/* ──────────────────────────────────────────────────────────────────────────
+   Right column: team list components
+   ────────────────────────────────────────────────────────────────────────── */
 function Row({label,children}){return(
   <div className="grid items-start gap-2 sm:grid-cols-[120px_minmax(0,1fr)]">
     <label className="mt-1 text-sm text-gray-600">{label}</label><div>{children}</div>
@@ -461,7 +622,9 @@ function kitForTeam(i){
   ]; return a[i%a.length]
 }
 
-/* ─ 공용 아바타 & 유틸 ─ */
+/* ──────────────────────────────────────────────────────────────────────────
+   Common avatar & utils
+   ────────────────────────────────────────────────────────────────────────── */
 function InitialAvatar({ id,name,size=24 }){
   const initial=(name||'?').trim().charAt(0)?.toUpperCase()||'?'
   const color="#"+stringToColor(String(id||'seed'))
@@ -470,11 +633,27 @@ function InitialAvatar({ id,name,size=24 }){
 function stringToColor(str){let h=0;for(let i=0;i<str.length;i++) h=str.charCodeAt(i)+((h<<5)-h);return ((h>>>0).toString(16)+'000000').substring(0,6)}
 function seededShuffle(arr,seed=1){const a=[...arr],rand=mulberry32(seed>>>0);for(let i=a.length-1;i>0;i--){const j=Math.floor(rand()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
 function mulberry32(a){return function(){let t=(a+=0x6D2B79F5);t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296}}
-function PitchLines(){return(<>
-  <div className="absolute inset-2 border-2 border-white/80 rounded-md"/><div className="absolute left-2 right-2 top-1/2 h-0.5 bg-white/70"/>
-  <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 border border-white/80 rounded-full" style={{width:90,height:90}}/>
-  <div className="absolute left-1/2 -translate-x-1/2 top-2 w-[60%] h-24 border-2 border-white/80 rounded-sm"/>
-  <div className="absolute left-1/2 -translate-x-1/2 top-[74px] w-28 h-12 border-2 border-white/80 rounded-sm"/>
-  <div className="absolute left-1/2 -translate-x-1/2 bottom-2 w-[60%] h-24 border-2 border-white/80 rounded-sm"/>
-  <div className="absolute left-1/2 -translate-x-1/2 bottom-[74px] w-28 h-12 border-2 border-white/80 rounded-sm"/>
-</>)}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Percent-based clean pitch lines (goal area inside penalty area)
+   ────────────────────────────────────────────────────────────────────────── */
+function PitchLinesClean(){
+  return (
+    <>
+      {/* Touchline / outer */}
+      <div className="absolute rounded-md border border-white/80" style={{inset:'1%'}}/>
+      {/* Halfway line */}
+      <div className="absolute left-[1%] right-[1%] top-1/2 h-px bg-white/70"/>
+      {/* Centre circle (diameter 18%) */}
+      <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/80" style={{width:'18%',height:'18%'}}/>
+      {/* Top penalty area (depth 22%, width 60%) */}
+      <div className="absolute left-1/2 -translate-x-1/2 top-[1%] border border-white/80" style={{width:'60%',height:'22%'}}/>
+      {/* Top goal area (depth 7%, width 24%) */}
+      <div className="absolute left-1/2 -translate-x-1/2 top-[1%] border border-white/80" style={{width:'24%',height:'7%'}}/>
+      {/* Bottom penalty area */}
+      <div className="absolute left-1/2 -translate-x-1/2 bottom-[1%] border border-white/80" style={{width:'60%',height:'22%'}}/>
+      {/* Bottom goal area */}
+      <div className="absolute left-1/2 -translate-x-1/2 bottom-[1%] border border-white/80" style={{width:'24%',height:'7%'}}/>
+    </>
+  )
+}
