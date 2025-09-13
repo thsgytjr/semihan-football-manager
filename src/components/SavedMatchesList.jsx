@@ -271,7 +271,7 @@ export default function SavedMatchesList({
                                     const attendeeIds = snap.flat()
                                     onUpdateMatch(m.id, { snapshot: snap, attendeeIds })
                                   }}
-                                >빼기</button>
+                                >제외</button>
                               )}
                             </span>
                           </li>

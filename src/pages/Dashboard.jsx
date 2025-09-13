@@ -214,7 +214,7 @@ export default function Dashboard({ totals, players = [], matches = [], isAdmin,
 function AttackPointsTable({ rows, showAll, onToggle }) {
   const data = showAll ? rows : rows.slice(0, 5)
 
-  // 순위 변동 비교를 위한 로컬 저장
+  // 순위 변동 비교 (기존 로직 유지)
   const [prevOrder, setPrevOrder] = useState([])
   useEffect(() => {
     try {
@@ -224,15 +224,15 @@ function AttackPointsTable({ rows, showAll, onToggle }) {
   }, [])
   useEffect(() => {
     try {
-      const current = rows.map(r => toStr(r.id || r.name))
+      const current = rows.map(r => String(r.id || r.name))
       localStorage.setItem('ap_prevOrder_v1', JSON.stringify(current))
     } catch {}
   }, [rows])
 
   const deltaFor = (id, currentRank) => {
-    const prevRank = (prevOrder.indexOf(toStr(id)) + 1) || null
+    const prevRank = (prevOrder.indexOf(String(id)) + 1) || null
     if (!prevRank) return null
-    const diff = prevRank - currentRank // +면 상승, -면 하락
+    const diff = prevRank - currentRank
     if (diff === 0) return { diff: 0, dir: 'same' }
     return { diff, dir: diff > 0 ? 'up' : 'down' }
   }
@@ -244,27 +244,31 @@ function AttackPointsTable({ rows, showAll, onToggle }) {
       </div>
 
       <div className="overflow-hidden rounded-lg border border-stone-200">
-        <table className="w-full table-fixed text-sm">
-          <colgroup>
-            <col style={{width: '64px'}} />  {/* 순위 */}
-            <col />                          {/* 선수 (가변) */}
-            <col style={{width: '68px'}} />  {/* 포지션 */}
-            <col style={{width: '56px'}} />  {/* 출전 */}
-            <col style={{width: '48px'}} />  {/* G */}
-            <col style={{width: '48px'}} />  {/* A */}
-            <col style={{width: '64px'}} />  {/* PTS */}
+        {/* 모바일에선 table-auto, md 이상에서만 table-fixed */}
+        <table className="w-full text-sm md:table-fixed">
+          {/* colgroup은 md 이상에서만 적용 (모바일에서 폭 강제 X) */}
+          <colgroup className="hidden md:table-column-group">
+            <col style={{ width: '56px' }} />  {/* 순위: 살짝 줄임 */}
+            <col />                              {/* 선수: 가변 */}
+            <col style={{ width: '60px' }} />   {/* 포지션 */}
+            <col style={{ width: '48px' }} />   {/* 출전 */}
+            <col style={{ width: '42px' }} />   {/* G */}
+            <col style={{ width: '42px' }} />   {/* A */}
+            <col style={{ width: '56px' }} />   {/* PTS */}
           </colgroup>
+
           <thead>
             <tr className="text-left text-[13px] text-stone-600">
-              <th className="px-3 py-2 border-b">순위</th>
-              <th className="px-3 py-2 border-b">선수</th>
-              <th className="px-3 py-2 border-b">포지션</th>
-              <th className="px-3 py-2 border-b">출전</th>
-              <th className="px-3 py-2 border-b">G</th>
-              <th className="px-3 py-2 border-b">A</th>
-              <th className="px-3 py-2 border-b">PTS</th>
+              <th className="border-b px-2 py-1.5 md:px-3 md:py-2">순위</th>
+              <th className="border-b px-2 py-1.5 md:px-3 md:py-2">선수</th>
+              <th className="border-b px-2 py-1.5 md:px-3 md:py-2">포지션</th>
+              <th className="border-b px-2 py-1.5 md:px-3 md:py-2">출전</th>
+              <th className="border-b px-2 py-1.5 md:px-3 md:py-2">G</th>
+              <th className="border-b px-2 py-1.5 md:px-3 md:py-2">A</th>
+              <th className="border-b px-2 py-1.5 md:px-3 md:py-2">PTS</th>
             </tr>
           </thead>
+
           <tbody>
             {data.map((r, idx) => {
               const rank = idx + 1
@@ -272,11 +276,11 @@ function AttackPointsTable({ rows, showAll, onToggle }) {
               const delta = deltaFor(r.id || r.name, rank)
               return (
                 <tr key={r.id || `${r.name}-${idx}`} className={`${tone.rowBg}`}>
-                  <td className={`px-3 py-2 border-b align-middle ${tone.cellBg}`}>
-                    {/* 3칸 고정 그리드: [메달|번호|변동] */}
+                  {/* 순위 */}
+                  <td className={`border-b align-middle px-2 py-1.5 md:px-3 md:py-2 ${tone.cellBg}`}>
                     <div
                       className="grid items-center"
-                      style={{ gridTemplateColumns: '20px 1fr 32px', columnGap: 6 }}
+                      style={{ gridTemplateColumns: '20px 1fr 28px', columnGap: 6 }}
                     >
                       <div className="flex items-center justify-center">
                         <Medal rank={rank} />
@@ -285,23 +289,32 @@ function AttackPointsTable({ rows, showAll, onToggle }) {
                       <div className="text-right">
                         {delta && delta.diff !== 0 ? (
                           <span
-                            className={`inline-block min-w-[28px] text-[11px] font-medium ${
+                            className={`inline-block min-w-[24px] text-[11px] font-medium ${
                               delta.dir === 'up' ? 'text-emerald-700' : 'text-rose-700'
                             }`}
                           >
                             {delta.dir === 'up' ? '▲' : '▼'} {Math.abs(delta.diff)}
                           </span>
                         ) : (
-                          <span className="inline-block min-w-[28px] text-[11px] text-transparent">0</span>
+                          <span className="inline-block min-w-[24px] text-[11px] text-transparent">0</span>
                         )}
                       </div>
                     </div>
                   </td>
+                  {/* 선수 (모바일 이름 찌그러짐 방지 핵심) */}
+                  <td className={`border-b px-2 py-1.5 md:px-3 md:py-2 ${tone.cellBg}`}>
+                    <div
+                      className="grid items-center min-w-0"
+                      style={{ gridTemplateColumns: 'auto 1fr auto', columnGap: 8 }}
+                    >
+                      <div className="shrink-0">
+                        <InitialAvatar id={r.id || r.name} name={r.name} size={20} />
+                      </div>
 
-                  <td className={`px-3 py-2 border-b ${tone.cellBg}`}>
-                    <div className="flex items-center gap-2 min-w-0">
-                      <InitialAvatar id={r.id || r.name} name={r.name} size={20} />
-                      <span className="font-medium truncate min-w-0">{r.name}</span>
+                      <div className="min-w-0">
+                        <span className="block font-medium truncate whitespace-nowrap">{r.name}</span>
+                      </div>
+
                       {r.isGuest && (
                         <span className="ml-1 shrink-0 rounded-full bg-stone-900 text-white text-[10px] px-2 py-[2px]">
                           게스트
@@ -309,11 +322,12 @@ function AttackPointsTable({ rows, showAll, onToggle }) {
                       )}
                     </div>
                   </td>
-                  <td className={`px-3 py-2 border-b text-stone-700 ${tone.cellBg}`}>{r.pos || '-'}</td>
-                  <td className={`px-3 py-2 border-b tabular-nums ${tone.cellBg}`}>{r.gp}</td>
-                  <td className={`px-3 py-2 border-b tabular-nums ${tone.cellBg}`}>{r.g}</td>
-                  <td className={`px-3 py-2 border-b tabular-nums ${tone.cellBg}`}>{r.a}</td>
-                  <td className={`px-3 py-2 border-b font-semibold tabular-nums ${tone.cellBg}`}>{r.pts}</td>
+
+                  <td className={`border-b px-2 py-1.5 text-stone-700 md:px-3 md:py-2 ${tone.cellBg}`}>{r.pos || '-'}</td>
+                  <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.gp}</td>
+                  <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.g}</td>
+                  <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.a}</td>
+                  <td className={`border-b px-2 py-1.5 font-semibold tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.pts}</td>
                 </tr>
               )
             })}
