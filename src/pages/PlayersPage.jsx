@@ -1,6 +1,5 @@
 // src/pages/PlayersPage.jsx
 import React, { useMemo, useState, useEffect } from "react"
-import { FaCheckCircle } from "react-icons/fa"
 import { notify } from "../components/Toast"
 import { overall } from "../lib/players"
 import { STAT_KEYS } from "../lib/constants"
@@ -15,6 +14,15 @@ const FIELD =
   "w-full bg-white text-stone-800 placeholder-stone-400 border border-stone-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
 const DROPDOWN = FIELD + " appearance-none"
 
+// 게스트 배지 (G)
+function GuestBadge(){
+  return (
+    <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200">
+      G
+    </span>
+  )
+}
+
 export default function PlayersPage({
   players,
   selectedId,
@@ -26,7 +34,8 @@ export default function PlayersPage({
   onReset,
   positionLabel = "선호 포지션",
   dropdownClassName,
-  badgeNote = "정회원은 자동으로 아래와 같은 배지가 부여됩니다:",
+  // ✅ 정회원 배지 안내 문구 제거 (기본값 빈 문자열)
+  badgeNote = "",
 }) {
   const [draft, setDraft] = useState(null)
   const [confirm, setConfirm] = useState({ open: false, id: null, name: "" })
@@ -42,9 +51,10 @@ export default function PlayersPage({
     [players]
   )
 
+  // ✅ 정회원 배지 로직 제거, 게스트만 표시용 badge 값 부여(필요 시)
   function ensureBadge(p) {
     const next = { ...p }
-    next.badge = next.membership === "정회원" ? "badge" : ""
+    next.badge = next.membership === "게스트" ? "guest" : ""
     return next
   }
 
@@ -104,10 +114,12 @@ export default function PlayersPage({
         <div className="rounded-lg border border-stone-200 bg-white p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-base font-semibold">선수 편집</h3>
-            <div className="flex items-center gap-2 text-xs text-stone-600">
-              {badgeNote}
-              <FaCheckCircle className="ml-2 inline-flex items-center gap-1 text-emerald-500 text-sm" />
-            </div>
+            {/* ✅ 정회원 안내/로고 제거: badgeNote가 비어있으면 아무 것도 표시하지 않음 */}
+            {badgeNote ? (
+              <div className="flex items-center gap-2 text-xs text-stone-600">
+                {badgeNote}
+              </div>
+            ) : <span className="text-xs text-stone-400"></span>}
           </div>
 
           {!draft ? (
@@ -240,55 +252,50 @@ export default function PlayersPage({
       <section className="lg:col-span-1">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">선수 목록</h2>
-          <div className="flex gap-2">
-            <button
-              onClick={onCreate}
-              className="rounded-md bg-emerald-500 px-3 py-2 text-sm text-white hover:bg-emerald-600"
-            >
-              새 선수
-            </button>
+          {/* ✅ 게스트 표기 안내(오른쪽) */}
+          <div className="text-[11px] text-stone-500">
+            표기: <span className="inline-flex items-center gap-1"><GuestBadge /> 게스트</span>
           </div>
         </div>
 
         <ul className="rounded-md border border-stone-200 bg-white divide-y divide-stone-200">
-          {sorted.map((p) => (
-            <li
-              key={p.id}
-              className={`flex items-center gap-3 px-3 py-2 cursor-pointer ${
-                selectedId === p.id ? "bg-emerald-50" : ""
-              }`}
-              onClick={() => onSelect(p.id)}
-            >
-              <InitialAvatar id={p.id} name={p.name} size={36} />
-
-              <div className="flex-1">
-                <div className="font-medium text-stone-800 flex items-center gap-2">
-                  {p.name || "이름없음"}
-                  <span className="inline-flex items-center rounded bg-stone-800 px-2 py-0.5 text-[11px] text-white">
-                    OVR&nbsp;{overall(p)}
-                  </span>
-                </div>
-                <div className="text-xs text-stone-500">
-                  {(p.membership || "미지정").trim()}
-                  {p.membership === "정회원" && (
-                    <span className="ml-2 inline-flex items-center gap-1 text-emerald-500">
-                      <FaCheckCircle className="text-sm" />
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  requestDelete(p.id, p.name)
-                }}
-                className="rounded-md border border-stone-300 bg-white px-2 py-1 text-xs hover:bg-stone-100"
+          {sorted.map((p) => {
+            const mem = String(p.membership || "").trim()
+            const isGuest = mem === "게스트"
+            return (
+              <li
+                key={p.id}
+                className={`flex items-center gap-3 px-3 py-2 cursor-pointer ${selectedId === p.id ? "bg-emerald-50" : ""}`}
+                onClick={() => onSelect(p.id)}
               >
-                삭제
-              </button>
-            </li>
-          ))}
+                <InitialAvatar id={p.id} name={p.name} size={36} />
+
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-stone-800 flex items-center gap-2">
+                    <span className="truncate">{p.name || "이름없음"}</span>
+                    <span className="inline-flex items-center rounded bg-stone-800 px-2 py-0.5 text-[11px] text-white">
+                      OVR&nbsp;{overall(p)}
+                    </span>
+                    {/* ✅ 게스트만 배지 */}
+                    {isGuest && <GuestBadge />}
+                  </div>
+                  <div className="text-xs text-stone-500">
+                    {mem || "미지정"}
+                  </div>
+                </div>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    requestDelete(p.id, p.name)
+                  }}
+                  className="rounded-md border border-stone-300 bg-white px-2 py-1 text-xs hover:bg-stone-100"
+                >
+                  삭제
+                </button>
+              </li>
+            )
+          })}
           {sorted.length === 0 && (
             <li className="px-3 py-6 text-sm text-stone-500">
               선수가 없습니다. “새 선수”를 눌러 추가하세요.

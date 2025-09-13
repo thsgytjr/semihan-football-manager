@@ -2,7 +2,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Card from '../components/Card'
 import { mkMatch, decideMode, splitKTeams, hydrateMatch } from '../lib/match'
-import { downloadJSON } from '../utils/io'
 import { overall } from '../lib/players'
 import { notify } from '../components/Toast'
 
@@ -19,8 +18,29 @@ import FreePitch from '../components/pitch/FreePitch'
 import { assignToFormation, recommendFormation, countPositions } from '../lib/formation'
 import { seededShuffle } from '../utils/random'
 
+/* 다가오는 토요일 06:30 로컬 -> datetime-local value ("YYYY-MM-DDTHH:MM") */
+function nextSaturday0630Local() {
+  const now = new Date()
+  const dow = now.getDay()             // 0=일 ~ 6=토
+  let add = (6 - dow + 7) % 7          // 다음 토요일까지 +일
+  if (add === 0) {
+    const test = new Date(now)
+    test.setHours(6, 30, 0, 0)
+    if (now > test) add = 7
+  }
+  const d = new Date(now)
+  d.setDate(now.getDate() + add)
+  d.setHours(6, 30, 0, 0)
+  const yyyy = d.getFullYear()
+  const mm = String(d.getMonth()+1).padStart(2,'0')
+  const dd = String(d.getDate()).padStart(2,'0')
+  const HH = String(d.getHours()).padStart(2,'0')
+  const MM = String(d.getMinutes()).padStart(2,'0')
+  return `${yyyy}-${mm}-${dd}T${HH}:${MM}`
+}
+
 export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMatch, onUpdateMatch, isAdmin }){
-  const [dateISO,setDateISO]=useState(()=>new Date().toISOString().slice(0,16))
+  const [dateISO,setDateISO]=useState(()=>nextSaturday0630Local()) // ✅ 기본값 토 06:30
   const [attendeeIds,setAttendeeIds]=useState([])
   const [criterion,setCriterion]=useState('overall')
   const [teamCount,setTeamCount]=useState(2)
@@ -30,6 +50,10 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
   const [locationPreset,setLocationPreset]=useState('coppell-west')
   const [locationName,setLocationName]=useState('Coppell Middle School - West')
   const [locationAddress,setLocationAddress]=useState('2701 Ranch Trail, Coppell, TX 75019')
+
+  // 💰 자동/커스텀 금액 모드
+  const [feeMode, setFeeMode] = useState('preset') // 'preset' | 'custom'
+  const [customBaseCost, setCustomBaseCost] = useState(0)
 
   const [manualTeams,setManualTeams]=useState(null)
   const [activePlayerId,setActivePlayerId]=useState(null)
@@ -76,6 +100,27 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
     setShuffleSeed(0)
   },[attendees,teams,criterion])
 
+  /* 💰 베이스 금액(장소별 고정 or 커스텀) */
+  const baseCost = useMemo(()=>{
+    if (feeMode === 'custom') return Math.max(0, Number(customBaseCost)||0)
+    return (
+      locationPreset==='indoor-soccer-zone' ? 230 :
+      locationPreset==='coppell-west' ? 300 : 0
+    )
+  },[feeMode, customBaseCost, locationPreset])
+
+  const PREMIUM = 1.2
+
+  // 화면용 라이브 계산(미리보기)
+  const liveFees = useMemo(()=>{
+    const isMember = (v)=>String(v??'').trim()==='member'||String(v??'').trim()==='정회원'
+    const memberCount = attendees.filter(p => isMember(p.membership)).length
+    const guestCount  = attendees.length - memberCount
+    if (attendees.length===0 || baseCost<=0) return { total: baseCost, memberFee: 0, guestFee: 0, premium: PREMIUM }
+    const x = baseCost / (memberCount + PREMIUM * guestCount)
+    return { total: baseCost, memberFee: Math.round(x), guestFee: Math.round(PREMIUM*x), premium: PREMIUM }
+  },[attendees, baseCost])
+
   const previewTeams=useMemo(()=>{
     let base=manualTeams??autoSplit.teams
     if(!manualTeams&&shuffleSeed) base=base.map(list=>seededShuffle(list,shuffleSeed+list.length))
@@ -107,30 +152,9 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
 
   const toggle=id=>setAttendeeIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id])
 
-  /* ──────────────────────────────────────────────────────────
-     💰 구장비 계산 (게스트 20% 프리미엄)
-     ────────────────────────────────────────────────────────── */
-  const PREMIUM = 1.2
-  const baseCost = useMemo(()=>(
-    locationPreset==='indoor-soccer-zone' ? 230 :
-    locationPreset==='coppell-west' ? 300 : 0
-  ),[locationPreset])
-
-  // 화면용 라이브 계산(미리보기)
-  const liveFees = useMemo(()=>{
-    const isMember = (v)=>String(v??'').trim()==='member'||String(v??'').trim()==='정회원'
-    const memberCount = attendees.filter(p => isMember(p.membership)).length
-    const guestCount  = attendees.length - memberCount
-    if (attendees.length===0 || baseCost<=0) return { total: baseCost, memberFee: 0, guestFee: 0, premium: PREMIUM }
-    const x = baseCost / (memberCount + PREMIUM * guestCount)
-    return { total: baseCost, memberFee: Math.round(x), guestFee: Math.round(PREMIUM*x), premium: PREMIUM }
-  },[attendees, baseCost])
-
-  // 저장 직전 계산(참석자/장소 스냅샷 기준)
-  function computeFeesAtSave({ locationPreset, attendees }) {
-    const base =
-      locationPreset === 'indoor-soccer-zone' ? 230 :
-      locationPreset === 'coppell-west'       ? 300 : 0
+  // 저장 직전 계산(참석자/장소/커스텀 스냅샷 기준)
+  function computeFeesAtSave({ baseCostValue, attendees }) {
+    const base = Math.max(0, Number(baseCostValue)||0)
     const isMember = (v)=>String(v??'').trim()==='member'||String(v??'').trim()==='정회원'
     const memberCount = attendees.filter(p => isMember(p.membership)).length
     const guestCount  = attendees.length - memberCount
@@ -151,7 +175,10 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
     const attendeeIdsFromTeams = snapshot.flat()
     const attendeeObjs = players.filter(p => attendeeIdsFromTeams.includes(p.id))
 
-    const fees = computeFeesAtSave({ locationPreset, attendees: attendeeObjs }) // 🔐 저장 직전 확정 계산
+    const fees = computeFeesAtSave({
+      baseCostValue: baseCost,
+      attendees: attendeeObjs
+    })
 
     const base = mkMatch({
       id: crypto.randomUUID?.() || String(Date.now()),
@@ -170,35 +197,16 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
       videos: []
     })
 
-    const payload = { ...base, fees } // ✅ mkMatch 결과 뒤에 fees 병합(중요)
-
-    // 디버깅 도움 (원하면 콘솔 해제)
-    // console.log('saving fees', fees)
-    // console.log('payload', payload)
-
+    const payload = { ...base, fees }
     onSaveMatch(payload)
     notify('매치가 저장되었습니다 ✅')
   }
 
-  function exportTeams(){
-    if(!isAdmin){ notify('Admin만 가능합니다.'); return }
-    const sumsNoGK=previewTeams.map(list=>list.filter(p=>(p.position||p.pos)!=='GK').reduce((a,p)=>a+(p.ovr??overall(p)),0))
-    const avgsNoGK=sumsNoGK.map((sum,i)=>{const n=previewTeams[i].filter(p=>(p.position||p.pos)!=='GK').length;return n?Math.round(sum/n):0})
-    downloadJSON(
-      {
-        dateISO,mode,teamCount:teams,criterion,selectionMode:'manual',
-        location:{preset:locationPreset,name:locationName,address:locationAddress},
-        teams:previewTeams.map(t=>t.map(p=>({id:p.id,name:p.name,pos:p.position}))),
-        sums:autoSplit.sums,sumsNoGK,avgsNoGK, formations, board: placedByTeam,
-        fees: liveFees
-      },
-      `match_${dateISO.replace(/[:T]/g,'-')}.json`
-    )
-  }
-
+  // Select All
   const allSelected=attendeeIds.length===players.length&&players.length>0
   const toggleSelectAll=()=>allSelected?setAttendeeIds([]):setAttendeeIds(players.map(p=>p.id))
 
+  // DnD
   const sensors=useSensors(
     useSensor(PointerSensor,{activationConstraint:{distance:4}}),
     useSensor(TouchSensor,{activationConstraint:{delay:120,tolerance:6}})
@@ -335,22 +343,49 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                 <option value="indoor-soccer-zone">Indoor Soccer Zone</option>
                 <option value="other">Other (Freeform)</option>
               </select>
-              {locationPreset!=='other'
-                ? <div className="text-xs text-gray-500">주소: {locationAddress}</div>
-                : <div className="grid gap-2 sm:grid-cols-2">
-                    <input className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="장소 이름" value={locationName} onChange={e=>setLocationName(e.target.value)} />
-                    <input className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="주소" value={locationAddress} onChange={e=>setLocationAddress(e.target.value)} />
-                  </div>}
+
+              {/* 💰 금액 모드 */}
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                <label className="inline-flex items-center gap-2">
+                  <input type="radio" name="feeMode" value="preset" checked={feeMode==='preset'} onChange={()=>setFeeMode('preset')} />
+                  자동(장소별 고정)
+                </label>
+                <label className="inline-flex items-center gap-2">
+                  <input type="radio" name="feeMode" value="custom" checked={feeMode==='custom'} onChange={()=>setFeeMode('custom')} />
+                  커스텀
+                </label>
+                {feeMode==='custom' && (
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="총 구장비(예: 230)"
+                    value={customBaseCost}
+                    onChange={e=>setCustomBaseCost(e.target.value)}
+                    className="w-40 rounded border border-gray-300 bg-white px-3 py-1.5"
+                  />
+                )}
+              </div>
 
               {/* 💰 예상 구장비 즉시 표시 */}
               <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                <div><b>예상 구장비</b>: ${baseCost} / 2시간</div>
+                <div>
+                  <b>예상 구장비</b>: ${baseCost} / 2시간
+                  {feeMode==='preset' && <span className="ml-2 opacity-70">(장소별 고정 금액)</span>}
+                  {feeMode==='custom' && <span className="ml-2 opacity-70">(사용자 지정 금액)</span>}
+                </div>
                 <div className="mt-1">
                   {attendees.length>0 && baseCost>0
                     ? <>멤버 {liveFees.memberFee}$/인 · 게스트 {liveFees.guestFee}$/인 <span className="opacity-70">(게스트 +{Math.round((liveFees.premium-1)*100)}%)</span></>
                     : <span className="opacity-70">참석자를 선택하면 1인당 금액이 계산됩니다.</span>}
                 </div>
               </div>
+
+              {locationPreset==='other' && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <input className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="장소 이름" value={locationName} onChange={e=>setLocationName(e.target.value)} />
+                  <input className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="주소" value={locationAddress} onChange={e=>setLocationAddress(e.target.value)} />
+                </div>
+              )}
             </div>
           </Row>
 
@@ -368,18 +403,24 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
               {allSelected?'모두 해제':'모두 선택'}</button>
               </span>}>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
-              {players.map(p=>(
-                <label key={p.id} className={`flex items-center gap-2 rounded border px-3 py-2 ${attendeeIds.includes(p.id)?'border-emerald-400 bg-emerald-50':'border-gray-200 bg-white hover:bg-gray-50'}`}>
-                  <input type="checkbox" checked={attendeeIds.includes(p.id)} onChange={()=>toggle(p.id)} />
-                  <InitialAvatar id={p.id} name={p.name} size={24} />
-                  <span className="text-sm flex-1 whitespace-normal break-words">
-                    {p.name} {(p.position||p.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}
-                  </span>
-                  {/* DB에 "정회원/게스트"가 들어있을 수도 있으므로 라벨만 노출 */}
-                  {isAdmin && <span className="text-[10px] text-gray-500">{(String(p.membership||'guest').includes('정회원')||String(p.membership||'')==='member')?'정회원':'게스트'}</span>}
-                  {isAdmin && !hideOVR && (p.position||p.pos)!=='GK' && <span className="text-xs text-gray-500 shrink-0">OVR {p.ovr??overall(p)}</span>}
-                </label>
-              ))}
+              {players.map(p=>{
+                const mem = String(p.membership||'').trim()
+                const isMember = (mem==='member' || mem.includes('정회원'))
+                return (
+                  <label key={p.id} className={`flex items-center gap-2 rounded border px-3 py-2 ${attendeeIds.includes(p.id)?'border-emerald-400 bg-emerald-50':'border-gray-200 bg-white hover:bg-gray-50'}`}>
+                    <input type="checkbox" checked={attendeeIds.includes(p.id)} onChange={()=>toggle(p.id)} />
+                    <InitialAvatar id={p.id} name={p.name} size={24} />
+                    <span className="text-sm flex-1 whitespace-normal break-words">
+                      {p.name} {(p.position||p.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}
+                    </span>
+
+                    {/* 🔻 게스트 표기 */}
+                    {!isMember && <GuestBadge />}
+
+                    {isAdmin && !hideOVR && (p.position||p.pos)!=='GK' && <span className="text-xs text-gray-500 shrink-0">OVR {p.ovr??overall(p)}</span>}
+                  </label>
+                )
+              })}
             </div>
           </Row>
 
@@ -387,9 +428,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
             {isAdmin && (
               <button onClick={save} className="rounded bg-emerald-500 px-4 py-2 text-white font-semibold">매치 저장</button>
             )}
-            {isAdmin && (
-              <button onClick={exportTeams} className="rounded border border-gray-300 bg-white px-4 py-2 text-gray-700">라인업 Export</button>
-            )}
+            {/* ❌ 라인업 Export 기능 제거 */}
           </div>
         </div>
       </Card>
@@ -402,6 +441,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
             기준: {criterion} · <span className="font-medium">GK 평균 제외</span>
           </div>}
         >
+          {/* ✅ 툴바: 한 줄에 모두(OVR 숨기기 포함) */}
           <Toolbar
             isAdmin={isAdmin}
             hideOVR={hideOVR}
@@ -430,38 +470,9 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
             manualTeams={manualTeams}
           />
 
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            {isAdmin && (
-              <button
-                type="button"
-                aria-pressed={hideOVR}
-                onClick={() => setHideOVR((v) => !v)}
-                className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ${
-                  hideOVR ? "border-emerald-500 text-emerald-700 bg-emerald-50"
-                          : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
-                }`}
-              >
-                <span className={`inline-block h-2.5 w-2.5 rounded-full ${hideOVR ? "bg-emerald-500" : "bg-gray-300"}`}></span>
-                OVR 숨기기
-              </button>
-            )}
-
-            <button
-              onClick={() => {
-                setManualTeams((prev) =>
-                  (prev ?? previewTeams).map((list) =>
-                    list.slice().sort(() => Math.random() - 0.5)
-                  )
-                )
-              }}
-              className="flex items-center gap-2 rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 px-5 py-2 text-white text-sm font-medium shadow-lg hover:from-blue-600 hover:to-indigo-600 hover:shadow-xl transition-all duration-300"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                strokeWidth={2} stroke="currentColor" className="h-5 w-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m-15 0l15 15"/>
-              </svg>
-              랜덤 섞기
-            </button>
+          {/* 표기 안내(게스트 배지) */}
+          <div className="mb-2 flex items-center justify-end text-[11px] text-gray-500">
+            표기 안내: <span className="ml-1 inline-flex items-center gap-1"><GuestBadge /> 게스트</span>
           </div>
 
           <DndContext
@@ -492,18 +503,26 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
           <ul className="space-y-2">
             {matches.map(m=>{
               const hydrated=hydrateMatch(m,players)
-              const feesShown = m.fees ?? deriveFees(m, players) // 과거 레코드 대비 안전장치
+              const feesShown = m.fees ?? deriveFees(m, players)
               return (
                 <li key={m.id} className="rounded border border-gray-200 bg-white p-3">
                   <div className="mb-1 flex items-center justify-between">
                     <div className="text-sm">
-                      <b>{m.dateISO.replace('T',' ')}</b> · {m.mode} · {m.teamCount}팀 · 참석 {attendeesCount(m)}명
+                      <b>{(m.dateISO||'').replace('T',' ')}</b> · {m.mode} · {m.teamCount}팀 · 참석 {attendeesCount(m)}명
                       {m.location?.name?<> · 장소 {m.location.name}</>:null}
                     </div>
                     <div className="flex items-center gap-2">
                       <button className="text-xs rounded border border-gray-300 bg-white px-2 py-1"
                         onClick={()=>loadSavedIntoPlanner(m)}>팀배정에 로드</button>
-                      {isAdmin && <button className="text-xs text-red-600" onClick={()=>onDeleteMatch(m.id)}>삭제</button>}
+                      {isAdmin && (
+                        <button
+                          className="text-xs text-red-600"
+                          onClick={()=>{
+                            const ok = window.confirm('정말 삭제하시겠어요?\n삭제 시 대시보드의 공격포인트/기록 집계에 영향을 줄 수 있습니다.')
+                            if (ok) onDeleteMatch(m.id)
+                          }}
+                        >삭제</button>
+                      )}
                     </div>
                   </div>
 
@@ -535,15 +554,21 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                             </div>
                           </div>
                           <ul className="space-y-1 p-2 pt-0 text-sm">
-                            {list.map(p=>(
-                              <li key={p.id} className="flex items-center justify-between gap-2 border-t border-gray-100 pt-1 first:border-0 first:pt-0">
-                                <span className="flex items-center gap-2 min-w-0 flex-1">
-                                  <InitialAvatar id={p.id} name={p.name} size={24} />
-                                  <span className="truncate">{p.name} {(p.position||p.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}</span>
-                                </span>
-                                {isAdmin && !hideOVR && (p.position||p.pos)!=='GK' && <span className="text-gray-500 shrink-0">OVR {p.ovr??overall(p)}</span>}
-                              </li>
-                            ))}
+                            {list.map(p=>{
+                              const mem = String(p.membership||'').trim()
+                              const isMember = (mem==='member' || mem.includes('정회원'))
+                              return (
+                                <li key={p.id} className="flex items-center justify-between gap-2 border-t border-gray-100 pt-1 first:border-0 first:pt-0">
+                                  <span className="flex items-center gap-2 min-w-0 flex-1">
+                                    <InitialAvatar id={p.id} name={p.name} size={24} />
+                                    <span className="truncate">{p.name} {(p.position||p.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}</span>
+                                    {/* 🔻 게스트 표기 */}
+                                    {!isMember && <GuestBadge />}
+                                  </span>
+                                  {isAdmin && !hideOVR && (p.position||p.pos)!=='GK' && <span className="text-gray-500 shrink-0">OVR {p.ovr??overall(p)}</span>}
+                                </li>
+                              )
+                            })}
                             {list.length===0 && <li className="px-1 py-1 text-xs text-gray-400">팀원 없음</li>}
                           </ul>
                         </div>
@@ -670,11 +695,14 @@ function Row({label,children}){return(
     <label className="mt-1 text-sm text-gray-600">{label}</label><div>{children}</div>
   </div>
 )}
+
 function Toolbar({isAdmin,hideOVR,setHideOVR,reshuffleTeams,sortTeamsByOVR,resetManual,manualTeams}){
   return (
     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
       <div className="flex flex-wrap items-center gap-2">
-        <button onClick={reshuffleTeams} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">시드로 섞기</button>
+        {/* ✅ 라벨 교체: 시드로 섞기 → 랜덤 섞기 */}
+        <button onClick={reshuffleTeams} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">랜덤 섞기</button>
+
         {isAdmin && (
           <>
             <button onClick={()=>sortTeamsByOVR('desc')} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">팀 OVR 내림차순</button>
@@ -682,13 +710,27 @@ function Toolbar({isAdmin,hideOVR,setHideOVR,reshuffleTeams,sortTeamsByOVR,reset
             <button onClick={resetManual} disabled={!manualTeams} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">수동 편집 초기화</button>
           </>
         )}
-        {!isAdmin && (
-          <button onClick={resetManual} disabled={!manualTeams} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">수동 편집 초기화</button>
+
+        {/* ✅ OVR 숨기기 토글을 한 줄 툴바에 배치 */}
+        {isAdmin && (
+          <button
+            type="button"
+            aria-pressed={hideOVR}
+            onClick={() => setHideOVR((v) => !v)}
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ${
+              hideOVR ? "border-emerald-500 text-emerald-700 bg-emerald-50"
+                      : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50"
+            }`}
+          >
+            <span className={`inline-block h-2.5 w-2.5 rounded-full ${hideOVR ? "bg-emerald-500" : "bg-gray-300"}`}></span>
+            OVR 숨기기
+          </button>
         )}
       </div>
     </div>
   )
 }
+
 function TeamColumn({ teamIndex,labelKit,players,showOVR,isAdmin }){
   const id=`team-${teamIndex}`; const { setNodeRef,isOver }=useDroppable({ id })
   const non=players.filter(p=>(p.position||p.pos)!=='GK'), sum=non.reduce((a,p)=>a+(p.ovr??overall(p)),0), avg=non.length?Math.round(sum/non.length):0
@@ -712,23 +754,32 @@ function TeamColumn({ teamIndex,labelKit,players,showOVR,isAdmin }){
     </div>
   )
 }
+
 function PlayerRow({ player,showOVR }){
   const { attributes,listeners,setNodeRef,transform,transition,isDragging }=useSortable({ id:String(player.id) })
   const style={ transform:CSS.Transform.toString(transform), transition,
     opacity: isDragging ? 0.7 : 1, boxShadow:isDragging?'0 6px 18px rgba(0,0,0,.12)':undefined,
     borderRadius:8, background:isDragging?'rgba(16,185,129,0.06)':undefined }
+  const mem = String(player.membership||'').trim()
+  const isMember = (mem==='member' || mem.includes('정회원'))
+
   return (
     <li ref={setNodeRef} style={style}
       className="flex items-start gap-2 border-t border-gray-100 pt-1 first:border-0 first:pt-0 touch-manipulation cursor-grab active:cursor-grabbing"
       {...attributes} {...listeners}>
       <span className="flex items-center gap-2 min-w-0 flex-1">
         <InitialAvatar id={player.id} name={player.name} size={24} />
-        <span className="whitespace-normal break-words">{player.name} {(player.position||player.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}</span>
+        <span className="whitespace-normal break-words">
+          {player.name} {(player.position||player.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}
+        </span>
+        {/* 🔻 게스트 표기 */}
+        {!isMember && <GuestBadge />}
       </span>
       {showOVR && (player.position||player.pos)!=='GK' && <span className="text-gray-500 text-xs shrink-0">OVR {player.ovr??overall(player)}</span>}
     </li>
   )
 }
+
 function DragGhost({ player,showOVR }){
   if(!player) return null
   return (
@@ -739,6 +790,7 @@ function DragGhost({ player,showOVR }){
     </div>
   )
 }
+
 function kitForTeam(i){
   const a=[
     {label:'화이트',headerClass:'bg-white text-stone-800 border-b border-stone-300'},
@@ -751,21 +803,27 @@ function kitForTeam(i){
     {label:'티얼',headerClass:'bg-teal-600 text-white border-b border-teal-700'},
     {label:'핑크',headerClass:'bg-pink-600 text-white border-b border-pink-700'},
     {label:'옐로',headerClass:'bg-yellow-400 text-stone-900 border-b border-yellow-500'},
-  ]; return a[i%a.length]
+  ]
+  return a[i%a.length]
 }
-function FullscreenModal({children,onClose}){
-  useEffect(()=>{
-    const onEsc=(e)=>{ if(e.key==='Escape') onClose() }
-    document.addEventListener('keydown',onEsc)
-    document.body.style.overflow='hidden'
-    return ()=>{ document.removeEventListener('keydown',onEsc); document.body.style.overflow='' }
-  },[onClose])
+
+/* 간단 모달 래퍼 (이미 프로젝트에 존재한다면 기존 것 사용) */
+function FullscreenModal({ children, onClose }){
   return (
-    <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose}/>
-      <div className="absolute inset-2 md:inset-6 xl:inset-12 rounded-2xl bg-white shadow-2xl p-3 md:p-4 overflow-auto">
+    <div className="fixed inset-0 z-50 bg-black/40">
+      <div className="absolute inset-4 md:inset-10 rounded-lg bg-white p-4 overflow-auto">
+        <div className="mb-2 flex justify-end">
+          <button onClick={onClose} className="rounded border border-gray-300 bg-white px-3 py-1 text-sm">닫기</button>
+        </div>
         {children}
       </div>
     </div>
+  )
+}
+
+/* 공용: 게스트 배지 */
+function GuestBadge(){
+  return (
+    <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200">G</span>
   )
 }
