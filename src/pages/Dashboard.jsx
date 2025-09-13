@@ -101,14 +101,14 @@ export default function Dashboard({ totals, players = [], matches = [], isAdmin,
       }
     }
     const rows = [...index.values()]
-    .filter(r => r.gp > 0)  // 출전이 0이면 제외
-    .map(r => ({
-      ...r,
-      pts: r.g + r.a,
-      isGuest: !isMember(r.membership)
-    }))
-    .sort((a, b) => b.pts - a.pts || b.g - a.g || a.name.localeCompare(b.name))
-
+      .filter(r => r.gp > 0)  // 출전이 0이면 제외
+      .map(r => ({
+        ...r,
+        pts: r.g + r.a,
+        isGuest: !isMember(r.membership)
+      }))
+      // 정렬: PTS desc, G desc, 이름 asc
+      .sort((a, b) => b.pts - a.pts || b.g - a.g || a.name.localeCompare(b.name))
 
     const debug = {
       playersCount: players.length,
@@ -118,7 +118,6 @@ export default function Dashboard({ totals, players = [], matches = [], isAdmin,
       totalsRowsCount: rows.length,
       totalsPtsSum: rows.reduce((s, r) => s + r.pts, 0)
     }
-    // console.log('[AP DEBUG]', debug)
     return { totalsRows: rows, debugInfo: debug }
   }, [players, matches])
 
@@ -206,15 +205,32 @@ export default function Dashboard({ totals, players = [], matches = [], isAdmin,
 
 /* ──────────────────────────────────────────────────────────
    공격포인트 테이블
+   - 동률 순위: 같은 PTS면 같은 순위, 다음 순위는 점프 (예: 1,2,2,4)
    - 모바일도 같은 테이블 뷰 (card 제거)
    - table-fixed + 좁은 컬럼 폭으로 모바일에서 넓어지지 않게
    - 1~3위: 행 전체 파스텔 배경 (금/은/동)
    - 순위 변동: ▲▼ + 변동 폭 (localStorage 비교)
 ────────────────────────────────────────────────────────── */
 function AttackPointsTable({ rows, showAll, onToggle }) {
-  const data = showAll ? rows : rows.slice(0, 5)
+  // 1) 전 선수 목록 기준으로 "동률 순위"를 먼저 계산
+  const rankedRows = useMemo(() => {
+    const out = []
+    let lastRank = 0
+    let lastPts = null
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i]
+      const rank = (i === 0) ? 1 : (r.pts === lastPts ? lastRank : i + 1)
+      out.push({ ...r, rank })
+      lastRank = rank
+      lastPts = r.pts
+    }
+    return out
+  }, [rows])
 
-  // 순위 변동 비교 (기존 로직 유지)
+  // 2) 표시 데이터 (Top 5면 자르되, 순위는 전역 순위 유지)
+  const data = showAll ? rankedRows : rankedRows.slice(0, 5)
+
+  // 순위 변동 비교 (기존 로직 유지: order 기반)
   const [prevOrder, setPrevOrder] = useState([])
   useEffect(() => {
     try {
@@ -271,7 +287,7 @@ function AttackPointsTable({ rows, showAll, onToggle }) {
 
           <tbody>
             {data.map((r, idx) => {
-              const rank = idx + 1
+              const rank = r.rank
               const tone = rankTone(rank)
               const delta = deltaFor(r.id || r.name, rank)
               return (
