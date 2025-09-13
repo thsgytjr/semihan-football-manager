@@ -1,10 +1,12 @@
-import React, { useState } from "react"
-import InitialAvatar from "../components/InitialAvatar"
+// src/components/SavedMatchesList.jsx
+import React, { useMemo, useState } from "react"
+import InitialAvatar from "./InitialAvatar"
 import { overall } from "../lib/players"
 import { hydrateMatch } from "../lib/match"
-import { formatMatchLabel } from "../lib/matchLabel" // ★ 추가
+import { formatMatchLabel } from "../lib/matchLabel"
 
-// ── 내부 유틸 ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// 뱃지/스타일 유틸
 function GuestBadge() {
   return (
     <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200">
@@ -29,10 +31,32 @@ function kitForTeam(i) {
   return a[i % a.length]
 }
 
+// ─────────────────────────────────────────────
+// 스냅샷/출석 도우미
+const toStr = (v) => (v === null || v === undefined) ? "" : String(v)
+const isMember = (mem) => {
+  const s = toStr(mem).trim().toLowerCase()
+  return s === "member" || s.includes("정회원")
+}
+
 function attendeesCount(m) {
   if (Array.isArray(m?.snapshot) && m.snapshot.length) return m.snapshot.flat().length
   if (Array.isArray(m?.attendeeIds)) return m.attendeeIds.length
   return 0
+}
+
+function normalizeSnapshot(match, teams) {
+  const snap = Array.isArray(match?.snapshot) ? match.snapshot : null
+  if (snap && Array.isArray(snap) && snap.length === teams.length) {
+    return snap.map((arr) => Array.isArray(arr) ? arr.slice() : [])
+  }
+  // 스냅샷 없거나 팀 수 불일치: 화면의 teams로부터 생성
+  return teams.map((list) => list.map((p) => p.id))
+}
+
+function notInMatchPlayers(players, snapshot2D) {
+  const inside = new Set(snapshot2D.flat().map(String))
+  return players.filter((p) => !inside.has(String(p.id)))
 }
 
 // 저장본에 fees가 없을 때(구버전 등) 멤버/게스트 단가 추정
@@ -49,7 +73,6 @@ function deriveFeesFromSnapshot(m, players) {
     : (Array.isArray(m?.attendeeIds) ? m.attendeeIds : [])
   const byId = new Map(players.map(p => [String(p.id), p]))
   const attendees = ids.map(id => byId.get(String(id))).filter(Boolean)
-  const isMember = (v)=> String(v??"").trim()==="member" || String(v??"").includes("정회원")
   const memberCount = attendees.filter(p => isMember(p.membership)).length
   const guestCount  = attendees.length - memberCount
   const PREMIUM = 1.2
@@ -57,26 +80,70 @@ function deriveFeesFromSnapshot(m, players) {
   return { total: baseCost, memberFee: Math.round(x||0), guestFee: Math.round(PREMIUM*(x||0)), premium: PREMIUM, _estimated: true }
 }
 
-// 유튜브 링크 입력 미니 컴포넌트
-function VideoAdder({ onAdd }){
-  const [val, setVal] = useState("")
+// ─────────────────────────────────────────────
+// 빠른 출석 편집 바 (관리자 전용)
+function QuickAttendanceEditor({ match, teams, players, onUpdate }) {
+  const [teamIdx, setTeamIdx] = useState(0)
+  const [query, setQuery] = useState("")
+
+  const baseSnap = useMemo(() => normalizeSnapshot(match, teams), [match, teams])
+  const candidates = useMemo(() => notInMatchPlayers(players, baseSnap), [players, baseSnap])
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    if (!q) return candidates.slice(0, 30)
+    return candidates.filter(p => (p.name || "").toLowerCase().includes(q))
+  }, [candidates, query])
+
+  const addPlayer = (player) => {
+    const pid = player?.id
+    if (!pid && typeof player === "string") {
+      const found = candidates.find(p => (p.name || "").toLowerCase() === player.toLowerCase())
+      if (!found) return
+      return addPlayer(found)
+    }
+    const snap = normalizeSnapshot(match, teams)
+    if (!snap[teamIdx]) snap[teamIdx] = []
+    if (!snap[teamIdx].some(id => String(id) === String(pid))) {
+      snap[teamIdx] = [...snap[teamIdx], pid]
+      const attendeeIds = snap.flat() // 출석 = 스냅샷 합치기
+      onUpdate(match.id, { snapshot: snap, attendeeIds })
+    }
+    setQuery("")
+  }
+
   return (
-    <div className="flex items-center gap-2">
-      <input
-        className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm"
-        placeholder="https://youtu.be/... 또는 https://www.youtube.com/watch?v=..."
-        value={val}
-        onChange={e=>setVal(e.target.value)}
-      />
-      <button
-        className="whitespace-nowrap rounded border border-gray-300 bg-white px-3 py-2 text-sm"
-        onClick={()=>{ const u=val.trim(); if(!u) return; onAdd(u); setVal("") }}
-      >추가</button>
+    <div className="mt-2 rounded border border-gray-200 bg-gray-50 p-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="text-xs text-gray-600">빠른 출석 편집</label>
+        <select
+          className="rounded border border-gray-300 bg-white px-2 py-1 text-xs"
+          value={teamIdx}
+          onChange={(e) => setTeamIdx(Number(e.target.value))}
+        >
+          {teams.map((_, i) => (<option key={i} value={i}>팀 {i+1}</option>))}
+        </select>
+        <input
+          className="min-w-[180px] flex-1 rounded border border-gray-300 bg-white px-2 py-1 text-sm"
+          placeholder="이름 검색 후 추가"
+          value={query}
+          onChange={(e)=>setQuery(e.target.value)}
+          list={`qae-${match.id}`}
+        />
+        <datalist id={`qae-${match.id}`}>
+          {filtered.map(p => <option key={p.id} value={p.name} />)}
+        </datalist>
+        <button
+          className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs"
+          onClick={()=>addPlayer(query)}
+        >추가</button>
+      </div>
     </div>
   )
 }
 
-// ── 공용 리스트 컴포넌트 ────────────────────────────────
+// ─────────────────────────────────────────────
+// 메인 리스트
 export default function SavedMatchesList({
   matches = [],
   players = [],
@@ -99,14 +166,13 @@ export default function SavedMatchesList({
         const teams = hydrated.teams || []
         const fees = deriveFeesFromSnapshot(m, players)
         const count = attendeesCount(m)
+        const label = formatMatchLabel(m, { withDate: true, withCount: true, count }) // 월-주차 프리픽스 + 인원
 
         const addVideo = (url) => onUpdateMatch?.(m.id, { videos: [ ...(m.videos||[]), url ] })
         const removeVideo = (idx) => {
           const next = (m.videos||[]).filter((_, i)=> i!==idx)
           onUpdateMatch?.(m.id, { videos: next })
         }
-
-        const label = formatMatchLabel(m, { withDate: true, withCount: true, count }) // ★ 월-주차 프리픽스
 
         return (
           <li key={m.id} className="rounded border border-gray-200 bg-white p-3">
@@ -117,7 +183,7 @@ export default function SavedMatchesList({
                 {m.location?.name ? <> · 장소 {m.location.name}</> : null}
               </div>
               <div className="flex items-center gap-3">
-                {/* ✅ 게스트 표기 레전드 */}
+                {/* 게스트 표기 레전드 */}
                 <div className="hidden sm:flex items-center gap-1 text-[11px] text-gray-500">
                   표기: <GuestBadge /> 게스트
                 </div>
@@ -143,7 +209,7 @@ export default function SavedMatchesList({
               </div>
             </div>
 
-            {/* 💰 요금 줄 */}
+            {/* 💰 금액 줄 */}
             <div className="mb-2 text-xs text-gray-800">
               💰 총액 ${fees?.total ?? 0}
               {typeof fees?.memberFee==="number" && typeof fees?.guestFee==="number" && (
@@ -151,7 +217,7 @@ export default function SavedMatchesList({
               )}
             </div>
 
-            {/* 팀 카드 */}
+            {/* 팀 카드 (선수 개별 빼기 버튼 포함) */}
             <div className="grid grid-cols-2 gap-2 sm:gap-3">
               {teams.map((list, i) => {
                 const kit = kitForTeam(i)
@@ -167,22 +233,38 @@ export default function SavedMatchesList({
                         ? <div className="opacity-80">{kit.label} · {list.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</div>
                         : <div className="opacity-80">{kit.label} · {list.length}명</div>}
                     </div>
+
                     <ul className="divide-y divide-gray-100">
-                      {list.map(p => {
-                        const mem = String(p.membership||"").trim()
-                        const member = mem==="member" || mem.includes("정회원")
+                      {list.map((p) => {
+                        const member = isMember(p.membership)
                         return (
                           <li key={p.id} className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
                             <span className="flex items-center gap-2 min-w-0 flex-1">
-                              <InitialAvatar id={p.id} name={p.name} size={22}/>
+                              <InitialAvatar id={p.id} name={p.name} size={22} />
                               <span className="truncate">
                                 {p.name} {(p.position||p.pos)==="GK" && <em className="ml-1 text-xs text-gray-400">(GK)</em>}
                               </span>
-                              {!member && <GuestBadge/>}
+                              {!member && <GuestBadge />}
                             </span>
-                            {isAdmin && showTeamOVRForAdmin && !hideOVR && (p.position||p.pos)!=="GK" && (
-                              <span className="text-gray-500 shrink-0">OVR {p.ovr??overall(p)}</span>
-                            )}
+
+                            <span className="flex items-center gap-2 shrink-0">
+                              {isAdmin && showTeamOVRForAdmin && !hideOVR && (p.position||p.pos)!=="GK" && (
+                                <span className="text-gray-500">OVR {p.ovr??overall(p)}</span>
+                              )}
+                              {/* 선수 개별 빼기(관리자 전용) */}
+                              {isAdmin && onUpdateMatch && (
+                                <button
+                                  className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-100"
+                                  title="이 팀에서 빼기"
+                                  onClick={()=>{
+                                    const snap = normalizeSnapshot(m, teams)
+                                    snap[i] = snap[i].filter(id => String(id)!==String(p.id))
+                                    const attendeeIds = snap.flat()
+                                    onUpdateMatch(m.id, { snapshot: snap, attendeeIds })
+                                  }}
+                                >빼기</button>
+                              )}
+                            </span>
                           </li>
                         )
                       })}
@@ -192,6 +274,11 @@ export default function SavedMatchesList({
                 )
               })}
             </div>
+
+            {/* 빠른 출석 편집 바 (관리자 전용) */}
+            {isAdmin && onUpdateMatch && (
+              <QuickAttendanceEditor match={m} teams={teams} players={players} onUpdate={onUpdateMatch} />
+            )}
 
             {/* 🎥 유튜브 링크 */}
             <div className="mt-3 space-y-2">
@@ -226,5 +313,25 @@ export default function SavedMatchesList({
         )
       })}
     </ul>
+  )
+}
+
+// ─────────────────────────────────────────────
+// 유튜브 링크 입력
+function VideoAdder({ onAdd }){
+  const [val, setVal] = useState("")
+  return (
+    <div className="flex items-center gap-2">
+      <input
+        className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+        placeholder="https://youtu.be/... 또는 https://www.youtube.com/watch?v=..."
+        value={val}
+        onChange={e=>setVal(e.target.value)}
+      />
+      <button
+        className="whitespace-nowrap rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+        onClick={()=>{ const u=val.trim(); if(!u) return; onAdd(u); setVal("") }}
+      >추가</button>
+    </div>
   )
 }

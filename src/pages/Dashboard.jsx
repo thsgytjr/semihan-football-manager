@@ -100,12 +100,15 @@ export default function Dashboard({ totals, players = [], matches = [], isAdmin,
         index.set(pid, row)
       }
     }
-
-    const rows = [...index.values()].map(r => ({
+    const rows = [...index.values()]
+    .filter(r => r.gp > 0)  // 출전이 0이면 제외
+    .map(r => ({
       ...r,
       pts: r.g + r.a,
       isGuest: !isMember(r.membership)
-    })).sort((a, b) => b.pts - a.pts || b.g - a.g || a.name.localeCompare(b.name))
+    }))
+    .sort((a, b) => b.pts - a.pts || b.g - a.g || a.name.localeCompare(b.name))
+
 
     const debug = {
       playersCount: players.length,
@@ -270,16 +273,31 @@ function AttackPointsTable({ rows, showAll, onToggle }) {
               return (
                 <tr key={r.id || `${r.name}-${idx}`} className={`${tone.rowBg}`}>
                   <td className={`px-3 py-2 border-b align-middle ${tone.cellBg}`}>
-                    <div className="flex items-center gap-2">
-                      <Medal rank={rank} />
-                      <span className="tabular-nums">{rank}</span>
-                      {delta && delta.diff !== 0 && (
-                        <span className={`ml-1 text-[11px] font-medium ${delta.dir==='up'?'text-emerald-700':'text-rose-700'}`}>
-                          {delta.dir === 'up' ? '▲' : '▼'} {Math.abs(delta.diff)}
-                        </span>
-                      )}
+                    {/* 3칸 고정 그리드: [메달|번호|변동] */}
+                    <div
+                      className="grid items-center"
+                      style={{ gridTemplateColumns: '20px 1fr 32px', columnGap: 6 }}
+                    >
+                      <div className="flex items-center justify-center">
+                        <Medal rank={rank} />
+                      </div>
+                      <div className="text-center tabular-nums">{rank}</div>
+                      <div className="text-right">
+                        {delta && delta.diff !== 0 ? (
+                          <span
+                            className={`inline-block min-w-[28px] text-[11px] font-medium ${
+                              delta.dir === 'up' ? 'text-emerald-700' : 'text-rose-700'
+                            }`}
+                          >
+                            {delta.dir === 'up' ? '▲' : '▼'} {Math.abs(delta.diff)}
+                          </span>
+                        ) : (
+                          <span className="inline-block min-w-[28px] text-[11px] text-transparent">0</span>
+                        )}
+                      </div>
                     </div>
                   </td>
+
                   <td className={`px-3 py-2 border-b ${tone.cellBg}`}>
                     <div className="flex items-center gap-2 min-w-0">
                       <InitialAvatar id={r.id || r.name} name={r.name} size={20} />
@@ -333,7 +351,7 @@ function rankTone(rank){
   // 1~3위: 행 전체 동일 파스텔 배경
   if (rank === 1) return { rowBg: 'bg-yellow-50', cellBg: 'bg-yellow-50' }
   if (rank === 2) return { rowBg: 'bg-gray-50',   cellBg: 'bg-gray-50' }
-  if (rank === 3) return { rowBg: 'bg-amber-50',  cellBg: 'bg-amber-50' }
+  if (rank === 3) return { rowBg: 'bg-orange-100',  cellBg: 'bg-orange-100' }
   return { rowBg: '', cellBg: '' }
 }
 
