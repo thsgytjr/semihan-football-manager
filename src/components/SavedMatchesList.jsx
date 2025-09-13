@@ -2,6 +2,7 @@ import React, { useState } from "react"
 import InitialAvatar from "../components/InitialAvatar"
 import { overall } from "../lib/players"
 import { hydrateMatch } from "../lib/match"
+import { formatMatchLabel } from "../lib/matchLabel" // ★ 추가
 
 // ── 내부 유틸 ─────────────────────────────────────────────
 function GuestBadge() {
@@ -105,12 +106,14 @@ export default function SavedMatchesList({
           onUpdateMatch?.(m.id, { videos: next })
         }
 
+        const label = formatMatchLabel(m, { withDate: true, withCount: true, count }) // ★ 월-주차 프리픽스
+
         return (
           <li key={m.id} className="rounded border border-gray-200 bg-white p-3">
             {/* 헤더 */}
             <div className="mb-1 flex items-center justify-between">
               <div className="text-sm">
-                <b>{(m.dateISO || "").replace("T"," ")}</b> · {m.mode} · {m.teamCount}팀 · 참석 {count}명
+                <b>{label}</b> · {m.mode} · {m.teamCount}팀
                 {m.location?.name ? <> · 장소 {m.location.name}</> : null}
               </div>
               <div className="flex items-center gap-3">
@@ -175,7 +178,7 @@ export default function SavedMatchesList({
                               <span className="truncate">
                                 {p.name} {(p.position||p.pos)==="GK" && <em className="ml-1 text-xs text-gray-400">(GK)</em>}
                               </span>
-                              {!member && <GuestBadge/>} {/* ✅ 선수 옆에도 게스트 배지 */}
+                              {!member && <GuestBadge/>}
                             </span>
                             {isAdmin && showTeamOVRForAdmin && !hideOVR && (p.position||p.pos)!=="GK" && (
                               <span className="text-gray-500 shrink-0">OVR {p.ovr??overall(p)}</span>
