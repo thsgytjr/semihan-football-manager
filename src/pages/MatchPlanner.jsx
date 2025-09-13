@@ -361,7 +361,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                 </div>
                 <div className="mt-1">
                   {attendees.length>0 && baseCost>0
-                    ? <>멤버 {liveFees.memberFee}$/인 · 게스트 {liveFees.guestFee}$/인 <span className="opacity-70">(게스트 +{Math.round((liveFees.premium-1)*100)}%)</span></>
+                    ? <>멤버 {liveFees.memberFee}$/인 · 게스트 {liveFees.guestFee}$/인 <span className="opacity-70">(게스트 +$2)</span></>
                     : <span className="opacity-70">참석자를 선택하면 1인당 금액이 계산됩니다.</span>}
                 </div>
               </div>

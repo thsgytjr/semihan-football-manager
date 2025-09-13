@@ -75,9 +75,18 @@ function deriveFeesFromSnapshot(m, players) {
   const attendees = ids.map(id => byId.get(String(id))).filter(Boolean)
   const memberCount = attendees.filter(p => isMember(p.membership)).length
   const guestCount  = attendees.length - memberCount
-  const PREMIUM = 1.2
-  const x = baseCost / (memberCount + PREMIUM * guestCount || 1)
-  return { total: baseCost, memberFee: Math.round(x||0), guestFee: Math.round(PREMIUM*(x||0)), premium: PREMIUM, _estimated: true }
+  const x = baseCost / (memberCount + guestCount || 1)
+  // 멤버 단가
+  const memberFee = Math.round(x || 0)
+  // 게스트는 멤버 단가 + 2
+  const guestFee = memberFee + 2
+  return { 
+    total: baseCost, 
+    memberFee, 
+    guestFee, 
+    premium: null,   // 퍼센트 프리미엄 아님
+    _estimated: true 
+  }
 }
 
 // ─────────────────────────────────────────────
@@ -213,7 +222,7 @@ export default function SavedMatchesList({
             <div className="mb-2 text-xs text-gray-800">
               💰 총액 ${fees?.total ?? 0}
               {typeof fees?.memberFee==="number" && typeof fees?.guestFee==="number" && (
-                <> · 멤버 ${fees.memberFee}/인 · 게스트 ${fees.guestFee}/인 <span className="opacity-70">(게스트 +{Math.round(((fees?.premium??1.2)-1)*100)}%){fees?._estimated && " · 추정"}</span></>
+                <> · 멤버 ${fees.memberFee}/인 · 게스트 ${fees.guestFee}/인 <span className="opacity-70">(게스트 +$2){fees?._estimated && " · 추정"}</span></>
               )}
             </div>
 
