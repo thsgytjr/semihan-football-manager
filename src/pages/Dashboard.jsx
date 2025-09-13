@@ -5,10 +5,56 @@ import Stat from '../components/Stat'
 import InitialAvatar from '../components/InitialAvatar'
 import { hydrateMatch } from '../lib/match'
 import SavedMatchesList from '../components/SavedMatchesList'
-import { formatMatchLabel } from '../lib/matchLabel'  // ★ 공용 라벨
-// import { overall } from '../lib/players'  // (현재 파일에선 사용 안함)
+import { formatMatchLabel } from '../lib/matchLabel'
 
-export default function Dashboard({ totals, players, matches, isAdmin, onUpdateMatch }) {
+const toStr = (v) => (v === null || v === undefined) ? '' : String(v)
+const isMember = (mem) => {
+  const s = toStr(mem).trim().toLowerCase()
+  return s === 'member' || s.includes('정회원')
+}
+
+// 참석자 파서 (여러 필드명 대응)
+function extractAttendeeIds(m) {
+  const candidates = [m?.snapshot, m?.attendeeIds, m?.attendees, m?.participants, m?.roster].filter(Boolean)
+  let raw = []
+  for (const c of candidates) { if (Array.isArray(c)) { raw = c; break } }
+  if (!Array.isArray(raw)) raw = []
+  return raw.flat().map((x) => {
+    if (typeof x === 'object' && x !== null) {
+      const cand = x.id ?? x.playerId ?? x.user_id ?? x.userId ?? x.pid ?? x.uid
+      return toStr(cand)
+    }
+    return toStr(x)
+  }).filter(Boolean)
+}
+
+// 스탯 파서 (맵/배열 모두 지원)
+function extractStatsByPlayer(m) {
+  const src = m?.stats ?? m?.records ?? m?.playerStats ?? m?.ga ?? m?.scoreboard ?? null
+  const out = {}
+  if (!src) return out
+  if (!Array.isArray(src) && typeof src === 'object') {
+    for (const [k, v] of Object.entries(src)) {
+      const pid = toStr(k)
+      if (!pid) continue
+      out[pid] = { goals: Number(v?.goals || 0), assists: Number(v?.assists || 0) }
+    }
+    return out
+  }
+  if (Array.isArray(src)) {
+    for (const rec of src) {
+      const pid = toStr(rec?.playerId ?? rec?.id ?? rec?.user_id ?? rec?.uid)
+      if (!pid) continue
+      out[pid] = {
+        goals: (out[pid]?.goals || 0) + Number(rec?.goals || 0),
+        assists: (out[pid]?.assists || 0) + Number(rec?.assists || 0)
+      }
+    }
+  }
+  return out
+}
+
+export default function Dashboard({ totals, players = [], matches = [], isAdmin, onUpdateMatch }) {
   const [editingMatchId, setEditingMatchId] = useState(matches?.[0]?.id || null)
 
   useEffect(() => {
@@ -17,50 +63,41 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
     if (!editingMatchId || !exists) setEditingMatchId(matches[0].id)
   }, [matches])
 
-  const attendeesOf = (m) => {
-    if (Array.isArray(m?.snapshot) && m.snapshot.length) return m.snapshot.flat()
-    return Array.isArray(m?.attendeeIds) ? m.attendeeIds : []
-  }
-
-  // 공격 포인트 집계 (게스트 배지 표기 포함)
-  const totalsTable = useMemo(() => {
+  // 공격포인트 집계
+  const { totalsRows, debugInfo } = useMemo(() => {
     const index = new Map()
-    const idToPlayer = new Map(players.map(p => [String(p.id), p]))
-    const isMember = (mem) => {
-      const s = String(mem || '').trim()
-      return s === 'member' || s.includes('정회원')
-    }
+    const idToPlayer = new Map(players.map(p => [toStr(p.id), p]))
+    let matchCountWithAttendees = 0
+    let matchCountWithStats = 0
 
     for (const m of (matches || [])) {
-      const attended = new Set(attendeesOf(m).map(String))
-      const stats = m?.stats || {}
+      const attendedIds = new Set(extractAttendeeIds(m))
+      if (attendedIds.size > 0) matchCountWithAttendees++
+      const statsMap = extractStatsByPlayer(m)
+      if (Object.keys(statsMap).length > 0) matchCountWithStats++
 
-      for (const pid of attended) {
+      // 출전(GP)
+      for (const pid of attendedIds) {
         const p = idToPlayer.get(pid)
         if (!p) continue
         const row = index.get(pid) || {
-          id: pid,
-          name: p.name,
-          pos: p.position || p.pos,
-          membership: p.membership || '',
+          id: pid, name: p.name, pos: p.position || p.pos, membership: p.membership || '',
           gp: 0, g: 0, a: 0
         }
         row.gp += 1
         index.set(pid, row)
       }
-      for (const [pid, rec] of Object.entries(stats)) {
-        const p = idToPlayer.get(String(pid))
+      // 골/어시
+      for (const [pid, rec] of Object.entries(statsMap)) {
+        const p = idToPlayer.get(pid)
         if (!p) continue
-        const row = index.get(String(pid)) || {
-          id: String(pid),
-          name: p.name,
-          pos: p.position || p.pos,
-          membership: p.membership || '',
+        const row = index.get(pid) || {
+          id: pid, name: p.name, pos: p.position || p.pos, membership: p.membership || '',
           gp: 0, g: 0, a: 0
         }
         row.g += Number(rec?.goals || 0)
         row.a += Number(rec?.assists || 0)
-        index.set(String(pid), row)
+        index.set(pid, row)
       }
     }
 
@@ -68,9 +105,18 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
       ...r,
       pts: r.g + r.a,
       isGuest: !isMember(r.membership)
-    }))
-    rows.sort((a, b) => b.pts - a.pts || b.g - a.g || a.name.localeCompare(b.name))
-    return rows
+    })).sort((a, b) => b.pts - a.pts || b.g - a.g || a.name.localeCompare(b.name))
+
+    const debug = {
+      playersCount: players.length,
+      matchesCount: matches.length,
+      matchCountWithAttendees,
+      matchCountWithStats,
+      totalsRowsCount: rows.length,
+      totalsPtsSum: rows.reduce((s, r) => s + r.pts, 0)
+    }
+    // console.log('[AP DEBUG]', debug)
+    return { totalsRows: rows, debugInfo: debug }
   }, [players, matches])
 
   const editingMatch = useMemo(
@@ -78,16 +124,16 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
     [matches, editingMatchId]
   )
 
-  // 경기별 골/어시 드래프트
+  // 경기별 골/어시 드래프트 (Admin)
   const [draft, setDraft] = useState({})
   useEffect(() => {
     if (!editingMatch) { setDraft({}); return }
-    const src = editingMatch.stats || {}
+    const src = extractStatsByPlayer(editingMatch)
     const next = {}
-    const ids = new Set(attendeesOf(editingMatch).map(String))
+    const ids = new Set(extractAttendeeIds(editingMatch))
     for (const p of players) {
-      if (!ids.has(String(p.id))) continue
-      const rec = src?.[p.id] || {}
+      if (!ids.has(toStr(p.id))) continue
+      const rec = src?.[toStr(p.id)] || {}
       next[p.id] = { goals: Number(rec.goals || 0), assists: Number(rec.assists || 0) }
     }
     setDraft(next)
@@ -112,21 +158,21 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Stat label="총 선수" value={`${totalPlayers}명`} />
           <Stat label="저장된 경기" value={`${totalMatches}회`} />
-          <Stat label="공격포인트 합계(골+어시)" value={totalsTable.reduce((a,r)=>a+r.pts,0)} />
-          <Stat label="기록 보유 선수 수" value={totalsTable.filter(r=>r.pts>0 || r.gp>0).length} />
-        </div>
-        <div className="mt-3 text-xs md:text-sm text-gray-600">
-          * 대시보드는 누구나 열람 가능 · 매치플래너는 Admin 전용입니다.
+          <Stat label="공격포인트 합계(골+어시)" value={totalsRows.reduce((a,r)=>a+r.pts,0)} />
+          <Stat label="기록 보유 선수 수" value={totalsRows.filter(r=>r.pts>0 || r.gp>0).length} />
         </div>
       </Card>
 
-      {/* 2) 공격포인트 (Top 5 + 확장) — 생략: 기존 그대로 (게스트 배지 포함) */}
+      {/* 2) 공격포인트 (Top 5 + 확장) */}
       <Card title={`공격포인트${showAllTotals ? '' : ' (Top 5)'}`}>
-        {/* ... 기존 목록/테이블 블록 그대로 ... */}
-        {/* —— 공간 절약을 위해 이 섹션의 내부는 생략했지만, 이전 답변의 테이블/카드 구현을 그대로 사용하세요. —— */}
+        <AttackPointsTable
+          rows={totalsRows}
+          showAll={showAllTotals}
+          onToggle={() => setShowAllTotals(s=>!s)}
+        />
       </Card>
 
-      {/* 3) 매치 히스토리 (공용 리스트 사용) */}
+      {/* 3) 매치 히스토리 */}
       <Card title="매치 히스토리">
         <SavedMatchesList
           matches={matches}
@@ -141,7 +187,6 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
       {isAdmin && (
         <FocusComposer
           matches={matches}
-          attendeesOf={attendeesOf}
           players={players}
           editingMatchId={editingMatchId}
           setEditingMatchId={setEditingMatchId}
@@ -157,10 +202,145 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
 }
 
 /* ──────────────────────────────────────────────────────────
-   FocusComposer (요청 반영: 포지션 필터 제거, 항상 전체 리스트 표기)
-   + 드롭다운 라벨에 월-주차 프리픽스 적용
-   ────────────────────────────────────────────────────────── */
-function FocusComposer({ matches, attendeesOf, players, editingMatchId, setEditingMatchId, editingMatch, draft, setDraft, onSave, setVal }){
+   공격포인트 테이블
+   - 모바일도 같은 테이블 뷰 (card 제거)
+   - table-fixed + 좁은 컬럼 폭으로 모바일에서 넓어지지 않게
+   - 1~3위: 행 전체 파스텔 배경 (금/은/동)
+   - 순위 변동: ▲▼ + 변동 폭 (localStorage 비교)
+────────────────────────────────────────────────────────── */
+function AttackPointsTable({ rows, showAll, onToggle }) {
+  const data = showAll ? rows : rows.slice(0, 5)
+
+  // 순위 변동 비교를 위한 로컬 저장
+  const [prevOrder, setPrevOrder] = useState([])
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem('ap_prevOrder_v1')
+      if (s) setPrevOrder(JSON.parse(s))
+    } catch {}
+  }, [])
+  useEffect(() => {
+    try {
+      const current = rows.map(r => toStr(r.id || r.name))
+      localStorage.setItem('ap_prevOrder_v1', JSON.stringify(current))
+    } catch {}
+  }, [rows])
+
+  const deltaFor = (id, currentRank) => {
+    const prevRank = (prevOrder.indexOf(toStr(id)) + 1) || null
+    if (!prevRank) return null
+    const diff = prevRank - currentRank // +면 상승, -면 하락
+    if (diff === 0) return { diff: 0, dir: 'same' }
+    return { diff, dir: diff > 0 ? 'up' : 'down' }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="text-xs text-stone-500">
+        총 선수 {rows.length}명 · 총 PTS {rows.reduce((a, r) => a + (r.g + r.a), 0)}
+      </div>
+
+      <div className="overflow-hidden rounded-lg border border-stone-200">
+        <table className="w-full table-fixed text-sm">
+          <colgroup>
+            <col style={{width: '64px'}} />  {/* 순위 */}
+            <col />                          {/* 선수 (가변) */}
+            <col style={{width: '68px'}} />  {/* 포지션 */}
+            <col style={{width: '56px'}} />  {/* 출전 */}
+            <col style={{width: '48px'}} />  {/* G */}
+            <col style={{width: '48px'}} />  {/* A */}
+            <col style={{width: '64px'}} />  {/* PTS */}
+          </colgroup>
+          <thead>
+            <tr className="text-left text-[13px] text-stone-600">
+              <th className="px-3 py-2 border-b">순위</th>
+              <th className="px-3 py-2 border-b">선수</th>
+              <th className="px-3 py-2 border-b">포지션</th>
+              <th className="px-3 py-2 border-b">출전</th>
+              <th className="px-3 py-2 border-b">G</th>
+              <th className="px-3 py-2 border-b">A</th>
+              <th className="px-3 py-2 border-b">PTS</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((r, idx) => {
+              const rank = idx + 1
+              const tone = rankTone(rank)
+              const delta = deltaFor(r.id || r.name, rank)
+              return (
+                <tr key={r.id || `${r.name}-${idx}`} className={`${tone.rowBg}`}>
+                  <td className={`px-3 py-2 border-b align-middle ${tone.cellBg}`}>
+                    <div className="flex items-center gap-2">
+                      <Medal rank={rank} />
+                      <span className="tabular-nums">{rank}</span>
+                      {delta && delta.diff !== 0 && (
+                        <span className={`ml-1 text-[11px] font-medium ${delta.dir==='up'?'text-emerald-700':'text-rose-700'}`}>
+                          {delta.dir === 'up' ? '▲' : '▼'} {Math.abs(delta.diff)}
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className={`px-3 py-2 border-b ${tone.cellBg}`}>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <InitialAvatar id={r.id || r.name} name={r.name} size={20} />
+                      <span className="font-medium truncate">{r.name}</span>
+                      {r.isGuest && (
+                        <span className="ml-1 shrink-0 rounded-full bg-stone-900 text-white text-[10px] px-2 py-[2px]">
+                          게스트
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className={`px-3 py-2 border-b text-stone-700 ${tone.cellBg}`}>{r.pos || '-'}</td>
+                  <td className={`px-3 py-2 border-b tabular-nums ${tone.cellBg}`}>{r.gp}</td>
+                  <td className={`px-3 py-2 border-b tabular-nums ${tone.cellBg}`}>{r.g}</td>
+                  <td className={`px-3 py-2 border-b tabular-nums ${tone.cellBg}`}>{r.a}</td>
+                  <td className={`px-3 py-2 border-b font-semibold tabular-nums ${tone.cellBg}`}>{r.pts}</td>
+                </tr>
+              )
+            })}
+            {data.length === 0 && (
+              <tr>
+                <td className="px-3 py-4 text-sm text-stone-500" colSpan={7}>
+                  표시할 기록이 없습니다.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          onClick={onToggle}
+          className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50"
+        >
+          {showAll ? '접기' : '전체 보기'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function Medal({ rank }) {
+  if (rank === 1) return <span role="img" aria-label="gold" className="text-base">🥇</span>
+  if (rank === 2) return <span role="img" aria-label="silver" className="text-base">🥈</span>
+  if (rank === 3) return <span role="img" aria-label="bronze" className="text-base">🥉</span>
+  return <span className="inline-block w-4 text-center text-stone-400">—</span>
+}
+
+function rankTone(rank){
+  // 1~3위: 행 전체 동일 파스텔 배경
+  if (rank === 1) return { rowBg: 'bg-yellow-50', cellBg: 'bg-yellow-50' }
+  if (rank === 2) return { rowBg: 'bg-gray-50',   cellBg: 'bg-gray-50' }
+  if (rank === 3) return { rowBg: 'bg-amber-50',  cellBg: 'bg-amber-50' }
+  return { rowBg: '', cellBg: '' }
+}
+
+/* ──────────────────────────────────────────────────────────
+   경기별 골/어시 입력 (Admin · Focus)
+────────────────────────────────────────────────────────── */
+function FocusComposer({ matches, players, editingMatchId, setEditingMatchId, editingMatch, draft, setDraft, onSave, setVal }){
   const [q, setQ] = useState('')
   const [teamIdx, setTeamIdx] = useState('all')
   const [panelIds, setPanelIds] = useState([])
@@ -173,11 +353,11 @@ function FocusComposer({ matches, attendeesOf, players, editingMatchId, setEditi
   }, [editingMatch, players])
 
   const roster = useMemo(() => {
-    const ids = new Set((editingMatch ? attendeesOf(editingMatch) : []).map(String))
-    let pool = players.filter(p => ids.has(String(p.id)))
+    const ids = new Set(extractAttendeeIds(editingMatch || {}))
+    let pool = players.filter(p => ids.has(toStr(p.id)))
     if (teamIdx !== 'all' && teams[teamIdx]) {
-      const tset = new Set(teams[teamIdx].map(p => String(p.id)))
-      pool = pool.filter(p => tset.has(String(p.id)))
+      const tset = new Set(teams[teamIdx].map(p => toStr(p.id)))
+      pool = pool.filter(p => tset.has(toStr(p.id)))
     }
     const needle = q.trim().toLowerCase()
     if (needle) pool = pool.filter(p => (p.name||'').toLowerCase().includes(needle))
@@ -200,9 +380,7 @@ function FocusComposer({ matches, attendeesOf, players, editingMatchId, setEditi
                 className="rounded border border-gray-300 bg-white px-3 py-2 text-sm"
               >
                 {matches.map(m => {
-                  const count = (Array.isArray(m?.snapshot) && m.snapshot.length)
-                    ? m.snapshot.flat().length
-                    : (Array.isArray(m?.attendeeIds) ? m.attendeeIds.length : 0)
+                  const count = extractAttendeeIds(m).length
                   const label = formatMatchLabel(m, { withDate: true, withCount: true, count })
                   return (
                     <option key={m.id} value={m.id}>{label}</option>
@@ -220,7 +398,6 @@ function FocusComposer({ matches, attendeesOf, players, editingMatchId, setEditi
             />
           </div>
 
-          {/* 항상 전체팀(필터 결과) 노출 */}
           <div className="mb-2">
             <ul className="max-h-56 overflow-auto rounded border border-gray-200 bg-white">
               {roster.map(p => (
@@ -240,7 +417,6 @@ function FocusComposer({ matches, attendeesOf, players, editingMatchId, setEditi
             </ul>
           </div>
 
-          {/* 편집 패널 */}
           <EditorPanel
             players={players}
             panelIds={panelIds}
@@ -269,7 +445,7 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setVal, onSave }){
       </div>
       <ul className="divide-y divide-gray-100">
         {panelIds.map(pid => {
-          const p = players.find(pp => String(pp.id)===String(pid))
+          const p = players.find(pp => toStr(pp.id)===toStr(pid))
           const rec = draft[pid] || { goals:0, assists:0 }
           if (!p) return null
           return (
