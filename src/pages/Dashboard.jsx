@@ -212,41 +212,51 @@ export default function Dashboard({ totals, players = [], matches = [], isAdmin,
    - 순위 변동: ▲▼ + 변동 폭 (localStorage 비교)
 ────────────────────────────────────────────────────────── */
 function AttackPointsTable({ rows, showAll, onToggle }) {
-  // 1) 전 선수 목록 기준으로 "동률 순위"를 먼저 계산
-  const rankedRows = useMemo(() => {
-    const out = []
+  // 1) 전원 기준 ‘공동순위’ 먼저 계산 (PTS 동률 → 같은 rank, 다음 순위 점프)
+  const rankedAll = React.useMemo(() => {
     let lastRank = 0
     let lastPts = null
-    for (let i = 0; i < rows.length; i++) {
-      const r = rows[i]
+    return rows.map((r, i) => {
       const rank = (i === 0) ? 1 : (r.pts === lastPts ? lastRank : i + 1)
-      out.push({ ...r, rank })
       lastRank = rank
       lastPts = r.pts
-    }
-    return out
+      return { ...r, rank }
+    })
   }, [rows])
 
-  // 2) 표시 데이터 (Top 5면 자르되, 순위는 전역 순위 유지)
-  const data = showAll ? rankedRows : rankedRows.slice(0, 5)
+  // 2) Top5 뷰에서도 ‘전역(rankedAll) 순위’를 그대로 표시
+  const data = showAll ? rankedAll : rankedAll.slice(0, 5)
 
-  // 순위 변동 비교 (기존 로직 유지: order 기반)
-  const [prevOrder, setPrevOrder] = useState([])
+  // 3) 이전 순위: ID→순위 매핑으로 저장/로드 (v2)
+  const [prevRanks, setPrevRanks] = useState({})
   useEffect(() => {
     try {
-      const s = localStorage.getItem('ap_prevOrder_v1')
-      if (s) setPrevOrder(JSON.parse(s))
+      const v2 = localStorage.getItem('ap_prevRanks_v2')
+      if (v2) {
+        setPrevRanks(JSON.parse(v2) || {})
+        return
+      }
+      // (마이그레이션) 구버전 배열→순위 매핑으로 변환
+      const legacy = localStorage.getItem('ap_prevOrder_v1')
+      if (legacy) {
+        const arr = JSON.parse(legacy) || []
+        const migrated = {}
+        arr.forEach((id, i) => { migrated[String(id)] = i + 1 })
+        setPrevRanks(migrated)
+      }
     } catch {}
   }, [])
   useEffect(() => {
     try {
-      const current = rows.map(r => String(r.id || r.name))
-      localStorage.setItem('ap_prevOrder_v1', JSON.stringify(current))
+      const mapping = {}
+      rankedAll.forEach(r => { mapping[String(r.id || r.name)] = r.rank })
+      localStorage.setItem('ap_prevRanks_v2', JSON.stringify(mapping))
     } catch {}
-  }, [rows])
+  }, [rankedAll])
 
+  // 4) 동률 고려한 오름차 계산
   const deltaFor = (id, currentRank) => {
-    const prevRank = (prevOrder.indexOf(String(id)) + 1) || null
+    const prevRank = prevRanks[String(id)]
     if (!prevRank) return null
     const diff = prevRank - currentRank
     if (diff === 0) return { diff: 0, dir: 'same' }
@@ -260,17 +270,15 @@ function AttackPointsTable({ rows, showAll, onToggle }) {
       </div>
 
       <div className="overflow-hidden rounded-lg border border-stone-200">
-        {/* 모바일에선 table-auto, md 이상에서만 table-fixed */}
         <table className="w-full text-sm md:table-fixed">
-          {/* colgroup은 md 이상에서만 적용 (모바일에서 폭 강제 X) */}
           <colgroup className="hidden md:table-column-group">
-            <col style={{ width: '56px' }} />  {/* 순위: 살짝 줄임 */}
-            <col />                              {/* 선수: 가변 */}
-            <col style={{ width: '60px' }} />   {/* 포지션 */}
-            <col style={{ width: '48px' }} />   {/* 출전 */}
-            <col style={{ width: '42px' }} />   {/* G */}
-            <col style={{ width: '42px' }} />   {/* A */}
-            <col style={{ width: '56px' }} />   {/* PTS */}
+            <col style={{ width: '56px' }} />
+            <col />
+            <col style={{ width: '60px' }} />
+            <col style={{ width: '48px' }} />
+            <col style={{ width: '42px' }} />
+            <col style={{ width: '42px' }} />
+            <col style={{ width: '56px' }} />
           </colgroup>
 
           <thead>
@@ -292,7 +300,6 @@ function AttackPointsTable({ rows, showAll, onToggle }) {
               const delta = deltaFor(r.id || r.name, rank)
               return (
                 <tr key={r.id || `${r.name}-${idx}`} className={`${tone.rowBg}`}>
-                  {/* 순위 */}
                   <td className={`border-b align-middle px-2 py-1.5 md:px-3 md:py-2 ${tone.cellBg}`}>
                     <div
                       className="grid items-center"
@@ -317,7 +324,8 @@ function AttackPointsTable({ rows, showAll, onToggle }) {
                       </div>
                     </div>
                   </td>
-                  {/* 선수 (모바일 이름 찌그러짐 방지 핵심) */}
+
+                  {/* 나머지 셀은 기존 그대로 */}
                   <td className={`border-b px-2 py-1.5 md:px-3 md:py-2 ${tone.cellBg}`}>
                     <div
                       className="grid items-center min-w-0"
@@ -326,11 +334,9 @@ function AttackPointsTable({ rows, showAll, onToggle }) {
                       <div className="shrink-0">
                         <InitialAvatar id={r.id || r.name} name={r.name} size={20} />
                       </div>
-
                       <div className="min-w-0">
                         <span className="block font-medium truncate whitespace-nowrap">{r.name}</span>
                       </div>
-
                       {r.isGuest && (
                         <span className="ml-1 shrink-0 rounded-full bg-stone-900 text-white text-[10px] px-2 py-[2px]">
                           게스트
@@ -338,7 +344,6 @@ function AttackPointsTable({ rows, showAll, onToggle }) {
                       )}
                     </div>
                   </td>
-
                   <td className={`border-b px-2 py-1.5 text-stone-700 md:px-3 md:py-2 ${tone.cellBg}`}>{r.pos || '-'}</td>
                   <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.gp}</td>
                   <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.g}</td>
