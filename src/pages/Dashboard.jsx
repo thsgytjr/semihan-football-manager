@@ -301,7 +301,7 @@ function AttackPointsTable({ rows, showAll, onToggle }) {
                   <td className={`px-3 py-2 border-b ${tone.cellBg}`}>
                     <div className="flex items-center gap-2 min-w-0">
                       <InitialAvatar id={r.id || r.name} name={r.name} size={20} />
-                      <span className="font-medium truncate">{r.name}</span>
+                      <span className="font-medium truncate min-w-0">{r.name}</span>
                       {r.isGuest && (
                         <span className="ml-1 shrink-0 rounded-full bg-stone-900 text-white text-[10px] px-2 py-[2px]">
                           게스트
