@@ -1,3 +1,4 @@
+// src/pages/Dashboard.jsx
 import React, { useMemo, useState, useEffect } from 'react'
 import Card from '../components/Card'
 import Stat from '../components/Stat'
@@ -5,14 +6,14 @@ import InitialAvatar from '../components/InitialAvatar'
 import { overall } from '../lib/players'
 import { hydrateMatch } from '../lib/match'
 
-/**
- * 대시보드 (모바일 우선)
- * - 순서: 매치 요약 → 공격포인트 → 매치 히스토리
- * - 공격포인트는 Top 5만 기본 노출, [전체 보기]로 확장
- * - (Admin) FocusComposer: 검색/필터로 선택한 선수만 편집
- */
 export default function Dashboard({ totals, players, matches, isAdmin, onUpdateMatch }) {
+  // ✅ 초기 로딩/비동기 대비: matches 들어오면 첫 경기 자동 선택
   const [editingMatchId, setEditingMatchId] = useState(matches?.[0]?.id || null)
+  useEffect(() => {
+    if (!matches || matches.length === 0) { setEditingMatchId(null); return }
+    const exists = matches.some(m => m.id === editingMatchId)
+    if (!editingMatchId || !exists) setEditingMatchId(matches[0].id)
+  }, [matches])
 
   // 참석자 집계 helper (snapshot 우선)
   const attendeesOf = (m) => {
@@ -20,14 +21,14 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
     return Array.isArray(m?.attendeeIds) ? m.attendeeIds : []
   }
 
-  // 누적 공격포인트 (모든 매치 기반)
+  // 누각 공격포인트 (모든 매치 기반)
   const totalsTable = useMemo(() => {
-    const index = new Map() // playerId -> { id, name, pos, gp, g, a }
+    const index = new Map()
     const idToPlayer = new Map(players.map(p => [String(p.id), p]))
 
     for (const m of (matches || [])) {
       const attended = new Set(attendeesOf(m).map(String))
-      const stats = m?.stats || {} // { [pid]: {goals, assists} }
+      const stats = m?.stats || {}
 
       // 경기수
       for (const pid of attended) {
@@ -53,10 +54,13 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
     return rows
   }, [players, matches])
 
-  // 편집 대상 매치 & 참석자
-  const editingMatch = useMemo(() => matches.find(m => m.id === editingMatchId) || null, [matches, editingMatchId])
+  // 편집 대상 매치
+  const editingMatch = useMemo(
+    () => (matches || []).find(m => m.id === editingMatchId) || null,
+    [matches, editingMatchId]
+  )
 
-  // 편집 드래프트 (초깃값 = 기존 기록)
+  // 편집 드래프트 (초깃값 = 기존 기록, 참석자만)
   const [draft, setDraft] = useState({})
   useEffect(() => {
     if (!editingMatch) { setDraft({}); return }
@@ -70,6 +74,9 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
     }
     setDraft(next)
   }, [editingMatchId, editingMatch, players])
+
+  const setVal = (pid, key, v) =>
+    setDraft(prev => ({ ...prev, [pid]: { ...prev[pid], [key]: Math.max(0, v || 0) } }))
 
   const saveStats = () => {
     if (!editingMatch) return
@@ -109,66 +116,89 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
                 {showAllTotals ? '접기' : `전체 보기 (${totalsTable.length})`}
               </button>
             </div>
-            {(() => { const rows = showAllTotals ? totalsTable : totalsTable.slice(0,5); return (
-              <>
-                {/* 모바일 카드 리스트 */}
-                <ul className="grid gap-2 md:hidden">
-                  {rows.map(r => (
-                    <li key={r.id} className="rounded border border-gray-200 bg-white p-3">
-                      <div className="flex items-center gap-2">
-                        <InitialAvatar id={r.id} name={r.name} size={24} />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate font-medium">{r.name}</div>
-                          <div className="text-xs text-gray-500">{r.pos || '-'} · 경기 {r.gp}</div>
-                        </div>
-                        <Badge label="PTS" value={r.pts} />
-                      </div>
-                      <div className="mt-2 flex items-center gap-2 text-xs">
-                        <Chip>골 {r.g}</Chip>
-                        <Chip>어시 {r.a}</Chip>
-                        <Chip className="ml-auto">경기 {r.gp}</Chip>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+            {(() => {
+              const rows = showAllTotals ? totalsTable : totalsTable.slice(0,5)
+              return (
+                <>
+                  {/* 모바일 카드 리스트 */}
+                  <ul className="grid gap-2 md:hidden">
+                    {rows.map((r, idx) => {
+                      const top = rankInfo(idx)
+                      return (
+                        <li
+                          key={r.id}
+                          className={`relative rounded border border-gray-200 bg-white p-3 ${top.cardClass}`}
+                        >
+                          {top.emoji && (
+                            <div className={`absolute -left-2 -top-2 rounded-full px-2 py-0.5 text-xs ${top.badgeClass}`}>
+                              {top.emoji}
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2">
+                            <InitialAvatar id={r.id} name={r.name} size={24} />
+                            <div className="min-w-0 flex-1">
+                              <div className="truncate font-medium">{r.name}</div>
+                              <div className="text-xs text-gray-500">{r.pos || '-'} · 경기 {r.gp}</div>
+                            </div>
+                            <Badge label="PTS" value={r.pts} />
+                          </div>
+                          <div className="mt-2 flex items-center gap-2 text-xs">
+                            <Chip>골 {r.g}</Chip>
+                            <Chip>어시 {r.a}</Chip>
+                            <Chip className="ml-auto">경기 {r.gp}</Chip>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
 
-                {/* 데스크톱 테이블 */}
-                <div className="hidden md:block">
-                  <div className="overflow-x-auto rounded border border-gray-200">
-                    <TableScrollHint />
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-stone-100 text-stone-700">
-                          <th className="px-3 py-2 text-left">선수</th>
-                          <th className="px-3 py-2 text-left">포지션</th>
-                          <th className="px-3 py-2 text-right">경기수</th>
-                          <th className="px-3 py-2 text-right">골</th>
-                          <th className="px-3 py-2 text-right">어시스트</th>
-                          <th className="px-3 py-2 text-right">공격포인트</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.map(r => (
-                          <tr key={r.id} className="border-t">
-                            <td className="px-3 py-2">
-                              <div className="flex items-center gap-2">
-                                <InitialAvatar id={r.id} name={r.name} size={22} />
-                                <span>{r.name}</span>
-                              </div>
-                            </td>
-                            <td className="px-3 py-2">{r.pos || '-'}</td>
-                            <td className="px-3 py-2 text-right">{r.gp}</td>
-                            <td className="px-3 py-2 text-right">{r.g}</td>
-                            <td className="px-3 py-2 text-right">{r.a}</td>
-                            <td className="px-3 py-2 text-right font-semibold">{r.pts}</td>
+                  {/* 데스크톱 테이블 */}
+                  <div className="hidden md:block">
+                    <div className="overflow-x-auto rounded border border-gray-200">
+                      <TableScrollHint />
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-stone-100 text-stone-700">
+                            <th className="px-3 py-2 text-left">순위</th>
+                            <th className="px-3 py-2 text-left">선수</th>
+                            <th className="px-3 py-2 text-left">포지션</th>
+                            <th className="px-3 py-2 text-right">경기수</th>
+                            <th className="px-3 py-2 text-right">골</th>
+                            <th className="px-3 py-2 text-right">어시스트</th>
+                            <th className="px-3 py-2 text-right">공격포인트</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {rows.map((r, idx) => {
+                            const top = rankInfo(idx)
+                            return (
+                              <tr key={r.id} className={`border-t ${top.rowClass}`}>
+                                <td className="px-3 py-2">
+                                  <span className="inline-flex items-center gap-1">
+                                    {top.emoji ? top.emoji : idx + 1}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <InitialAvatar id={r.id} name={r.name} size={22} />
+                                    <span>{r.name}</span>
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">{r.pos || '-'}</td>
+                                <td className="px-3 py-2 text-right">{r.gp}</td>
+                                <td className="px-3 py-2 text-right">{r.g}</td>
+                                <td className="px-3 py-2 text-right">{r.a}</td>
+                                <td className="px-3 py-2 text-right font-semibold">{r.pts}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
-                </div>
-              </>
-            )})()}
+                </>
+              )
+            })()}
           </>
         )}
       </Card>
@@ -180,25 +210,23 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
         ) : (
           <ul className="space-y-3">
             {matches.map((m) => {
-              const hydrated = hydrateMatch(m, players) // snapshot 우선 복원
+              const hydrated = hydrateMatch(m, players)
               const teams = hydrated.teams || []
+              // ⬇️ 이곳의 금액 표기를 '멤버/게스트 가격만'으로 교체
+              const feesShown = m.fees ?? deriveFees(m, players)
               return (
                 <li key={m.id} className="rounded border border-gray-200 bg-white p-3">
-                  <div className="mb-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="text-sm">
-                      <b>{(m.dateISO || '').replace('T',' ')}</b> · {m.mode} · {m.teamCount}팀 · 참석 {attendeesOf(m).length}명
-                      {m.location?.name ? <> · 장소 {m.location.name}</> : null}
-                    </div>
-                    {isAdmin && (
-                      <button
-                        onClick={()=>setEditingMatchId(m.id)}
-                        className={`rounded px-2 py-1 text-xs border ${editingMatchId===m.id?'bg-stone-900 text-white':'bg-white text-stone-700 hover:bg-stone-100'}`}>
-                        이 경기 기록 입력/수정
-                      </button>
-                    )}
+                  <div className="mb-1 text-sm">
+                    <b>{(m.dateISO || '').replace('T',' ')}</b> · {m.mode} · {m.teamCount}팀 · 참석 {attendeesOf(m).length}명
+                    {m.location?.name ? <> · 장소 {m.location.name}</> : null}
                   </div>
 
-                  {/* 팀 멤버 카드 (항상 2열 · 모바일도 side-by-side) */}
+                  {/* 💰 멤버/게스트 1인 가격만 표기 */}
+                  <div className="mb-2 text-xs text-gray-800">
+                    💰 멤버 ${feesShown?.memberFee ?? 0} / 게스트 ${feesShown?.guestFee ?? 0}
+                  </div>
+
+                  {/* 팀 멤버 카드 */}
                   <div className="grid grid-cols-2 gap-2 sm:gap-3">
                     {teams.map((list, i) => {
                       const kit = kitForTeam(i)
@@ -263,7 +291,7 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
         )}
       </Card>
 
-      {/* (Admin 전용) FocusComposer: 선택한 선수만 편집 */}
+      {/* (Admin 전용) FocusComposer */}
       {isAdmin && (
         <FocusComposer
           matches={matches}
@@ -275,6 +303,7 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
           draft={draft}
           setDraft={setDraft}
           onSave={saveStats}
+          setVal={setVal}
         />
       )}
     </div>
@@ -284,7 +313,7 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
 /* ──────────────────────────────────────────────────────────
    FocusComposer: 검색/필터 → 선택한 선수만 에디트 패널에 표시
    ────────────────────────────────────────────────────────── */
-function FocusComposer({ matches, attendeesOf, players, editingMatchId, setEditingMatchId, editingMatch, draft, setDraft, onSave }){
+function FocusComposer({ matches, attendeesOf, players, editingMatchId, setEditingMatchId, editingMatch, draft, setDraft, onSave, setVal }){
   const [q, setQ] = useState('')
   const [teamIdx, setTeamIdx] = useState('all')
   const [pos, setPos] = useState('all')
@@ -312,9 +341,6 @@ function FocusComposer({ matches, attendeesOf, players, editingMatchId, setEditi
 
   const addToPanel = (pid) => setPanelIds(prev => prev.includes(pid) ? prev : [...prev, pid])
   const removeFromPanel = (pid) => setPanelIds(prev => prev.filter(id => id!==pid))
-
-  const setVal = (pid, key, v) => setDraft(prev => ({ ...prev, [pid]: { ...prev[pid], [key]: Math.max(0, v) } }))
-  const inc = (pid, key, d=1) => setVal(pid, key, (draft[pid]?.[key]||0)+d)
 
   const save = () => { onSave(); setShowSaved(true); setTimeout(()=>setShowSaved(false), 1200) }
 
@@ -387,16 +413,32 @@ function FocusComposer({ matches, attendeesOf, players, editingMatchId, setEditi
                 const rec = draft[pid] || { goals:0, assists:0 }
                 if (!p) return null
                 return (
-                  <li key={pid} className="flex items-center gap-2 px-3 py-2">
+                  <li key={pid} className="flex items-center gap-3 px-3 py-2">
                     <InitialAvatar id={p.id} name={p.name} size={22} />
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium">
                         {p.name} <span className="ml-1 text-xs text-gray-500">{p.position||p.pos||'-'}</span>
                       </div>
                     </div>
-                    <MiniCounter label="G" value={rec.goals} onDec={()=>inc(pid,'goals',-1)} onInc={()=>inc(pid,'goals',+1)} />
-                    <MiniCounter label="A" value={rec.assists} onDec={()=>inc(pid,'assists',-1)} onInc={()=>inc(pid,'assists',+1)} />
-                    <button onClick={()=>removeFromPanel(pid)} className="ml-1 rounded border px-2 py-1 text-xs">제거</button>
+
+                    {/* ✅ 아이콘(±)은 '완전 무스타일' */}
+                    <MiniCounter
+                      label="G"
+                      value={rec.goals}
+                      onDec={()=>setVal(p.id,'goals',Math.max(0,(rec.goals||0)-1))}
+                      onInc={()=>setVal(p.id,'goals',(rec.goals||0)+1)}
+                    />
+                    <MiniCounter
+                      label="A"
+                      value={rec.assists}
+                      onDec={()=>setVal(p.id,'assists',Math.max(0,(rec.assists||0)-1))}
+                      onInc={()=>setVal(p.id,'assists',(rec.assists||0)+1)}
+                    />
+
+                    <button onClick={()=>setPanelIds(prev=>prev.filter(id=>id!==pid))}
+                            className="ml-1 rounded border px-2 py-1 text-xs">
+                      제거
+                    </button>
                   </li>
                 )
               })}
@@ -424,13 +466,14 @@ function Pill({ children, active, onClick }){
   )
 }
 
+/* ✅ 무스타일 ±, 숫자만 탭-친화적으로 표시 */
 function MiniCounter({ label, value, onDec, onInc }){
   return (
     <div className="flex items-center gap-1">
       <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-stone-800 text-[10px] font-bold text-white">{label}</span>
-      <button onClick={onDec} className="h-6 w-6 rounded-full border">−</button>
-      <span className="w-6 text-center text-sm tabular-nums">{value}</span>
-      <button onClick={onInc} className="h-6 w-6 rounded-full border bg-stone-900 text-white">＋</button>
+      <button onClick={onDec} aria-label={`${label} 감소`}>-</button>
+      <span style={{ width: 24, textAlign: 'center' }} className="tabular-nums">{value}</span>
+      <button onClick={onInc} aria-label={`${label} 증가`}>+</button>
     </div>
   )
 }
@@ -462,6 +505,29 @@ function TableScrollHint(){
   )
 }
 
+/* 🔱 Top3 트로피·하이라이트 스타일 */
+function rankInfo(idx){
+  if (idx === 0) return {
+    emoji: '🥇',
+    rowClass: 'bg-amber-50',
+    cardClass: 'ring-1 ring-amber-200',
+    badgeClass: 'bg-amber-500 text-white shadow-sm'
+  }
+  if (idx === 1) return {
+    emoji: '🥈',
+    rowClass: 'bg-slate-50',
+    cardClass: 'ring-1 ring-slate-200',
+    badgeClass: 'bg-slate-500 text-white shadow-sm'
+  }
+  if (idx === 2) return {
+    emoji: '🥉',
+    rowClass: 'bg-orange-50',
+    cardClass: 'ring-1 ring-orange-200',
+    badgeClass: 'bg-orange-500 text-white shadow-sm'
+  }
+  return { emoji: '', rowClass: '', cardClass: '', badgeClass: '' }
+}
+
 /* 매치플래너와 동일한 룩&필을 위한 유틸 */
 function kitForTeam(i){
   const a=[
@@ -477,4 +543,32 @@ function kitForTeam(i){
     {label:'옐로',headerClass:'bg-yellow-400 text-stone-900 border-b border-yellow-500'},
   ]
   return a[i%a.length]
+}
+
+/* ──────────────────────────────────────────────────────────
+   표시용 fallback: 저장된 매치에 fees가 없을 때 멤버/게스트 단가 추정
+   ────────────────────────────────────────────────────────── */
+function deriveFees(m, players){
+  if (m?.fees) return m.fees
+  const preset = m?.location?.preset
+  const baseCost =
+    preset === 'indoor-soccer-zone' ? 230 :
+    preset === 'coppell-west'       ? 300 : 0
+  if (!baseCost) return { memberFee: 0, guestFee: 0, premium: 1.2 }
+
+  const ids = Array.isArray(m?.snapshot) && m.snapshot.length
+    ? m.snapshot.flat()
+    : (Array.isArray(m?.attendeeIds) ? m.attendeeIds : [])
+  const byId = new Map(players.map(p => [String(p.id), p]))
+  const attendees = ids.map(id => byId.get(String(id))).filter(Boolean)
+
+  const isMember = (v)=>String(v??'').trim()==='member'||String(v??'').trim()==='정회원'
+  const memberCount = attendees.filter(p => isMember(p.membership)).length
+  const guestCount  = attendees.length - memberCount
+  const PREMIUM = 1.2
+
+  if ((memberCount + guestCount) === 0) return { memberFee: 0, guestFee: 0, premium: PREMIUM }
+
+  const x = baseCost / (memberCount + PREMIUM * guestCount)
+  return { memberFee: Math.round(x), guestFee: Math.round(PREMIUM*x), premium: PREMIUM, _estimated: true }
 }
