@@ -5,6 +5,7 @@ import Stat from '../components/Stat'
 import InitialAvatar from '../components/InitialAvatar'
 import { overall } from '../lib/players'
 import { hydrateMatch } from '../lib/match'
+import SavedMatchesList from '../components/SavedMatchesList'   // ✅ 공용 리스트 사용
 
 export default function Dashboard({ totals, players, matches, isAdmin, onUpdateMatch }) {
   const [editingMatchId, setEditingMatchId] = useState(matches?.[0]?.id || null)
@@ -19,7 +20,7 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
     return Array.isArray(m?.attendeeIds) ? m.attendeeIds : []
   }
 
-  // ✅ membership 정보를 포함해 공격포인트 테이블용 rows 생성
+  // ✅ membership 포함 공격포인트 rows
   const totalsTable = useMemo(() => {
     const index = new Map()
     const idToPlayer = new Map(players.map(p => [String(p.id), p]))
@@ -125,7 +126,6 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
             <div className="mb-2 flex items-center justify-between">
               <div className="text-xs text-gray-600">골+어시 합계 기준 내림차순</div>
               <div className="flex items-center gap-3">
-                {/* 안내: 게스트 표기 */}
                 <div className="hidden sm:block text-[11px] text-gray-500">
                   표기: <span className="inline-flex items-center gap-1"><GuestBadge /> 게스트</span>
                 </div>
@@ -231,99 +231,15 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
         )}
       </Card>
 
-      {/* 3) 매치 히스토리 */}
+      {/* 3) 매치 히스토리 → 공용 컴포넌트로 교체 */}
       <Card title="매치 히스토리">
-        {totalMatches === 0 ? (
-          <div className="text-sm text-gray-500">저장된 매치가 없습니다.</div>
-        ) : (
-          <ul className="space-y-3">
-            {matches.map((m) => {
-              const hydrated = hydrateMatch(m, players)
-              const teams = hydrated.teams || []
-              const feesShown = m.fees ?? deriveFees(m, players)
-              return (
-                <li key={m.id} className="rounded border border-gray-200 bg-white p-3">
-                  <div className="mb-1 text-sm">
-                    <b>{(m.dateISO || '').replace('T',' ')}</b> · {m.mode} · {m.teamCount}팀 · 참석 {attendeesOf(m).length}명
-                    {m.location?.name ? <> · 장소 {m.location.name}</> : null}
-                  </div>
-
-                  {/* 💰 멤버/게스트 금액 줄 + 오른쪽 안내 */}
-                  <div className="mb-2 flex items-center justify-between text-xs">
-                    <div className="text-gray-800">
-                      💰 멤버 ${feesShown?.memberFee ?? 0} / 게스트 ${feesShown?.guestFee ?? 0}
-                    </div>
-                    <div className="text-[11px] text-gray-500">
-                      표기: <span className="inline-flex items-center gap-1"><GuestBadge /> 게스트</span>
-                    </div>
-                  </div>
-
-                  {/* 팀 멤버 카드 */}
-                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                    {teams.map((list, i) => {
-                      const kit = kitForTeam(i)
-                      const nonGK = list.filter(p => (p.position || p.pos) !== 'GK')
-                      const sum = nonGK.reduce((a, p) => a + (p.ovr ?? overall(p)), 0)
-                      const avg = nonGK.length ? Math.round(sum / nonGK.length) : 0
-                      return (
-                        <div key={i} className="overflow-hidden rounded border border-gray-200">
-                          <div className={`flex items-center justify-between px-3 py-2 text-xs ${kit.headerClass}`}>
-                            <div className="font-semibold">팀 {i + 1}</div>
-                            {isAdmin
-                              ? <div className="opacity-80">{kit.label} · {list.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</div>
-                              : <div className="opacity-80">{kit.label} · {list.length}명</div>}
-                          </div>
-                          <ul className="divide-y divide-gray-100">
-                            {list.map(p => {
-                              const mem = String(p.membership||'').trim()
-                              const isMember = (mem==='member'||mem.includes('정회원'))
-                              return (
-                                <li key={p.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
-                                  <span className="flex items-center gap-2 min-w-0 flex-1">
-                                    <InitialAvatar id={p.id} name={p.name} size={22} />
-                                    <span className="truncate">
-                                      {p.name} {(p.position || p.pos) === 'GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}
-                                    </span>
-                                    {!isMember && <GuestBadge />}
-                                  </span>
-                                  {isAdmin && (p.position || p.pos) !== 'GK' && (
-                                    <span className="text-gray-500 shrink-0">OVR {p.ovr ?? overall(p)}</span>
-                                  )}
-                                </li>
-                              )
-                            })}
-                            {list.length === 0 && <li className="px-3 py-2 text-xs text-gray-400">팀원 없음</li>}
-                          </ul>
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  {/* 🎥 유튜브 링크 */}
-                  {m.videos && m.videos.length > 0 && (
-                    <div className="mt-3 space-y-2">
-                      <div className="text-xs font-semibold text-gray-600">🎥 유튜브 링크</div>
-                      <ul className="flex flex-wrap gap-2">
-                        {m.videos.map((url, idx) => (
-                          <li key={idx} className="flex items-center gap-2">
-                            <a
-                              href={url}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="max-w-[240px] truncate rounded border border-gray-300 bg-white px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
-                              title={url}
-                            >
-                              {url}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </li>
-              )})}
-          </ul>
-        )}
+        <SavedMatchesList
+          matches={matches}
+          players={players}
+          isAdmin={isAdmin}
+          onUpdateMatch={onUpdateMatch}
+          showTeamOVRForAdmin={true}
+        />
       </Card>
 
       {/* (Admin 전용) FocusComposer */}
@@ -346,7 +262,7 @@ export default function Dashboard({ totals, players, matches, isAdmin, onUpdateM
 }
 
 /* ──────────────────────────────────────────────────────────
-   FocusComposer
+   FocusComposer 이하 기존 부품들 그대로 유지
    ────────────────────────────────────────────────────────── */
 function FocusComposer({ matches, attendeesOf, players, editingMatchId, setEditingMatchId, editingMatch, draft, setDraft, onSave, setVal }){
   const [q, setQ] = useState('')
@@ -500,7 +416,6 @@ function Pill({ children, active, onClick }){
   )
 }
 
-/* ✅ 무스타일 ±, 숫자만 탭-친화적으로 표시 */
 function MiniCounter({ label, value, onDec, onInc }){
   return (
     <div className="flex items-center gap-1">
@@ -560,46 +475,7 @@ function rankInfo(idx){
   return { emoji: '', rowClass: '', cardClass: '', badgeClass: '' }
 }
 
-function kitForTeam(i){
-  const a=[
-    {label:'화이트',headerClass:'bg-white text-stone-800 border-b border-stone-300'},
-    {label:'블랙',headerClass:'bg-stone-900 text-white border-b border-stone-900'},
-    {label:'블루',headerClass:'bg-blue-600 text-white border-b border-blue-700'},
-    {label:'레드',headerClass:'bg-red-600 text-white border-b border-red-700'},
-    {label:'그린',headerClass:'bg-emerald-600 text-white border-b border-emerald-700'},
-    {label:'퍼플',headerClass:'bg-violet-600 text-white border-b border-violet-700'},
-    {label:'오렌지',headerClass:'bg-orange-500 text-white border-b border-orange-600'},
-    {label:'티얼',headerClass:'bg-teal-600 text-white border-b border-teal-700'},
-    {label:'핑크',headerClass:'bg-pink-600 text-white border-b border-pink-700'},
-    {label:'옐로',headerClass:'bg-yellow-400 text-stone-900 border-b border-yellow-500'},
-  ]
-  return a[i%a.length]
-}
-
-/* 표시용 fallback: 저장된 매치에 fees가 없을 때 멤버/게스트 단가 추정 */
-function deriveFees(m, players){
-  if (m?.fees) return m.fees
-  const preset = m?.location?.preset
-  const baseCost =
-    preset === 'indoor-soccer-zone' ? 230 :
-    preset === 'coppell-west'       ? 300 : 0
-  if (!baseCost) return { memberFee: 0, guestFee: 0, premium: 1.2 }
-
-  const ids = Array.isArray(m?.snapshot) && m.snapshot.length
-    ? m.snapshot.flat()
-    : (Array.isArray(m?.attendeeIds) ? m.attendeeIds : [])
-  const byId = new Map(players.map(p => [String(p.id), p]))
-  const attendees = ids.map(id => byId.get(String(id))).filter(Boolean)
-
-  const isMember = (v)=>String(v??'').trim()==='member'||String(v??'').trim()==='정회원'
-  const memberCount = attendees.filter(p => isMember(p.membership)).length
-  const guestCount  = attendees.length - memberCount
-  const PREMIUM = 1.2
-  const x = baseCost / (memberCount + PREMIUM * guestCount || 1)
-  return { memberFee: Math.round(x||0), guestFee: Math.round(PREMIUM*(x||0)), premium: PREMIUM }
-}
-
-/* 게스트 배지 */
+/* 게스트 배지 (공격포인트 표기에 사용) */
 function GuestBadge(){
   return (
     <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200">G</span>
