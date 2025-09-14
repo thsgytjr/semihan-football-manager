@@ -158,7 +158,7 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
               >
                 {dateOptions.map(v => (
                   <option key={v} value={v}>
-                    {v === 'all' ? '토탈' : v}
+                    {v === 'all' ? '모든 매치' : v}
                   </option>
                 ))}
               </select>
