@@ -1,19 +1,31 @@
 // src/pages/Dashboard.jsx
 import React, { useMemo, useState, useEffect } from 'react'
 import Card from '../components/Card'
-import Stat from '../components/Stat'
 import InitialAvatar from '../components/InitialAvatar'
-import { hydrateMatch } from '../lib/match'
 import SavedMatchesList from '../components/SavedMatchesList'
-import { formatMatchLabel } from '../lib/matchLabel'
 
+/* -------------------------- 유틸 -------------------------- */
 const toStr = (v) => (v === null || v === undefined) ? '' : String(v)
 const isMember = (mem) => {
   const s = toStr(mem).trim().toLowerCase()
   return s === 'member' || s.includes('정회원')
 }
 
-// 참석자 파서 (여러 필드명 대응)
+// 날짜 키: YYYY-MM-DD
+function extractDateKey(m) {
+  const cand = m?.dateISO ?? m?.dateIso ?? m?.dateiso ?? m?.date ?? m?.dateStr ?? null
+  if (!cand) return null
+  let d
+  if (typeof cand === 'number') d = new Date(cand)
+  else d = new Date(String(cand))
+  if (Number.isNaN(d.getTime())) return null
+  const y = d.getFullYear()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${y}-${mm}-${dd}`
+}
+
+// 참석자 파서
 function extractAttendeeIds(m) {
   const candidates = [m?.snapshot, m?.attendeeIds, m?.attendees, m?.participants, m?.roster].filter(Boolean)
   let raw = []
@@ -28,7 +40,7 @@ function extractAttendeeIds(m) {
   }).filter(Boolean)
 }
 
-// 스탯 파서 (맵/배열 모두 지원)
+// 스탯 파서
 function extractStatsByPlayer(m) {
   const src = m?.stats ?? m?.records ?? m?.playerStats ?? m?.ga ?? m?.scoreboard ?? null
   const out = {}
@@ -54,165 +66,148 @@ function extractStatsByPlayer(m) {
   return out
 }
 
-export default function Dashboard({ totals, players = [], matches = [], isAdmin, onUpdateMatch }) {
-  const [editingMatchId, setEditingMatchId] = useState(matches?.[0]?.id || null)
+// 공격포인트 집계
+function computeAttackRows(players = [], matches = []) {
+  const index = new Map()
+  const idToPlayer = new Map(players.map(p => [toStr(p.id), p]))
+  for (const m of (matches || [])) {
+    const attendedIds = new Set(extractAttendeeIds(m))
+    const statsMap = extractStatsByPlayer(m)
+    // 출전
+    for (const pid of attendedIds) {
+      const p = idToPlayer.get(pid)
+      if (!p) continue
+      const row = index.get(pid) || {
+        id: pid, name: p.name, membership: p.membership || '',
+        gp: 0, g: 0, a: 0
+      }
+      row.gp += 1
+      index.set(pid, row)
+    }
+    // 골/어시
+    for (const [pid, rec] of Object.entries(statsMap)) {
+      const p = idToPlayer.get(pid)
+      if (!p) continue
+      const row = index.get(pid) || {
+        id: pid, name: p.name, membership: p.membership || '',
+        gp: 0, g: 0, a: 0
+      }
+      row.g += Number(rec?.goals || 0)
+      row.a += Number(rec?.assists || 0)
+      index.set(pid, row)
+    }
+  }
+  return [...index.values()]
+    .filter(r => r.gp > 0)
+    .map(r => ({ ...r, pts: r.g + r.a, isGuest: !isMember(r.membership) }))
+    .sort((a, b) => b.pts - a.pts || b.g - a.g || a.name.localeCompare(b.name))
+}
 
-  useEffect(() => {
-    if (!matches || matches.length === 0) { setEditingMatchId(null); return }
-    const exists = matches.some(m => m.id === editingMatchId)
-    if (!editingMatchId || !exists) setEditingMatchId(matches[0].id)
+/* --------------------- 에러 바운더리 ---------------------- */
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false }
+  }
+  static getDerivedStateFromError() { return { hasError: true } }
+  componentDidCatch(error, info) { /* 필요시 로깅 */ }
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback ?? <div className="text-sm text-stone-500">문제가 발생했어요.</div>
+    }
+    return this.props.children
+  }
+}
+
+/* -------------------------- 메인 -------------------------- */
+export default function Dashboard({ players = [], matches = [], isAdmin, onUpdateMatch }) {
+  // 날짜 드롭다운: 'all' = 토탈
+  const [apDateKey, setApDateKey] = useState('all')
+  const dateOptions = useMemo(() => {
+    const set = new Set()
+    for (const m of matches) {
+      const k = extractDateKey(m)
+      if (k) set.add(k)
+    }
+    return ['all', ...Array.from(set).sort().reverse()]
   }, [matches])
 
-  // 공격포인트 집계
-  const { totalsRows, debugInfo } = useMemo(() => {
-    const index = new Map()
-    const idToPlayer = new Map(players.map(p => [toStr(p.id), p]))
-    let matchCountWithAttendees = 0
-    let matchCountWithStats = 0
-
-    for (const m of (matches || [])) {
-      const attendedIds = new Set(extractAttendeeIds(m))
-      if (attendedIds.size > 0) matchCountWithAttendees++
-      const statsMap = extractStatsByPlayer(m)
-      if (Object.keys(statsMap).length > 0) matchCountWithStats++
-
-      // 출전(GP)
-      for (const pid of attendedIds) {
-        const p = idToPlayer.get(pid)
-        if (!p) continue
-        const row = index.get(pid) || {
-          id: pid, name: p.name, pos: p.position || p.pos, membership: p.membership || '',
-          gp: 0, g: 0, a: 0
-        }
-        row.gp += 1
-        index.set(pid, row)
-      }
-      // 골/어시
-      for (const [pid, rec] of Object.entries(statsMap)) {
-        const p = idToPlayer.get(pid)
-        if (!p) continue
-        const row = index.get(pid) || {
-          id: pid, name: p.name, pos: p.position || p.pos, membership: p.membership || '',
-          gp: 0, g: 0, a: 0
-        }
-        row.g += Number(rec?.goals || 0)
-        row.a += Number(rec?.assists || 0)
-        index.set(pid, row)
-      }
-    }
-    const rows = [...index.values()]
-      .filter(r => r.gp > 0)  // 출전이 0이면 제외
-      .map(r => ({
-        ...r,
-        pts: r.g + r.a,
-        isGuest: !isMember(r.membership)
-      }))
-      // 정렬: PTS desc, G desc, 이름 asc
-      .sort((a, b) => b.pts - a.pts || b.g - a.g || a.name.localeCompare(b.name))
-
-    const debug = {
-      playersCount: players.length,
-      matchesCount: matches.length,
-      matchCountWithAttendees,
-      matchCountWithStats,
-      totalsRowsCount: rows.length,
-      totalsPtsSum: rows.reduce((s, r) => s + r.pts, 0)
-    }
-    return { totalsRows: rows, debugInfo: debug }
-  }, [players, matches])
-
-  const editingMatch = useMemo(
-    () => (matches || []).find(m => m.id === editingMatchId) || null,
-    [matches, editingMatchId]
+  const filteredMatches = useMemo(
+    () => apDateKey === 'all' ? matches : matches.filter(m => extractDateKey(m) === apDateKey),
+    [matches, apDateKey]
   )
-
-  // 경기별 골/어시 드래프트 (Admin)
-  const [draft, setDraft] = useState({})
-  useEffect(() => {
-    if (!editingMatch) { setDraft({}); return }
-    const src = extractStatsByPlayer(editingMatch)
-    const next = {}
-    const ids = new Set(extractAttendeeIds(editingMatch))
-    for (const p of players) {
-      if (!ids.has(toStr(p.id))) continue
-      const rec = src?.[toStr(p.id)] || {}
-      next[p.id] = { goals: Number(rec.goals || 0), assists: Number(rec.assists || 0) }
-    }
-    setDraft(next)
-  }, [editingMatchId, editingMatch, players])
-
-  const setVal = (pid, key, v) =>
-    setDraft(prev => ({ ...prev, [pid]: { ...prev[pid], [key]: Math.max(0, v || 0) } }))
-
-  const saveStats = () => {
-    if (!editingMatch) return
-    onUpdateMatch?.(editingMatch.id, { stats: draft })
-  }
-
-  const totalPlayers = players.length
-  const totalMatches = (matches || []).length
+  const totalsRows = useMemo(() => computeAttackRows(players, filteredMatches), [players, filteredMatches])
   const [showAllTotals, setShowAllTotals] = useState(false)
 
   return (
     <div className="grid gap-6">
-      {/* 1) 요약 */}
-      <Card title="요약">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Stat label="총 선수" value={`${totalPlayers}명`} />
-          <Stat label="저장된 경기" value={`${totalMatches}회`} />
-          <Stat label="공격포인트 합계(골+어시)" value={totalsRows.reduce((a,r)=>a+r.pts,0)} />
-          <Stat label="기록 보유 선수 수" value={totalsRows.filter(r=>r.pts>0 || r.gp>0).length} />
-        </div>
-      </Card>
-
-      {/* 2) 공격포인트 (Top 5 + 확장) */}
-      <Card title={`공격포인트${showAllTotals ? '' : ' (Top 5)'}`}>
+      {/* 공격포인트 */}
+      <Card title="공격포인트">
         <AttackPointsTable
           rows={totalsRows}
           showAll={showAllTotals}
-          onToggle={() => setShowAllTotals(s=>!s)}
+          onToggle={() => setShowAllTotals(s => !s)}
+          /* 컨트롤 UI (토탈 드롭다운 + 전체 보기) */
+          controls={
+            <>
+              <select
+                value={apDateKey}
+                onChange={(e) => setApDateKey(e.target.value)}
+                className="rounded border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
+                title="토탈 또는 날짜별 보기"
+              >
+                {dateOptions.map(v => (
+                  <option key={v} value={v}>
+                    {v === 'all' ? '토탈' : v}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => setShowAllTotals(s => !s)}
+                className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50"
+                title={showAllTotals ? '접기' : '전체 보기'}
+              >
+                {showAllTotals ? '접기' : '전체 보기'}
+              </button>
+            </>
+          }
         />
       </Card>
 
-      {/* 3) 매치 히스토리 */}
+      {/* 매치 히스토리 (CSS로만 OVR 숨김) */}
       <Card title="매치 히스토리">
-        <SavedMatchesList
-          matches={matches}
-          players={players}
-          isAdmin={isAdmin}
-          onUpdateMatch={onUpdateMatch}
-          showTeamOVRForAdmin={true}
-        />
-      </Card>
+        <ErrorBoundary fallback={<div className="text-sm text-stone-500">목록을 불러오는 중 문제가 발생했어요.</div>}>
+          <div className="saved-matches-no-ovr text-[13px] leading-tight">
+            <SavedMatchesList
+              matches={matches}
+              players={players}
+              isAdmin={isAdmin}
+              onUpdateMatch={onUpdateMatch}
+            />
+          </div>
+        </ErrorBoundary>
 
-      {/* (Admin 전용) 경기별 골/어시 입력 */}
-      {isAdmin && (
-        <FocusComposer
-          matches={matches}
-          players={players}
-          editingMatchId={editingMatchId}
-          setEditingMatchId={setEditingMatchId}
-          editingMatch={editingMatch}
-          draft={draft}
-          setDraft={setDraft}
-          onSave={saveStats}
-          setVal={setVal}
-        />
-      )}
+        {/* 방어적 CSS: OVR 관련 셀렉터 숨김 (React 트리 무손상) */}
+        <style>{`
+          .saved-matches-no-ovr [data-ovr],
+          .saved-matches-no-ovr .ovr,
+          .saved-matches-no-ovr .ovr-badge,
+          .saved-matches-no-ovr .ovr-chip,
+          .saved-matches-no-ovr .stat-ovr,
+          .saved-matches-no-ovr .text-ovr,
+          .saved-matches-no-ovr [class*="OVR"],
+          .saved-matches-no-ovr [class*="ovr"] {
+            display: none !important;
+          }
+        `}</style>
+      </Card>
     </div>
   )
 }
 
-/* ──────────────────────────────────────────────────────────
-   공격포인트 테이블
-   - 동률 순위: 같은 PTS면 같은 순위, 다음 순위는 점프 (예: 1,2,2,4)
-   - 모바일도 같은 테이블 뷰 (card 제거)
-   - table-fixed + 좁은 컬럼 폭으로 모바일에서 넓어지지 않게
-   - 1~3위: 행 전체 파스텔 배경 (금/은/동)
-   - 순위 변동: ▲▼ + 변동 폭 (localStorage 비교)
-────────────────────────────────────────────────────────── */
-function AttackPointsTable({ rows, showAll, onToggle }) {
-  // 1) 전원 기준 ‘공동순위’ 먼저 계산 (PTS 동률 → 같은 rank, 다음 순위 점프)
+/* --------------- 공격포인트 테이블 컴포넌트 --------------- */
+function AttackPointsTable({ rows, showAll, onToggle, controls }) {
+  // 공동순위 계산
   const rankedAll = React.useMemo(() => {
     let lastRank = 0
     let lastPts = null
@@ -224,26 +219,14 @@ function AttackPointsTable({ rows, showAll, onToggle }) {
     })
   }, [rows])
 
-  // 2) Top5 뷰에서도 ‘전역(rankedAll) 순위’를 그대로 표시
   const data = showAll ? rankedAll : rankedAll.slice(0, 5)
 
-  // 3) 이전 순위: ID→순위 매핑으로 저장/로드 (v2)
+  // 이전 순위 저장(로컬)
   const [prevRanks, setPrevRanks] = useState({})
   useEffect(() => {
     try {
       const v2 = localStorage.getItem('ap_prevRanks_v2')
-      if (v2) {
-        setPrevRanks(JSON.parse(v2) || {})
-        return
-      }
-      // (마이그레이션) 구버전 배열→순위 매핑으로 변환
-      const legacy = localStorage.getItem('ap_prevOrder_v1')
-      if (legacy) {
-        const arr = JSON.parse(legacy) || []
-        const migrated = {}
-        arr.forEach((id, i) => { migrated[String(id)] = i + 1 })
-        setPrevRanks(migrated)
-      }
+      if (v2) setPrevRanks(JSON.parse(v2) || {})
     } catch {}
   }, [])
   useEffect(() => {
@@ -254,7 +237,6 @@ function AttackPointsTable({ rows, showAll, onToggle }) {
     } catch {}
   }, [rankedAll])
 
-  // 4) 동률 고려한 오름차 계산
   const deltaFor = (id, currentRank) => {
     const prevRank = prevRanks[String(id)]
     if (!prevRank) return null
@@ -263,299 +245,121 @@ function AttackPointsTable({ rows, showAll, onToggle }) {
     return { diff, dir: diff > 0 ? 'up' : 'down' }
   }
 
+  // 합계(같은 라인에 표시)
+  const totalPlayers = rows.length
+  const totalPts = rows.reduce((a, r) => a + (r.g + r.a), 0)
+
   return (
-    <div className="flex flex-col gap-3">
-      <div className="text-xs text-stone-500">
-        총 선수 {rows.length}명 · 총 PTS {rows.reduce((a, r) => a + (r.g + r.a), 0)}
-      </div>
+    <div className="overflow-hidden rounded-lg border border-stone-200">
+      <table className="w-full text-sm md:table-fixed">
+        <colgroup className="hidden md:table-column-group">
+          <col style={{ width: '48px' }} />
+          <col />
+          <col style={{ width: '56px' }} />
+          <col style={{ width: '42px' }} />
+          <col style={{ width: '42px' }} />
+          <col style={{ width: '56px' }} />
+        </colgroup>
 
-      <div className="overflow-hidden rounded-lg border border-stone-200">
-        <table className="w-full text-sm md:table-fixed">
-          <colgroup className="hidden md:table-column-group">
-            <col style={{ width: '56px' }} />
-            <col />
-            <col style={{ width: '60px' }} />
-            <col style={{ width: '48px' }} />
-            <col style={{ width: '42px' }} />
-            <col style={{ width: '42px' }} />
-            <col style={{ width: '56px' }} />
-          </colgroup>
+        {/* 헤더 1행: 왼쪽 합계, 오른쪽 컨트롤(같은 라인) */}
+        <thead>
+          <tr>
+            <th colSpan={6} className="border-b px-2 py-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="text-xs text-stone-500">
+                  총 선수 {totalPlayers}명
+                </div>
+                <div className="flex items-center gap-2">
+                  {controls}
+                </div>
+              </div>
+            </th>
+          </tr>
+          <tr className="text-left text-[13px] text-stone-600">
+            <th className="border-b px-1.5 py-1.5 md:px-3 md:py-2">순위</th>
+            <th className="border-b px-2 py-1.5 md:px-3 md:py-2">선수</th>
+            <th className="border-b px-2 py-1.5 md:px-3 md:py-2">출전</th>
+            <th className="border-b px-2 py-1.5 md:px-3 md:py-2">G</th>
+            <th className="border-b px-2 py-1.5 md:px-3 md:py-2">A</th>
+            <th className="border-b px-2 py-1.5 md:px-3 md:py-2">PTS</th>
+          </tr>
+        </thead>
 
-          <thead>
-            <tr className="text-left text-[13px] text-stone-600">
-              <th className="border-b px-2 py-1.5 md:px-3 md:py-2">순위</th>
-              <th className="border-b px-2 py-1.5 md:px-3 md:py-2">선수</th>
-              <th className="border-b px-2 py-1.5 md:px-3 md:py-2">포지션</th>
-              <th className="border-b px-2 py-1.5 md:px-3 md:py-2">출전</th>
-              <th className="border-b px-2 py-1.5 md:px-3 md:py-2">G</th>
-              <th className="border-b px-2 py-1.5 md:px-3 md:py-2">A</th>
-              <th className="border-b px-2 py-1.5 md:px-3 md:py-2">PTS</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {data.map((r, idx) => {
-              const rank = r.rank
-              const tone = rankTone(rank)
-              const delta = deltaFor(r.id || r.name, rank)
-              return (
-                <tr key={r.id || `${r.name}-${idx}`} className={`${tone.rowBg}`}>
-                  <td className={`border-b align-middle px-2 py-1.5 md:px-3 md:py-2 ${tone.cellBg}`}>
-                    <div
-                      className="grid items-center"
-                      style={{ gridTemplateColumns: '20px 1fr 28px', columnGap: 6 }}
-                    >
-                      <div className="flex items-center justify-center">
-                        <Medal rank={rank} />
-                      </div>
-                      <div className="text-center tabular-nums">{rank}</div>
-                      <div className="text-right">
-                        {delta && delta.diff !== 0 ? (
-                          <span
-                            className={`inline-block min-w-[24px] text-[11px] font-medium ${
-                              delta.dir === 'up' ? 'text-emerald-700' : 'text-rose-700'
-                            }`}
-                          >
-                            {delta.dir === 'up' ? '▲' : '▼'} {Math.abs(delta.diff)}
-                          </span>
-                        ) : (
-                          <span className="inline-block min-w-[24px] text-[11px] text-transparent">0</span>
-                        )}
-                      </div>
+        <tbody>
+          {data.map((r, idx) => {
+            const rank = r.rank
+            const tone = rankTone(rank)
+            const delta = deltaFor(r.id || r.name, rank)
+            return (
+              <tr key={r.id || `${r.name}-${idx}`} className={`${tone.rowBg}`}>
+                <td className={`border-b align-middle px-1.5 py-1.5 md:px-3 md:py-2 ${tone.cellBg}`}>
+                  <div className="grid items-center" style={{ gridTemplateColumns: '16px 1fr 22px', columnGap: 4 }}>
+                    <div className="flex items-center justify-center">
+                      <Medal rank={rank} />
                     </div>
-                  </td>
-
-                  {/* 나머지 셀은 기존 그대로 */}
-                  <td className={`border-b px-2 py-1.5 md:px-3 md:py-2 ${tone.cellBg}`}>
-                    <div
-                      className="grid items-center min-w-0"
-                      style={{ gridTemplateColumns: 'auto 1fr auto', columnGap: 8 }}
-                    >
-                      <div className="shrink-0">
-                        <InitialAvatar id={r.id || r.name} name={r.name} size={20} />
-                      </div>
-                      <div className="min-w-0">
-                        <span className="block font-medium truncate whitespace-nowrap">{r.name}</span>
-                      </div>
-                      {r.isGuest && (
-                        <span className="ml-1 shrink-0 rounded-full bg-stone-900 text-white text-[10px] px-2 py-[2px]">
-                          게스트
+                    <div className="text-center tabular-nums">{rank}</div>
+                    <div className="text-right hidden sm:block">
+                      {delta && delta.diff !== 0 ? (
+                        <span
+                          className={`inline-block min-w-[20px] text-[11px] font-medium ${
+                            delta.dir === 'up' ? 'text-emerald-700' : 'text-rose-700'
+                          }`}
+                        >
+                          {delta.dir === 'up' ? '▲' : '▼'} {Math.abs(delta.diff)}
                         </span>
+                      ) : (
+                        <span className="inline-block min-w-[20px] text-[11px] text-transparent">0</span>
                       )}
                     </div>
-                  </td>
-                  <td className={`border-b px-2 py-1.5 text-stone-700 md:px-3 md:py-2 ${tone.cellBg}`}>{r.pos || '-'}</td>
-                  <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.gp}</td>
-                  <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.g}</td>
-                  <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.a}</td>
-                  <td className={`border-b px-2 py-1.5 font-semibold tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.pts}</td>
-                </tr>
-              )
-            })}
-            {data.length === 0 && (
-              <tr>
-                <td className="px-3 py-4 text-sm text-stone-500" colSpan={7}>
-                  표시할 기록이 없습니다.
+                  </div>
                 </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
 
-      <div className="flex justify-end">
-        <button
-          onClick={onToggle}
-          className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50"
-        >
-          {showAll ? '접기' : '전체 보기'}
-        </button>
-      </div>
+                <td className={`border-b px-2 py-1.5 md:px-3 md:py-2 ${tone.cellBg}`}>
+                  <div className="grid items-center min-w-0" style={{ gridTemplateColumns: 'auto 1fr auto', columnGap: 6 }}>
+                    <div className="shrink-0">
+                      <InitialAvatar id={r.id || r.name} name={r.name} size={20} />
+                    </div>
+                    <div className="min-w-0">
+                      <span className="block font-medium truncate whitespace-nowrap">{r.name}</span>
+                    </div>
+                    {r.isGuest && (
+                      <span className="ml-1 shrink-0 rounded-full bg-stone-900 text-white text-[10px] px-2 py-[2px]">
+                        게스트
+                      </span>
+                    )}
+                  </div>
+                </td>
+
+                <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.gp}</td>
+                <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.g}</td>
+                <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.a}</td>
+                <td className={`border-b px-2 py-1.5 font-semibold tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.pts}</td>
+              </tr>
+            )
+          })}
+          {data.length === 0 && (
+            <tr>
+              <td className="px-3 py-4 text-sm text-stone-500" colSpan={6}>
+                표시할 기록이 없습니다.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   )
 }
 
+/* ---------------------- 보조 컴포넌트 --------------------- */
 function Medal({ rank }) {
   if (rank === 1) return <span role="img" aria-label="gold" className="text-base">🥇</span>
   if (rank === 2) return <span role="img" aria-label="silver" className="text-base">🥈</span>
   if (rank === 3) return <span role="img" aria-label="bronze" className="text-base">🥉</span>
   return <span className="inline-block w-4 text-center text-stone-400">—</span>
 }
-
 function rankTone(rank){
-  // 1~3위: 행 전체 동일 파스텔 배경
   if (rank === 1) return { rowBg: 'bg-yellow-50', cellBg: 'bg-yellow-50' }
   if (rank === 2) return { rowBg: 'bg-gray-50',   cellBg: 'bg-gray-50' }
   if (rank === 3) return { rowBg: 'bg-orange-100',  cellBg: 'bg-orange-100' }
   return { rowBg: '', cellBg: '' }
-}
-
-/* ──────────────────────────────────────────────────────────
-   경기별 골/어시 입력 (Admin · Focus)
-────────────────────────────────────────────────────────── */
-function FocusComposer({ matches, players, editingMatchId, setEditingMatchId, editingMatch, draft, setDraft, onSave, setVal }){
-  const [q, setQ] = useState('')
-  const [teamIdx, setTeamIdx] = useState('all')
-  const [panelIds, setPanelIds] = useState([])
-  const [showSaved, setShowSaved] = useState(false)
-
-  const teams = useMemo(() => {
-    if (!editingMatch) return []
-    const hydrated = hydrateMatch(editingMatch, players)
-    return hydrated.teams || []
-  }, [editingMatch, players])
-
-  const roster = useMemo(() => {
-    const ids = new Set(extractAttendeeIds(editingMatch || {}))
-    let pool = players.filter(p => ids.has(toStr(p.id)))
-    if (teamIdx !== 'all' && teams[teamIdx]) {
-      const tset = new Set(teams[teamIdx].map(p => toStr(p.id)))
-      pool = pool.filter(p => tset.has(toStr(p.id)))
-    }
-    const needle = q.trim().toLowerCase()
-    if (needle) pool = pool.filter(p => (p.name||'').toLowerCase().includes(needle))
-    return pool.sort((a,b)=>a.name.localeCompare(b.name))
-  }, [players, editingMatch, teams, teamIdx, q])
-
-  const save = () => { onSave(); setShowSaved(true); setTimeout(()=>setShowSaved(false), 1200) }
-
-  return (
-    <Card title="경기별 골/어시 기록 입력 (Admin · Focus)">
-      {matches.length === 0 ? (
-        <div className="text-sm text-gray-500">저장된 매치가 없습니다.</div>
-      ) : (
-        <>
-          <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={editingMatchId || ''}
-                onChange={(e)=>{ setPanelIds([]); setQ(''); setTeamIdx('all'); setEditingMatchId(e.target.value) }}
-                className="rounded border border-gray-300 bg-white px-3 py-2 text-sm"
-              >
-                {matches.map(m => {
-                  const count = extractAttendeeIds(m).length
-                  const label = formatMatchLabel(m, { withDate: true, withCount: true, count })
-                  return (
-                    <option key={m.id} value={m.id}>{label}</option>
-                  )
-                })}
-              </select>
-              <Pill active={teamIdx==='all'} onClick={()=>setTeamIdx('all')}>전체팀</Pill>
-              {teams.map((_,i)=>(<Pill key={i} active={teamIdx===i} onClick={()=>setTeamIdx(i)}>팀 {i+1}</Pill>))}
-            </div>
-            <input
-              value={q}
-              onChange={e=>setQ(e.target.value)}
-              placeholder="선수 검색 (이름)"
-              className="w-full md:w-64 rounded border border-gray-300 bg-white px-3 py-2 text-sm"
-            />
-          </div>
-
-          <div className="mb-2">
-            <ul className="max-h-56 overflow-auto rounded border border-gray-200 bg-white">
-              {roster.map(p => (
-                <li key={p.id} className="flex items-center justify-between px-3 py-2 hover:bg-stone-50">
-                  <div className="flex items-center gap-2">
-                    <InitialAvatar id={p.id} name={p.name} size={20} />
-                    <span className="text-sm">{p.name}</span>
-                    <span className="text-xs text-gray-500">{p.position||p.pos||'-'}</span>
-                  </div>
-                  <button onClick={()=>setPanelIds(prev => prev.includes(p.id)? prev : [...prev, p.id])}
-                          className="rounded bg-stone-900 px-2 py-1 text-xs text-white">패널에 추가</button>
-                </li>
-              ))}
-              {roster.length===0 && (
-                <li className="px-3 py-3 text-sm text-gray-500">일치하는 선수가 없습니다.</li>
-              )}
-            </ul>
-          </div>
-
-          <EditorPanel
-            players={players}
-            panelIds={panelIds}
-            setPanelIds={setPanelIds}
-            draft={draft}
-            setVal={setVal}
-            onSave={save}
-          />
-
-          {showSaved && <div className="mt-2 text-right text-xs text-emerald-700">✅ 저장되었습니다</div>}
-        </>
-      )}
-    </Card>
-  )
-}
-
-function EditorPanel({ players, panelIds, setPanelIds, draft, setVal, onSave }){
-  return (
-    <div className="rounded border border-gray-200 bg-white">
-      <div className="flex items-center justify-between border-b px-3 py-2 text-xs">
-        <div className="font-semibold">편집 패널 · {panelIds.length}명</div>
-        <div className="flex items-center gap-2">
-          <button onClick={()=>setPanelIds([])} className="rounded border px-2 py-1">모두 제거</button>
-          <button onClick={onSave} className="rounded bg-emerald-600 px-3 py-1 text-white">저장</button>
-        </div>
-      </div>
-      <ul className="divide-y divide-gray-100">
-        {panelIds.map(pid => {
-          const p = players.find(pp => toStr(pp.id)===toStr(pid))
-          const rec = draft[pid] || { goals:0, assists:0 }
-          if (!p) return null
-          return (
-            <li key={pid} className="flex items-center gap-3 px-3 py-2">
-              <InitialAvatar id={p.id} name={p.name} size={22} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">
-                  {p.name} <span className="ml-1 text-xs text-gray-500">{p.position||p.pos||'-'}</span>
-                </div>
-              </div>
-
-              <MiniCounter
-                label="G"
-                value={rec.goals}
-                onDec={()=>setVal(p.id,'goals',Math.max(0,(rec.goals||0)-1))}
-                onInc={()=>setVal(p.id,'goals',(rec.goals||0)+1)}
-              />
-              <MiniCounter
-                label="A"
-                value={rec.assists}
-                onDec={()=>setVal(p.id,'assists',Math.max(0,(rec.assists||0)-1))}
-                onInc={()=>setVal(p.id,'assists',(rec.assists||0)+1)}
-              />
-
-              <button onClick={()=>setPanelIds(prev=>prev.filter(id=>id!==pid))}
-                      className="ml-1 rounded border px-2 py-1 text-xs">
-                제거
-              </button>
-            </li>
-          )
-        })}
-        {panelIds.length===0 && (
-          <li className="px-3 py-6 text-center text-sm text-gray-500">
-            아직 선택된 선수가 없습니다. 위에서 검색 후 "패널에 추가"를 눌러주세요.
-          </li>
-        )}
-      </ul>
-    </div>
-  )
-}
-
-function Pill({ children, active, onClick }){
-  return (
-    <button onClick={onClick}
-      className={`rounded-full border px-3 py-1 text-xs ${active? 'border-stone-900 bg-stone-900 text-white':'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}>
-      {children}
-    </button>
-  )
-}
-
-function MiniCounter({ label, value, onDec, onInc }){
-  return (
-    <div className="flex items-center gap-1">
-      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-stone-800 text-[10px] font-bold text-white">{label}</span>
-      <button onClick={onDec} aria-label={`${label} 감소`}>-</button>
-      <span style={{ width: 24, textAlign: 'center' }} className="tabular-nums">{value}</span>
-      <button onClick={onInc} aria-label={`${label} 증가`}>+</button>
-    </div>
-  )
 }
