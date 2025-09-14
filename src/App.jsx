@@ -17,6 +17,8 @@ import Dashboard from "./pages/Dashboard"
 import PlayersPage from "./pages/PlayersPage"
 import MatchPlanner from "./pages/MatchPlanner"
 import StatsInput from "./pages/StatsInput"   // ⬅️ 새 탭
+import logoUrl from "./assets/semihan-football-manager-logo.png"
+
 
 // ✅ 간편 Admin(공유 비밀번호) — 로컬 저장
 const ADMIN_PASS = import.meta.env.VITE_ADMIN_PASSWORD || "letmein"
@@ -159,10 +161,13 @@ export default function App() {
       <header className="sticky top-0 z-10 border-b border-stone-300 bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <img 
-              src="/src/assets/semihan-football-manager-logo.png" 
-              alt="Semihan Football Manager Logo" 
+            <img
+              src={logoUrl}
+              alt="Semihan Football Manager Logo"
               className="h-7 w-7 object-contain"
+              width={28}
+              height={28}
+              decoding="async"
             />
             <h1 className="text-base font-semibold tracking-tight">
               semihan-football-manager
