@@ -159,7 +159,11 @@ export default function App() {
       <header className="sticky top-0 z-10 border-b border-stone-300 bg-white/80 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-2">
-            <div className="h-7 w-7 rounded bg-emerald-500" />
+            <img 
+              src="/src/assets/semihan-football-manager-logo.png" 
+              alt="Semihan Football Manager Logo" 
+              className="h-7 w-7 object-contain"
+            />
             <h1 className="text-base font-semibold tracking-tight">
               semihan-football-manager
             </h1>
