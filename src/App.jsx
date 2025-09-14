@@ -170,7 +170,7 @@ export default function App() {
               decoding="async"
             />
             <h1 className="text-base font-semibold tracking-tight">
-              semihan-football-manager
+              Semihan-FM
             </h1>
           </div>
           <nav className="flex gap-1 items-center">
