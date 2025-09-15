@@ -22,7 +22,7 @@ function extractDateKey(m) {
   const y = d.getFullYear()
   const mm = String(d.getMonth() + 1).padStart(2, '0')
   const dd = String(d.getDate()).padStart(2, '0')
-  return `${y}-${mm}-${dd}`
+  return `${mm}/${dd}/${y}`
 }
 
 // 참석자 파서
