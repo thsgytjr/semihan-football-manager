@@ -5,546 +5,248 @@ import { overall } from "../lib/players"
 import { hydrateMatch } from "../lib/match"
 import { formatMatchLabel } from "../lib/matchLabel"
 
-/* ────────────────────────────────────────────
- * 뱃지/스타일 유틸
- * ──────────────────────────────────────────── */
-function GuestBadge() {
-  return (
-    <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200">
-      G
-    </span>
-  )
+const S = (v)=>v==null?"":String(v)
+const isMember = (m)=>{ const s=S(m).trim().toLowerCase(); return s==="member"||s.includes("정회원") }
+const GuestBadge = ()=>(
+  <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200">G</span>
+)
+const kitForTeam=(i)=>[
+  {label:"화이트",headerClass:"bg-white text-stone-800 border-b border-stone-300"},
+  {label:"블랙",headerClass:"bg-stone-900 text-white border-b border-stone-900"},
+  {label:"블루",headerClass:"bg-blue-600 text-white border-b border-blue-700"},
+  {label:"레드",headerClass:"bg-red-600 text-white border-b border-red-700"},
+  {label:"그린",headerClass:"bg-emerald-600 text-white border-b border-emerald-700"},
+  {label:"퍼플",headerClass:"bg-violet-600 text-white border-b border-violet-700"},
+  {label:"오렌지",headerClass:"bg-orange-500 text-white border-b border-orange-600"},
+  {label:"티얼",headerClass:"bg-teal-600 text-white border-b border-teal-700"},
+  {label:"핑크",headerClass:"bg-pink-600 text-white border-b border-pink-700"},
+  {label:"옐로",headerClass:"bg-yellow-400 text-stone-900 border-b border-yellow-500"},
+][i%10]
+const normalizeSnapshot=(m,teams)=>{
+  const snap=Array.isArray(m?.snapshot)?m.snapshot:null
+  return (snap&&snap.length===teams.length)?snap.map(a=>Array.isArray(a)?a.slice():[]):teams.map(list=>list.map(p=>p.id))
+}
+const notInMatchPlayers=(players,snap2D)=>{
+  const inside=new Set(snap2D.flat().map(String))
+  return players.filter(p=>!inside.has(String(p.id)))
+}
+const deriveFormatByLocation=(m)=>{
+  const p=(m?.location?.preset||"").toLowerCase(), n=(m?.location?.name||"").toLowerCase()
+  if(p==="indoor-soccer-zone"||n.includes("indoor soccer zone")) return "9v9"
+  if(p==="coppell-west"||n.includes("coppell")) return "11v11"
+  return m?.mode||""
 }
 
-function kitForTeam(i) {
-  const a = [
-    { label: "화이트", headerClass: "bg-white text-stone-800 border-b border-stone-300" },
-    { label: "블랙",   headerClass: "bg-stone-900 text-white border-b border-stone-900" },
-    { label: "블루",   headerClass: "bg-blue-600 text-white border-b border-blue-700" },
-    { label: "레드",   headerClass: "bg-red-600 text-white border-b border-red-700" },
-    { label: "그린",   headerClass: "bg-emerald-600 text-white border-b border-emerald-700" },
-    { label: "퍼플",   headerClass: "bg-violet-600 text-white border-b border-violet-700" },
-    { label: "오렌지", headerClass: "bg-orange-500 text-white border-b border-orange-600" },
-    { label: "티얼",   headerClass: "bg-teal-600 text-white border-b border-teal-700" },
-    { label: "핑크",   headerClass: "bg-pink-600 text-white border-b border-pink-700" },
-    { label: "옐로",   headerClass: "bg-yellow-400 text-stone-900 border-b border-yellow-500" },
-  ]
-  return a[i % a.length]
-}
-
-/* ────────────────────────────────────────────
- * 스냅샷/출석 도우미
- * ──────────────────────────────────────────── */
-const toStr = (v) => (v === null || v === undefined) ? "" : String(v)
-const isMember = (mem) => {
-  const s = toStr(mem).trim().toLowerCase()
-  return s === "member" || s.includes("정회원")
-}
-
-function normalizeSnapshot(match, teams) {
-  const snap = Array.isArray(match?.snapshot) ? match.snapshot : null
-  if (snap && Array.isArray(snap) && snap.length === teams.length) {
-    return snap.map((arr) => Array.isArray(arr) ? arr.slice() : [])
+/* 요금 계산: 게스트 없으면 균등 분배, 있으면 +$2 규칙 */
+function deriveFeesFromSnapshot(m, players){
+  const ids=Array.isArray(m?.snapshot)&&m.snapshot.length?m.snapshot.flat():Array.isArray(m?.attendeeIds)?m.attendeeIds:[]
+  const map=new Map(players.map(p=>[String(p.id),p])), atts=ids.map(id=>map.get(String(id))).filter(Boolean)
+  const memberCount=atts.filter(p=>isMember(p.membership)).length, guestCount=Math.max(0, atts.length-memberCount)
+  if(m?.fees&&typeof m.fees.memberFee==="number"&&typeof m.fees.guestFee==="number") return {...m.fees,memberCount,guestCount,_estimated:false}
+  const preset=(m?.location?.preset||"").toLowerCase()
+  const total = preset==="indoor-soccer-zone"?230 : preset==="coppell-west"?300 : (m?.fees?.total||0)
+  if(!total||atts.length===0) return { total: total||0, memberFee:0, guestFee:0, memberCount, guestCount, _estimated:true }
+  let memberFee=0, guestFee=0
+  if(guestCount===0){
+    memberFee=Math.round(total/Math.max(1,memberCount))
+  }else{
+    const denom=memberCount+guestCount, mEach=(total-2*guestCount)/Math.max(1,denom)
+    memberFee=Math.max(0,Math.round(mEach)); guestFee=memberFee+2
+    const diff=total-(memberCount*memberFee+guestCount*guestFee)
+    if(diff){ const adj=Math.max(-2,Math.min(2,diff)); memberFee=Math.max(0,memberFee+adj); guestFee=memberFee+2 }
   }
-  // 스냅샷 없거나 팀 수 불일치: 화면의 teams로부터 생성
-  return teams.map((list) => list.map((p) => p.id))
+  return { total, memberFee, guestFee, memberCount, guestCount, _estimated:true }
 }
 
-function notInMatchPlayers(players, snapshot2D) {
-  const inside = new Set(snapshot2D.flat().map(String))
-  return players.filter((p) => !inside.has(String(p.id)))
-}
-
-/* 장소 → 경기형식 라벨(9v9 / 11v11) */
-function deriveFormatByLocation(m) {
-  const preset = (m?.location?.preset || "").toLowerCase()
-  const name   = (m?.location?.name || "").toLowerCase()
-  if (preset === "indoor-soccer-zone" || name.includes("indoor soccer zone")) return "9v9"
-  if (preset === "coppell-west" || name.includes("coppell")) return "11v11"
-  return m?.mode || "" // 그 외는 기존값 유지
-}
-
-/* ────────────────────────────────────────────
- * 요금 추정 (구버전 저장본 호환)
- *  - “게스트는 멤버보다 항상 $2 더 낸다” 규칙 유지
- *  - total = memberCount*m + guestCount*(m+2)를 만족하도록 m 계산
- *  - 소수점은 반올림
- * ──────────────────────────────────────────── */
-function deriveFeesFromSnapshot(m, players) {
-  // 저장된 확정 fees가 있으면 그 값을 그대로 사용
-  if (m?.fees && typeof m.fees.memberFee === "number" && typeof m.fees.guestFee === "number") {
-    // 혹시 규칙이 안 맞아도 저장본을 우선
-    return m.fees
-  }
-
-  // 구장별 기본 총액 (필요시 프로젝트 룰에 맞게 조정 가능)
-  const preset = (m?.location?.preset || "").toLowerCase()
-  const baseCost =
-    preset === "indoor-soccer-zone" ? 230 :
-    preset === "coppell-west"       ? 300 : 0
-
-  // 인원 파악
-  const ids = Array.isArray(m?.snapshot) && m.snapshot.length
-    ? m.snapshot.flat()
-    : (Array.isArray(m?.attendeeIds) ? m.attendeeIds : [])
-  const byId = new Map(players.map(p => [String(p.id), p]))
-  const attendees = ids.map(id => byId.get(String(id))).filter(Boolean)
-
-  const memberCount = attendees.filter(p => isMember(p.membership)).length
-  const guestCount  = Math.max(0, attendees.length - memberCount)
-
-  // 인원/총액이 없으면 0 표시(추정)
-  if (!baseCost || attendees.length === 0) {
-    return { total: baseCost || 0, memberFee: 0, guestFee: 0, _estimated: true }
-  }
-
-  // total = m*memberCount + (m+2)*guestCount
-  // => total = m*(memberCount + guestCount) + 2*guestCount
-  // => m = (total - 2*guestCount) / (memberCount + guestCount)
-  const denom = memberCount + guestCount
-  let mEach = (baseCost - 2 * guestCount) / (denom || 1)
-  // 반올림하여 달러 정수
-  let memberFee = Math.max(0, Math.round(mEach))
-  let guestFee  = memberFee + 2
-
-  // 반올림으로 인해 총액 차이 보정(±1~2$ 오차 범위만 보정)
-  let computedTotal = memberCount * memberFee + guestCount * guestFee
-  const diff = baseCost - computedTotal
-  if (diff !== 0) {
-    // 오차가 1~2달러면 멤버 요금에 흡수 (과도한 보정은 하지 않음)
-    const adjust = Math.max(-2, Math.min(2, diff))
-    memberFee = Math.max(0, memberFee + adjust)
-    guestFee  = memberFee + 2
-    computedTotal = memberCount * memberFee + guestCount * guestFee
-  }
-
-  return { total: baseCost, memberFee, guestFee, _estimated: true }
-}
-
-/* ────────────────────────────────────────────
- * 유튜브 링크 입력
- * ──────────────────────────────────────────── */
+/* 유튜브 링크 입력 */
 function VideoAdder({ onAdd }){
-  const [val, setVal] = useState("")
+  const [val,setVal]=useState("")
   return (
     <div className="flex items-center gap-2">
-      <input
-        className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm"
-        placeholder="https://youtu.be/... 또는 https://www.youtube.com/watch?v=..."
-        value={val}
-        onChange={e=>setVal(e.target.value)}
-      />
-      <button
-        className="whitespace-nowrap rounded border border-gray-300 bg-white px-3 py-2 text-sm"
-        onClick={()=>{ const u=val.trim(); if(!u) return; onAdd(u); setVal("") }}
-      >추가</button>
+      <input className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="https://youtu.be/... 또는 https://www.youtube.com/watch?v=..." value={val} onChange={e=>setVal(e.target.value)}/>
+      <button className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" onClick={()=>{const u=val.trim(); if(!u)return; onAdd(u); setVal("")}}>추가</button>
     </div>
   )
 }
 
-/* ────────────────────────────────────────────
- * 빠른 출석 편집 바 (드래프트 전용)
- * ──────────────────────────────────────────── */
-function QuickAttendanceEditor({ players, snapshot, onDraftChange }) {
-  const [teamIdx, setTeamIdx] = useState(0)
-  const [query, setQuery] = useState("")
-  const [open, setOpen] = useState(false)
-  const [hi, setHi] = useState(-1) // highlighted index
-  const wrapRef = useRef(null)
-  const listRef = useRef(null)
-
-  const candidates = useMemo(() => notInMatchPlayers(players, snapshot), [players, snapshot])
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    let base = candidates
-    if (q) base = candidates.filter(p => (p.name || "").toLowerCase().includes(q))
-    // 키워드 일치도 가볍게 정렬(앞부분 일치 우선)
-    return base
-      .slice(0)
-      .sort((a,b)=>{
-        const an=(a.name||"").toLowerCase(), bn=(b.name||"").toLowerCase()
-        const as = an.indexOf(q), bs = bn.indexOf(q)
-        const aw = as<0?999:as, bw = bs<0?999:bs
-        return aw - bw || an.localeCompare(bn)
-      })
-      .slice(0, 40)
-  }, [candidates, query])
-
+/* 빠른 출석 편집(드래프트만 수정) */
+function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
+  const [teamIdx,setTeamIdx]=useState(0),[q,setQ]=useState(""),[open,setOpen]=useState(false),[hi,setHi]=useState(-1)
+  const wrapRef=useRef(null), listRef=useRef(null)
+  const cands=useMemo(()=>notInMatchPlayers(players,snapshot),[players,snapshot])
+  const list=useMemo(()=>{
+    const t=q.trim().toLowerCase()
+    const base=t?cands.filter(p=>(p.name||"").toLowerCase().includes(t)):cands
+    return base.slice().sort((a,b)=>{
+      const an=(a.name||"").toLowerCase(), bn=(b.name||"").toLowerCase()
+      const ai=an.indexOf(t), bi=bn.indexOf(t); const aw=ai<0?999:ai, bw=bi<0?999:bi
+      return aw-bw||an.localeCompare(bn)
+    }).slice(0,40)
+  },[cands,q])
   useEffect(()=>{
-    const onDoc = (e)=>{
-      if (!wrapRef.current) return
-      if (!wrapRef.current.contains(e.target)) setOpen(false)
-    }
-    document.addEventListener("mousedown", onDoc)
-    return ()=>document.removeEventListener("mousedown", onDoc)
-  }, [])
-
+    const h=e=>{ if(!wrapRef.current) return; if(!wrapRef.current.contains(e.target)) setOpen(false) }
+    document.addEventListener("mousedown",h); return()=>document.removeEventListener("mousedown",h)
+  },[])
   useEffect(()=>{
-    if (listRef.current && hi>=0) {
-      const el = listRef.current.querySelector(`[data-idx="${hi}"]`)
-      if (el) {
-        const { offsetTop, offsetHeight } = el
-        const { scrollTop, clientHeight } = listRef.current
-        if (offsetTop < scrollTop) listRef.current.scrollTop = offsetTop
-        else if (offsetTop + offsetHeight > scrollTop + clientHeight) {
-          listRef.current.scrollTop = offsetTop - clientHeight + offsetHeight
-        }
-      }
-    }
-  }, [hi])
-
-  const addPlayer = (pLike) => {
-    const player = typeof pLike==="string"
-      ? filtered.find(pp => (pp.name||"").toLowerCase() === pLike.trim().toLowerCase())
-      : pLike
-    if (!player) return
-    const pid = player.id
-    const next = snapshot.map((arr, idx) =>
-      idx === teamIdx
-        ? (arr.some(id => String(id)===String(pid)) ? arr : [...arr, pid])
-        : arr
-    )
-    onDraftChange(next)
-    setQuery("")
-    setHi(-1)
-    setOpen(false)
+    if(listRef.current&&hi>=0){ const el=listRef.current.querySelector(`[data-idx="${hi}"]`)
+      if(el){ const {offsetTop:h,offsetHeight:hh}=el; const {scrollTop:t,clientHeight:c}=listRef.current
+        if(h<t) listRef.current.scrollTop=h; else if(h+hh>t+c) listRef.current.scrollTop=h-c+hh } }
+  },[hi])
+  const add=(pLike)=>{
+    const p=typeof pLike==="string"?list.find(pp=>(pp.name||"").toLowerCase()===pLike.trim().toLowerCase()):pLike
+    if(!p) return
+    const id=p.id, next=snapshot.map((arr,i)=>i===teamIdx?(arr.some(x=>String(x)===String(id))?arr:[...arr,id]):arr)
+    onDraftChange(next); setQ(""); setHi(-1); setOpen(false)
   }
-
-  const onKey = (e) => {
-    if (!open && (e.key === "ArrowDown" || e.key === "Enter")) { setOpen(true); return }
-    if (!open) return
-    if (e.key === "ArrowDown") { e.preventDefault(); setHi(h => Math.min(h+1, filtered.length-1)) }
-    else if (e.key === "ArrowUp") { e.preventDefault(); setHi(h => Math.max(h-1, 0)) }
-    else if (e.key === "Enter") {
-      e.preventDefault()
-      if (hi>=0 && hi<filtered.length) addPlayer(filtered[hi])
-      else addPlayer(query)
-    } else if (e.key === "Escape") {
-      setOpen(false)
-    }
+  const onKey=(e)=>{
+    if(!open&&(e.key==="ArrowDown"||e.key==="Enter")){ setOpen(true); return }
+    if(!open) return
+    if(e.key==="ArrowDown"){ e.preventDefault(); setHi(h=>Math.min(h+1,list.length-1)) }
+    else if(e.key==="ArrowUp"){ e.preventDefault(); setHi(h=>Math.max(h-1,0)) }
+    else if(e.key==="Enter"){ e.preventDefault(); if(hi>=0&&hi<list.length) add(list[hi]); else add(q) }
+    else if(e.key==="Escape") setOpen(false)
   }
-
   return (
     <div className="mt-2 rounded border border-gray-200 bg-gray-50 p-2" ref={wrapRef}>
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-xs text-gray-600">빠른 출석 편집</label>
-        <select
-          className="rounded border border-gray-300 bg-white px-2 py-1 text-xs"
-          value={teamIdx}
-          onChange={(e) => setTeamIdx(Number(e.target.value))}
-        >
-          {snapshot.map((_, i) => (<option key={i} value={i}>팀 {i+1}</option>))}
+        <select className="rounded border border-gray-300 bg-white px-2 py-1 text-xs" value={teamIdx} onChange={e=>setTeamIdx(Number(e.target.value))}>
+          {snapshot.map((_,i)=><option key={i} value={i}>팀 {i+1}</option>)}
         </select>
-
         <div className="relative min-w-[220px] flex-1">
-          <input
-            className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
-            placeholder="이름 검색 후 추가 (Enter)"
-            value={query}
-            onChange={(e)=>{ setQuery(e.target.value); setOpen(true); setHi(-1) }}
-            onFocus={()=>setOpen(true)}
-            onKeyDown={onKey}
-          />
-          {open && filtered.length>0 && (
-            <div
-              ref={listRef}
-              className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-md border border-gray-200 bg-white shadow-lg"
-              role="listbox"
-              aria-label="가용 선수 목록"
-            >
-              {filtered.map((p, idx)=>(
-                <button
-                  key={p.id}
-                  type="button"
-                  data-idx={idx}
-                  className={`flex w-full items-center gap-2 px-2 py-1.5 text-sm hover:bg-gray-50 ${idx===hi ? "bg-gray-100" : ""}`}
-                  onMouseEnter={()=>setHi(idx)}
-                  onMouseDown={(e)=>e.preventDefault()}
-                  onClick={()=>addPlayer(p)}
-                >
-                  <InitialAvatar id={p.id} name={p.name} size={22} />
-                  <span className="truncate">{p.name}</span>
-                  {(p.position||p.pos)==="GK" && <span className="ml-auto text-[11px] text-gray-400">GK</span>}
+          <input className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm" placeholder="이름 검색 후 추가 (Enter)"
+            value={q} onChange={e=>{setQ(e.target.value); setOpen(true); setHi(-1)}} onFocus={()=>setOpen(true)} onKeyDown={onKey}/>
+          {open&&list.length>0&&(
+            <div ref={listRef} className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-md border border-gray-200 bg-white shadow-lg" role="listbox" aria-label="가용 선수 목록">
+              {list.map((p,idx)=>(
+                <button key={p.id} type="button" data-idx={idx}
+                  className={`flex w-full items-center gap-2 px-2 py-1.5 text-sm hover:bg-gray-50 ${idx===hi?"bg-gray-100":""}`}
+                  onMouseEnter={()=>setHi(idx)} onMouseDown={e=>e.preventDefault()} onClick={()=>add(p)}>
+                  <InitialAvatar id={p.id} name={p.name} size={22}/><span className="truncate">{p.name}</span>
+                  {(p.position||p.pos)==="GK"&&<span className="ml-auto text-[11px] text-gray-400">GK</span>}
                 </button>
               ))}
             </div>
           )}
         </div>
-
-        <button
-          className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs"
-          onClick={()=>addPlayer(query)}
-        >추가</button>
+        <button className="rounded border border-gray-300 bg-white px-3 py-1.5 text-xs" onClick={()=>add(q)}>추가</button>
       </div>
     </div>
   )
 }
 
-/* ────────────────────────────────────────────
- * 매치 카드
- * ──────────────────────────────────────────── */
-function MatchCard({
-  m,
-  players,
-  isAdmin,
-  enableLoadToPlanner,
-  onLoadToPlanner,
-  onDeleteMatch,
-  onUpdateMatch,
-  showTeamOVRForAdmin,
-  hideOVR
-}) {
-  // 초기 팀/스냅샷 구성
-  const hydrated = useMemo(() => hydrateMatch(m, players), [m, players])
-  const initialSnap = useMemo(
-    () => normalizeSnapshot(m, hydrated.teams || []),
-    [m, hydrated.teams]
-  )
-
-  const [draftSnap, setDraftSnap] = useState(initialSnap)
-  const [dirty, setDirty] = useState(false)
-
-  // id→player 매핑
-  const byId = useMemo(() => new Map(players.map(p => [String(p.id), p])), [players])
-
-  // 초안 팀(플레이어 객체 배열) 구성
-  const draftTeams = useMemo(
-    () => draftSnap.map(ids => ids.map(id => byId.get(String(id))).filter(Boolean)),
-    [draftSnap, byId]
-  )
-
-  // 라벨/인원/요금 (초안 기준으로 미리보기)
-  const draftCount = useMemo(() => draftSnap.flat().length, [draftSnap])
-  const label = useMemo(
-    () => formatMatchLabel({ ...m, snapshot: draftSnap }, { withDate: true, withCount: true, count: draftCount }),
-    [m, draftSnap, draftCount]
-  )
-  const fees = useMemo(
-    () => deriveFeesFromSnapshot({ ...m, snapshot: draftSnap }, players),
-    [m, draftSnap, players]
-  )
-
-  const formatLabel = deriveFormatByLocation(m)
-
-  // 비디오 링크는 기존 동작(즉시 반영) 유지
-  const addVideo = (url) => onUpdateMatch?.(m.id, { videos: [ ...(m.videos||[]), url ] })
-  const removeVideo = (idx) => {
-    const next = (m.videos||[]).filter((_, i)=> i!==idx)
-    onUpdateMatch?.(m.id, { videos: next })
-  }
-
-  // 초안 변경 헬퍼
-  const setSnapAndDirty = (next) => {
-    setDraftSnap(next)
-    setDirty(true)
-  }
-  const resetDraft = () => {
-    setDraftSnap(initialSnap)
-    setDirty(false)
-  }
-  const saveDraft = () => {
-    const attendeeIds = draftSnap.flat()
-    onUpdateMatch?.(m.id, { snapshot: draftSnap, attendeeIds })
-    setDirty(false)
-  }
+/* 매치 카드 */
+function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, onDeleteMatch, onUpdateMatch, showTeamOVRForAdmin, hideOVR }){
+  const hydrated=useMemo(()=>hydrateMatch(m,players),[m,players])
+  const initialSnap=useMemo(()=>normalizeSnapshot(m,hydrated.teams||[]),[m,hydrated.teams])
+  const [draftSnap,setDraftSnap]=useState(initialSnap), [dirty,setDirty]=useState(false)
+  const byId=useMemo(()=>new Map(players.map(p=>[String(p.id),p])),[players])
+  const draftTeams=useMemo(()=>draftSnap.map(ids=>ids.map(id=>byId.get(String(id))).filter(Boolean)),[draftSnap,byId])
+  const draftCount=useMemo(()=>draftSnap.flat().length,[draftSnap])
+  const label=useMemo(()=>formatMatchLabel({...m,snapshot:draftSnap},{withDate:true,withCount:true,count:draftCount}),[m,draftSnap,draftCount])
+  const fees=useMemo(()=>deriveFeesFromSnapshot({...m,snapshot:draftSnap},players),[m,draftSnap,players])
+  const formatLabel=deriveFormatByLocation(m)
+  const addVideo=(url)=>onUpdateMatch?.(m.id,{videos:[...(m.videos||[]),url]})
+  const removeVideo=(idx)=>onUpdateMatch?.(m.id,{videos:(m.videos||[]).filter((_,i)=>i!==idx)})
+  const setSnap=(next)=>{ setDraftSnap(next); setDirty(true) }
+  const resetDraft=()=>{ setDraftSnap(initialSnap); setDirty(false) }
+  const saveDraft=()=>{ onUpdateMatch?.(m.id,{snapshot:draftSnap,attendeeIds:draftSnap.flat()}); setDirty(false) }
 
   return (
     <li className="rounded border border-gray-200 bg-white p-3">
-      {/* 헤더 */}
       <div className="mb-1 flex items-center justify-between">
-        <div className="text-sm">
-          <b>{label}</b> · {formatLabel} · {m.teamCount}팀
-          {m.location?.name ? <> · 장소 {m.location.name}</> : null}
-          {dirty && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-800 border border-amber-200">수정됨(저장 필요)</span>}
-        </div>
+        <div className="text-sm"><b>{label}</b> · {formatLabel} · {m.teamCount}팀{m.location?.name&&<> · 장소 {m.location.name}</>}{dirty&&<span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-800 border border-amber-200">수정됨(저장 필요)</span>}</div>
         <div className="flex items-center gap-3">
-          {/* 게스트 표기 레전드 */}
-          <div className="hidden sm:flex items-center gap-1 text-[11px] text-gray-500">
-            표기: <GuestBadge /> 게스트
-          </div>
-          {enableLoadToPlanner && (
-            <button
-              className="text-xs rounded border border-gray-300 bg-white px-2 py-1"
-              onClick={()=>onLoadToPlanner?.(m)}
-            >
-              팀배정에 로드
-            </button>
-          )}
-          {isAdmin && onDeleteMatch && (
-            <button
-              className="text-xs text-red-600"
-              onClick={()=>{
-                const ok = window.confirm("정말 삭제하시겠어요?\n삭제 시 대시보드의 공격포인트/기록 집계에 영향을 줄 수 있습니다.")
-                if (ok) onDeleteMatch(m.id)
-              }}
-            >
-              삭제
-            </button>
-          )}
+          <div className="hidden sm:flex items-center gap-1 text-[11px] text-gray-500">표기: <GuestBadge/> 게스트</div>
+          {enableLoadToPlanner&&<button className="text-xs rounded border border-gray-300 bg-white px-2 py-1" onClick={()=>onLoadToPlanner?.(m)}>팀배정에 로드</button>}
+          {isAdmin&&onDeleteMatch&&<button className="text-xs text-red-600" onClick={()=>{ if(window.confirm("정말 삭제하시겠어요?\n삭제 시 대시보드의 공격포인트/기록 집계에 영향을 줄 수 있습니다.")) onDeleteMatch(m.id) }}>삭제</button>}
         </div>
       </div>
 
-      {/* 💰 금액 줄 (초안 기준 미리보기) */}
       <div className="mb-2 text-xs text-gray-800">
-        💰 총액 ${fees?.total ?? 0}
-        {typeof fees?.memberFee==="number" && typeof fees?.guestFee==="number" && (
-          <>
-            {" "}· 멤버 ${fees.memberFee}/인 · 게스트 ${fees.guestFee}/인
-            {fees?._estimated && <span className="opacity-70"> · 추정</span>}
-          </>
+        💰 총액 ${fees?.total??0}
+        {typeof fees?.memberFee==="number"&&(
+          <> · 멤버 ${fees.memberFee}/인{fees?.guestCount>0&&typeof fees?.guestFee==="number"&&<> · 게스트 ${fees.guestFee}/인</>}{fees?._estimated&&<span className="opacity-70"> · 추정</span>}</>
         )}
       </div>
 
-      {/* 팀 카드 */}
       <div className="grid grid-cols-2 gap-2 sm:gap-3">
-        {draftTeams.map((list, i) => {
-          const kit = kitForTeam(i)
-          const nonGK = list.filter(p => (p.position||p.pos) !== "GK")
-          const sum = nonGK.reduce((a,p)=> a+(p.ovr??overall(p)), 0)
-          const avg = nonGK.length ? Math.round(sum / nonGK.length) : 0
-
+        {draftTeams.map((list,i)=>{
+          const kit=kitForTeam(i), nonGK=list.filter(p=>(p.position||p.pos)!=="GK")
+          const sum=nonGK.reduce((a,p)=>a+(p.ovr??overall(p)),0), avg=nonGK.length?Math.round(sum/nonGK.length):0
           return (
             <div key={i} className="space-y-1 overflow-hidden rounded border border-gray-200">
               <div className={`flex items-center justify-between px-3 py-1.5 text-xs ${kit.headerClass}`}>
                 <div className="font-semibold">팀 {i+1}</div>
-                {isAdmin && showTeamOVRForAdmin && !hideOVR
+                {isAdmin&&showTeamOVRForAdmin&&!hideOVR
                   ? <div className="opacity-80">{kit.label} · {list.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</div>
                   : <div className="opacity-80">{kit.label} · {list.length}명</div>}
               </div>
-
               <ul className="divide-y divide-gray-100">
-                {list.map((p) => {
-                  const member = isMember(p.membership)
+                {list.map(p=>{
+                  const member=isMember(p.membership)
                   return (
                     <li key={p.id} className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
                       <span className="flex items-center gap-2 min-w-0 flex-1">
-                        <InitialAvatar id={p.id} name={p.name} size={22} />
-                        <span className="truncate">
-                          {p.name} {(p.position||p.pos)==="GK" && <em className="ml-1 text-xs text-gray-400">(GK)</em>}
-                        </span>
-                        {!member && <GuestBadge />}
+                        <InitialAvatar id={p.id} name={p.name} size={22}/>
+                        <span className="truncate">{p.name}{(p.position||p.pos)==="GK"&&<em className="ml-1 text-xs text-gray-400">(GK)</em>}</span>
+                        {!member&&<GuestBadge/>}
                       </span>
-
                       <span className="flex items-center gap-2 shrink-0">
-                        {isAdmin && showTeamOVRForAdmin && !hideOVR && (p.position||p.pos)!=="GK" && (
-                          <span className="text-gray-500">OVR {p.ovr??overall(p)}</span>
-                        )}
-                        {/* 선수 개별 제외 → 초안만 수정 */}
-                        {isAdmin && (
-                          <button
-                            className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-100"
+                        {isAdmin&&showTeamOVRForAdmin&&!hideOVR&&(p.position||p.pos)!=="GK"&&<span className="text-gray-500">OVR {p.ovr??overall(p)}</span>}
+                        {isAdmin&&(
+                          <button className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-100"
                             title="이 팀에서 제외 (저장 전 초안)"
-                            onClick={()=>{
-                              const next = draftSnap.map((arr, idx) =>
-                                idx === i ? arr.filter(id => String(id)!==String(p.id)) : arr
-                              )
-                              setSnapAndDirty(next)
-                            }}
+                            onClick={()=>setSnap(draftSnap.map((arr,idx)=>idx===i?arr.filter(id=>String(id)!==String(p.id)):arr))}
                           >제외</button>
                         )}
                       </span>
                     </li>
                   )
                 })}
-                {list.length===0 && <li className="px-3 py-2 text-xs text-gray-400">팀원 없음</li>}
+                {list.length===0&&<li className="px-3 py-2 text-xs text-gray-400">팀원 없음</li>}
               </ul>
             </div>
           )
         })}
       </div>
 
-      {/* 빠른 출석 편집 바 (초안만 수정) */}
-      {isAdmin && (
-        <QuickAttendanceEditor
-          players={players}
-          snapshot={draftSnap}
-          onDraftChange={setSnapAndDirty}
-        />
-      )}
-
-      {/* 저장/취소 바 */}
-      {isAdmin && dirty && (
+      {isAdmin&&<QuickAttendanceEditor players={players} snapshot={draftSnap} onDraftChange={setSnap}/>}
+      {isAdmin&&dirty&&(
         <div className="mt-3 flex items-center justify-end gap-2">
-          <button
-            className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm"
-            onClick={resetDraft}
-            title="변경사항 취소"
-          >취소</button>
-          <button
-            className="rounded bg-blue-600 text-white px-3 py-1.5 text-sm hover:bg-blue-700"
-            onClick={saveDraft}
-            title="변경사항 저장"
-          >저장</button>
+          <button className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm" onClick={resetDraft} title="변경사항 취소">취소</button>
+          <button className="rounded bg-blue-600 text-white px-3 py-1.5 text-sm hover:bg-blue-700" onClick={saveDraft} title="변경사항 저장">저장</button>
         </div>
       )}
 
-      {/* 🎥 유튜브 링크 (즉시 반영 유지) */}
       <div className="mt-3 space-y-2">
         <div className="text-xs font-semibold text-gray-600">🎥 유튜브 링크</div>
-        {(m.videos && m.videos.length>0) ? (
+        {(m.videos&&m.videos.length>0)?(
           <ul className="flex flex-wrap gap-2">
-            {m.videos.map((url, idx)=>(
+            {m.videos.map((url,idx)=>(
               <li key={idx} className="flex items-center gap-2">
-                <a
-                  href={url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="max-w-[240px] truncate rounded border border-gray-300 bg-white px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
-                  title={url}
-                >
-                  {url}
-                </a>
-                {isAdmin && onUpdateMatch && (
-                  <button className="text-[11px] text-red-600" onClick={()=>removeVideo(idx)} title="삭제">삭제</button>
-                )}
+                <a href={url} target="_blank" rel="noreferrer" className="max-w-[240px] truncate rounded border border-gray-300 bg-white px-2 py-1 text-xs text-blue-600 hover:bg-blue-50" title={url}>{url}</a>
+                {isAdmin&&onUpdateMatch&&<button className="text-[11px] text-red-600" onClick={()=>removeVideo(idx)} title="삭제">삭제</button>}
               </li>
             ))}
           </ul>
-        ) : (
-          <div className="text-xs text-gray-500">등록된 링크가 없습니다.</div>
-        )}
-        {isAdmin && onUpdateMatch && (
-          <VideoAdder onAdd={addVideo}/>
-        )}
+        ):<div className="text-xs text-gray-500">등록된 링크가 없습니다.</div>}
+        {isAdmin&&onUpdateMatch&&<VideoAdder onAdd={addVideo}/>}
       </div>
     </li>
   )
 }
 
-/* ────────────────────────────────────────────
- * 메인 리스트
- * ──────────────────────────────────────────── */
-export default function SavedMatchesList({
-  matches = [],
-  players = [],
-  isAdmin = false,
-  enableLoadToPlanner = false,
-  onLoadToPlanner,          // (match)=>void
-  onDeleteMatch,            // (matchId)=>void
-  onUpdateMatch,            // (matchId, patch)=>void
-  showTeamOVRForAdmin = true,
-  hideOVR = false,
-}) {
-  if (!matches?.length) {
-    return <div className="text-sm text-gray-500">저장된 매치가 없습니다.</div>
-  }
-
+/* 메인 리스트 */
+export default function SavedMatchesList({ matches=[], players=[], isAdmin=false, enableLoadToPlanner=false, onLoadToPlanner, onDeleteMatch, onUpdateMatch, showTeamOVRForAdmin=true, hideOVR=false }){
+  if(!matches?.length) return <div className="text-sm text-gray-500">저장된 매치가 없습니다.</div>
   return (
     <ul className="space-y-2">
-      {matches.map((m) => (
-        <MatchCard
-          key={m.id}
-          m={m}
-          players={players}
-          isAdmin={isAdmin}
-          enableLoadToPlanner={enableLoadToPlanner}
-          onLoadToPlanner={onLoadToPlanner}
-          onDeleteMatch={onDeleteMatch}
-          onUpdateMatch={onUpdateMatch}
-          showTeamOVRForAdmin={showTeamOVRForAdmin}
-          hideOVR={hideOVR}
-        />
+      {matches.map(m=>(
+        <MatchCard key={m.id} m={m} players={players} isAdmin={isAdmin}
+          enableLoadToPlanner={enableLoadToPlanner} onLoadToPlanner={onLoadToPlanner}
+          onDeleteMatch={onDeleteMatch} onUpdateMatch={onUpdateMatch}
+          showTeamOVRForAdmin={showTeamOVRForAdmin} hideOVR={hideOVR}/>
       ))}
     </ul>
   )

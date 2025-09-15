@@ -63,7 +63,6 @@ export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,
         </div>
         <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
           <div><b>예상 구장비</b>: ${baseCost} / 2시간 {feeMode==='preset'?<span className="ml-2 opacity-70">(장소별 고정 금액)</span>:<span className="ml-2 opacity-70">(사용자 지정 금액)</span>}</div>
-          <div className="mt-1">{attendees.length>0&&baseCost>0?(<>멤버 {liveFees.memberFee}$/인 · 게스트 {liveFees.guestFee}$/인</>):<span className="opacity-70">참석자를 선택하면 1인당 금액이 계산됩니다.</span>}</div>
         </div>
         {locationPreset==='other'&&(<div className="grid gap-2 sm:grid-cols-2"><input className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="장소 이름" value={locationName} onChange={e=>setLocationName(e.target.value)}/><input className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="주소" value={locationAddress} onChange={e=>setLocationAddress(e.target.value)}/></div>)}
       </div></Row>
