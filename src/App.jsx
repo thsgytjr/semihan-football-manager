@@ -1,6 +1,6 @@
 // src/App.jsx
 import React, { useEffect, useMemo, useState } from "react"
-import { Home, Users, CalendarDays, ListChecks, LayoutDashboard } from "lucide-react"
+import { Home, Users, CalendarDays, ListChecks } from "lucide-react"
 
 import {
   listPlayers, upsertPlayer, deletePlayer, subscribePlayers,
@@ -17,11 +17,40 @@ import Dashboard from "./pages/Dashboard"
 import PlayersPage from "./pages/PlayersPage"
 import MatchPlanner from "./pages/MatchPlanner"
 import StatsInput from "./pages/StatsInput"
-import FormationBoard from "./pages/FormationBoard"   // ⬅️ 추가
+import FormationBoard from "./pages/FormationBoard"
 import logoUrl from "./assets/semihan-football-manager-logo.png"
 
-// ✅ 간편 Admin(공유 비밀번호) — 로컬 저장
+// 간편 Admin(공유 비밀번호) — 로컬 저장
 const ADMIN_PASS = import.meta.env.VITE_ADMIN_PASSWORD || "letmein"
+
+// ✅ 간단한 “축구장” 아이콘 (SVG, currentColor 사용)
+function IconPitch({ size = 16 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      role="img"
+      className="shrink-0"
+    >
+      {/* 외곽 */}
+      <rect x="2" y="5" width="20" height="14" rx="2" ry="2"
+        fill="none" stroke="currentColor" strokeWidth="1.5" />
+      {/* 하프라인 */}
+      <line x1="12" y1="5" x2="12" y2="19"
+        stroke="currentColor" strokeWidth="1.5" />
+      {/* 센터 서클 */}
+      <circle cx="12" cy="12" r="2.8" fill="none"
+        stroke="currentColor" strokeWidth="1.5" />
+      {/* 페널티 박스 간단 표시 (좌/우) */}
+      <rect x="2" y="8" width="3.5" height="8" fill="none"
+        stroke="currentColor" strokeWidth="1.2" />
+      <rect x="18.5" y="8" width="3.5" height="8" fill="none"
+        stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  )
+}
 
 export default function App() {
   // 'dashboard' | 'players' | 'planner' | 'stats' | 'formation'
@@ -47,7 +76,7 @@ export default function App() {
     notify("Admin 모드 해제")
   }
 
-  // ✅ 최초 로드 + 실시간 구독
+  // 최초 로드 + 실시간 구독
   useEffect(() => {
     let mounted = true
     ;(async () => {
@@ -74,7 +103,7 @@ export default function App() {
   const players = db.players || []
   const matches = db.matches || []
 
-  // ✅ 대시보드 요약(간단)
+  // 대시보드 요약(간단)
   const totals = useMemo(() => {
     const cnt = players.length
     const goalsProxy = Math.round(players.reduce((a, p) => a + (p.stats?.Shooting || 0) * 0.1, 0))
@@ -144,7 +173,7 @@ export default function App() {
     notify("매치를 삭제했습니다.")
   }
 
-  // ✅ 저장된 매치 업데이트(포메이션/좌표/경기기록 재저장)
+  // 저장된 매치 업데이트(포메이션/좌표/경기기록 재저장)
   function handleUpdateMatch(id, patch) {
     const next = (db.matches || []).map(m =>
       m.id === id ? { ...m, ...patch } : m
@@ -197,14 +226,15 @@ export default function App() {
                 active={tab === "planner"}
               />
             )}
-            {isAdmin && (
-              <TabButton
-                icon={<LayoutDashboard size={16} />}
-                label="포메이션 보드"
-                onClick={() => setTab("formation")}
-                active={tab === "formation"}
-              />
-            )}
+
+            {/* ✅ 포메이션 보드는 회원에게도 공개 + 축구장 아이콘 적용 */}
+            <TabButton
+              icon={<IconPitch size={16} />}
+              label="포메이션 보드"
+              onClick={() => setTab("formation")}
+              active={tab === "formation"}
+            />
+
             {isAdmin && (
               <TabButton
                 icon={<ListChecks size={16} />}
@@ -264,10 +294,11 @@ export default function App() {
           />
         )}
 
-        {tab === "formation" && isAdmin && (
+        {/* 회원/관리자 공용 */}
+        {tab === "formation" && (
           <FormationBoard
             players={players}
-            isAdmin={isAdmin}
+            isAdmin={isAdmin} // 필요 시 내부에서 일부 버튼만 Admin 전용 처리 가능
           />
         )}
 
@@ -281,14 +312,19 @@ export default function App() {
         )}
       </main>
 
-      {/* 푸터 */}
+      {/* 푸터 - 도움말: 회원에게는 Admin 기능 항목 숨김 처리 */}
       <footer className="mx-auto mt-10 max-w-6xl px-4 pb-8">
         <Card title="도움말">
           <ul className="list-disc pl-5 text-sm text-stone-600">
             <li>대시보드: 저장된 매치 열람, 공격포인트(골/어시/경기수) 트래킹</li>
-            <li>매치 플래너: 팀 배정, 포메이션 설정 (Admin)</li>
-            <li>포메이션 보드: 체크한 선수만 보드에 표시 · 자동/수동 배치 (Admin)</li>
-            <li>기록 입력: 경기별 골/어시 기록 입력/수정 (Admin)</li>
+            <li>포메이션 보드: 체크한 선수만 보드에 표시 · 드래그로 수동 배치</li>
+            {isAdmin && (
+              <>
+                <li>선수 관리: 선수 생성/수정/삭제, 일괄 가져오기</li>
+                <li>매치 플래너: 팀 배정, 포메이션 설정, 저장/삭제</li>
+                <li>기록 입력: 경기별 골/어시 기록 입력/수정</li>
+              </>
+            )}
           </ul>
         </Card>
       </footer>
