@@ -183,6 +183,7 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
               players={players}
               isAdmin={isAdmin}
               onUpdateMatch={onUpdateMatch}
+              hideOVR={true} 
             />
           </div>
         </ErrorBoundary>
