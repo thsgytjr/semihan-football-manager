@@ -44,8 +44,15 @@ export default function App(){
           <TabButton icon={<IconPitch size={16}/>} label="포메이션 보드" onClick={()=>setTab("formation")} active={tab==="formation"}/>
           {isAdmin&&<TabButton icon={<ListChecks size={16}/>} label="기록 입력" onClick={()=>setTab("stats")} active={tab==="stats"}/>}
           <div className="ml-2 pl-2 border-l border-stone-300">
-            {isAdmin?(<button onClick={adminLogout} className="rounded px-3 py-1.5 text-sm bg-stone-900 text-white">Admin 로그아웃</button>):
-            (<button onClick={()=>setLoginOpen(true)} className="rounded px-3 py-1.5 text-sm border border-stone-300 bg-white">Admin 로그인</button>)}
+            {isAdmin?(
+              <button onClick={adminLogout} className="inline-flex items-center gap-2 rounded-lg bg-stone-900 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-400">
+                <X size={14}/> Admin 로그아웃
+              </button>
+            ):(
+              <button onClick={()=>setLoginOpen(true)} className="inline-flex items-center gap-2 rounded-lg border border-stone-300 bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:from-emerald-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400">
+                <Lock size={14}/> Admin 로그인
+              </button>
+            )}
           </div>
         </nav>
       </div>
