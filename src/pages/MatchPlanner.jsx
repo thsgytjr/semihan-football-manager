@@ -17,9 +17,9 @@ import InitialAvatar from '../components/InitialAvatar'
 import FreePitch from '../components/pitch/FreePitch'
 import { assignToFormation, recommendFormation, countPositions } from '../lib/formation'
 import { seededShuffle } from '../utils/random'
-import SavedMatchesList from '../components/SavedMatchesList'   // ✅ 공용 리스트 추가
+import SavedMatchesList from '../components/SavedMatchesList'
 
-/* 다가오는 토요일 06:30 로컬 -> datetime-local value ("YYYY-MM-DDTHH:MM") */
+/* 다가오는 토요일 06:30 로컬 -> "YYYY-MM-DDTHH:MM" */
 function nextSaturday0630Local() {
   const now = new Date()
   const dow = now.getDay()
@@ -40,6 +40,71 @@ function nextSaturday0630Local() {
   return `${yyyy}-${mm}-${dd}T${HH}:${MM}`
 }
 
+/* ────────────────────────────────────────────
+ * 포지션 유틸 + 포지션 분산 스플리터
+ * ──────────────────────────────────────────── */
+function positionGroupOf(p) {
+  const raw = String(p.position || p.pos || '').toUpperCase()
+  if (raw === 'GK' || raw.includes('GK')) return 'GK'
+  const df = ['DF','CB','LB','RB','LWB','RWB','CBR','CBL','SW']
+  const mf = ['MF','CM','DM','AM','LM','RM','CDM','CAM','RDM','LDM','RCM','LCM']
+  const fw = ['FW','ST','CF','LW','RW','RF','LF']
+  if (df.some(k => raw.includes(k))) return 'DF'
+  if (mf.some(k => raw.includes(k))) return 'MF'
+  if (fw.some(k => raw.includes(k))) return 'FW'
+  return 'OTHER'
+}
+const POSITION_ORDER = ['GK','DF','MF','FW','OTHER']
+const positionOrderIndex = (p) => POSITION_ORDER.indexOf(positionGroupOf(p))
+
+function sortByOVRDescWithSeed(list, seed=0) {
+  const shuffled = seededShuffle(list.slice(), seed || 0x9e3779b1)
+  return shuffled.sort((a,b) => (b.ovr ?? overall(b)) - (a.ovr ?? overall(a)))
+}
+
+function splitKTeamsPosAware(players, k, seed = 0) {
+  const teams = Array.from({ length: k }, () => [])
+  const meta  = Array.from({ length: k }, () => ({
+    nonGkOVR: 0, counts: { GK:0, DF:0, MF:0, FW:0, OTHER:0 }
+  }))
+
+  const groups = {
+    GK:   players.filter(p => positionGroupOf(p) === 'GK'),
+    DF:   players.filter(p => positionGroupOf(p) === 'DF'),
+    MF:   players.filter(p => positionGroupOf(p) === 'MF'),
+    FW:   players.filter(p => positionGroupOf(p) === 'FW'),
+    OTHER:players.filter(p => positionGroupOf(p) === 'OTHER'),
+  }
+  for (const key of Object.keys(groups)) {
+    groups[key] = sortByOVRDescWithSeed(groups[key], seed + key.length)
+  }
+
+  function placeGroup(key) {
+    const list = groups[key]
+    let dir = 1
+    while (list.length) {
+      const orderedTeams = Array.from({ length: k }, (_, i) => i).sort((i, j) => {
+        const ci = meta[i].counts[key], cj = meta[j].counts[key]
+        if (ci !== cj) return ci - cj
+        return meta[i].nonGkOVR - meta[j].nonGkOVR
+      })
+      const pickOrder = dir === 1 ? orderedTeams : orderedTeams.slice().reverse()
+      for (const teamIndex of pickOrder) {
+        if (!list.length) break
+        const p = list.shift()
+        teams[teamIndex].push(p)
+        meta[teamIndex].counts[key]++
+        if (key !== 'GK') meta[teamIndex].nonGkOVR += (p.ovr ?? overall(p))
+      }
+      dir *= -1
+    }
+  }
+  ;['GK','DF','MF','FW','OTHER'].forEach(placeGroup)
+  return { teams }
+}
+
+/* ──────────────────────────────────────────── */
+
 export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMatch, onUpdateMatch, isAdmin }){
   const [dateISO,setDateISO]=useState(()=>nextSaturday0630Local())
   const [attendeeIds,setAttendeeIds]=useState([])
@@ -52,7 +117,6 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
   const [locationName,setLocationName]=useState('Coppell Middle School - West')
   const [locationAddress,setLocationAddress]=useState('2701 Ranch Trail, Coppell, TX 75019')
 
-  // 💰 자동/커스텀 금액
   const [feeMode, setFeeMode] = useState('preset') // 'preset' | 'custom'
   const [customBaseCost, setCustomBaseCost] = useState(0)
 
@@ -70,23 +134,29 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
   const [editingMatchId, setEditingMatchId] = useState(null)
   const [editorPlayers, setEditorPlayers] = useState([])
 
+  // ✅ 포지션 고려 분산 토글(기본 ON)
+  const [posAware, setPosAware] = useState(true)
+
   const count=attendeeIds.length
   const autoSuggestion=decideMode(count)
   const mode=autoSuggestion.mode
   const teams=Math.max(2,Math.min(10,Number(teamCount)||2))
   const attendees=useMemo(()=>players.filter(p=>attendeeIds.includes(p.id)),[players,attendeeIds])
-  const autoSplit=useMemo(()=>splitKTeams(attendees,teams,criterion),[attendees,teams,criterion])
+
+  // ✅ 자동 분배: 포지션 고려 or 기존 방식
+  const autoSplit=useMemo(()=>{
+    if (posAware) {
+      return splitKTeamsPosAware(attendees, teams, shuffleSeed)
+    }
+    return splitKTeams(attendees, teams, criterion)
+  },[attendees,teams,criterion,posAware,shuffleSeed])
 
   const skipAutoResetRef = useRef(false)
-
   useEffect(()=>{
-    if (skipAutoResetRef.current) {
-      skipAutoResetRef.current = false
-      return
-    }
+    if (skipAutoResetRef.current) { skipAutoResetRef.current = false; return }
     setManualTeams(null)
     setShuffleSeed(0)
-  },[attendees,teams,criterion])
+  },[attendees,teams,criterion,posAware])
 
   /* 💰 베이스 금액(장소별 or 커스텀) */
   const baseCost = useMemo(()=>{
@@ -98,7 +168,6 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
   },[feeMode, customBaseCost, locationPreset])
 
   const PREMIUM = 1.2
-
   const liveFees = useMemo(()=>{
     const isMember = (v)=>String(v??'').trim()==='member'||String(v??'').trim()==='정회원'
     const memberCount = attendees.filter(p => isMember(p.membership)).length
@@ -110,7 +179,9 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
 
   const previewTeams=useMemo(()=>{
     let base=manualTeams??autoSplit.teams
-    if(!manualTeams&&shuffleSeed) base=base.map(list=>seededShuffle(list,shuffleSeed+list.length))
+    if(!manualTeams&&shuffleSeed) {
+      base = base.map(list=>seededShuffle(list,shuffleSeed+list.length))
+    }
     return base
   },[manualTeams,autoSplit.teams,shuffleSeed])
 
@@ -149,7 +220,6 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
     return { total: base, memberFee: Math.round(x), guestFee: Math.round(PREMIUM*x), premium: PREMIUM }
   }
 
-  // ✅ 저장: 화면 팀 그대로 + fees
   function save(){
     if(!isAdmin){ notify('Admin만 가능합니다.'); return }
 
@@ -160,17 +230,12 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
     const snapshot = baseTeams.map(team => team.map(p => p.id))
     const attendeeIdsFromTeams = snapshot.flat()
     const attendeeObjs = players.filter(p => attendeeIdsFromTeams.includes(p.id))
-
-    const fees = computeFeesAtSave({
-      baseCostValue: baseCost,
-      attendees: attendeeObjs
-    })
-
+    const fees = computeFeesAtSave({ baseCostValue: baseCost, attendees: attendeeObjs })
     const base = mkMatch({
       id: crypto.randomUUID?.() || String(Date.now()),
       dateISO,
       attendeeIds: attendeeIdsFromTeams,
-      criterion,
+      criterion: posAware ? 'pos-aware' : criterion,
       players,
       selectionMode: 'manual',
       teamCount: baseTeams.length,
@@ -182,7 +247,6 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
       locked: true,
       videos: []
     })
-
     const payload = { ...base, fees }
     onSaveMatch(payload)
     notify('매치가 저장되었습니다 ✅')
@@ -361,7 +425,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                 </div>
                 <div className="mt-1">
                   {attendees.length>0 && baseCost>0
-                    ? <>멤버 {liveFees.memberFee}$/인 · 게스트 {liveFees.guestFee}$/인 <span className="opacity-70">(게스트 +$2)</span></>
+                    ? <>멤버 {liveFees.memberFee}$/인 · 게스트 {liveFees.guestFee}$/인</>
                     : <span className="opacity-70">참석자를 선택하면 1인당 금액이 계산됩니다.</span>}
                 </div>
               </div>
@@ -380,6 +444,11 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
               <select className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" value={teams} onChange={e=>setTeamCount(Number(e.target.value))}>
                 {Array.from({length:9},(_,i)=>i+2).map(n=><option key={n} value={n}>{n}팀</option>)}
               </select>
+              {/* ✅ 포지션 고려 매칭 토글 */}
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={posAware} onChange={()=>setPosAware(v=>!v)} />
+                포지션 고려 매칭
+              </label>
             </div>
           </Row>
 
@@ -407,7 +476,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
             </div>
           </Row>
 
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {isAdmin && (
               <button onClick={save} className="rounded bg-emerald-500 px-4 py-2 text-white font-semibold">매치 저장</button>
             )}
@@ -420,7 +489,7 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
         <Card
           title="팀 배정 미리보기 (드래그 & 드랍 커스텀 가능)"
           right={<div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">
-            기준: {criterion} · <span className="font-medium">GK 평균 제외</span>
+            기준: {posAware ? '포지션 분산' : criterion} · <span className="font-medium">GK 평균 제외</span>
           </div>}
         >
           <Toolbar
@@ -430,11 +499,14 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
             reshuffleTeams={() => {
               const seed = (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0
               setShuffleSeed(seed)
-              setManualTeams((prev) =>
-                (prev ?? autoSplit.teams).map((list) =>
-                  seededShuffle(list, seed + list.length)
+              if (posAware) setManualTeams(null)
+              else {
+                setManualTeams((prev) =>
+                  (prev ?? autoSplit.teams).map((list) =>
+                    seededShuffle(list, seed + list.length)
+                  )
                 )
-              )
+              }
             }}
             sortTeamsByOVR={(order = "desc") => {
               const base = manualTeams ?? previewTeams
@@ -443,6 +515,22 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
                   list.slice().sort((a, b) => {
                     const A = a.ovr ?? overall(a), B = b.ovr ?? overall(b)
                     return order === "asc" ? A - B : B - A
+                  })
+                )
+              )
+            }}
+            /* ✅ 포지션별 정렬 버튼 (GK→DF→MF→FW→OTHER) */
+            sortTeamsByPosition={(dir='asc')=>{
+              const base = manualTeams ?? previewTeams
+              const mul = dir==='asc' ? 1 : -1
+              setManualTeams(
+                base.map(list =>
+                  list.slice().sort((a,b)=>{
+                    const ia = positionOrderIndex(a), ib = positionOrderIndex(b)
+                    if (ia !== ib) return (ia - ib) * mul
+                    // 같은 포지션이면 OVR 내림
+                    const A = a.ovr ?? overall(a), B = b.ovr ?? overall(b)
+                    return (B - A) * (dir==='asc' ? 1 : 1) // 동일
                   })
                 )
               )
@@ -465,7 +553,13 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
             <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))" }}>
               {previewTeams.map((list, i) => (
                 <div key={i} className="space-y-2">
-                  <TeamColumn teamIndex={i} labelKit={kitForTeam(i)} players={list} showOVR={isAdmin && !hideOVR} isAdmin={isAdmin} />
+                  <TeamColumn
+                    teamIndex={i}
+                    labelKit={kitForTeam(i)}
+                    players={list}
+                    showOVR={isAdmin && !hideOVR}
+                    isAdmin={isAdmin}
+                  />
                 </div>
               ))}
             </div>
@@ -477,7 +571,6 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
           </DndContext>
         </Card>
 
-        {/* ✅ 저장된 매치: 공용 컴포넌트로 교체 */}
         <Card title="저장된 매치" right={<div className="text-xs text-gray-500"><span className="font-medium">GK 평균 제외</span></div>}>
           <SavedMatchesList
             matches={matches}
@@ -545,24 +638,37 @@ export default function MatchPlanner({ players, matches, onSaveMatch, onDeleteMa
   )
 }
 
-function Row({label,children}){return(
-  <div className="grid items-start gap-2 sm:grid-cols-[120px_minmax(0,1fr)]">
-    <label className="mt-1 text-sm text-gray-600">{label}</label><div>{children}</div>
-  </div>
-)}
+/* ---------------------------- UI 조각들 ---------------------------- */
+function Row({label,children}){
+  return (
+    <div className="grid items-start gap-2 sm:grid-cols-[120px_minmax(0,1fr)]">
+      <label className="mt-1 text-sm text-gray-600">{label}</label><div>{children}</div>
+    </div>
+  )
+}
 
-function Toolbar({isAdmin,hideOVR,setHideOVR,reshuffleTeams,sortTeamsByOVR,resetManual,manualTeams}){
+function Toolbar({isAdmin,hideOVR,setHideOVR,reshuffleTeams,sortTeamsByOVR,sortTeamsByPosition,resetManual,manualTeams}){
   return (
     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <button onClick={reshuffleTeams} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">랜덤 섞기</button>
+
+        {/* OVR 정렬 */}
         {isAdmin && (
           <>
-            <button onClick={()=>sortTeamsByOVR('desc')} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">팀 OVR 내림차순</button>
-            <button onClick={()=>sortTeamsByOVR('asc')} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">팀 OVR 오름차순</button>
-            <button onClick={resetManual} disabled={!manualTeams} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">수동 편집 초기화</button>
+            <button onClick={()=>sortTeamsByOVR('desc')} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">팀 OVR ↓</button>
+            <button onClick={()=>sortTeamsByOVR('asc')} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">팀 OVR ↑</button>
           </>
         )}
+
+        {/* ✅ 포지션 정렬 */}
+        <button onClick={()=>sortTeamsByPosition('asc')} className="rounded border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-800 hover:bg-emerald-100">
+          포지션 정렬 ↑ (GK→FW)
+        </button>
+        <button onClick={()=>sortTeamsByPosition('desc')} className="rounded border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-800 hover:bg-emerald-100">
+          포지션 정렬 ↓ (FW→GK)
+        </button>
+
         {isAdmin && (
           <button
             type="button"
@@ -577,24 +683,41 @@ function Toolbar({isAdmin,hideOVR,setHideOVR,reshuffleTeams,sortTeamsByOVR,reset
             OVR 숨기기
           </button>
         )}
+
+        <button onClick={resetManual} disabled={!manualTeams} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">수동 편집 초기화</button>
       </div>
     </div>
   )
 }
 
 function TeamColumn({ teamIndex,labelKit,players,showOVR,isAdmin }){
-  const id=`team-${teamIndex}`; const { setNodeRef,isOver }=useDroppable({ id })
-  const non=players.filter(p=>(p.position||p.pos)!=='GK'), sum=non.reduce((a,p)=>a+(p.ovr??overall(p)),0), avg=non.length?Math.round(sum/non.length):0
+  const id=`team-${teamIndex}`
+  const { setNodeRef,isOver }=useDroppable({ id })
+  const non=players.filter(p=>(p.position||p.pos)!=='GK')
+  const sum=non.reduce((a,p)=>a+(p.ovr??overall(p)),0)
+  const avg=non.length?Math.round(sum/non.length):0
+
+  // ✅ 포지션 카운트
+  const posCount = useMemo(()=>{
+    const c = { GK:0, DF:0, MF:0, FW:0, OTHER:0 }
+    for (const p of players) c[positionGroupOf(p)]++
+    return c
+  },[players])
+
   return (
     <div ref={setNodeRef} className={`rounded-lg border bg-white transition ${isOver?'border-emerald-500 ring-2 ring-emerald-200':'border-gray-200'}`}>
       <div className={`mb-1 flex items-center justify-between px-3 py-2 text-xs ${labelKit.headerClass}`}>
         <div className="font-semibold">팀 {teamIndex+1}</div>
-        {isAdmin ? (
-          <div className="opacity-80">{labelKit.label} · {players.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</div>
-        ) : (
-          <div className="opacity-80">{labelKit.label} · {players.length}명</div>
-        )}
+        <div className="opacity-80 flex items-center gap-2">
+          <span>{labelKit.label} · {players.length}명</span>
+          {isAdmin && (
+            <>
+              <span className="hidden sm:inline">· <b>팀파워</b> {sum} · 평균 {avg}</span>
+            </>
+          )}
+        </div>
       </div>
+
       <SortableContext id={id} items={players.map(p=>String(p.id))} strategy={verticalListSortingStrategy}>
         <ul className="space-y-1 px-3 pb-3 text-sm min-h-[44px]">
           {isOver && <li className="rounded border-2 border-dashed border-emerald-400/70 bg-emerald-50/40 px-2 py-1 text-xs text-emerald-700">여기에 드롭</li>}
@@ -605,13 +728,16 @@ function TeamColumn({ teamIndex,labelKit,players,showOVR,isAdmin }){
     </div>
   )
 }
+
 function PlayerRow({ player,showOVR }){
   const { attributes,listeners,setNodeRef,transform,transition,isDragging }=useSortable({ id:String(player.id) })
   const style={ transform:CSS.Transform.toString(transform), transition,
     opacity: isDragging ? 0.7 : 1, boxShadow:isDragging?'0 6px 18px rgba(0,0,0,.12)':undefined,
     borderRadius:8, background:isDragging?'rgba(16,185,129,0.06)':undefined }
-  const mem = String(player.membership||'').trim()
-  const isMember = (mem==='member' || mem.includes('정회원'))
+
+  const pos = positionGroupOf(player)
+  const isGK = pos === 'GK'
+  const ovrVal = player.ovr ?? overall(player)
 
   return (
     <li ref={setNodeRef} style={style}
@@ -620,22 +746,41 @@ function PlayerRow({ player,showOVR }){
       <span className="flex items-center gap-2 min-w-0 flex-1">
         <InitialAvatar id={player.id} name={player.name} size={24} />
         <span className="whitespace-normal break-words">
-          {player.name} {(player.position||player.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}
+          {player.name}
         </span>
-        {!isMember && <GuestBadge />}
+
+        {/* ✅ 포지션 배지 */}
+        <span className={`ml-1 inline-flex items-center rounded-full px-2 py-[2px] text-[11px] ${
+          isGK ? 'bg-amber-100 text-amber-800' :
+          pos==='DF' ? 'bg-blue-100 text-blue-800' :
+          pos==='MF' ? 'bg-emerald-100 text-emerald-800' :
+          pos==='FW' ? 'bg-rose-100 text-rose-800' :
+          'bg-stone-100 text-stone-700'
+        }`}>
+          {pos}
+        </span>
       </span>
-      {showOVR && (player.position||player.pos)!=='GK' && <span className="text-gray-500 text-xs shrink-0">OVR {player.ovr??overall(player)}</span>}
+
+      {/* ✅ OVR 표기 (규칙 유지: GK는 OVR 제외) */}
+      {showOVR && !isGK && (
+        <span className="ovr-chip shrink-0 rounded-full bg-stone-900 text-white text-[11px] px-2 py-[2px] tabular-nums">
+          OVR {ovrVal}
+        </span>
+      )}
     </li>
   )
 }
 
 function DragGhost({ player,showOVR }){
   if(!player) return null
+  const pos = positionGroupOf(player)
+  const isGK = pos === 'GK'
   return (
     <div className="rounded-full border border-emerald-300 bg-white px-3 py-1.5 shadow-xl text-sm flex items-center gap-2 scale-[1.04]" style={{filter:'drop-shadow(0 8px 20px rgba(0,0,0,.18))'}}>
       <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 text-white text-[11px]">⇆</span>
       <span className="font-medium">{player.name}</span>
-      {showOVR && (player.position||player.pos)!=='GK' && <span className="text-gray-500">OVR {player.ovr??overall(player)}</span>}
+      <span className="text-[11px] rounded-full bg-stone-100 px-2 py-[2px]">{pos}</span>
+      {showOVR && !isGK && <span className="text-gray-600 text-[12px]">OVR {player.ovr??overall(player)}</span>}
     </div>
   )
 }
