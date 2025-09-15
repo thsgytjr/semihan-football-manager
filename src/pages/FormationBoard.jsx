@@ -2,8 +2,6 @@ import React, { useEffect, useMemo, useState } from "react"
 import Card from "../components/Card"
 import InitialAvatar from "../components/InitialAvatar"
 import FreePitch from "../components/pitch/FreePitch"
-import { assignToFormation, recommendFormation, countPositions } from "../lib/formation"
-import { overall } from "../lib/players"
 
 function GuestBadge(){
   return (
@@ -13,33 +11,52 @@ function GuestBadge(){
   )
 }
 
-export default function FormationBoard({ players=[], isAdmin=false }){
-  // 체크된 선수 ID들
+// 선택된 선수 중 새로 추가되는 선수는 하단(약 y=90%)에 좌우로 간단 배치
+function appendNewlySelected(basePlaced, selectedPlayers){
+  const byId = new Map(basePlaced.map(p => [String(p.id), p]))
+  const next = [...basePlaced]
+  let newIdx = 0
+  const newOnes = selectedPlayers.filter(p => !byId.has(String(p.id)))
+  const totalNew = newOnes.length
+
+  newOnes.forEach((p, i) => {
+    // 하단에 균등 간격 배치 (포메이션과 무관, 화면 진입용 기본 위치)
+    const x = 50 + ((i - (totalNew - 1)/2) * 8) // 8% 간격
+    const y = 90
+    next.push({
+      id: p.id,
+      name: p.name,
+      role: p.position || p.pos || "",
+      x: pct(x),
+      y: pct(y),
+    })
+    newIdx++
+  })
+
+  // 선택 해제된 선수는 제거
+  const selIdSet = new Set(selectedPlayers.map(p => String(p.id)))
+  return next.filter(p => selIdSet.has(String(p.id)))
+}
+
+const clamp = (n, min, max) => Math.max(min, Math.min(max, n))
+const pct = (v) => clamp(v, 0, 100)
+
+export default function FormationBoard({ players = [], isAdmin = false }){
   const [selectedIds, setSelectedIds] = useState([])
-  // 현재 포메이션
-  const [formation, setFormation] = useState("4-3-3")
-  // 보드 위 배치
   const [placed, setPlaced] = useState([])
-  // ✅ 리스트 오픈 상태 (필요할 때만 렌더)
   const [listOpen, setListOpen] = useState(false)
   const [query, setQuery] = useState("")
 
-  // 파생: 선택된 선수 객체 배열
   const selectedPlayers = useMemo(
     () => players.filter(p => selectedIds.includes(p.id)),
     [players, selectedIds]
   )
 
-  // 추천 포메이션
-  const autoRecommended = useMemo(() => {
-    return recommendFormation({
-      count: selectedPlayers.length,
-      mode: "11v11",
-      positions: countPositions(selectedPlayers),
-    })
+  // 선택 변경 시: 기존 배치 유지 + 새로 선택된 선수만 하단에 간단 배치
+  useEffect(() => {
+    setPlaced(prev => appendNewlySelected(Array.isArray(prev) ? prev : [], selectedPlayers))
   }, [selectedPlayers])
 
-  // 체크박스 토글
   const toggle = (id) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
@@ -47,39 +64,6 @@ export default function FormationBoard({ players=[], isAdmin=false }){
   const allSelected = selectedIds.length === players.length && players.length > 0
   const toggleAll = () => setSelectedIds(allSelected ? [] : players.map(p => p.id))
 
-  // 선택 변경 시 배치 보존
-  useEffect(() => {
-    setPlaced(prev => {
-      const byId = new Map(prev.map(p => [String(p.id), p]))
-      const base = assignToFormation({
-        players: selectedPlayers,
-        formation: formation || "4-3-3",
-      })
-      return base.map(p => byId.get(String(p.id)) || p)
-    })
-  }, [selectedPlayers, formation])
-
-  // 자동 배치
-  const autoPlace = () => {
-    setPlaced(assignToFormation({ players: selectedPlayers, formation }))
-  }
-
-  // 추천 포메이션 적용
-  const useRecommended = () => {
-    const next = autoRecommended || "4-3-3"
-    setFormation(next)
-    setPlaced(assignToFormation({ players: selectedPlayers, formation: next }))
-  }
-
-  // 초기화
-  const clearBoard = () => {
-    setSelectedIds([])
-    setPlaced([])
-  }
-
-  const showOVR = isAdmin
-
-  // ✅ 검색된 리스트 (리스트 열렸을 때만 계산)
   const filtered = useMemo(() => {
     if (!listOpen) return []
     const q = query.trim().toLowerCase()
@@ -92,7 +76,6 @@ export default function FormationBoard({ players=[], isAdmin=false }){
 
   return (
     <div className="grid gap-4">
-      {/* 상단 툴바 (포메이션/자동/추천/비우기) */}
       <Card
         title="포메이션 보드"
         right={
@@ -101,43 +84,7 @@ export default function FormationBoard({ players=[], isAdmin=false }){
           </div>
         }
       >
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <div className="ml-auto flex items-center gap-2 text-sm">
-            <label className="text-gray-600">포메이션</label>
-            <select
-              className="rounded border border-gray-300 bg-white px-2 py-1"
-              value={formation}
-              onChange={e => setFormation(e.target.value)}
-            >
-              <option value="4-3-3">4-3-3</option>
-              <option value="4-4-2">4-4-2</option>
-              <option value="3-5-2">3-5-2</option>
-              <option value="3-3-2">9v9 · 3-3-2</option>
-              <option value="3-2-3">9v9 · 3-2-3</option>
-              <option value="2-3-1">7v7 · 2-3-1</option>
-            </select>
-
-            <button
-              onClick={autoPlace}
-              className="rounded bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-white"
-            >
-              자동 배치
-            </button>
-            <button
-              onClick={useRecommended}
-              className="rounded border border-emerald-600 text-emerald-700 bg-white px-3 py-1.5 text-sm"
-              title={`추천: ${autoRecommended}`}
-            >
-              추천 포메이션 적용
-            </button>
-            <button
-              onClick={clearBoard}
-              className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50"
-            >
-              비우기
-            </button>
-          </div>
-        </div>
+        {/* 포메이션/자동배치/추천 버튼 전부 제거됨 */}
 
         {/* 필드 + 플로팅 버튼 */}
         <div className="relative">
@@ -153,7 +100,7 @@ export default function FormationBoard({ players=[], isAdmin=false }){
             height={680}
           />
 
-          {/* ✅ 필드 위 반투명 + 버튼 (리스트 열기) */}
+          {/* 필드 위 반투명 + 버튼 (리스트 열기) */}
           <button
             onClick={() => setListOpen(true)}
             className="absolute left-3 top-3 rounded-full bg-white/70 backdrop-blur px-3 py-2 text-xl leading-none shadow hover:bg-white"
@@ -165,7 +112,7 @@ export default function FormationBoard({ players=[], isAdmin=false }){
         </div>
       </Card>
 
-      {/* ✅ 하단 시트(모달): 선수 체크리스트 (필요할 때만 렌더) */}
+      {/* 하단 시트(모달): 선수 체크리스트 */}
       {listOpen && (
         <>
           <div
@@ -220,9 +167,6 @@ export default function FormationBoard({ players=[], isAdmin=false }){
                       {p.name} {(p.position||p.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}
                     </span>
                     {!isMember && <GuestBadge />}
-                    {showOVR && (p.position||p.pos)!=='GK' && (
-                      <span className="text-xs text-gray-500 shrink-0">OVR {p.ovr ?? overall(p)}</span>
-                    )}
                   </label>
                 )
               })}
