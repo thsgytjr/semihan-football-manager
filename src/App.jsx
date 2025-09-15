@@ -1,6 +1,6 @@
 // src/App.jsx
 import React, { useEffect, useMemo, useState } from "react"
-import { Home, Users, CalendarDays, ListChecks } from "lucide-react"
+import { Home, Users, CalendarDays, ListChecks, LayoutDashboard } from "lucide-react"
 
 import {
   listPlayers, upsertPlayer, deletePlayer, subscribePlayers,
@@ -16,15 +16,16 @@ import Card from "./components/Card"
 import Dashboard from "./pages/Dashboard"
 import PlayersPage from "./pages/PlayersPage"
 import MatchPlanner from "./pages/MatchPlanner"
-import StatsInput from "./pages/StatsInput"   // ⬅️ 새 탭
+import StatsInput from "./pages/StatsInput"
+import FormationBoard from "./pages/FormationBoard"   // ⬅️ 추가
 import logoUrl from "./assets/semihan-football-manager-logo.png"
-
 
 // ✅ 간편 Admin(공유 비밀번호) — 로컬 저장
 const ADMIN_PASS = import.meta.env.VITE_ADMIN_PASSWORD || "letmein"
 
 export default function App() {
-  const [tab, setTab] = useState("dashboard") // 'dashboard' | 'players' | 'planner' | 'stats'
+  // 'dashboard' | 'players' | 'planner' | 'stats' | 'formation'
+  const [tab, setTab] = useState("dashboard")
   const [db, setDb] = useState({ players: [], matches: [] })
   const [selectedPlayerId, setSelectedPlayerId] = useState(null)
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem("isAdmin") === "1")
@@ -198,6 +199,14 @@ export default function App() {
             )}
             {isAdmin && (
               <TabButton
+                icon={<LayoutDashboard size={16} />}
+                label="포메이션 보드 (Beta)"
+                onClick={() => setTab("formation")}
+                active={tab === "formation"}
+              />
+            )}
+            {isAdmin && (
+              <TabButton
                 icon={<ListChecks size={16} />}
                 label="기록 입력"
                 onClick={() => setTab("stats")}
@@ -255,6 +264,13 @@ export default function App() {
           />
         )}
 
+        {tab === "formation" && isAdmin && (
+          <FormationBoard
+            players={players}
+            isAdmin={isAdmin}
+          />
+        )}
+
         {tab === "stats" && isAdmin && (
           <StatsInput
             players={players}
@@ -271,6 +287,7 @@ export default function App() {
           <ul className="list-disc pl-5 text-sm text-stone-600">
             <li>대시보드: 저장된 매치 열람, 공격포인트(골/어시/경기수) 트래킹</li>
             <li>매치 플래너: 팀 배정, 포메이션 설정 (Admin)</li>
+            <li>포메이션 보드 (Beta): 체크한 선수만 보드에 표시 · 자동/수동 배치 (Admin)</li>
             <li>기록 입력: 경기별 골/어시 기록 입력/수정 (Admin)</li>
           </ul>
         </Card>

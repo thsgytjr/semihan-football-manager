@@ -107,6 +107,23 @@ export default function PlayersPage({
     setConfirm({ open: false, id: null, name: "" })
   }
 
+  // ✅ 새 선수 추가 버튼 핸들러 (onCreate가 없을 때 폴백 드래프트 생성)
+  function handleCreate() {
+    if (typeof onCreate === "function") {
+      onCreate()
+    } else {
+      const temp = {
+        id: Date.now(),
+        name: "",
+        membership: "",
+        position: "",
+        stats: ensureStatsObject({})
+      }
+      setDraft(temp)
+      notify("새 선수 드래프트가 생성되었습니다.")
+    }
+  }
+
   return (
     <div className="relative grid grid-cols-1 gap-6 lg:grid-cols-3">
       {/* ⭐ 선수 에디터 (최상단) */}
@@ -124,7 +141,14 @@ export default function PlayersPage({
 
           {!draft ? (
             <div className="text-sm text-stone-500">
-              왼쪽에서 선수를 선택하거나 “새 선수”를 눌러 편집하세요.
+              왼쪽에서 선수를 선택하거나{" "}
+              <button
+                onClick={handleCreate}
+                className="inline-flex items-center rounded-md bg-emerald-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-600"
+              >
+                새 선수
+              </button>
+              를 눌러 편집하세요.
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4">
@@ -252,9 +276,20 @@ export default function PlayersPage({
       <section className="lg:col-span-1">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">선수 목록</h2>
-          {/* ✅ 게스트 표기 안내(오른쪽) */}
-          <div className="text-[11px] text-stone-500">
-            표기: <span className="inline-flex items-center gap-1"><GuestBadge /> 게스트</span>
+          {/* 오른쪽: 게스트 표기 + 새 선수 버튼 */}
+          <div className="flex items-center gap-2">
+            <div className="text-[11px] text-stone-500">
+              표기:{" "}
+              <span className="inline-flex items-center gap-1">
+                <GuestBadge /> 게스트
+              </span>
+            </div>
+            <button
+              onClick={handleCreate}
+              className="rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-600"
+            >
+              새 선수
+            </button>
           </div>
         </div>
 
@@ -298,7 +333,14 @@ export default function PlayersPage({
           })}
           {sorted.length === 0 && (
             <li className="px-3 py-6 text-sm text-stone-500">
-              선수가 없습니다. “새 선수”를 눌러 추가하세요.
+              선수가 없습니다.{" "}
+              <button
+                onClick={handleCreate}
+                className="inline-flex items-center rounded-md bg-emerald-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-emerald-600"
+              >
+                새 선수
+              </button>
+              를 눌러 추가하세요.
             </li>
           )}
         </ul>
