@@ -23,31 +23,15 @@ import logoUrl from "./assets/semihan-football-manager-logo.png"
 // 간편 Admin(공유 비밀번호) — 로컬 저장
 const ADMIN_PASS = import.meta.env.VITE_ADMIN_PASSWORD || "letmein"
 
-// ✅ 간단한 “축구장” 아이콘 (SVG, currentColor 사용)
+// ✅ 커스텀 “축구장” 아이콘
 function IconPitch({ size = 16 }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      role="img"
-      className="shrink-0"
-    >
-      {/* 외곽 */}
-      <rect x="2" y="5" width="20" height="14" rx="2" ry="2"
-        fill="none" stroke="currentColor" strokeWidth="1.5" />
-      {/* 하프라인 */}
-      <line x1="12" y1="5" x2="12" y2="19"
-        stroke="currentColor" strokeWidth="1.5" />
-      {/* 센터 서클 */}
-      <circle cx="12" cy="12" r="2.8" fill="none"
-        stroke="currentColor" strokeWidth="1.5" />
-      {/* 페널티 박스 간단 표시 (좌/우) */}
-      <rect x="2" y="8" width="3.5" height="8" fill="none"
-        stroke="currentColor" strokeWidth="1.2" />
-      <rect x="18.5" y="8" width="3.5" height="8" fill="none"
-        stroke="currentColor" strokeWidth="1.2" />
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" role="img" className="shrink-0">
+      <rect x="2" y="5" width="20" height="14" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <rect x="2" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <rect x="18.5" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2" />
     </svg>
   )
 }
@@ -55,7 +39,7 @@ function IconPitch({ size = 16 }) {
 export default function App() {
   // 'dashboard' | 'players' | 'planner' | 'stats' | 'formation'
   const [tab, setTab] = useState("dashboard")
-  const [db, setDb] = useState({ players: [], matches: [] })
+  const [db, setDb] = useState({ players: [], matches: [], visits: 0 })
   const [selectedPlayerId, setSelectedPlayerId] = useState(null)
   const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem("isAdmin") === "1")
 
@@ -76,15 +60,38 @@ export default function App() {
     notify("Admin 모드 해제")
   }
 
-  // 최초 로드 + 실시간 구독
+  // 최초 로드 + 실시간 구독 + 방문자 카운트(로컬 제외)
   useEffect(() => {
     let mounted = true
     ;(async () => {
       try {
         const playersFromDB = await listPlayers()
-        const shared = await loadDB() // { players:[], matches:[] }
+        const shared = await loadDB() // { players:[], matches:[], visits:number }
         if (!mounted) return
-        setDb({ players: playersFromDB, matches: shared.matches || [] })
+        setDb({
+          players: playersFromDB,
+          matches: shared.matches || [],
+          visits: typeof shared.visits === "number" ? shared.visits : 0,
+        })
+
+        // 🔒 로컬(개발) 환경은 카운트 제외
+        const host = (typeof window !== "undefined" && window.location && window.location.hostname) ? window.location.hostname : ""
+        const isLocalHost =
+          host === "localhost" ||
+          host === "127.0.0.1" ||
+          host === "::1" ||
+          (host && host.endsWith(".local"))
+
+        // 세션당 1회만 방문자 카운트 증가 (단, 로컬은 제외)
+        const key = "sfm_visit_logged"
+        const alreadyLogged = typeof sessionStorage !== "undefined" && sessionStorage.getItem(key)
+        if (!isLocalHost && !alreadyLogged) {
+          try {
+            if (typeof sessionStorage !== "undefined") sessionStorage.setItem(key, "1")
+          } catch {}
+          const nextVisits = (typeof shared.visits === "number" ? shared.visits : 0) + 1
+          await saveDB({ players: [], matches: shared.matches || [], visits: nextVisits })
+        }
       } catch (e) {
         console.error("[App] initial load failed", e)
       }
@@ -94,7 +101,11 @@ export default function App() {
       setDb(prev => ({ ...prev, players: list }))
     })
     const offDB = subscribeDB((next) => {
-      setDb(prev => ({ ...prev, matches: next.matches || [] }))
+      setDb(prev => ({
+        ...prev,
+        matches: next.matches || prev.matches || [],
+        visits: typeof next.visits === "number" ? next.visits : (prev.visits || 0),
+      }))
     })
 
     return () => { mounted = false; offPlayers?.(); offDB?.() }
@@ -102,6 +113,7 @@ export default function App() {
 
   const players = db.players || []
   const matches = db.matches || []
+  const visits  = typeof db.visits === "number" ? db.visits : 0
 
   // 대시보드 요약(간단)
   const totals = useMemo(() => {
@@ -162,14 +174,14 @@ export default function App() {
     if (!isAdmin) return notify("Admin만 가능합니다.")
     const next = [...(db.matches || []), match]
     setDb(prev => ({ ...prev, matches: next }))
-    saveDB({ players: [], matches: next })
+    saveDB({ players: [], matches: next, visits })
   }
 
   function handleDeleteMatch(id) {
     if (!isAdmin) return notify("Admin만 가능합니다.")
     const next = (db.matches || []).filter(m => m.id !== id)
     setDb(prev => ({ ...prev, matches: next }))
-    saveDB({ players: [], matches: next })
+    saveDB({ players: [], matches: next, visits })
     notify("매치를 삭제했습니다.")
   }
 
@@ -179,7 +191,7 @@ export default function App() {
       m.id === id ? { ...m, ...patch } : m
     )
     setDb(prev => ({ ...prev, matches: next }))
-    saveDB({ players: [], matches: next })
+    saveDB({ players: [], matches: next, visits })
     notify("업데이트되었습니다.")
   }
 
@@ -227,7 +239,7 @@ export default function App() {
               />
             )}
 
-            {/* ✅ 포메이션 보드는 회원에게도 공개 + 축구장 아이콘 적용 */}
+            {/* 회원에게도 공개 + 축구장 아이콘 */}
             <TabButton
               icon={<IconPitch size={16} />}
               label="포메이션 보드"
@@ -298,7 +310,7 @@ export default function App() {
         {tab === "formation" && (
           <FormationBoard
             players={players}
-            isAdmin={isAdmin} // 필요 시 내부에서 일부 버튼만 Admin 전용 처리 가능
+            isAdmin={isAdmin}
           />
         )}
 
@@ -312,7 +324,7 @@ export default function App() {
         )}
       </main>
 
-      {/* 푸터 - 도움말: 회원에게는 Admin 기능 항목 숨김 처리 */}
+      {/* 푸터 - 도움말(회원에게 Admin 기능 숨김) + Admin 전용 방문자 카운트 */}
       <footer className="mx-auto mt-10 max-w-6xl px-4 pb-8">
         <Card title="도움말">
           <ul className="list-disc pl-5 text-sm text-stone-600">
@@ -326,7 +338,15 @@ export default function App() {
               </>
             )}
           </ul>
+          {isAdmin && (
+            <div className="mt-3 text-xs text-stone-700">
+              👀 총 방문자: <b>{visits}</b> <span className="opacity-60"></span>
+            </div>
+          )}
         </Card>
+        <div className="mt-4 text-center text-[11px] text-stone-400">
+          Semihan Football Manager · v{import.meta.env.VITE_APP_VERSION} build({import.meta.env.VITE_APP_COMMIT})
+        </div>
       </footer>
     </div>
   )
@@ -337,11 +357,7 @@ function TabButton({ icon, label, active, onClick }) {
     <button
       onClick={onClick}
       className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm transition
-        ${
-          active
-            ? "bg-emerald-500 text-white shadow-sm"
-            : "text-stone-700 hover:bg-stone-200 active:bg-stone-300"
-        }`}
+        ${active ? "bg-emerald-500 text-white shadow-sm" : "text-stone-700 hover:bg-stone-200 active:bg-stone-300"}`}
       aria-pressed={active}
     >
       {icon}

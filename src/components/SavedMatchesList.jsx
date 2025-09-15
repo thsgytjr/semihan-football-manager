@@ -5,8 +5,9 @@ import { overall } from "../lib/players"
 import { hydrateMatch } from "../lib/match"
 import { formatMatchLabel } from "../lib/matchLabel"
 
-// ─────────────────────────────────────────────
-// 뱃지/스타일 유틸
+/* ────────────────────────────────────────────
+ * 뱃지/스타일 유틸
+ * ──────────────────────────────────────────── */
 function GuestBadge() {
   return (
     <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200">
@@ -18,21 +19,22 @@ function GuestBadge() {
 function kitForTeam(i) {
   const a = [
     { label: "화이트", headerClass: "bg-white text-stone-800 border-b border-stone-300" },
-    { label: "블랙", headerClass: "bg-stone-900 text-white border-b border-stone-900" },
-    { label: "블루", headerClass: "bg-blue-600 text-white border-b border-blue-700" },
-    { label: "레드", headerClass: "bg-red-600 text-white border-b border-red-700" },
-    { label: "그린", headerClass: "bg-emerald-600 text-white border-b border-emerald-700" },
-    { label: "퍼플", headerClass: "bg-violet-600 text-white border-b border-violet-700" },
+    { label: "블랙",   headerClass: "bg-stone-900 text-white border-b border-stone-900" },
+    { label: "블루",   headerClass: "bg-blue-600 text-white border-b border-blue-700" },
+    { label: "레드",   headerClass: "bg-red-600 text-white border-b border-red-700" },
+    { label: "그린",   headerClass: "bg-emerald-600 text-white border-b border-emerald-700" },
+    { label: "퍼플",   headerClass: "bg-violet-600 text-white border-b border-violet-700" },
     { label: "오렌지", headerClass: "bg-orange-500 text-white border-b border-orange-600" },
-    { label: "티얼", headerClass: "bg-teal-600 text-white border-b border-teal-700" },
-    { label: "핑크", headerClass: "bg-pink-600 text-white border-b border-pink-700" },
-    { label: "옐로", headerClass: "bg-yellow-400 text-stone-900 border-b border-yellow-500" },
+    { label: "티얼",   headerClass: "bg-teal-600 text-white border-b border-teal-700" },
+    { label: "핑크",   headerClass: "bg-pink-600 text-white border-b border-pink-700" },
+    { label: "옐로",   headerClass: "bg-yellow-400 text-stone-900 border-b border-yellow-500" },
   ]
   return a[i % a.length]
 }
 
-// ─────────────────────────────────────────────
-// 스냅샷/출석 도우미
+/* ────────────────────────────────────────────
+ * 스냅샷/출석 도우미
+ * ──────────────────────────────────────────── */
 const toStr = (v) => (v === null || v === undefined) ? "" : String(v)
 const isMember = (mem) => {
   const s = toStr(mem).trim().toLowerCase()
@@ -53,36 +55,75 @@ function notInMatchPlayers(players, snapshot2D) {
   return players.filter((p) => !inside.has(String(p.id)))
 }
 
-// 저장본에 fees가 없을 때(구버전 등) 멤버/게스트 단가 추정
+/* 장소 → 경기형식 라벨(9v9 / 11v11) */
+function deriveFormatByLocation(m) {
+  const preset = (m?.location?.preset || "").toLowerCase()
+  const name   = (m?.location?.name || "").toLowerCase()
+  if (preset === "indoor-soccer-zone" || name.includes("indoor soccer zone")) return "9v9"
+  if (preset === "coppell-west" || name.includes("coppell")) return "11v11"
+  return m?.mode || "" // 그 외는 기존값 유지
+}
+
+/* ────────────────────────────────────────────
+ * 요금 추정 (구버전 저장본 호환)
+ *  - “게스트는 멤버보다 항상 $2 더 낸다” 규칙 유지
+ *  - total = memberCount*m + guestCount*(m+2)를 만족하도록 m 계산
+ *  - 소수점은 반올림
+ * ──────────────────────────────────────────── */
 function deriveFeesFromSnapshot(m, players) {
-  if (m?.fees) return m.fees
-  const preset = m?.location?.preset
+  // 저장된 확정 fees가 있으면 그 값을 그대로 사용
+  if (m?.fees && typeof m.fees.memberFee === "number" && typeof m.fees.guestFee === "number") {
+    // 혹시 규칙이 안 맞아도 저장본을 우선
+    return m.fees
+  }
+
+  // 구장별 기본 총액 (필요시 프로젝트 룰에 맞게 조정 가능)
+  const preset = (m?.location?.preset || "").toLowerCase()
   const baseCost =
     preset === "indoor-soccer-zone" ? 230 :
     preset === "coppell-west"       ? 300 : 0
-  if (!baseCost) return { total: 0, memberFee: 0, guestFee: 0, premium: 1.2, _estimated: true }
 
+  // 인원 파악
   const ids = Array.isArray(m?.snapshot) && m.snapshot.length
     ? m.snapshot.flat()
     : (Array.isArray(m?.attendeeIds) ? m.attendeeIds : [])
   const byId = new Map(players.map(p => [String(p.id), p]))
   const attendees = ids.map(id => byId.get(String(id))).filter(Boolean)
+
   const memberCount = attendees.filter(p => isMember(p.membership)).length
-  const guestCount  = attendees.length - memberCount
-  const x = baseCost / (memberCount + guestCount || 1)
-  const memberFee = Math.round(x || 0)
-  const guestFee = memberFee + 2 // 게스트는 멤버 +$2
-  return { 
-    total: baseCost, 
-    memberFee, 
-    guestFee, 
-    premium: null,
-    _estimated: true 
+  const guestCount  = Math.max(0, attendees.length - memberCount)
+
+  // 인원/총액이 없으면 0 표시(추정)
+  if (!baseCost || attendees.length === 0) {
+    return { total: baseCost || 0, memberFee: 0, guestFee: 0, _estimated: true }
   }
+
+  // total = m*memberCount + (m+2)*guestCount
+  // => total = m*(memberCount + guestCount) + 2*guestCount
+  // => m = (total - 2*guestCount) / (memberCount + guestCount)
+  const denom = memberCount + guestCount
+  let mEach = (baseCost - 2 * guestCount) / (denom || 1)
+  // 반올림하여 달러 정수
+  let memberFee = Math.max(0, Math.round(mEach))
+  let guestFee  = memberFee + 2
+
+  // 반올림으로 인해 총액 차이 보정(±1~2$ 오차 범위만 보정)
+  let computedTotal = memberCount * memberFee + guestCount * guestFee
+  const diff = baseCost - computedTotal
+  if (diff !== 0) {
+    // 오차가 1~2달러면 멤버 요금에 흡수 (과도한 보정은 하지 않음)
+    const adjust = Math.max(-2, Math.min(2, diff))
+    memberFee = Math.max(0, memberFee + adjust)
+    guestFee  = memberFee + 2
+    computedTotal = memberCount * memberFee + guestCount * guestFee
+  }
+
+  return { total: baseCost, memberFee, guestFee, _estimated: true }
 }
 
-// ─────────────────────────────────────────────
-// 유튜브 링크 입력
+/* ────────────────────────────────────────────
+ * 유튜브 링크 입력
+ * ──────────────────────────────────────────── */
 function VideoAdder({ onAdd }){
   const [val, setVal] = useState("")
   return (
@@ -101,8 +142,9 @@ function VideoAdder({ onAdd }){
   )
 }
 
-// ─────────────────────────────────────────────
-// 빠른 출석 편집 바 (드래프트 전용) - 커스텀 드롭다운(아바타+이름)
+/* ────────────────────────────────────────────
+ * 빠른 출석 편집 바 (드래프트 전용)
+ * ──────────────────────────────────────────── */
 function QuickAttendanceEditor({ players, snapshot, onDraftChange }) {
   const [teamIdx, setTeamIdx] = useState(0)
   const [query, setQuery] = useState("")
@@ -126,11 +168,10 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange }) {
         const aw = as<0?999:as, bw = bs<0?999:bs
         return aw - bw || an.localeCompare(bn)
       })
-      .slice(0, 40) // 너무 길지 않게 40개 제한
+      .slice(0, 40)
   }, [candidates, query])
 
   useEffect(()=>{
-    // 외부 클릭 닫기
     const onDoc = (e)=>{
       if (!wrapRef.current) return
       if (!wrapRef.current.contains(e.target)) setOpen(false)
@@ -140,7 +181,6 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange }) {
   }, [])
 
   useEffect(()=>{
-    // 하이라이트 가시성 보장
     if (listRef.current && hi>=0) {
       const el = listRef.current.querySelector(`[data-idx="${hi}"]`)
       if (el) {
@@ -241,8 +281,9 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange }) {
   )
 }
 
-// ─────────────────────────────────────────────
-// 매치 카드 (선수 추가/제외는 초안 → 저장/취소로 확정)
+/* ────────────────────────────────────────────
+ * 매치 카드
+ * ──────────────────────────────────────────── */
 function MatchCard({
   m,
   players,
@@ -284,6 +325,8 @@ function MatchCard({
     [m, draftSnap, players]
   )
 
+  const formatLabel = deriveFormatByLocation(m)
+
   // 비디오 링크는 기존 동작(즉시 반영) 유지
   const addVideo = (url) => onUpdateMatch?.(m.id, { videos: [ ...(m.videos||[]), url ] })
   const removeVideo = (idx) => {
@@ -311,7 +354,7 @@ function MatchCard({
       {/* 헤더 */}
       <div className="mb-1 flex items-center justify-between">
         <div className="text-sm">
-          <b>{label}</b> · {m.mode} · {m.teamCount}팀
+          <b>{label}</b> · {formatLabel} · {m.teamCount}팀
           {m.location?.name ? <> · 장소 {m.location.name}</> : null}
           {dirty && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-800 border border-amber-200">수정됨(저장 필요)</span>}
         </div>
@@ -346,11 +389,14 @@ function MatchCard({
       <div className="mb-2 text-xs text-gray-800">
         💰 총액 ${fees?.total ?? 0}
         {typeof fees?.memberFee==="number" && typeof fees?.guestFee==="number" && (
-          <> · 멤버 ${fees.memberFee}/인 · 게스트 ${fees.guestFee}/인 <span className="opacity-70">(게스트 +$2){fees?._estimated && " · 추정"}</span></>
+          <>
+            {" "}· 멤버 ${fees.memberFee}/인 · 게스트 ${fees.guestFee}/인
+            {fees?._estimated && <span className="opacity-70"> · 추정</span>}
+          </>
         )}
       </div>
 
-      {/* 팀 카드 (선수 개별 제외는 초안만 수정) */}
+      {/* 팀 카드 */}
       <div className="grid grid-cols-2 gap-2 sm:gap-3">
         {draftTeams.map((list, i) => {
           const kit = kitForTeam(i)
@@ -466,8 +512,9 @@ function MatchCard({
   )
 }
 
-// ─────────────────────────────────────────────
-// 메인 리스트
+/* ────────────────────────────────────────────
+ * 메인 리스트
+ * ──────────────────────────────────────────── */
 export default function SavedMatchesList({
   matches = [],
   players = [],
