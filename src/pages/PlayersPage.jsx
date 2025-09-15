@@ -34,7 +34,6 @@ export default function PlayersPage({
   onReset,
   positionLabel = "선호 포지션",
   dropdownClassName,
-  // ✅ 정회원 배지 안내 문구 제거 (기본값 빈 문자열)
   badgeNote = "",
 }) {
   const [draft, setDraft] = useState(null)
@@ -51,7 +50,14 @@ export default function PlayersPage({
     [players]
   )
 
-  // ✅ 정회원 배지 로직 제거, 게스트만 표시용 badge 값 부여(필요 시)
+  // ✅ 카운트 계산 (총, 정회원, 게스트)
+  const counts = useMemo(() => {
+    const total = players.length
+    const guests = players.filter(p => String(p.membership).trim() === "게스트").length
+    const members = total - guests
+    return { total, guests, members }
+  }, [players])
+
   function ensureBadge(p) {
     const next = { ...p }
     next.badge = next.membership === "게스트" ? "guest" : ""
@@ -63,7 +69,6 @@ export default function PlayersPage({
     return n.length === 0 || n === "새 선수"
   }
 
-  // 스탯 변경
   function setStat(key, value) {
     setDraft(prev => {
       if (!prev) return prev
@@ -94,10 +99,10 @@ export default function PlayersPage({
   async function confirmDelete() {
     try {
       if (confirm.id) {
-        await onDelete(confirm.id) // App 쪽에서 성공 토스트 처리
+        await onDelete(confirm.id)
       }
     } catch (e) {
-      notify("삭제에 실패했습니다. 다시 시도해 주세요.") // 실패시에만 알림
+      notify("삭제에 실패했습니다. 다시 시도해 주세요.")
       console.error(e)
     } finally {
       setConfirm({ open: false, id: null, name: "" })
@@ -107,7 +112,6 @@ export default function PlayersPage({
     setConfirm({ open: false, id: null, name: "" })
   }
 
-  // ✅ 새 선수 추가 버튼 핸들러 (onCreate가 없을 때 폴백 드래프트 생성)
   function handleCreate() {
     if (typeof onCreate === "function") {
       onCreate()
@@ -126,12 +130,11 @@ export default function PlayersPage({
 
   return (
     <div className="relative grid grid-cols-1 gap-6 lg:grid-cols-3">
-      {/* ⭐ 선수 에디터 (최상단) */}
+      {/* 선수 에디터 */}
       <section className="lg:col-span-2">
         <div className="rounded-lg border border-stone-200 bg-white p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-base font-semibold">선수 편집</h3>
-            {/* ✅ 정회원 안내/로고 제거: badgeNote가 비어있으면 아무 것도 표시하지 않음 */}
             {badgeNote ? (
               <div className="flex items-center gap-2 text-xs text-stone-600">
                 {badgeNote}
@@ -152,7 +155,7 @@ export default function PlayersPage({
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-4">
-              {/* 1) 능력치 (최상단) + 6각형 레이더 */}
+              {/* 능력치 */}
               <div className="rounded-md border border-stone-200 p-3">
                 <div className="mb-2 flex items-center justify-between">
                   <div className="text-sm font-semibold text-stone-700">능력치</div>
@@ -167,7 +170,6 @@ export default function PlayersPage({
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  {/* 컨트롤 */}
                   <div className="order-2 md:order-1">
                     <div className="text-xs text-stone-500 mb-1">0–100 범위, 실시간 반영</div>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -197,14 +199,13 @@ export default function PlayersPage({
                     </div>
                   </div>
 
-                  {/* 레이더 */}
                   <div className="order-1 md:order-2">
                     <RadarHexagon size={260} stats={draft.stats} />
                   </div>
                 </div>
               </div>
 
-              {/* 2) 기본 정보 */}
+              {/* 기본 정보 */}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="md:col-span-2 flex items-center gap-3">
                   <InitialAvatar id={draft.id} name={draft.name} size={48} />
@@ -272,17 +273,13 @@ export default function PlayersPage({
         </div>
       </section>
 
-      {/* 선수 목록 (편집 아래쪽) */}
+      {/* 선수 목록 */}
       <section className="lg:col-span-1">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-lg font-semibold">선수 목록</h2>
-          {/* 오른쪽: 게스트 표기 + 새 선수 버튼 */}
           <div className="flex items-center gap-2">
             <div className="text-[11px] text-stone-500">
-              표기:{" "}
-              <span className="inline-flex items-center gap-1">
-                <GuestBadge /> 게스트
-              </span>
+              표기: <span className="inline-flex items-center gap-1"><GuestBadge /> 게스트</span>
             </div>
             <button
               onClick={handleCreate}
@@ -291,6 +288,13 @@ export default function PlayersPage({
               새 선수
             </button>
           </div>
+        </div>
+
+        {/* ✅ 카운트 표시 */}
+        <div className="mb-2 text-xs text-stone-600 flex gap-3">
+          <span>총 선수: <strong>{counts.total}</strong></span>
+          <span>정회원: <strong>{counts.members}</strong></span>
+          <span>게스트: <strong>{counts.guests}</strong></span>
         </div>
 
         <ul className="rounded-md border border-stone-200 bg-white divide-y divide-stone-200">
@@ -311,7 +315,6 @@ export default function PlayersPage({
                     <span className="inline-flex items-center rounded bg-stone-800 px-2 py-0.5 text-[11px] text-white">
                       OVR&nbsp;{overall(p)}
                     </span>
-                    {/* ✅ 게스트만 배지 */}
                     {isGuest && <GuestBadge />}
                   </div>
                   <div className="text-xs text-stone-500">
