@@ -200,7 +200,7 @@ export default function App() {
             {isAdmin && (
               <TabButton
                 icon={<LayoutDashboard size={16} />}
-                label="포메이션 보드 (Beta)"
+                label="포메이션 보드"
                 onClick={() => setTab("formation")}
                 active={tab === "formation"}
               />
@@ -287,7 +287,7 @@ export default function App() {
           <ul className="list-disc pl-5 text-sm text-stone-600">
             <li>대시보드: 저장된 매치 열람, 공격포인트(골/어시/경기수) 트래킹</li>
             <li>매치 플래너: 팀 배정, 포메이션 설정 (Admin)</li>
-            <li>포메이션 보드 (Beta): 체크한 선수만 보드에 표시 · 자동/수동 배치 (Admin)</li>
+            <li>포메이션 보드: 체크한 선수만 보드에 표시 · 자동/수동 배치 (Admin)</li>
             <li>기록 입력: 경기별 골/어시 기록 입력/수정 (Admin)</li>
           </ul>
         </Card>

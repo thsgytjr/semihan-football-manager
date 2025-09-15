@@ -1,5 +1,13 @@
 import React, { useEffect, useRef } from "react"
-import { DndContext, useDraggable, DragOverlay } from "@dnd-kit/core"
+import {
+  DndContext,
+  useDraggable,
+  DragOverlay,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core"
 import { CSS } from "@dnd-kit/utilities"
 import PitchLines from "../PitchLines"
 import InitialAvatar from "../InitialAvatar"
@@ -11,6 +19,12 @@ const pct = (v) => clamp(v, 0, 100)
 export default function FreePitch({ players = [], placed = [], setPlaced, height = 560 }) {
   const wrapRef = useRef(null)
   const safePlaced = Array.isArray(placed) ? placed : []
+
+  // ✅ 모바일 터치 안정화: TouchSensor + MouseSensor
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 0, tolerance: 8 } })
+  )
 
   useEffect(() => {
     const byId = new Map(safePlaced.map(p => [String(p.id), p]))
@@ -39,24 +53,40 @@ export default function FreePitch({ players = [], placed = [], setPlaced, height
   }
 
   return (
-    <div ref={wrapRef} className="relative rounded-xl overflow-hidden" style={{ height, background: "#0a7e2a" }}>
+    <div
+      ref={wrapRef}
+      className="relative rounded-xl overflow-hidden"
+      style={{ height, background: "#0a7e2a", touchAction: "none" }} // ✅ 터치 스크롤 간섭 방지
+    >
       <PitchLines />
-      <DndContext onDragEnd={onEnd}>
+      <DndContext sensors={sensors} onDragEnd={onEnd}>
         {safePlaced.map(p => <FieldDot key={p.id} data={p} />)}
         <DragOverlay />
       </DndContext>
-      <div className="absolute right-2 top-2 rounded bg-black/40 text-white text-[11px] px-2 py-1">필드 자유 배치 · GK 하단 존</div>
+      <div className="absolute right-2 top-2 rounded bg-black/40 text-white text-[11px] px-2 py-1">
+        필드 자유 배치 · GK 하단 존
+      </div>
     </div>
   )
 }
 
 function FieldDot({ data }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `pitch:${String(data.id)}` })
-  const style = { transform: CSS.Translate.toString(transform), left: `calc(${data.x}% - 18px)`, top: `calc(${data.y}% - 18px)` }
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    left: `calc(${data.x}% - 18px)`,
+    top: `calc(${data.y}% - 18px)`,
+    touchAction: "none", // ✅ 드래그 중 스크롤 방지
+  }
   return (
-    <div ref={setNodeRef} {...attributes} {...listeners}
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
       className={`absolute flex flex-col items-center ${isDragging ? "opacity-80" : ""}`}
-      style={style} title={`${data.name} (${data.role})`}>
+      style={style}
+      title={`${data.name} (${data.role})`}
+    >
       <InitialAvatar id={data.id} name={data.name} size={36} />
       <div className="mt-1 text-center text-xs text-white">
         <div className="font-semibold">{data.name}</div>

@@ -18,8 +18,11 @@ export default function FormationBoard({ players=[], isAdmin=false }){
   const [selectedIds, setSelectedIds] = useState([])
   // 현재 포메이션
   const [formation, setFormation] = useState("4-3-3")
-  // 보드 위 배치 (배열: {id, name, pos, x, y, ...})
+  // 보드 위 배치
   const [placed, setPlaced] = useState([])
+  // ✅ 리스트 오픈 상태 (필요할 때만 렌더)
+  const [listOpen, setListOpen] = useState(false)
+  const [query, setQuery] = useState("")
 
   // 파생: 선택된 선수 객체 배열
   const selectedPlayers = useMemo(
@@ -27,7 +30,7 @@ export default function FormationBoard({ players=[], isAdmin=false }){
     [players, selectedIds]
   )
 
-  // 추천 포메이션 버튼에서 사용
+  // 추천 포메이션
   const autoRecommended = useMemo(() => {
     return recommendFormation({
       count: selectedPlayers.length,
@@ -44,7 +47,7 @@ export default function FormationBoard({ players=[], isAdmin=false }){
   const allSelected = selectedIds.length === players.length && players.length > 0
   const toggleAll = () => setSelectedIds(allSelected ? [] : players.map(p => p.id))
 
-  // 선택 변경 시, 기존 배치를 최대한 보존하면서 신규/삭제 반영
+  // 선택 변경 시 배치 보존
   useEffect(() => {
     setPlaced(prev => {
       const byId = new Map(prev.map(p => [String(p.id), p]))
@@ -52,7 +55,6 @@ export default function FormationBoard({ players=[], isAdmin=false }){
         players: selectedPlayers,
         formation: formation || "4-3-3",
       })
-      // 기존 좌표가 있으면 유지
       return base.map(p => byId.get(String(p.id)) || p)
     })
   }, [selectedPlayers, formation])
@@ -62,25 +64,37 @@ export default function FormationBoard({ players=[], isAdmin=false }){
     setPlaced(assignToFormation({ players: selectedPlayers, formation }))
   }
 
-  // 추천 포메이션으로 변경 + 자동 배치
+  // 추천 포메이션 적용
   const useRecommended = () => {
     const next = autoRecommended || "4-3-3"
     setFormation(next)
     setPlaced(assignToFormation({ players: selectedPlayers, formation: next }))
   }
 
-  // 배치 초기화(보드 비우기)
+  // 초기화
   const clearBoard = () => {
     setSelectedIds([])
     setPlaced([])
   }
 
-  const showOVR = isAdmin // Admin이면 OVR 표시
+  const showOVR = isAdmin
+
+  // ✅ 검색된 리스트 (리스트 열렸을 때만 계산)
+  const filtered = useMemo(() => {
+    if (!listOpen) return []
+    const q = query.trim().toLowerCase()
+    if (!q) return players
+    return players.filter(p =>
+      String(p.name||"").toLowerCase().includes(q) ||
+      String(p.position||p.pos||"").toLowerCase().includes(q)
+    )
+  }, [listOpen, query, players])
 
   return (
     <div className="grid gap-4">
+      {/* 상단 툴바 (포메이션/자동/추천/비우기) */}
       <Card
-        title="선수 선택"
+        title="포메이션 보드"
         right={
           <div className="flex items-center gap-2 text-[11px] text-gray-500">
             표기: <span className="inline-flex items-center gap-1"><GuestBadge /> 게스트</span>
@@ -88,13 +102,6 @@ export default function FormationBoard({ players=[], isAdmin=false }){
         }
       >
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <button
-            onClick={toggleAll}
-            className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50"
-          >
-            {allSelected ? "모두 해제" : "모두 선택"}
-          </button>
-
           <div className="ml-auto flex items-center gap-2 text-sm">
             <label className="text-gray-600">포메이션</label>
             <select
@@ -132,54 +139,100 @@ export default function FormationBoard({ players=[], isAdmin=false }){
           </div>
         </div>
 
-        {/* 선수 체크리스트 */}
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
-          {players.map(p => {
-            const mem = String(p.membership || "").trim()
-            const isMember = mem === "member" || mem.includes("정회원")
-            const checked = selectedIds.includes(p.id)
-            return (
-              <label
-                key={p.id}
-                className={`flex items-center gap-2 rounded border px-3 py-2 cursor-pointer ${
-                  checked ? "border-emerald-400 bg-emerald-50" : "border-gray-200 bg-white hover:bg-gray-50"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  onChange={() => toggle(p.id)}
-                />
-                <InitialAvatar id={p.id} name={p.name} size={24} />
-                <span className="text-sm flex-1 whitespace-normal break-words">
-                  {p.name} {(p.position||p.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}
-                </span>
-                {!isMember && <GuestBadge />}
-                {showOVR && (p.position||p.pos)!=='GK' && (
-                  <span className="text-xs text-gray-500 shrink-0">OVR {p.ovr ?? overall(p)}</span>
-                )}
-              </label>
-            )
-          })}
+        {/* 필드 + 플로팅 버튼 */}
+        <div className="relative">
+          <FreePitch
+            players={selectedPlayers}
+            placed={placed}
+            setPlaced={(nextOrUpdater) => {
+              setPlaced(prev => {
+                const resolved = typeof nextOrUpdater === "function" ? nextOrUpdater(prev) : nextOrUpdater
+                return Array.isArray(resolved) ? resolved : prev
+              })
+            }}
+            height={680}
+          />
+
+          {/* ✅ 필드 위 반투명 + 버튼 (리스트 열기) */}
+          <button
+            onClick={() => setListOpen(true)}
+            className="absolute left-3 top-3 rounded-full bg-white/70 backdrop-blur px-3 py-2 text-xl leading-none shadow hover:bg-white"
+            aria-label="선수 추가"
+            title="선수 추가"
+          >
+            +
+          </button>
         </div>
       </Card>
 
-      <Card title="포메이션 보드 (Beta)">
-        <div className="mb-2 text-xs text-gray-500">
-          드래그로 자유 배치 가능 · GK는 골키퍼 존(80~98%)만 이동 가능
-        </div>
-        <FreePitch
-          players={selectedPlayers}
-          placed={placed}
-          setPlaced={(nextOrUpdater) => {
-            setPlaced(prev => {
-              const resolved = typeof nextOrUpdater === "function" ? nextOrUpdater(prev) : nextOrUpdater
-              return Array.isArray(resolved) ? resolved : prev
-            })
-          }}
-          height={680}
-        />
-      </Card>
+      {/* ✅ 하단 시트(모달): 선수 체크리스트 (필요할 때만 렌더) */}
+      {listOpen && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-40"
+            onClick={() => setListOpen(false)}
+          />
+          <div className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-white shadow-xl max-h-[75vh] overflow-auto">
+            <div className="p-3 border-b sticky top-0 bg-white">
+              <div className="flex items-center gap-2">
+                <input
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder="선수/포지션 검색"
+                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
+                />
+                <button
+                  onClick={toggleAll}
+                  className="shrink-0 rounded border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50"
+                >
+                  {allSelected ? "모두 해제" : "모두 선택"}
+                </button>
+                <button
+                  onClick={() => setListOpen(false)}
+                  className="shrink-0 rounded bg-emerald-500 px-3 py-2 text-sm font-semibold text-white"
+                >
+                  완료
+                </button>
+              </div>
+            </div>
+
+            <div className="p-3 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
+              {filtered.map(p => {
+                const mem = String(p.membership || "").trim()
+                const isMember = mem === "member" || mem.includes("정회원")
+                const checked = selectedIds.includes(p.id)
+                return (
+                  <label
+                    key={p.id}
+                    className={`flex items-center gap-2 rounded border px-3 py-2 cursor-pointer ${
+                      checked ? "border-emerald-400 bg-emerald-50" : "border-gray-200 bg-white hover:bg-gray-50"
+                    }`}
+                    onClick={() => toggle(p.id)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggle(p.id)}
+                      className="mr-1"
+                    />
+                    <InitialAvatar id={p.id} name={p.name} size={24} />
+                    <span className="text-sm flex-1 whitespace-normal break-words">
+                      {p.name} {(p.position||p.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}
+                    </span>
+                    {!isMember && <GuestBadge />}
+                    {showOVR && (p.position||p.pos)!=='GK' && (
+                      <span className="text-xs text-gray-500 shrink-0">OVR {p.ovr ?? overall(p)}</span>
+                    )}
+                  </label>
+                )
+              })}
+              {filtered.length === 0 && (
+                <div className="text-center text-sm text-gray-500 py-6">검색 결과가 없습니다.</div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }
