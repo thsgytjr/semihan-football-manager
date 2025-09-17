@@ -3,6 +3,19 @@ import Card from "../components/Card"
 import InitialAvatar from "../components/InitialAvatar"
 import FreePitch from "../components/pitch/FreePitch"
 
+/**
+ * 새 기능 요약
+ * - + 버튼 → 하단 시트(모달)
+ * - 모달에 "팀 불러오기" 패널 (fetchMatchTeams prop 제공 시 표시)
+ * - 매치 선택 → 팀 버튼 클릭하면 해당 팀 선수들이 자동 선택되어 보드에 배치
+ *
+ * 요구 prop:
+ *   fetchMatchTeams?: () => Promise<Array<{
+ *     id: string, label?: string,
+ *     teams: Array<{ name: string, playerIds: (string|number)[] }>
+ *   }>>
+ */
+
 function GuestBadge(){
   return (
     <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200">
@@ -11,16 +24,17 @@ function GuestBadge(){
   )
 }
 
-// 선택된 선수 중 새로 추가되는 선수는 하단(약 y=90%)에 좌우로 간단 배치
+const clamp = (n, min, max) => Math.max(min, Math.min(max, n))
+const pct = (v) => clamp(v, 0, 100)
+
+// 새로 선택된 선수는 하단(약 y=90%)에 간단 배치
 function appendNewlySelected(basePlaced, selectedPlayers){
   const byId = new Map(basePlaced.map(p => [String(p.id), p]))
   const next = [...basePlaced]
-  let newIdx = 0
   const newOnes = selectedPlayers.filter(p => !byId.has(String(p.id)))
   const totalNew = newOnes.length
 
   newOnes.forEach((p, i) => {
-    // 하단에 균등 간격 배치 (포메이션과 무관, 화면 진입용 기본 위치)
     const x = 50 + ((i - (totalNew - 1)/2) * 8) // 8% 간격
     const y = 90
     next.push({
@@ -30,29 +44,34 @@ function appendNewlySelected(basePlaced, selectedPlayers){
       x: pct(x),
       y: pct(y),
     })
-    newIdx++
   })
 
-  // 선택 해제된 선수는 제거
   const selIdSet = new Set(selectedPlayers.map(p => String(p.id)))
   return next.filter(p => selIdSet.has(String(p.id)))
 }
 
-const clamp = (n, min, max) => Math.max(min, Math.min(max, n))
-const pct = (v) => clamp(v, 0, 100)
-
-export default function FormationBoard({ players = [], isAdmin = false }){
+export default function FormationBoard({
+  players = [],
+  isAdmin = false,
+  fetchMatchTeams,      // ⬅️ 추가: 팀/매치 로더 (옵션)
+}){
   const [selectedIds, setSelectedIds] = useState([])
   const [placed, setPlaced] = useState([])
   const [listOpen, setListOpen] = useState(false)
   const [query, setQuery] = useState("")
+
+  // 팀 불러오기 패널 상태
+  const [teamsPanelOpen, setTeamsPanelOpen] = useState(false)
+  const [loadingTeams, setLoadingTeams] = useState(false)
+  const [loadError, setLoadError] = useState("")
+  const [matches, setMatches] = useState([])    // [{id,label,teams:[{name,playerIds}]}]
+  const [activeMatchId, setActiveMatchId] = useState("")
 
   const selectedPlayers = useMemo(
     () => players.filter(p => selectedIds.includes(p.id)),
     [players, selectedIds]
   )
 
-  // 선택 변경 시: 기존 배치 유지 + 새로 선택된 선수만 하단에 간단 배치
   useEffect(() => {
     setPlaced(prev => appendNewlySelected(Array.isArray(prev) ? prev : [], selectedPlayers))
   }, [selectedPlayers])
@@ -74,6 +93,49 @@ export default function FormationBoard({ players = [], isAdmin = false }){
     )
   }, [listOpen, query, players])
 
+  // 팀 불러오기: 매치 목록 로드
+  const openTeamsPanel = async () => {
+    if (!fetchMatchTeams) return
+    setTeamsPanelOpen((prev) => {
+      const next = !prev
+      if (next && matches.length === 0 && !loadingTeams) {
+        void loadMatches()
+      }
+      return next
+    })
+  }
+
+  const loadMatches = async () => {
+    if (!fetchMatchTeams) return
+    setLoadingTeams(true)
+    setLoadError("")
+    try {
+      const data = await fetchMatchTeams()
+      const norm = Array.isArray(data) ? data : []
+      setMatches(norm)
+      if (norm.length > 0){
+        setActiveMatchId(String(norm[0].id))
+      }
+    } catch (err) {
+      console.error(err)
+      setLoadError("매치 목록을 불러오지 못했습니다.")
+    } finally {
+      setLoadingTeams(false)
+    }
+  }
+
+  const activeMatch = useMemo(
+    () => matches.find(m => String(m.id) === String(activeMatchId)),
+    [matches, activeMatchId]
+  )
+
+  const importTeamToBoard = (teamPlayerIds = []) => {
+    const idSet = new Set(teamPlayerIds.map(String))
+    const validIds = players.filter(p => idSet.has(String(p.id))).map(p => p.id)
+    setSelectedIds(validIds)
+    // 모달은 닫지 않음(사용자가 세부 조정 후 완료로 닫도록)
+  }
+
   return (
     <div className="grid gap-4">
       <Card
@@ -84,9 +146,7 @@ export default function FormationBoard({ players = [], isAdmin = false }){
           </div>
         }
       >
-        {/* 포메이션/자동배치/추천 버튼 전부 제거됨 */}
-
-        {/* 필드 + 플로팅 버튼 */}
+        {/* 필드 + 플로팅 + 버튼 */}
         <div className="relative">
           <FreePitch
             players={selectedPlayers}
@@ -100,7 +160,6 @@ export default function FormationBoard({ players = [], isAdmin = false }){
             height={680}
           />
 
-          {/* 필드 위 반투명 + 버튼 (리스트 열기) */}
           <button
             onClick={() => setListOpen(true)}
             className="absolute left-3 top-3 rounded-full bg-white/70 backdrop-blur px-3 py-2 text-xl leading-none shadow hover:bg-white"
@@ -112,37 +171,112 @@ export default function FormationBoard({ players = [], isAdmin = false }){
         </div>
       </Card>
 
-      {/* 하단 시트(모달): 선수 체크리스트 */}
+      {/* 하단 모달 */}
       {listOpen && (
         <>
           <div
             className="fixed inset-0 bg-black/40 z-40"
             onClick={() => setListOpen(false)}
           />
-          <div className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-white shadow-xl max-h-[75vh] overflow-auto">
+          <div className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-white shadow-xl max-h-[80vh] overflow-auto">
             <div className="p-3 border-b sticky top-0 bg-white">
-              <div className="flex items-center gap-2">
-                <input
-                  value={query}
-                  onChange={e => setQuery(e.target.value)}
-                  placeholder="선수/포지션 검색"
-                  className="w-full rounded border border-gray-300 px-3 py-2 text-sm"
-                />
-                <button
-                  onClick={toggleAll}
-                  className="shrink-0 rounded border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50"
-                >
-                  {allSelected ? "모두 해제" : "모두 선택"}
-                </button>
-                <button
-                  onClick={() => setListOpen(false)}
-                  className="shrink-0 rounded bg-emerald-500 px-3 py-2 text-sm font-semibold text-white"
-                >
-                  완료
-                </button>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <input
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    placeholder="선수/포지션 검색"
+                    className="w-[240px] rounded border border-gray-300 px-3 py-2 text-sm"
+                  />
+                  <button
+                    onClick={toggleAll}
+                    className="shrink-0 rounded border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50"
+                  >
+                    {allSelected ? "모두 해제" : "모두 선택"}
+                  </button>
+
+                  {/* 팀 불러오기 토글 (fetchMatchTeams가 있을 때만) */}
+                  {typeof fetchMatchTeams === "function" && (
+                    <button
+                      onClick={openTeamsPanel}
+                      className={`shrink-0 rounded px-3 py-2 text-sm font-semibold border ${teamsPanelOpen ? "bg-amber-100 border-amber-300" : "bg-amber-50 hover:bg-amber-100 border-amber-200"}`}
+                      title="매치 히스토리에서 팀을 선택하여 불러오기"
+                    >
+                      팀 불러오기
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setListOpen(false)}
+                    className="shrink-0 rounded bg-emerald-500 px-3 py-2 text-sm font-semibold text-white"
+                  >
+                    완료
+                  </button>
+                </div>
               </div>
+
+              {/* 팀 불러오기 패널 */}
+              {teamsPanelOpen && (
+                <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                  {loadingTeams && (
+                    <div className="text-sm text-gray-600">매치 목록을 불러오는 중…</div>
+                  )}
+                  {!!loadError && (
+                    <div className="text-sm text-rose-600">{loadError}</div>
+                  )}
+                  {!loadingTeams && !loadError && (
+                    <>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <label className="text-xs text-gray-500">매치 선택</label>
+                        <select
+                          value={activeMatchId}
+                          onChange={(e) => setActiveMatchId(e.target.value)}
+                          className="rounded border border-gray-300 px-2 py-1 text-sm w-full sm:w-[260px]"
+                        >
+                          {matches.map(m => (
+                            <option key={m.id} value={String(m.id)}>
+                              {m.label || m.id}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={loadMatches}
+                          className="rounded border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50"
+                          title="목록 새로고침"
+                        >
+                          새로고침
+                        </button>
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {activeMatch?.teams?.length ? (
+                          activeMatch.teams.map((t, idx) => (
+                            <button
+                              key={idx}
+                              onClick={() => importTeamToBoard(t.playerIds || [])}
+                              className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold hover:bg-emerald-100"
+                              title="이 팀의 선수 전원을 포메이션 보드에 올리기"
+                            >
+                              {t.name || `Team ${idx+1}`} 불러오기
+                            </button>
+                          ))
+                        ) : (
+                          <div className="text-xs text-gray-500">선택된 매치에 팀 정보가 없습니다.</div>
+                        )}
+                      </div>
+
+                      <p className="mt-2 text-[11px] text-gray-500">
+                        팀을 누르면 해당 팀의 선수들이 자동 선택됩니다. 필요 시 검색/체크로 조정 후 <strong>완료</strong>를 눌러 닫아주세요.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
+            {/* 선수 체크리스트 */}
             <div className="p-3 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
               {filtered.map(p => {
                 const mem = String(p.membership || "").trim()
