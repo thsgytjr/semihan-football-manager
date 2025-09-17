@@ -10,6 +10,7 @@ const isMember = (m)=>{ const s=S(m).trim().toLowerCase(); return s==="member"||
 const GuestBadge = ()=>(
   <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200">G</span>
 )
+
 const kitForTeam=(i)=>[
   {label:"화이트",headerClass:"bg-white text-stone-800 border-b border-stone-300"},
   {label:"블랙",headerClass:"bg-stone-900 text-white border-b border-stone-900"},
@@ -38,7 +39,7 @@ const deriveFormatByLocation=(m)=>{
   return m?.mode||""
 }
 
-/* 요금 계산: 게스트 없으면 균등 분배, 있으면 +$2 규칙 */
+/* 요금 계산: 게스트 없으면 균등, 있으면 +$2 규칙 */
 function deriveFeesFromSnapshot(m, players){
   const ids=Array.isArray(m?.snapshot)&&m.snapshot.length?m.snapshot.flat():Array.isArray(m?.attendeeIds)?m.attendeeIds:[]
   const map=new Map(players.map(p=>[String(p.id),p])), atts=ids.map(id=>map.get(String(id))).filter(Boolean)
@@ -153,7 +154,6 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
   const resetDraft=()=>{ setDraftSnap(initialSnap); setDirty(false) }
   const saveDraft=()=>{ onUpdateMatch?.(m.id,{snapshot:draftSnap,attendeeIds:draftSnap.flat()}); setDirty(false) }
 
-  // ✅ 매치 카드 안의 팀 테이블을 "팀 수"에 맞춰 가로로 꽉 채우기 (최대 4열)
   const teamCols = Math.max(1, Math.min(4, draftTeams.length))
   const gridStyle = { gridTemplateColumns: `repeat(${teamCols}, minmax(0, 1fr))` }
 
@@ -175,7 +175,6 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
         )}
       </div>
 
-      {/* ⬇️ 여기: 팀 수에 맞춰 1~4열 그리드로 자동 배치 */}
       <div className="grid gap-2 sm:gap-3" style={gridStyle}>
         {draftTeams.map((list,i)=>{
           const kit=kitForTeam(i), nonGK=list.filter(p=>(p.position||p.pos)!=="GK")
@@ -199,11 +198,11 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                         {!member&&<GuestBadge/>}
                       </span>
                       <span className="flex items-center gap-2 shrink-0">
-                        {isAdmin&&showTeamOVRForAdmin&&!hideOVR&&(p.position||p.pos)!=="GK"&&<span className="text-gray-500">OVR {p.ovr??overall(p)}</span>}
+                        {isAdmin&&showTeamOVRForAdmin&&!hideOVR&&(p.position||p.pos)!=="GK"&&<span className="text-gray-500" data-ovr>OVR {p.ovr??overall(p)}</span>}
                         {isAdmin&&(
                           <button className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-100"
                             title="이 팀에서 제외 (저장 전 초안)"
-                            onClick={()=>setSnap(draftSnap.map((arr,idx)=>idx===i?arr.filter(id=>String(id)!==String(p.id)):arr))}
+                            onClick={()=>setDraftSnap(draftSnap.map((arr,idx)=>idx===i?arr.filter(id=>String(id)!==String(p.id)):arr))}
                           >제외</button>
                         )}
                       </span>
@@ -217,7 +216,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
         })}
       </div>
 
-      {isAdmin&&<QuickAttendanceEditor players={players} snapshot={draftSnap} onDraftChange={setSnap}/>}
+      {isAdmin&&<QuickAttendanceEditor players={players} snapshot={draftSnap} onDraftChange={setDraftSnap}/>}
       {isAdmin&&dirty&&(
         <div className="mt-3 flex items-center justify-end gap-2">
           <button className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm" onClick={resetDraft} title="변경사항 취소">취소</button>
@@ -243,7 +242,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
   )
 }
 
-/* 유틸: 최신순 정렬용 날짜 파서 */
+/* 최신순 정렬용 날짜 파서 */
 function _ts(m){
   const cand = m?.dateISO || m?.dateIso || m?.dateiso || m?.date || m?.dateStr
   const t = cand ? new Date(cand).getTime() : NaN
@@ -260,25 +259,23 @@ export default function SavedMatchesList({
   onLoadToPlanner,
   onDeleteMatch,
   onUpdateMatch,
-  showTeamOVRForAdmin=true,
+  showTeamOVRForAdmin=false,
   hideOVR=false
 }){
-  if(!matches?.length) return <div className="text-sm text-gray-500">저장된 매치가 없습니다.</div>
-
-  // ✅ 최신 매치가 항상 위로 오도록 정렬 (dateISO 내림차순, fallback로 id/생성순은 유지)
-  const sorted = useMemo(()=>{
-    // 동일 타임스탬프일 땐 원래 입력 순서 유지 (안정 정렬 흉내)
-    return matches.slice().sort((a,b)=>_ts(b)-_ts(a))
-  },[matches])
-
+  const ordered = useMemo(()=>matches.slice().sort((a,b)=>_ts(b)-_ts(a)),[matches])
   return (
-    <ul className="space-y-2">
-      {sorted.map(m=>(
+    <ul className="grid gap-3">
+      {ordered.map(m=>(
         <MatchCard key={m.id} m={m} players={players} isAdmin={isAdmin}
-          enableLoadToPlanner={enableLoadToPlanner} onLoadToPlanner={onLoadToPlanner}
-          onDeleteMatch={onDeleteMatch} onUpdateMatch={onUpdateMatch}
-          showTeamOVRForAdmin={showTeamOVRForAdmin} hideOVR={hideOVR}/>
+          enableLoadToPlanner={enableLoadToPlanner}
+          onLoadToPlanner={onLoadToPlanner}
+          onDeleteMatch={onDeleteMatch}
+          onUpdateMatch={onUpdateMatch}
+          showTeamOVRForAdmin={showTeamOVRForAdmin}
+          hideOVR={hideOVR}
+        />
       ))}
+      {ordered.length===0&&<li className="text-sm text-stone-500">표시할 매치가 없습니다.</li>}
     </ul>
   )
 }
