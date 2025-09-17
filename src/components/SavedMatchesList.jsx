@@ -22,6 +22,7 @@ const kitForTeam=(i)=>[
   {label:"핑크",headerClass:"bg-pink-600 text-white border-b border-pink-700"},
   {label:"옐로",headerClass:"bg-yellow-400 text-stone-900 border-b border-yellow-500"},
 ][i%10]
+
 const normalizeSnapshot=(m,teams)=>{
   const snap=Array.isArray(m?.snapshot)?m.snapshot:null
   return (snap&&snap.length===teams.length)?snap.map(a=>Array.isArray(a)?a.slice():[]):teams.map(list=>list.map(p=>p.id))
@@ -152,6 +153,10 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
   const resetDraft=()=>{ setDraftSnap(initialSnap); setDirty(false) }
   const saveDraft=()=>{ onUpdateMatch?.(m.id,{snapshot:draftSnap,attendeeIds:draftSnap.flat()}); setDirty(false) }
 
+  // ✅ 매치 카드 안의 팀 테이블을 "팀 수"에 맞춰 가로로 꽉 채우기 (최대 4열)
+  const teamCols = Math.max(1, Math.min(4, draftTeams.length))
+  const gridStyle = { gridTemplateColumns: `repeat(${teamCols}, minmax(0, 1fr))` }
+
   return (
     <li className="rounded border border-gray-200 bg-white p-3">
       <div className="mb-1 flex items-center justify-between">
@@ -170,7 +175,8 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-2 sm:gap-3">
+      {/* ⬇️ 여기: 팀 수에 맞춰 1~4열 그리드로 자동 배치 */}
+      <div className="grid gap-2 sm:gap-3" style={gridStyle}>
         {draftTeams.map((list,i)=>{
           const kit=kitForTeam(i), nonGK=list.filter(p=>(p.position||p.pos)!=="GK")
           const sum=nonGK.reduce((a,p)=>a+(p.ovr??overall(p)),0), avg=nonGK.length?Math.round(sum/nonGK.length):0
@@ -237,12 +243,37 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
   )
 }
 
+/* 유틸: 최신순 정렬용 날짜 파서 */
+function _ts(m){
+  const cand = m?.dateISO || m?.dateIso || m?.dateiso || m?.date || m?.dateStr
+  const t = cand ? new Date(cand).getTime() : NaN
+  if(!Number.isFinite(t)) return 0
+  return t
+}
+
 /* 메인 리스트 */
-export default function SavedMatchesList({ matches=[], players=[], isAdmin=false, enableLoadToPlanner=false, onLoadToPlanner, onDeleteMatch, onUpdateMatch, showTeamOVRForAdmin=true, hideOVR=false }){
+export default function SavedMatchesList({
+  matches=[],
+  players=[],
+  isAdmin=false,
+  enableLoadToPlanner=false,
+  onLoadToPlanner,
+  onDeleteMatch,
+  onUpdateMatch,
+  showTeamOVRForAdmin=true,
+  hideOVR=false
+}){
   if(!matches?.length) return <div className="text-sm text-gray-500">저장된 매치가 없습니다.</div>
+
+  // ✅ 최신 매치가 항상 위로 오도록 정렬 (dateISO 내림차순, fallback로 id/생성순은 유지)
+  const sorted = useMemo(()=>{
+    // 동일 타임스탬프일 땐 원래 입력 순서 유지 (안정 정렬 흉내)
+    return matches.slice().sort((a,b)=>_ts(b)-_ts(a))
+  },[matches])
+
   return (
     <ul className="space-y-2">
-      {matches.map(m=>(
+      {sorted.map(m=>(
         <MatchCard key={m.id} m={m} players={players} isAdmin={isAdmin}
           enableLoadToPlanner={enableLoadToPlanner} onLoadToPlanner={onLoadToPlanner}
           onDeleteMatch={onDeleteMatch} onUpdateMatch={onUpdateMatch}
