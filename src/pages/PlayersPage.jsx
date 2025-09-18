@@ -31,7 +31,7 @@ function PosChip({ pos }) {
     : pos === "MF"
     ? "bg-emerald-100 text-emerald-800"
     : pos === "FW"
-    ? "bg-rose-100 text-rose-800"
+    ? "bg-purple-100 text-purple-800"
     : "bg-stone-100 text-stone-700"
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-[2px] text-[11px] ${cls}`}>

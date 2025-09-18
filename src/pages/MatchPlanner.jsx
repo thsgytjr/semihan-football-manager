@@ -216,7 +216,7 @@ function PlayerRow({player,showOVR}){
             isGK ? 'bg-amber-100 text-amber-800'
                  : pos==='DF' ? 'bg-blue-100 text-blue-800'
                  : pos==='MF' ? 'bg-emerald-100 text-emerald-800'
-                 : pos==='FW' ? 'bg-rose-100 text-rose-800'
+                 : pos==='FW' ? 'bg-purple-100 text-purple-800'
                  : 'bg-stone-100 text-stone-700'
           }`}
         >
@@ -253,7 +253,7 @@ function DragGhost({player,showOVR}){if(!player)return null;const pos=positionGr
       <InitialAvatar id={player.id} name={player.name} size={22}/>
       <span className="truncate">{player.name}</span>
       {!member&&<GuestBadge/>}
-      <span className={`ml-1 inline-flex items-center rounded-full px-2 py-[2px] text-[11px] ${isGK?'bg-amber-100 text-amber-800':pos==='DF'?'bg-blue-100 text-blue-800':pos==='MF'?'bg-emerald-100 text-emerald-800':pos==='FW'?'bg-rose-100 text-rose-800':'bg-stone-100 text-stone-700'}`}>{pos}</span>
+      <span className={`ml-1 inline-flex items-center rounded-full px-2 py-[2px] text-[11px] ${isGK?'bg-amber-100 text-amber-800':pos==='DF'?'bg-blue-100 text-blue-800':pos==='MF'?'bg-emerald-100 text-emerald-800':pos==='FW'?'bg-purple-100 text-purple-800':'bg-stone-100 text-stone-700'}`}>{pos}</span>
       {showOVR&&!isGK&&<span className="text-xs text-gray-600">OVR {ovrVal}</span>}
     </div>
   </div>
