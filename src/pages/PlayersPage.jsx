@@ -95,6 +95,10 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
     }
   }
 
+  // 실시간 OVR 계산
+  const liveOVR = overall(draft) ?? 0
+  const isGuest = S(draft.membership).includes("게스트")
+
   return (
     <div
       className="fixed inset-0 z-50 bg-black/45 flex items-end md:items-center justify-center p-0 md:p-4"
@@ -113,13 +117,22 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
               <h3 className="font-semibold">선수 편집</h3>
             </div>
             <div className="flex items-center gap-2 text-[11px] text-stone-500">
-              <span className="inline-flex items-center gap-1"><GuestBadge /> 게스트</span>
+              {/* OVR 표시 추가 */}
+              <span className="inline-flex items-center rounded bg-stone-800 px-2 py-1 text-white">
+                OVR&nbsp;{liveOVR}
+              </span>
+              {/* 게스트 표기(선택) */}
+              {isGuest && (
+                <span className="inline-flex items-center gap-1">
+                  <GuestBadge /> 게스트
+                </span>
+              )}
               <button className="ml-2 text-stone-500 hover:text-stone-800" onClick={onClose} aria-label="닫기">✕</button>
             </div>
           </div>
         </div>
 
-        {/* 본문: 스크롤 영역 (푸터 높이만큼 하단 패딩 추가) */}
+        {/* 본문: 스크롤 영역 */}
         <div className="flex-1 overflow-y-auto px-4 py-4 pb-28 md:pb-4">
           <div className="grid gap-4 md:grid-cols-2">
             {/* 좌: 레이더 + 슬라이더 */}
@@ -207,7 +220,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
           </div>
         </div>
 
-        {/* 푸터: sticky bottom + 안전영역 패딩 + 최소 높이 */}
+        {/* 푸터 */}
         <div className="sticky bottom-0 z-10 px-4 pt-3 pb-3 border-t border-stone-200 bg-white
                         min-h-[60px] pb-[env(safe-area-inset-bottom)]">
           <div className="flex items-center justify-end gap-2">
@@ -259,8 +272,18 @@ export default function PlayersPage({
     return { total, members, guests }
   }, [players])
 
+  // 새 선수 클릭 시 즉시 편집 모달 열기 (신규 드래프트)
   const handleCreate = () => {
-    onCreate()
+    setEditing({
+      open: true,
+      player: {
+        id: null,
+        name: "",
+        membership: "정회원",
+        position: "",
+        stats: ensureStatsObject({}),
+      },
+    })
     notify("새 선수 추가 폼을 열었어요.")
   }
 
@@ -279,10 +302,17 @@ export default function PlayersPage({
 
   const openEdit = (p) => setEditing({ open: true, player: p })
   const closeEdit = () => setEditing({ open: false, player: null })
+
+  // 저장 시 신규/기존 분기 처리
   const saveEdit = async (patch) => {
     try {
-      await onUpdate(patch)
-      notify("선수 정보가 저장되었어요.")
+      if (patch.id) {
+        await onUpdate(patch)
+        notify("선수 정보가 저장되었어요.")
+      } else {
+        await onCreate(patch)
+        notify("새 선수가 추가되었어요.")
+      }
       closeEdit()
     } catch {
       notify("저장에 실패했습니다. 다시 시도해 주세요.")
