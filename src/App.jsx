@@ -45,7 +45,27 @@ export default function App(){
     return{count:cnt,goals:goalsProxy,attendance:attendanceProxy}
   },[players])
 
+  // ⬇️ 기존 기본값 생성 방식은 유지(필요시 다른 곳에서 사용)
   async function handleCreatePlayer(){if(!isAdmin)return notify("Admin만 가능합니다.");const p=mkPlayer("새 선수","MF");setDb(prev=>({...prev,players:[p,...(prev.players||[])]}));setSelectedPlayerId(p.id);notify("새 선수를 추가했습니다.");try{await upsertPlayer(p)}catch(e){console.error(e)}}
+
+  // ✅ 모달에서 넘어온 patch를 그대로 저장(OVR=50 초기화 문제 해결)
+  async function handleCreatePlayerFromModal(patch){
+    if(!isAdmin) return notify("Admin만 가능합니다.");
+    const base = mkPlayer(patch?.name || "새 선수", patch?.position || "");
+    const playerToSave = {
+      ...base,
+      ...patch,
+      id: patch?.id || base.id,           // 신규 ID 보존
+    };
+    // 프론트 상태 업데이트
+    setDb(prev => ({ ...prev, players: [playerToSave, ...(prev.players||[])] }));
+    setSelectedPlayerId(playerToSave.id);
+    notify("새 선수가 추가되었어요.");
+    // DB 반영
+    try { await upsertPlayer(playerToSave); }
+    catch(e){ console.error(e); }
+  }
+
   async function handleUpdatePlayer(next){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,players:(prev.players||[]).map(x=>x.id===next.id?next:x)}));try{await upsertPlayer(next)}catch(e){console.error(e)}}
   async function handleDeletePlayer(id){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,players:(prev.players||[]).filter(p=>p.id!==id)}));if(selectedPlayerId===id)setSelectedPlayerId(null);try{await deletePlayer(id);notify("선수를 삭제했습니다.")}catch(e){console.error(e)}}
   function handleImportPlayers(list){if(!isAdmin)return notify("Admin만 가능합니다.");const safe=Array.isArray(list)?list:[];setDb(prev=>({...prev,players:safe}));Promise.all(safe.map(upsertPlayer)).then(()=>notify("선수 목록을 가져왔습니다.")).catch(console.error);setSelectedPlayerId(null)}
@@ -58,16 +78,13 @@ export default function App(){
   function onAdminSuccess(){localStorage.setItem("isAdmin","1");setIsAdmin(true);setLoginOpen(false);notify("Admin 모드 활성화")}
 
   /* ──────────────────────────────────────────────────────────
-   * FormationBoard용 fetchMatchTeams 빌더
-   * - 현재 App의 matches[]를 사용해 [{id,label,teams:[{name,playerIds[]}]}] 형태로 변환
-   * - snapshot(배열의 배열), teams(JSON/객체), board 등 다양한 저장 형태를 유연하게 처리
+   * FormationBoard용 fetchMatchTeams 빌더 (생략 없음)
    * ────────────────────────────────────────────────────────── */
   function buildFetchMatchTeamsFromLocalMatches(localMatches){
     const safe = Array.isArray(localMatches) ? localMatches.slice().reverse() : []
     const coerceId = (v)=>String(v??"")
     const coerceIds = (arr)=>Array.isArray(arr)?arr.map(x=>typeof x==="object"&&x?coerceId(x.id??x.playerId??x.uid??x.user_id):coerceId(x)).filter(Boolean):[]
 
-    // 라벨: 날짜/팀수 보조 표기 (가용한 필드 우선 사용)
     const labelOf = (m) => {
       const d = m?.dateISO || m?.dateIso || m?.dateiso || m?.date || m?.dateStr
       let label = m?.label || (d ? new Date(d).toLocaleString() : coerceId(m?.id))
@@ -82,7 +99,6 @@ export default function App(){
     return async function fetchMatchTeams(){
       const out = []
       for(const m of safe){
-        // 1) snapshot: number[][] or string[][]
         if (Array.isArray(m?.snapshot) && m.snapshot.every(team => Array.isArray(team))){
           out.push({
             id: coerceId(m.id),
@@ -94,7 +110,6 @@ export default function App(){
           })
           continue
         }
-        // 2) teams: { "Team A":[...], "Team B":[...] } or [{name, playerIds}]
         if (m?.teams && typeof m.teams === "object"){
           if (Array.isArray(m.teams)){
             out.push({
@@ -114,7 +129,6 @@ export default function App(){
           }
           continue
         }
-        // 3) board: 포지션 좌표 기반 저장만 있고 팀 구성이 있을 수 있는 경우
         if (Array.isArray(m?.board) && m.board.every(team => Array.isArray(team))){
           out.push({
             id: coerceId(m.id),
@@ -126,7 +140,6 @@ export default function App(){
           })
           continue
         }
-        // 4) attendees만 있는 경우: 단일 팀으로 취급
         const ids = coerceIds(m?.attendeeIds||m?.attendees||m?.participants||m?.roster)
         if (ids.length){
           out.push({
@@ -177,9 +190,19 @@ export default function App(){
 
     <main className="mx-auto max-w-6xl p-4">
       {tab==="dashboard"&&(<Dashboard totals={totals} players={players} matches={matches} isAdmin={isAdmin} onUpdateMatch={handleUpdateMatch}/>)}
-      {tab==="players"&&isAdmin&&(<PlayersPage players={players} selectedId={selectedPlayerId} onSelect={setSelectedPlayerId} onCreate={handleCreatePlayer} onUpdate={handleUpdatePlayer} onDelete={handleDeletePlayer} onImport={handleImportPlayers} onReset={handleResetPlayers}/>)}
+      {tab==="players"&&isAdmin&&(
+        <PlayersPage
+          players={players}
+          selectedId={selectedPlayerId}
+          onSelect={setSelectedPlayerId}
+          onCreate={handleCreatePlayerFromModal}  // ✅ 여기로 연결
+          onUpdate={handleUpdatePlayer}
+          onDelete={handleDeletePlayer}
+          onImport={handleImportPlayers}
+          onReset={handleResetPlayers}
+        />
+      )}
       {tab==="planner"&&isAdmin&&(<MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
-      {/* ⬇️ FormationBoard에 fetchMatchTeams 연결 */}
       {tab==="formation"&&(<FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>)}
       {tab==="stats"&&isAdmin&&(<StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
     </main>

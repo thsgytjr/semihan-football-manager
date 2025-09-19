@@ -188,7 +188,18 @@ function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint}){const
       <div className="font-semibold">팀 {teamIndex+1}</div>
       <div className="opacity-80 flex items-center gap-2">
         <span>{labelKit.label} · {players.length}명</span>
-        {isAdmin&&(<span className="hidden sm:inline">· <b>팀파워</b> {sum} · 평균 {avg}</span>)}
+        {isAdmin&&(
+            <span
+            className="
+              block sm:inline            /* xs=블록, sm+=인라인 */
+              text-[11px] mt-0.5 sm:mt-0 /* xs는 살짝 아래로, sm+는 원래 줄 */
+              sm:before:content-['·']    /* sm+에서만 앞에 '·' 추가 */
+              sm:before:mx-1             /* 점과 내용 사이 여백 */
+            "
+          >
+            <b>팀파워</b> {sum} · 평균 {avg}
+            </span>
+          )}
       </div>
     </div>
     <SortableContext id={id} items={players.map(p=>String(p.id))} strategy={verticalListSortingStrategy}>

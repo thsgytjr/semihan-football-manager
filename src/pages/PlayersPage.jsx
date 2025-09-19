@@ -44,7 +44,7 @@ const FIELD =
   "w-full bg-white text-stone-800 placeholder-stone-400 border border-stone-300 rounded-md px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400"
 const DROPDOWN = FIELD + " appearance-none"
 
-// ===== 편집 모달(팝업) — 모바일 푸터 항상 노출 =====
+// ===== 편집 모달 =====
 function EditPlayerModal({ open, player, onClose, onSave }) {
   const [draft, setDraft] = useState(null)
 
@@ -63,6 +63,9 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
   }, [open, player])
 
   const nameEmpty = !S(draft?.name).trim()
+  const isNew = !player?.id
+  const posMissing = isNew && !S(draft?.position).trim()
+
   if (!open || !draft) return null
 
   const setStat = (k, v) =>
@@ -75,6 +78,10 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
   const handleSave = () => {
     if (nameEmpty) {
       notify("이름을 입력해 주세요.")
+      return
+    }
+    if (posMissing) {
+      notify("포지션을 선택해 주세요.")
       return
     }
     const payload = {
@@ -91,11 +98,11 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
   const onKeyDown = (e) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
       e.preventDefault()
-      if (!nameEmpty) handleSave()
+      if (!nameEmpty && !posMissing) handleSave()
     }
   }
 
-  // 실시간 OVR 계산
+  // 실시간 OVR
   const liveOVR = overall(draft) ?? 0
   const isGuest = S(draft.membership).includes("게스트")
 
@@ -104,12 +111,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
       className="fixed inset-0 z-50 bg-black/45 flex items-end md:items-center justify-center p-0 md:p-4"
       onKeyDown={onKeyDown}
     >
-      {/* 패널: 모바일 바텀시트 / 데스크탑 중앙 모달 */}
-      <div
-        className="bg-white w-full md:max-w-4xl rounded-t-2xl md:rounded-2xl shadow-2xl
-                   max-h-[100dvh] md:max-h-[90dvh] flex flex-col min-h-0"
-      >
-        {/* 헤더: sticky */}
+      <div className="bg-white w-full md:max-w-4xl rounded-t-2xl md:rounded-2xl shadow-2xl max-h-[100dvh] md:max-h-[90dvh] flex flex-col min-h-0">
         <div className="sticky top-0 z-10 px-4 py-3 border-b border-stone-200 bg-white">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -117,11 +119,9 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
               <h3 className="font-semibold">선수 편집</h3>
             </div>
             <div className="flex items-center gap-2 text-[11px] text-stone-500">
-              {/* OVR 표시 추가 */}
               <span className="inline-flex items-center rounded bg-stone-800 px-2 py-1 text-white">
                 OVR&nbsp;{liveOVR}
               </span>
-              {/* 게스트 표기(선택) */}
               {isGuest && (
                 <span className="inline-flex items-center gap-1">
                   <GuestBadge /> 게스트
@@ -132,10 +132,8 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
           </div>
         </div>
 
-        {/* 본문: 스크롤 영역 */}
         <div className="flex-1 overflow-y-auto px-4 py-4 pb-28 md:pb-4">
           <div className="grid gap-4 md:grid-cols-2">
-            {/* 좌: 레이더 + 슬라이더 */}
             <div className="order-2 md:order-1">
               <div className="mb-4">
                 <RadarHexagon size={280} stats={draft.stats} />
@@ -170,7 +168,6 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
               </div>
             </div>
 
-            {/* 우: 기본 정보 */}
             <div className="order-1 md:order-2 space-y-3">
               <div>
                 <label className="block text-xs font-medium text-stone-600 mb-1">
@@ -184,7 +181,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
                   autoFocus
                 />
                 {nameEmpty && (
-                  <p className="mt-1 text-[11px] text-rose-600">이름은 비워둘 수 없어요.</p>
+                  <p className="mt-1 text-[11px] text-rose-600">*Required</p>
                 )}
               </div>
 
@@ -201,7 +198,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-stone-600 mb-1">포지션</label>
+                <label className="block text-xs font-medium text-stone-600 mb-1">포지션<span className="text-rose-500"> *</span></label>
                 <select
                   className={DROPDOWN}
                   value={draft.position}
@@ -213,16 +210,15 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
                   <option value="MF">MF</option>
                   <option value="FW">FW</option>
                 </select>
+                 {posMissing && (
+                   <p className="mt-1 text-[11px] text-rose-600">*Required</p>
+                 )}
               </div>
-
-              <div className="text-xs text-stone-500">⌘/Ctrl + Enter 로 빠르게 저장할 수 있어요.</div>
             </div>
           </div>
         </div>
 
-        {/* 푸터 */}
-        <div className="sticky bottom-0 z-10 px-4 pt-3 pb-3 border-t border-stone-200 bg-white
-                        min-h-[60px] pb-[env(safe-area-inset-bottom)]">
+        <div className="sticky bottom-0 z-10 px-4 pt-3 pb-3 border-t border-stone-200 bg-white min-h-[60px] pb-[env(safe-area-inset-bottom)]">
           <div className="flex items-center justify-end gap-2">
             <button className="px-3 py-2 rounded-md border border-stone-300" onClick={onClose}>
               취소
@@ -230,7 +226,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
             <button
               className={`px-3 py-2 rounded-md text-white ${nameEmpty ? "bg-stone-300 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700"}`}
               onClick={handleSave}
-              disabled={nameEmpty}
+              disabled={nameEmpty||posMissing}
             >
               저장
             </button>
@@ -272,7 +268,7 @@ export default function PlayersPage({
     return { total, members, guests }
   }, [players])
 
-  // 새 선수 클릭 시 즉시 편집 모달 열기 (신규 드래프트)
+  // 새 선수 클릭 → 모달 열기(초기 드래프트)
   const handleCreate = () => {
     setEditing({
       open: true,
@@ -303,14 +299,14 @@ export default function PlayersPage({
   const openEdit = (p) => setEditing({ open: true, player: p })
   const closeEdit = () => setEditing({ open: false, player: null })
 
-  // 저장 시 신규/기존 분기 처리
+  // 저장: 신규/기존 분기
   const saveEdit = async (patch) => {
     try {
       if (patch.id) {
         await onUpdate(patch)
         notify("선수 정보가 저장되었어요.")
       } else {
-        await onCreate(patch)
+        await onCreate(patch)   // ✅ 모달 patch 그대로 전달
         notify("새 선수가 추가되었어요.")
       }
       closeEdit()
