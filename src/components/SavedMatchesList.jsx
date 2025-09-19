@@ -162,7 +162,6 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
       <div className="mb-1 flex items-center justify-between">
         <div className="text-sm"><b>{label}</b> · {formatLabel} · {m.teamCount}팀{m.location?.name&&<> · 장소 {m.location.name}</>}{dirty&&<span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-800 border border-amber-200">수정됨(저장 필요)</span>}</div>
         <div className="flex items-center gap-3">
-          <div className="hidden sm:flex items-center gap-1 text-[11px] text-gray-500">표기: <GuestBadge/> 게스트</div>
           {enableLoadToPlanner&&<button className="text-xs rounded border border-gray-300 bg-white px-2 py-1" onClick={()=>onLoadToPlanner?.(m)}>팀배정에 로드</button>}
           {isAdmin&&onDeleteMatch&&<button className="text-xs text-red-600" onClick={()=>{ if(window.confirm("정말 삭제하시겠어요?\n삭제 시 대시보드의 공격포인트/기록 집계에 영향을 줄 수 있습니다.")) onDeleteMatch(m.id) }}>삭제</button>}
         </div>
@@ -174,7 +173,13 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
           <> · 멤버 ${fees.memberFee}/인{fees?.guestCount>0&&typeof fees?.guestFee==="number"&&<> · 게스트 ${fees.guestFee}/인</>}{fees?._estimated&&<span className="opacity-70"> · 추정</span>}</>
         )}
       </div>
-
+      <div className="mb-1 flex justify-end">
+      <div className="flex items-center gap-1 text-[11px] text-gray-500 whitespace-nowrap">
+          <span>표기:</span>
+          <GuestBadge />
+          <span>게스트</span>
+        </div>
+      </div>
       <div className="grid gap-2 sm:gap-3" style={gridStyle}>
         {draftTeams.map((list,i)=>{
           const kit=kitForTeam(i), nonGK=list.filter(p=>(p.position||p.pos)!=="GK")
