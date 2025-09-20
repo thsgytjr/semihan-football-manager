@@ -150,9 +150,17 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
   const formatLabel=deriveFormatByLocation(m)
   const addVideo=(url)=>onUpdateMatch?.(m.id,{videos:[...(m.videos||[]),url]})
   const removeVideo=(idx)=>onUpdateMatch?.(m.id,{videos:(m.videos||[]).filter((_,i)=>i!==idx)})
+
+  // ✅ dirty 상태를 세팅하는 setSnap 래퍼
   const setSnap=(next)=>{ setDraftSnap(next); setDirty(true) }
   const resetDraft=()=>{ setDraftSnap(initialSnap); setDirty(false) }
   const saveDraft=()=>{ onUpdateMatch?.(m.id,{snapshot:draftSnap,attendeeIds:draftSnap.flat()}); setDirty(false) }
+
+  // ✅ 다른 매치로 전환될 때 초안/dirty 리셋
+  useEffect(()=>{
+    setDraftSnap(initialSnap)
+    setDirty(false)
+  }, [m.id, initialSnap.join('|')])
 
   const teamCols = Math.max(1, Math.min(4, draftTeams.length))
   const gridStyle = { gridTemplateColumns: `repeat(${teamCols}, minmax(0, 1fr))` }
@@ -173,13 +181,14 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
           <> · 멤버 ${fees.memberFee}/인{fees?.guestCount>0&&typeof fees?.guestFee==="number"&&<> · 게스트 ${fees.guestFee}/인</>}{fees?._estimated&&<span className="opacity-70"> · 추정</span>}</>
         )}
       </div>
+
+      {/* 표기: G 게스트 (요청하신 위치에 한 줄로) */}
       <div className="mb-1 flex justify-end">
-      <div className="flex items-center gap-1 text-[11px] text-gray-500 whitespace-nowrap">
-          <span>표기:</span>
-          <GuestBadge />
-          <span>게스트</span>
+        <div className="flex items-center gap-1 text-[11px] text-gray-500 whitespace-nowrap">
+          <span>표기:</span><span>G</span><span>게스트</span>
         </div>
       </div>
+
       <div className="grid gap-2 sm:gap-3" style={gridStyle}>
         {draftTeams.map((list,i)=>{
           const kit=kitForTeam(i), nonGK=list.filter(p=>(p.position||p.pos)!=="GK")
@@ -207,7 +216,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                         {isAdmin&&(
                           <button className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-100"
                             title="이 팀에서 제외 (저장 전 초안)"
-                            onClick={()=>setDraftSnap(draftSnap.map((arr,idx)=>idx===i?arr.filter(id=>String(id)!==String(p.id)):arr))}
+                            onClick={()=>setSnap(draftSnap.map((arr,idx)=>idx===i?arr.filter(id=>String(id)!==String(p.id)):arr))}
                           >제외</button>
                         )}
                       </span>
@@ -221,7 +230,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
         })}
       </div>
 
-      {isAdmin&&<QuickAttendanceEditor players={players} snapshot={draftSnap} onDraftChange={setDraftSnap}/>}
+      {isAdmin&&<QuickAttendanceEditor players={players} snapshot={draftSnap} onDraftChange={setSnap}/>}
       {isAdmin&&dirty&&(
         <div className="mt-3 flex items-center justify-end gap-2">
           <button className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm" onClick={resetDraft} title="변경사항 취소">취소</button>
