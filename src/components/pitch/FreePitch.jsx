@@ -327,7 +327,6 @@ export default function FreePitch({
     </div>
   )
 
-  // 폴백 전체화면: fixed 오버레이 모드
   if (forceFull && !isFS) {
     return (
       <div className="fixed inset-0 z-[1000] bg-black">
