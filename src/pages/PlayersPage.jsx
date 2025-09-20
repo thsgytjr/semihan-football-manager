@@ -249,17 +249,53 @@ export default function PlayersPage({
   const [confirm, setConfirm] = useState({ open: false, id: null, name: "" })
   const [editing, setEditing] = useState({ open: false, player: null })
 
+  // ▼ 정렬 상태: 키 & 방향
+  const [sortKey, setSortKey] = useState("name") // 'ovr' | 'pos' | 'name'
+  const [sortDir, setSortDir] = useState("asc")  // 'asc' | 'desc'
+  const POS_ORDER = ["GK","DF","MF","FW","OTHER",""] // 포지션 오름차순 기준
+
+  // 정렬 버튼 클릭 핸들러
+  const onSortClick = (key) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"))
+    } else {
+      setSortKey(key)
+      setSortDir("asc")
+    }
+  }
+
+  // 비교 함수 (오름차/내림차 방향 적용 유틸)
+  const applyDir = (cmp) => (sortDir === "asc" ? cmp : (a, b) => -cmp(a, b))
+
+  const cmpByNameAsc = (a,b)=> S(a.name).localeCompare(S(b.name))
+
+  const cmpByPosAsc = (a,b)=>{
+    const pa = posOf(a) || ""
+    const pb = posOf(b) || ""
+    const ra = POS_ORDER.indexOf(pa)
+    const rb = POS_ORDER.indexOf(pb)
+    if (ra !== rb) return ra - rb
+    return S(a.name).localeCompare(S(b.name))
+  }
+
+  const cmpByOvrAsc = (a,b)=>{
+    const oa = overall(a) || 0
+    const ob = overall(b) || 0
+    if (oa !== ob) return oa - ob
+    // 동점이면 포지션→이름
+    const posCmp = cmpByPosAsc(a,b)
+    if (posCmp !== 0) return posCmp
+    return S(a.name).localeCompare(S(b.name))
+  }
+
   const sorted = useMemo(() => {
     const arr = [...players]
-    arr.sort((a, b) => {
-      const an = S(a.name).localeCompare(S(b.name))
-      if (an !== 0) return an
-      const ap = posOf(a).localeCompare(posOf(b))
-      if (ap !== 0) return ap
-      return (overall(b) || 0) - (overall(a) || 0)
-    })
+    let cmp = cmpByNameAsc
+    if (sortKey === "ovr") cmp = cmpByOvrAsc
+    else if (sortKey === "pos") cmp = cmpByPosAsc
+    arr.sort(applyDir(cmp))
     return arr
-  }, [players])
+  }, [players, sortKey, sortDir])
 
   const counts = useMemo(() => {
     const total = players.length
@@ -268,7 +304,7 @@ export default function PlayersPage({
     return { total, members, guests }
   }, [players])
 
-  // 새 선수 클릭 → 모달 열기(초기 드래프트)
+  // 새 선수 추가
   const handleCreate = () => {
     setEditing({
       open: true,
@@ -299,14 +335,13 @@ export default function PlayersPage({
   const openEdit = (p) => setEditing({ open: true, player: p })
   const closeEdit = () => setEditing({ open: false, player: null })
 
-  // 저장: 신규/기존 분기
   const saveEdit = async (patch) => {
     try {
       if (patch.id) {
         await onUpdate(patch)
         notify("선수 정보가 저장되었어요.")
       } else {
-        await onCreate(patch)   // ✅ 모달 patch 그대로 전달
+        await onCreate(patch)
         notify("새 선수가 추가되었어요.")
       }
       closeEdit()
@@ -315,11 +350,39 @@ export default function PlayersPage({
     }
   }
 
+  // 현재 활성 버튼에만 화살표 표시
+  const arrowFor = (key) => sortKey === key ? (sortDir === "asc" ? "↑" : "↓") : ""
+
   return (
     <div className="max-w-5xl mx-auto p-4">
       <div className="flex items-center justify-between mb-3">
         <h1 className="text-xl font-semibold">선수 관리</h1>
         <div className="flex items-center gap-2">
+          {/* ▼ 정렬 버튼들 (데스크톱) */}
+          <div className="hidden sm:flex items-center gap-1 mr-2">
+            <button
+              className={`px-2 py-1.5 text-xs rounded border ${sortKey==='ovr' ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-stone-300 bg-white hover:bg-stone-50'}`}
+              onClick={()=>onSortClick('ovr')}
+              title="OVR 정렬 (토글: 오름/내림)"
+            >
+              OVR {arrowFor('ovr')}
+            </button>
+            <button
+              className={`px-2 py-1.5 text-xs rounded border ${sortKey==='pos' ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-stone-300 bg-white hover:bg-stone-50'}`}
+              onClick={()=>onSortClick('pos')}
+              title="포지션 정렬 (토글: 오름/내림)"
+            >
+              포지션 {arrowFor('pos')}
+            </button>
+            <button
+              className={`px-2 py-1.5 text-xs rounded border ${sortKey==='name' ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-stone-300 bg-white hover:bg-stone-50'}`}
+              onClick={()=>onSortClick('name')}
+              title="이름 정렬 (토글: 오름/내림)"
+            >
+              이름 {arrowFor('name')}
+            </button>
+          </div>
+
           <button
             onClick={handleCreate}
             className="px-3 py-2 rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
@@ -327,6 +390,31 @@ export default function PlayersPage({
             새 선수
           </button>
         </div>
+      </div>
+
+      {/* 모바일 정렬 버튼 */}
+      <div className="sm:hidden mb-3 flex items-center gap-1">
+        <button
+          className={`px-2 py-1.5 text-xs rounded border ${sortKey==='ovr' ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-stone-300 bg-white'}`}
+          onClick={()=>onSortClick('ovr')}
+          title="OVR 정렬"
+        >
+          OVR {arrowFor('ovr')}
+        </button>
+        <button
+          className={`px-2 py-1.5 text-xs rounded border ${sortKey==='pos' ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-stone-300 bg-white'}`}
+          onClick={()=>onSortClick('pos')}
+          title="포지션 정렬"
+        >
+          포지션 {arrowFor('pos')}
+        </button>
+        <button
+          className={`px-2 py-1.5 text-xs rounded border ${sortKey==='name' ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-stone-300 bg-white'}`}
+          onClick={()=>onSortClick('name')}
+          title="이름 정렬"
+        >
+          이름 {arrowFor('name')}
+        </button>
       </div>
 
       <div className="mb-2 text-xs text-stone-600 flex gap-3">
