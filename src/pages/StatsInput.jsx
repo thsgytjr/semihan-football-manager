@@ -7,6 +7,24 @@ import { formatMatchLabel } from '../lib/matchLabel'
 
 const toStr = (v) => (v === null || v === undefined) ? '' : String(v)
 
+/* ======== 날짜 파싱 유틸 ======== */
+function asTime(v) {
+  if (!v) return NaN
+  if (typeof v === 'number') return Number.isFinite(v) ? v : NaN
+  const t = Date.parse(v) // ISO 등 표준 문자열 우선
+  return Number.isNaN(t) ? NaN : t
+}
+function getMatchTime(m) {
+  // 우선순위: dateISO → date → created_at
+  const candidates = [m?.dateISO, m?.date, m?.created_at]
+  for (const c of candidates) {
+    const t = asTime(c)
+    if (!Number.isNaN(t)) return t
+  }
+  return 0
+}
+
+/* ======== 공용 유틸 ======== */
 function extractAttendeeIds(m) {
   const candidates = [m?.snapshot, m?.attendeeIds, m?.attendees, m?.participants, m?.roster].filter(Boolean)
   let raw = []
@@ -46,14 +64,27 @@ function extractStatsByPlayer(m) {
   return out
 }
 
+/* ======== 컴포넌트 ======== */
 export default function StatsInput({ players = [], matches = [], onUpdateMatch, isAdmin }) {
-  const [editingMatchId, setEditingMatchId] = useState(matches?.[0]?.id || null)
+  // 1) 최신순 정렬: dateISO(→date→created_at) 내림차순
+  const sortedMatches = useMemo(() => {
+    const arr = Array.isArray(matches) ? [...matches] : []
+    return arr.sort((a, b) => getMatchTime(b) - getMatchTime(a))
+  }, [matches])
+
+  // 2) 항상 "가장 최근"을 기본 선택
+  const [editingMatchId, setEditingMatchId] = useState('')
+  useEffect(() => {
+    const latestId = toStr(sortedMatches?.[0]?.id || '')
+    setEditingMatchId(latestId)
+  }, [sortedMatches])
+
   const editingMatch = useMemo(
-    () => (matches || []).find(m => m.id === editingMatchId) || null,
-    [matches, editingMatchId]
+    () => (sortedMatches || []).find(m => toStr(m.id) === toStr(editingMatchId)) || null,
+    [sortedMatches, editingMatchId]
   )
 
-  // 패널 드래프트
+  // 3) 패널 드래프트
   const [draft, setDraft] = useState({})
   useEffect(() => {
     if (!editingMatch) { setDraft({}); return }
@@ -66,7 +97,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       next[p.id] = { goals: Number(rec.goals || 0), assists: Number(rec.assists || 0) }
     }
     setDraft(next)
-  }, [editingMatchId, editingMatch, players])
+  }, [editingMatch, players])
 
   const setVal = (pid, key, v) =>
     setDraft(prev => ({ ...prev, [pid]: { ...prev[pid], [key]: Math.max(0, v || 0) } }))
@@ -83,10 +114,11 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
   }, [editingMatch, players])
 
   const roster = useMemo(() => {
-    const ids = new Set(extractAttendeeIds(editingMatch || {}))
+    if (!editingMatch) return []
+    const ids = new Set(extractAttendeeIds(editingMatch))
     let pool = players.filter(p => ids.has(toStr(p.id)))
     if (teamIdx !== 'all' && teams[teamIdx]) {
-      const tset = new Set(teams[teamIdx].map(p => toStr(p.id)))
+      const tset = new Set((teams[teamIdx] || []).map(p => toStr(p.id)))
       pool = pool.filter(p => tset.has(toStr(p.id)))
     }
     const needle = q.trim().toLowerCase()
@@ -111,28 +143,40 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
   return (
     <div className="grid gap-6">
       <Card title="경기별 골/어시 기록 입력">
-        {matches.length === 0 ? (
+        {sortedMatches.length === 0 ? (
           <div className="text-sm text-gray-500">저장된 매치가 없습니다.</div>
         ) : (
           <>
             <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
               <div className="flex flex-wrap items-center gap-2">
+                {/* 옵션 재구성 시 리마운트 → 시각적으로도 최신이 기본 표시 */}
                 <select
-                  value={editingMatchId || ''}
-                  onChange={(e)=>{ setPanelIds([]); setQ(''); setTeamIdx('all'); setEditingMatchId(e.target.value) }}
+                  key={sortedMatches.map(m=>toStr(m.id)).join('|')}
+                  value={toStr(editingMatchId)}
+                  onChange={(e)=>{
+                    setPanelIds([])
+                    setQ('')
+                    setTeamIdx('all')
+                    setEditingMatchId(toStr(e.target.value))
+                  }}
                   className="rounded border border-gray-300 bg-white px-3 py-2 text-sm"
                 >
-                  {matches.map(m => {
+                  {sortedMatches.map(m => {
                     const count = extractAttendeeIds(m).length
-                    const label = formatMatchLabel(m, { withDate: true, withCount: true, count })
+                    const label =
+                      (typeof formatMatchLabel === 'function'
+                        ? formatMatchLabel(m, { withDate: true, withCount: true, count })
+                        : (m.label || m.title || m.name || `Match ${toStr(m.id)}`))
                     return (
-                      <option key={m.id} value={m.id}>{label}</option>
+                      <option key={toStr(m.id)} value={toStr(m.id)}>{label}</option>
                     )
                   })}
                 </select>
+
                 <Pill active={teamIdx==='all'} onClick={()=>setTeamIdx('all')}>전체팀</Pill>
                 {teams.map((_,i)=>(<Pill key={i} active={teamIdx===i} onClick={()=>setTeamIdx(i)}>팀 {i+1}</Pill>))}
               </div>
+
               <input
                 value={q}
                 onChange={e=>setQ(e.target.value)}
@@ -144,14 +188,18 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
             <div className="mb-2">
               <ul className="max-h-56 overflow-auto rounded border border-gray-200 bg-white">
                 {roster.map(p => (
-                  <li key={p.id} className="flex items-center justify-between px-3 py-2 hover:bg-stone-50">
+                  <li key={toStr(p.id)} className="flex items-center justify-between px-3 py-2 hover:bg-stone-50">
                     <div className="flex items-center gap-2">
                       <InitialAvatar id={p.id} name={p.name} size={20} />
                       <span className="text-sm">{p.name}</span>
                       <span className="text-xs text-gray-500">{p.position||p.pos||'-'}</span>
                     </div>
-                    <button onClick={()=>setPanelIds(prev => prev.includes(p.id)? prev : [...prev, p.id])}
-                            className="rounded bg-stone-900 px-2 py-1 text-xs text-white">패널에 추가</button>
+                    <button
+                      onClick={()=>setPanelIds(prev => prev.includes(p.id)? prev : [...prev, p.id])}
+                      className="rounded bg-stone-900 px-2 py-1 text-xs text-white"
+                    >
+                      패널에 추가
+                    </button>
                   </li>
                 ))}
                 {roster.length===0 && (
@@ -193,7 +241,7 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setVal, onSave }){
           const rec = draft[pid] || { goals:0, assists:0 }
           if (!p) return null
           return (
-            <li key={pid} className="flex items-center gap-3 px-3 py-2">
+            <li key={toStr(pid)} className="flex items-center gap-3 px-3 py-2">
               <InitialAvatar id={p.id} name={p.name} size={22} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">
