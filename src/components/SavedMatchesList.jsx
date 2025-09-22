@@ -11,6 +11,111 @@ const GuestBadge = ()=>(
   <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200">G</span>
 )
 
+/* ---------------------- YouTube 유틸 ---------------------- */
+function parseYouTubeIdFromUrl(url) {
+  const s = S(url).trim()
+  if (!s) return null
+  try {
+    const u = new URL(s)
+    if (u.hostname.includes('youtu.be')) {
+      const id = u.pathname.split('/').filter(Boolean)[0]
+      return id || null
+    }
+    if (u.hostname.includes('youtube.com')) {
+      if (u.pathname.startsWith('/shorts/')) {
+        const id = u.pathname.split('/')[2] || u.pathname.split('/')[1]
+        return id || null
+      }
+      if (u.pathname.startsWith('/embed/')) {
+        const id = u.pathname.split('/')[2]
+        return id || null
+      }
+      const v = u.searchParams.get('v')
+      if (v) return v
+    }
+  } catch {}
+  const rx = /(?:v=|\/shorts\/|\/embed\/|youtu\.be\/)([A-Za-z0-9_-]{11})/i
+  const m = s.match(rx)
+  if (m && m[1]) return m[1]
+  if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s
+  return null
+}
+
+/** match 객체에서 유튜브 {id,url,title,sourceIndex?} 배열 생성
+ * - 우선순위 필드: youtubeUrl + youtubeTitle
+ * - m.videos: 문자열 또는 {url,title} 혼용 지원
+ * - links/media/attachments/videos 배열 내부의 {url|link|href, title?}도 지원
+ */
+function extractYouTubeEntries(match){
+  const prefers = []
+
+  // 1) 권장 단일 필드
+  if (match?.youtubeUrl) {
+    prefers.push({ url: match.youtubeUrl, title: match?.youtubeTitle })
+  }
+
+  // 2) videos 배열(문자열/객체 혼용)
+  if (Array.isArray(match?.videos)) {
+    match.videos.forEach((v, idx) => {
+      if (typeof v === 'string') prefers.push({ url: v, title: match?.youtubeTitle, sourceIndex: idx })
+      else if (v && typeof v === 'object') prefers.push({ url: v.url || v.link || v.href, title: v.title, sourceIndex: idx })
+    })
+  }
+
+  // 3) 여분 배열 필드
+  ;['links', 'media', 'attachments'].forEach(k=>{
+    const arr = match?.[k]
+    if (Array.isArray(arr)) {
+      arr.forEach((item) => {
+        const url = typeof item === 'string' ? item : (item?.url || item?.link || item?.href)
+        const title = (typeof item === 'object' && item?.title) || match?.youtubeTitle || match?.title || match?.name
+        if (url) prefers.push({ url, title })
+      })
+    }
+  })
+
+  // URL → ID 변환 + 정리
+  const out = []
+  prefers.forEach((cand) => {
+    const id = parseYouTubeIdFromUrl(cand.url)
+    if (id) out.push({ id, url: `https://www.youtube.com/watch?v=${id}`, title: S(cand.title||''), sourceIndex: cand.sourceIndex })
+  })
+  // 중복 제거(id 기준)
+  const seen = new Set()
+  return out.filter(e => (seen.has(e.id) ? false : (seen.add(e.id), true)))
+}
+
+function YouTubeThumb({ videoId, title, dateKey }) {
+  const thumb = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`
+  const href  = `https://www.youtube.com/watch?v=${videoId}`
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="group relative block overflow-hidden rounded-lg border border-stone-200"
+      title={title}
+    >
+      <img
+        src={thumb}
+        alt={title}
+        loading="lazy"
+        className="aspect-video w-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+      />
+      <div className="pointer-events-none absolute inset-0 flex items-end justify-between bg-gradient-to-t from-black/60 via-black/10 to-transparent p-2">
+        <div className="text-[11px] leading-tight text-white drop-shadow">
+          <div className="font-medium truncate max-w-[160px] sm:max-w-[200px]">{title || 'Match Video'}</div>
+          {dateKey ? <div className="opacity-90">{dateKey}</div> : null}
+        </div>
+        <div className="mb-1 mr-1 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/95 shadow-md group-hover:bg-white">
+          <svg viewBox="0 0 24 24" className="h-5 w-5"><path d="M8 5v14l11-7z" /></svg>
+        </div>
+      </div>
+    </a>
+  )
+}
+
+/* ----------------------- 기타 유틸 ------------------------ */
 const kitForTeam=(i)=>[
   {label:"화이트",headerClass:"bg-white text-stone-800 border-b border-stone-300"},
   {label:"블랙",headerClass:"bg-stone-900 text-white border-b border-stone-900"},
@@ -39,7 +144,7 @@ const deriveFormatByLocation=(m)=>{
   return m?.mode||""
 }
 
-/* 요금 계산: 게스트 없으면 균등, 있으면 +$2 규칙 */
+/* 요금 계산: 게스트 없으면 균등, 있으면 +$2 규칙 (예시) */
 function deriveFeesFromSnapshot(m, players){
   const ids=Array.isArray(m?.snapshot)&&m.snapshot.length?m.snapshot.flat():Array.isArray(m?.attendeeIds)?m.attendeeIds:[]
   const map=new Map(players.map(p=>[String(p.id),p])), atts=ids.map(id=>map.get(String(id))).filter(Boolean)
@@ -60,13 +165,36 @@ function deriveFeesFromSnapshot(m, players){
   return { total, memberFee, guestFee, memberCount, guestCount, _estimated:true }
 }
 
-/* 유튜브 링크 입력 */
+/* ---------------------- 입력 컴포넌트 ---------------------- */
+// 유튜브 링크 + 제목 추가
 function VideoAdder({ onAdd }){
-  const [val,setVal]=useState("")
+  const [url,setUrl]=useState("")
+  const [title,setTitle]=useState("")
+  const add=()=>{
+    const u=url.trim()
+    const t=title.trim()
+    if(!u) return
+    onAdd(u, t || null)
+    setUrl(""); setTitle("")
+  }
   return (
-    <div className="flex items-center gap-2">
-      <input className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="https://youtu.be/... 또는 https://www.youtube.com/watch?v=..." value={val} onChange={e=>setVal(e.target.value)}/>
-      <button className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" onClick={()=>{const u=val.trim(); if(!u)return; onAdd(u); setVal("")}}>추가</button>
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+      <input
+        className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+        placeholder="YouTube 링크 (https://youtu.be/... 또는 https://www.youtube.com/watch?v=...)"
+        value={url} onChange={e=>setUrl(e.target.value)}
+      />
+      <input
+        className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+        placeholder="썸네일에 표시할 제목 (선택)"
+        value={title} onChange={e=>setTitle(e.target.value)}
+      />
+      <button
+        className="rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+        onClick={add}
+      >
+        추가
+      </button>
     </div>
   )
 }
@@ -137,8 +265,8 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
   )
 }
 
-/* 매치 카드 */
-function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, onDeleteMatch, onUpdateMatch, showTeamOVRForAdmin, hideOVR }){
+/* ------------------------- 매치 카드 ------------------------- */
+function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, onDeleteMatch, onUpdateMatch, onUpdateVideos, showTeamOVRForAdmin, hideOVR }){
   const hydrated=useMemo(()=>hydrateMatch(m,players),[m,players])
   const initialSnap=useMemo(()=>normalizeSnapshot(m,hydrated.teams||[]),[m,hydrated.teams])
   const [draftSnap,setDraftSnap]=useState(initialSnap), [dirty,setDirty]=useState(false)
@@ -148,27 +276,38 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
   const label=useMemo(()=>formatMatchLabel({...m,snapshot:draftSnap},{withDate:true,withCount:true,count:draftCount}),[m,draftSnap,draftCount])
   const fees=useMemo(()=>deriveFeesFromSnapshot({...m,snapshot:draftSnap},players),[m,draftSnap,players])
   const formatLabel=deriveFormatByLocation(m)
-  const addVideo=(url)=>onUpdateMatch?.(m.id,{videos:[...(m.videos||[]),url]})
-  const removeVideo=(idx)=>onUpdateMatch?.(m.id,{videos:(m.videos||[]).filter((_,i)=>i!==idx)})
 
-  // ✅ dirty 상태를 세팅하는 setSnap 래퍼
   const setSnap=(next)=>{ setDraftSnap(next); setDirty(true) }
   const resetDraft=()=>{ setDraftSnap(initialSnap); setDirty(false) }
   const saveDraft=()=>{ onUpdateMatch?.(m.id,{snapshot:draftSnap,attendeeIds:draftSnap.flat()}); setDirty(false) }
 
-  // ✅ 다른 매치로 전환될 때 초안/dirty 리셋
-  useEffect(()=>{
-    setDraftSnap(initialSnap)
-    setDirty(false)
-  }, [m.id, initialSnap.join('|')])
+  useEffect(()=>{ setDraftSnap(initialSnap); setDirty(false) }, [m.id, initialSnap.join('|')])
 
   const teamCols = Math.max(1, Math.min(4, draftTeams.length))
   const gridStyle = { gridTemplateColumns: `repeat(${teamCols}, minmax(0, 1fr))` }
 
+  // ✅ 유튜브 항목 뽑기
+  const ytEntries = useMemo(()=>extractYouTubeEntries(m), [m])
+
+  // ✅ 추가/삭제(배열은 문자열/객체 혼합 호환)
+  const addVideo=(url, title)=>{
+    const next = [...(m.videos||[]), title ? { url, title } : url]
+    onUpdateMatch?.(m.id,{ videos: next, youtubeUrl: m.youtubeUrl ?? null, youtubeTitle: m.youtubeTitle ?? null })
+  }
+  const removeVideoBySourceIndex=(sourceIndex)=>{
+    if (!Array.isArray(m.videos)) return
+    const next = m.videos.filter((_,i)=>i!==sourceIndex)
+    onUpdateMatch?.(m.id,{ videos: next })
+  }
+
   return (
     <li className="rounded border border-gray-200 bg-white p-3">
       <div className="mb-1 flex items-center justify-between">
-        <div className="text-sm"><b>{label}</b> · {formatLabel} · {m.teamCount}팀{m.location?.name&&<> · 장소 {m.location.name}</>}{dirty&&<span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-800 border border-amber-200">수정됨(저장 필요)</span>}</div>
+        <div className="text-sm">
+          <b>{label}</b> · {formatLabel} · {m.teamCount}팀
+          {m.location?.name && <> · 장소 {m.location.name}</>}
+          {dirty && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-800 border border-amber-200">수정됨(저장 필요)</span>}
+        </div>
         <div className="flex items-center gap-3">
           {enableLoadToPlanner&&<button className="text-xs rounded border border-gray-300 bg-white px-2 py-1" onClick={()=>onLoadToPlanner?.(m)}>팀배정에 로드</button>}
           {isAdmin&&onDeleteMatch&&<button className="text-xs text-red-600" onClick={()=>{ if(window.confirm("정말 삭제하시겠어요?\n삭제 시 대시보드의 공격포인트/기록 집계에 영향을 줄 수 있습니다.")) onDeleteMatch(m.id) }}>삭제</button>}
@@ -182,7 +321,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
         )}
       </div>
 
-      {/* 표기: G 게스트 (요청하신 위치에 한 줄로) */}
+      {/* 표기: G 게스트 */}
       <div className="mb-1 flex justify-end">
         <div className="flex items-center gap-1 text-[11px] text-gray-500 whitespace-nowrap">
           <span>표기:</span><span>G</span><span>게스트</span>
@@ -197,7 +336,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
             <div key={i} className="space-y-1 overflow-hidden rounded border border-gray-200">
               <div className={`flex items-center justify-between px-3 py-1.5 text-xs ${kit.headerClass}`}>
                 <div className="font-semibold">팀 {i+1}</div>
-                {isAdmin&&showTeamOVRForAdmin&&!hideOVR
+                {isAdmin && !hideOVR
                   ? <div className="opacity-80">{kit.label} · {list.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</div>
                   : <div className="opacity-80">{kit.label} · {list.length}명</div>}
               </div>
@@ -212,9 +351,10 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                         {!member&&<GuestBadge/>}
                       </span>
                       <span className="flex items-center gap-2 shrink-0">
-                        {isAdmin&&showTeamOVRForAdmin&&!hideOVR&&(p.position||p.pos)!=="GK"&&<span className="text-gray-500" data-ovr>OVR {p.ovr??overall(p)}</span>}
+                        {/* OVR 표시는 상위 CSS에서 이미 숨김 처리 가능 */}
                         {isAdmin&&(
-                          <button className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-100"
+                          <button
+                            className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-100"
                             title="이 팀에서 제외 (저장 전 초안)"
                             onClick={()=>setSnap(draftSnap.map((arr,idx)=>idx===i?arr.filter(id=>String(id)!==String(p.id)):arr))}
                           >제외</button>
@@ -238,25 +378,47 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
         </div>
       )}
 
+      {/* 🎥 유튜브: 카드 내부 썸네일 + 어드민 입력 */}
       <div className="mt-3 space-y-2">
-        <div className="text-xs font-semibold text-gray-600">🎥 유튜브 링크</div>
-        {(m.videos&&m.videos.length>0)?(
-          <ul className="flex flex-wrap gap-2">
-            {m.videos.map((url,idx)=>(
-              <li key={idx} className="flex items-center gap-2">
-                <a href={url} target="_blank" rel="noreferrer" className="max-w-[240px] truncate rounded border border-gray-300 bg-white px-2 py-1 text-xs text-blue-600 hover:bg-blue-50" title={url}>{url}</a>
-                {isAdmin&&onUpdateMatch&&<button className="text-[11px] text-red-600" onClick={()=>removeVideo(idx)} title="삭제">삭제</button>}
-              </li>
+        <div className="text-xs font-semibold text-gray-600">🎥 유튜브</div>
+
+        {/* 썸네일 그리드 (있는 경우에만) */}
+        {ytEntries.length > 0 ? (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {ytEntries.map((e,i)=>(
+              <div key={`${e.id}-${i}`} className="relative">
+                <YouTubeThumb
+                  videoId={e.id}
+                  title={e.title}
+                  dateKey={m?.dateISO || m?.date || ""}
+                />
+                {/* 어드민만 삭제 버튼 표시 */}
+                {isAdmin && typeof e.sourceIndex === 'number' && (
+                  <button
+                    className="absolute right-2 top-2 rounded bg-white/95 px-2 py-0.5 text-[11px] text-red-700 shadow hover:bg-white"
+                    title="삭제"
+                    onClick={()=>removeVideoBySourceIndex(e.sourceIndex)}
+                  >
+                    삭제
+                  </button>
+                )}
+              </div>
             ))}
-          </ul>
-        ):<div className="text-xs text-gray-500">등록된 링크가 없습니다.</div>}
-        {isAdmin&&onUpdateMatch&&<VideoAdder onAdd={addVideo}/>}
+          </div>
+        ) : (
+          <div className="text-xs text-gray-500">등록된 유튜브 링크가 없습니다.</div>
+        )}
+
+        {/* 어드민: 링크+제목 추가 */}
+        {isAdmin && (
+          <VideoAdder onAdd={addVideo}/>
+        )}
       </div>
     </li>
   )
 }
 
-/* 최신순 정렬용 날짜 파서 */
+/* -------------------- 최신순 정렬 & 리스트 ------------------- */
 function _ts(m){
   const cand = m?.dateISO || m?.dateIso || m?.dateiso || m?.date || m?.dateStr
   const t = cand ? new Date(cand).getTime() : NaN
@@ -264,7 +426,6 @@ function _ts(m){
   return t
 }
 
-/* 메인 리스트 */
 export default function SavedMatchesList({
   matches=[],
   players=[],
@@ -280,7 +441,11 @@ export default function SavedMatchesList({
   return (
     <ul className="grid gap-3">
       {ordered.map(m=>(
-        <MatchCard key={m.id} m={m} players={players} isAdmin={isAdmin}
+        <MatchCard
+          key={m.id}
+          m={m}
+          players={players}
+          isAdmin={isAdmin}
           enableLoadToPlanner={enableLoadToPlanner}
           onLoadToPlanner={onLoadToPlanner}
           onDeleteMatch={onDeleteMatch}
