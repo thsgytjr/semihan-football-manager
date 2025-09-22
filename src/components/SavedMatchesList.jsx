@@ -380,7 +380,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
 
       {/* 🎥 유튜브: 카드 내부 썸네일 + 어드민 입력 */}
       <div className="mt-3 space-y-2">
-        <div className="text-xs font-semibold text-gray-600">🎥 유튜브</div>
+        <div className="text-xs font-semibold text-gray-600">🎥 Match Video(s)</div>
 
         {/* 썸네일 그리드 (있는 경우에만) */}
         {ytEntries.length > 0 ? (
@@ -406,7 +406,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
             ))}
           </div>
         ) : (
-          <div className="text-xs text-gray-500">등록된 유튜브 링크가 없습니다.</div>
+          <div className="text-xs text-gray-500">등록된 비디오 링크가 없습니다.</div>
         )}
 
         {/* 어드민: 링크+제목 추가 */}
