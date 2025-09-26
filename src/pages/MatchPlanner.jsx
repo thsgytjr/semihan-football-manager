@@ -91,6 +91,14 @@ export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,
     return calcFees({ total: Math.max(0, Number(baseCostValue) || 0), memberCount: m, guestCount: g })
   }
 
+  // ✅ 지도 링크 계산 (프리셋 + Other URL)
+  const mapLink = useMemo(()=>{
+    if (locationPreset==='indoor-soccer-zone') return 'https://maps.app.goo.gl/cud8m52vVwZJEinN8?g_st=ic'
+    if (locationPreset==='coppell-west') return 'https://maps.app.goo.gl/vBLE84hRB3ez1BJy5?g_st=ic'
+    if (locationPreset==='other' && /^https?:\/\//i.test(String(locationAddress||''))) return locationAddress
+    return null
+  },[locationPreset,locationAddress])
+
   function save(){
     if(!isAdmin){notify('Admin만 가능합니다.');return}
     const baseTeams=(latestTeamsRef.current&&latestTeamsRef.current.length)?latestTeamsRef.current:previewTeams
@@ -137,15 +145,35 @@ export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,
               <option value="indoor-soccer-zone">Indoor Soccer Zone</option>
               <option value="other">Other (Freeform)</option>
             </select>
+
+            {/* 요금 모드 */}
             <div className="flex flex-wrap items-center gap-3 text-sm">
               <label className="inline-flex items-center gap-2"><input type="radio" name="feeMode" value="preset" checked={feeMode==='preset'} onChange={()=>setFeeMode('preset')}/>자동(장소별 고정)</label>
               <label className="inline-flex items-center gap-2"><input type="radio" name="feeMode" value="custom" checked={feeMode==='custom'} onChange={()=>setFeeMode('custom')}/>커스텀</label>
               {feeMode==='custom'&&(<input type="number" min="0" placeholder="총 구장비(예: 220 또는 340)" value={customBaseCost} onChange={e=>setCustomBaseCost(e.target.value)} className="w-40 rounded border border-gray-300 bg-white px-3 py-1.5"/>)}
             </div>
+
+            {/* 비용 안내 */}
             <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
               <div><b>예상 구장비</b>: ${baseCost} / 2시간 {feeMode==='preset'?<span className="ml-2 opacity-70">(장소별 고정 금액)</span>:<span className="ml-2 opacity-70">(사용자 지정 금액)</span>}</div>
             </div>
-            {locationPreset==='other'&&(<div className="grid gap-2 sm:grid-cols-2"><input className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="장소 이름" value={locationName} onChange={e=>setLocationName(e.target.value)}/><input className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="주소" value={locationAddress} onChange={e=>setLocationAddress(e.target.value)}/></div>)}
+
+            {/* Freeform 입력 */}
+            {locationPreset==='other'&&(
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="장소 이름" value={locationName} onChange={e=>setLocationName(e.target.value)}/>
+                <input className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="주소 (URL 또는 일반주소)" value={locationAddress} onChange={e=>setLocationAddress(e.target.value)}/>
+              </div>
+            )}
+
+            {/* 지도 링크 프리뷰 (프리셋 또는 Other-URL) */}
+            {mapLink && (
+              <div className="text-xs">
+                <a href={mapLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline">
+                  Google Maps 열기 ↗
+                </a>
+              </div>
+            )}
           </div>
         </Row>
 

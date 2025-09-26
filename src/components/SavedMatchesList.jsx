@@ -168,6 +168,18 @@ const deriveFormatByLocation=(m)=>{
   return m?.mode||""
 }
 
+/* ✅ 장소 → 구글맵 링크 생성 */
+function getLocationLink(m){
+  const preset = (m?.location?.preset || "").toLowerCase()
+  if (preset === "indoor-soccer-zone")
+    return "https://maps.app.goo.gl/cud8m52vVwZJEinN8?g_st=ic"
+  if (preset === "coppell-west")
+    return "https://maps.app.goo.gl/vBLE84hRB3ez1BJy5?g_st=ic"
+  const addr = m?.location?.address || ""
+  if (/^https?:\/\//i.test(addr)) return addr
+  return null
+}
+
 /* 요금 계산: 새 규칙 (게스트 +$2, $1 단위, 총합 충족 보정) */
 function deriveFeesFromSnapshot(m, players){
   // 1) 참석자 추출
@@ -332,12 +344,27 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
     onUpdateMatch?.(m.id,{ videos: next })
   }
 
+  const locLink = getLocationLink(m)
+
   return (
     <li className="rounded border border-gray-200 bg-white p-3">
       <div className="mb-1 flex items-center justify-between">
         <div className="text-sm">
           <b>{label}</b> · {formatLabel} · {m.teamCount}팀
-          {m.location?.name && <> · 장소 {m.location.name}</>}
+          {m.location?.name && (
+            <> · 장소 {locLink ? (
+              <a 
+                href={locLink} 
+                target="_blank" 
+                rel="noreferrer"
+                className="text-blue-600 hover:underline"
+              >
+                {m.location.name}
+              </a>
+            ) : (
+              m.location.name
+            )}</>
+          )}
           {dirty && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-800 border border-amber-200">수정됨(저장 필요)</span>}
         </div>
         <div className="flex items-center gap-3">
