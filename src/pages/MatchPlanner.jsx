@@ -21,6 +21,25 @@ const GuestBadge=()=>(
 )
 /* ─────────────────────────────────────── */
 
+/* ───────── 공통 요금 유틸 ───────── */
+function calcFees({ total, memberCount, guestCount }) {
+  total = Math.max(0, Number(total) || 0)
+  const count = memberCount + guestCount
+  if (total <= 0 || count === 0) return { total, memberFee: 0, guestFee: 0 }
+
+  let baseEach = Math.ceil(total / count)
+  let memberFee = baseEach
+  let guestFee  = baseEach + 2
+
+  let sum = memberCount * memberFee + guestCount * guestFee
+  while (sum < total) {
+    memberFee += 1
+    guestFee  = memberFee + 2
+    sum = memberCount * memberFee + guestCount * guestFee
+  }
+  return { total, memberFee, guestFee }
+}
+
 const nextSaturday0630Local=()=>{const n=new Date(),d=new Date(n),dow=n.getDay();let add=(6-dow+7)%7;if(add===0){const t=new Date(n);t.setHours(6,30,0,0);if(n>t)add=7}d.setDate(n.getDate()+add);d.setHours(6,30,0,0);const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0'),H=String(d.getHours()).padStart(2,'0'),M=String(d.getMinutes()).padStart(2,'0');return`${y}-${m}-${dd}T${H}:${M}`}
 const POS_ORDER=['GK','DF','MF','FW','OTHER']
 const positionGroupOf=p=>{const raw=String(p.position||p.pos||'').toUpperCase();if(raw==='GK'||raw.includes('GK'))return'GK';const df=['DF','CB','LB','RB','LWB','RWB','CBR','CBL','SW'],mf=['MF','CM','DM','AM','LM','RM','CDM','CAM','RDM','LDM','RCM','LCM'],fw=['FW','ST','CF','LW','RW','RF','LF'];if(df.some(k=>raw.includes(k)))return'DF';if(mf.some(k=>raw.includes(k)))return'MF';if(fw.some(k=>raw.includes(k)))return'FW';return'OTHER'}
@@ -39,15 +58,55 @@ export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,
   const count=attendeeIds.length,autoSuggestion=decideMode(count),mode=autoSuggestion.mode,teams=Math.max(2,Math.min(10,Number(teamCount)||2)),attendees=useMemo(()=>players.filter(p=>attendeeIds.includes(p.id)),[players,attendeeIds])
   const autoSplit=useMemo(()=>posAware?splitKTeamsPosAware(attendees,teams,shuffleSeed):splitKTeams(attendees,teams,criterion),[attendees,teams,criterion,posAware,shuffleSeed])
   const skipAutoResetRef=useRef(false);useEffect(()=>{if(skipAutoResetRef.current){skipAutoResetRef.current=false;return}setManualTeams(null);setShuffleSeed(0)},[attendees,teams,criterion,posAware])
-  const baseCost=useMemo(()=>feeMode==='custom'?Math.max(0,Number(customBaseCost)||0):(locationPreset==='indoor-soccer-zone'?230:locationPreset==='coppell-west'?300:0),[feeMode,customBaseCost,locationPreset])
-  const PREMIUM=1.2,liveFees=useMemo(()=>{const m=attendees.filter(p=>isMember(p.membership)).length,g=attendees.length-m;if(attendees.length===0||baseCost<=0)return{total:baseCost,memberFee:0,guestFee:0,premium:PREMIUM};const x=baseCost/(m+PREMIUM*g);return{total:baseCost,memberFee:Math.round(x),guestFee:Math.round(PREMIUM*x),premium:PREMIUM}},[attendees,baseCost])
+
+  // ✅ 프리셋 총액: Indoor=220 / Coppell=340
+  const baseCost=useMemo(()=>feeMode==='custom'
+    ? Math.max(0,Number(customBaseCost)||0)
+    : (locationPreset==='indoor-soccer-zone'?220:locationPreset==='coppell-west'?340:0),
+  [feeMode,customBaseCost,locationPreset])
+
+  // ✅ 라이브 프리뷰 요금 (calcFees 사용)
+  const liveFees=useMemo(()=>{
+    const m=attendees.filter(p=>isMember(p.membership)).length
+    const g=Math.max(0,attendees.length-m)
+    return calcFees({ total: baseCost, memberCount: m, guestCount: g })
+  },[attendees,baseCost])
+
   const previewTeams=useMemo(()=>{let base=manualTeams??autoSplit.teams;if(!manualTeams&&shuffleSeed)base=base.map(list=>seededShuffle(list,shuffleSeed+list.length));return base},[manualTeams,autoSplit.teams,shuffleSeed]);useEffect(()=>{latestTeamsRef.current=previewTeams},[previewTeams])
   useEffect(()=>{setFormations(prev=>[...previewTeams].map((list,i)=>prev[i]||recommendFormation({count:list.length,mode,positions:countPositions(list)})));setPlacedByTeam(prev=>{const prevArr=Array.isArray(prev)?prev:[];return previewTeams.map((list,i)=>{const existed=Array.isArray(prevArr[i])?prevArr[i]:[],byId=new Map(existed.map(p=>[String(p.id),p]));const base=assignToFormation({players:list,formation:(formations[i]||recommendFormation({count:list.length,mode,positions:countPositions(list)}))});return base.map(d=>byId.get(String(d.id))||d)})})},[previewTeams,mode]) // eslint-disable-line
   
   const toggle=id=>setAttendeeIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id])
-  const computeFeesAtSave=({baseCostValue,attendees})=>{const base=Math.max(0,Number(baseCostValue)||0),m=attendees.filter(p=>isMember(p.membership)).length,g=attendees.length-m;if(base<=0||attendees.length===0)return{total:base,memberFee:0,guestFee:0,premium:PREMIUM};const x=base/(m+PREMIUM*g);return{total:base,memberFee:Math.round(x),guestFee:Math.round(PREMIUM*x),premium:PREMIUM}}
-  function save(){if(!isAdmin){notify('Admin만 가능합니다.');return}const baseTeams=(latestTeamsRef.current&&latestTeamsRef.current.length)?latestTeamsRef.current:previewTeams,snapshot=baseTeams.map(team=>team.map(p=>p.id)),ids=snapshot.flat(),objs=players.filter(p=>ids.includes(p.id)),fees=computeFeesAtSave({baseCostValue:baseCost,attendees:objs});const payload={...mkMatch({id:crypto.randomUUID?.()||String(Date.now()),dateISO,attendeeIds:ids,criterion:posAware?'pos-aware':criterion,players,selectionMode:'manual',teamCount:baseTeams.length,location:{preset:locationPreset,name:locationName,address:locationAddress},mode,snapshot,board:placedByTeam,formations,locked:true,videos:[]}),fees};onSaveMatch(payload);notify('매치가 저장되었습니다 ✅')}
-  const allSelected=attendeeIds.length===players.length&&players.length>0,toggleSelectAll=()=>allSelected?setAttendeeIds([]):setAttendeeIds(players.map(p=>p.id))
+
+  // ✅ 저장 시 요금 계산 (calcFees 사용)
+  const computeFeesAtSave = ({ baseCostValue, attendees }) => {
+    const list = Array.isArray(attendees) ? attendees : []
+    const m = list.filter(p => isMember(p.membership)).length
+    const g = Math.max(0, list.length - m)
+    return calcFees({ total: Math.max(0, Number(baseCostValue) || 0), memberCount: m, guestCount: g })
+  }
+
+  function save(){
+    if(!isAdmin){notify('Admin만 가능합니다.');return}
+    const baseTeams=(latestTeamsRef.current&&latestTeamsRef.current.length)?latestTeamsRef.current:previewTeams
+    const snapshot=baseTeams.map(team=>team.map(p=>p.id))
+    const ids=snapshot.flat()
+    const objs=players.filter(p=>ids.includes(p.id))
+    const fees=computeFeesAtSave({baseCostValue:baseCost,attendees:objs})
+    const payload={
+      ...mkMatch({
+        id:crypto.randomUUID?.()||String(Date.now()),
+        dateISO,attendeeIds:ids,criterion:posAware?'pos-aware':criterion,players,
+        selectionMode:'manual',teamCount:baseTeams.length,
+        location:{preset:locationPreset,name:locationName,address:locationAddress},
+        mode,snapshot,board:placedByTeam,formations,locked:true,videos:[]
+      }),
+      ...fees
+    }
+    onSaveMatch(payload);notify('매치가 저장되었습니다 ✅')
+  }
+
+  const allSelected=attendeeIds.length===players.length&&players.length>0
+  const toggleSelectAll=()=>allSelected?setAttendeeIds([]):setAttendeeIds(players.map(p=>p.id))
   const sensors=useSensors(useSensor(PointerSensor,{activationConstraint:{distance:4}}),useSensor(TouchSensor,{activationConstraint:{delay:120,tolerance:6}}))
   const findTeamIndexByItemId=itemId=>previewTeams.findIndex(list=>list.some(p=>String(p.id)===String(itemId))),findIndexInTeam=(teamIdx,id)=>(previewTeams[teamIdx]||[]).findIndex(p=>String(p.id)===String(id))
   const onDragStartHandler=e=>{setActivePlayerId(e.active.id);setActiveFromTeam(findTeamIndexByItemId(e.active.id));document.body.classList.add('cursor-grabbing')}
@@ -75,7 +134,7 @@ export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,
             <div className="flex flex-wrap items-center gap-3 text-sm">
               <label className="inline-flex items-center gap-2"><input type="radio" name="feeMode" value="preset" checked={feeMode==='preset'} onChange={()=>setFeeMode('preset')}/>자동(장소별 고정)</label>
               <label className="inline-flex items-center gap-2"><input type="radio" name="feeMode" value="custom" checked={feeMode==='custom'} onChange={()=>setFeeMode('custom')}/>커스텀</label>
-              {feeMode==='custom'&&(<input type="number" min="0" placeholder="총 구장비(예: 230)" value={customBaseCost} onChange={e=>setCustomBaseCost(e.target.value)} className="w-40 rounded border border-gray-300 bg-white px-3 py-1.5"/>)}
+              {feeMode==='custom'&&(<input type="number" min="0" placeholder="총 구장비(예: 220 또는 340)" value={customBaseCost} onChange={e=>setCustomBaseCost(e.target.value)} className="w-40 rounded border border-gray-300 bg-white px-3 py-1.5"/>)}
             </div>
             <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
               <div><b>예상 구장비</b>: ${baseCost} / 2시간 {feeMode==='preset'?<span className="ml-2 opacity-70">(장소별 고정 금액)</span>:<span className="ml-2 opacity-70">(사용자 지정 금액)</span>}</div>
@@ -151,7 +210,7 @@ export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,
 
     {editorOpen&&(
       <FullscreenModal onClose={closeEditor}>
-        {/* … 포메이션 편집 모달 (기존 로직 유지) … */}
+        {/* … 포메이션 편집 모달 … */}
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-semibold">팀 {editingTeamIdx+1} · 포메이션 편집</h3>
           <div className="flex items-center gap-2">
@@ -191,10 +250,10 @@ function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint}){const
         {isAdmin&&(
             <span
             className="
-              block sm:inline            /* xs=블록, sm+=인라인 */
-              text-[11px] mt-0.5 sm:mt-0 /* xs는 살짝 아래로, sm+는 원래 줄 */
-              sm:before:content-['·']    /* sm+에서만 앞에 '·' 추가 */
-              sm:before:mx-1             /* 점과 내용 사이 여백 */
+              block sm:inline
+              text-[11px] mt-0.5 sm:mt-0
+              sm:before:content-['·']
+              sm:before:mx-1
             "
           >
             <b>팀파워</b> {sum} · 평균 {avg}
@@ -211,7 +270,7 @@ function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint}){const
     </SortableContext>
   </div>)}
 
-/* ⬅️ 여기 수정: PlayerRow에 게스트 뱃지 추가 */
+/* PlayerRow */
 function PlayerRow({player,showOVR}){
   const{attributes,listeners,setNodeRef,transform,transition,isDragging}=useSortable({id:String(player.id)})
   const style={transform:CSS.Transform.toString(transform),transition,opacity:isDragging?0.7:1,boxShadow:isDragging?'0 6px 18px rgba(0,0,0,.12)':undefined,borderRadius:8,background:isDragging?'rgba(16,185,129,0.06)':undefined}
@@ -219,7 +278,7 @@ function PlayerRow({player,showOVR}){
   const member=isMember(player.membership)
   return(
     <li ref={setNodeRef} style={style} className="flex items-start gap-2 border-t border-gray-100 pt-1 first:border-0 first:pt-0 touch-manipulation cursor-grab active:cursor-grabbing" {...attributes}{...listeners}>
- <span className="flex items-center gap-2 min-w-0 flex-1">
+      <span className="flex items-center gap-2 min-w-0 flex-1">
         <InitialAvatar id={player.id} name={player.name} size={24} />
         <span className="whitespace-normal break-words">{player.name}</span>
         <span
@@ -233,9 +292,7 @@ function PlayerRow({player,showOVR}){
         >
           {pos}
         </span>
-
-        {/* 게스트 뱃지를 포지션 뒤로 이동 */}
-        {!isMember(player.membership) && <GuestBadge />}
+        {!member&&<GuestBadge />}
       </span>
 
       {!isGK && showOVR && <span className="ovr-chip shrink-0 rounded-full bg-stone-900 text-white text-[11px] px-2 py-[2px]" data-ovr>

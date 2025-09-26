@@ -324,8 +324,8 @@ function AttackPointsTable({ rows, showAll, onToggle, controls }) {
                       <span className="block font-medium truncate whitespace-nowrap">{r.name}</span>
                     </div>
                     {r.isGuest && (
-                      <span className="ml-1 shrink-0 rounded-full bg-stone-900 text-white text-[10px] px-2 py-[2px]">
-                        게스트
+                      <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200">
+                        G
                       </span>
                     )}
                   </div>

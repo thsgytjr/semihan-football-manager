@@ -11,6 +11,28 @@ const GuestBadge = ()=>(
   <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200">G</span>
 )
 
+/* ---------------------- 공통 요금 유틸 ---------------------- */
+/** 
+ * calcFees: $1 단위, 게스트는 멤버보다 항상 +$2, 합계가 total 미만이면 $1씩 올려 충족(초과 허용)
+ */
+function calcFees({ total, memberCount, guestCount }) {
+  total = Math.max(0, Number(total) || 0)
+  const count = memberCount + guestCount
+  if (total <= 0 || count === 0) return { total, memberFee: 0, guestFee: 0 }
+
+  let baseEach = Math.ceil(total / count)
+  let memberFee = baseEach
+  let guestFee  = baseEach + 2
+
+  let sum = memberCount * memberFee + guestCount * guestFee
+  while (sum < total) {
+    memberFee += 1
+    guestFee  = memberFee + 2
+    sum = memberCount * memberFee + guestCount * guestFee
+  }
+  return { total, memberFee, guestFee }
+}
+
 /* ---------------------- YouTube 유틸 ---------------------- */
 function parseYouTubeIdFromUrl(url) {
   const s = S(url).trim()
@@ -41,11 +63,7 @@ function parseYouTubeIdFromUrl(url) {
   return null
 }
 
-/** match 객체에서 유튜브 {id,url,title,sourceIndex?} 배열 생성
- * - 우선순위 필드: youtubeUrl + youtubeTitle
- * - m.videos: 문자열 또는 {url,title} 혼용 지원
- * - links/media/attachments/videos 배열 내부의 {url|link|href, title?}도 지원
- */
+/** match 객체에서 유튜브 {id,url,title,sourceIndex?} 배열 생성 */
 function extractYouTubeEntries(match){
   const prefers = []
 
@@ -144,24 +162,31 @@ const deriveFormatByLocation=(m)=>{
   return m?.mode||""
 }
 
-/* 요금 계산: 게스트 없으면 균등, 있으면 +$2 규칙 (예시) */
+/* 요금 계산: 새 규칙 (게스트 +$2, $1 단위, 총합 충족 보정) */
 function deriveFeesFromSnapshot(m, players){
+  // 1) 참석자 추출
   const ids=Array.isArray(m?.snapshot)&&m.snapshot.length?m.snapshot.flat():Array.isArray(m?.attendeeIds)?m.attendeeIds:[]
-  const map=new Map(players.map(p=>[String(p.id),p])), atts=ids.map(id=>map.get(String(id))).filter(Boolean)
-  const memberCount=atts.filter(p=>isMember(p.membership)).length, guestCount=Math.max(0, atts.length-memberCount)
-  if(m?.fees&&typeof m.fees.memberFee==="number"&&typeof m.fees.guestFee==="number") return {...m.fees,memberCount,guestCount,_estimated:false}
-  const preset=(m?.location?.preset||"").toLowerCase()
-  const total = preset==="indoor-soccer-zone"?230 : preset==="coppell-west"?300 : (m?.fees?.total||0)
-  if(!total||atts.length===0) return { total: total||0, memberFee:0, guestFee:0, memberCount, guestCount, _estimated:true }
-  let memberFee=0, guestFee=0
-  if(guestCount===0){
-    memberFee=Math.round(total/Math.max(1,memberCount))
-  }else{
-    const denom=memberCount+guestCount, mEach=(total-2*guestCount)/Math.max(1,denom)
-    memberFee=Math.max(0,Math.round(mEach)); guestFee=memberFee+2
-    const diff=total-(memberCount*memberFee+guestCount*guestFee)
-    if(diff){ const adj=Math.max(-2,Math.min(2,diff)); memberFee=Math.max(0,memberFee+adj); guestFee=memberFee+2 }
+  const map=new Map(players.map(p=>[String(p.id),p]))
+  const atts=ids.map(id=>map.get(String(id))).filter(Boolean)
+
+  const memberCount=atts.filter(p=>isMember(p.membership)).length
+  const guestCount=Math.max(0, atts.length-memberCount)
+
+  // 2) 매치에 명시적 fees가 있으면 우선 사용
+  if(m?.fees&&typeof m.fees.memberFee==="number"&&typeof m.fees.guestFee==="number"){
+    const total = typeof m.fees.total === 'number' ? m.fees.total 
+                  : (memberCount*m.fees.memberFee + guestCount*m.fees.guestFee)
+    return { total, memberFee:m.fees.memberFee, guestFee:m.fees.guestFee, memberCount, guestCount, _estimated:false }
   }
+
+  // 3) 장소 프리셋별 총액(Indoor=220, Coppell=340)
+  const preset=(m?.location?.preset||"").toLowerCase()
+  const total = preset==="indoor-soccer-zone" ? 220
+              : preset==="coppell-west"        ? 340
+              : (m?.fees?.total||0)
+
+  // 4) 새 규칙 계산
+  const { memberFee, guestFee } = calcFees({ total, memberCount, guestCount })
   return { total, memberFee, guestFee, memberCount, guestCount, _estimated:true }
 }
 
@@ -277,6 +302,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
   const fees=useMemo(()=>deriveFeesFromSnapshot({...m,snapshot:draftSnap},players),[m,draftSnap,players])
   const formatLabel=deriveFormatByLocation(m)
 
+  // ✅ 초안 변경은 반드시 setSnap 경유 → dirty 플래그 유지
   const setSnap=(next)=>{ setDraftSnap(next); setDirty(true) }
   const resetDraft=()=>{ setDraftSnap(initialSnap); setDirty(false) }
   const saveDraft=()=>{ onUpdateMatch?.(m.id,{snapshot:draftSnap,attendeeIds:draftSnap.flat()}); setDirty(false) }
@@ -351,7 +377,6 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                         {!member&&<GuestBadge/>}
                       </span>
                       <span className="flex items-center gap-2 shrink-0">
-                        {/* OVR 표시는 상위 CSS에서 이미 숨김 처리 가능 */}
                         {isAdmin&&(
                           <button
                             className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-100"
