@@ -23,21 +23,27 @@ const GuestBadge=()=>(
 
 /* ───────── 공통 요금 유틸 ───────── */
 function calcFees({ total, memberCount, guestCount }) {
-  total = Math.max(0, Number(total) || 0)
-  const count = memberCount + guestCount
-  if (total <= 0 || count === 0) return { total, memberFee: 0, guestFee: 0 }
+  total = Math.max(0, Number(total) || 0);
+  const count = memberCount + guestCount;
+  if (total <= 0 || count === 0) return { total, memberFee: 0, guestFee: 0 };
 
-  let baseEach = Math.ceil(total / count)
-  let memberFee = baseEach
-  let guestFee  = baseEach + 2
+  // 1) 최소 단가로 시작: floor((T - 2g) / (m + g))
+  let baseEach = Math.floor((total - 2 * guestCount) / count);
+  if (!Number.isFinite(baseEach) || baseEach < 0) baseEach = 0;
 
-  let sum = memberCount * memberFee + guestCount * guestFee
+  // 2) 게스트는 항상 멤버 +$2
+  let memberFee = baseEach;
+  let guestFee  = baseEach + 2;
+
+  // 3) 모자라면 $1씩만 올려 최소 초과로 맞춤 (정확히 나누어떨어지면 딱 맞음)
+  let sum = memberCount * memberFee + guestCount * guestFee;
   while (sum < total) {
-    memberFee += 1
-    guestFee  = memberFee + 2
-    sum = memberCount * memberFee + guestCount * guestFee
+    memberFee += 1;
+    guestFee  = memberFee + 2;
+    sum = memberCount * memberFee + guestCount * guestFee;
   }
-  return { total, memberFee, guestFee }
+
+  return { total, memberFee, guestFee };
 }
 
 const nextSaturday0630Local=()=>{const n=new Date(),d=new Date(n),dow=n.getDay();let add=(6-dow+7)%7;if(add===0){const t=new Date(n);t.setHours(6,30,0,0);if(n>t)add=7}d.setDate(n.getDate()+add);d.setHours(6,30,0,0);const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0'),H=String(d.getHours()).padStart(2,'0'),M=String(d.getMinutes()).padStart(2,'0');return`${y}-${m}-${dd}T${H}:${M}`}
