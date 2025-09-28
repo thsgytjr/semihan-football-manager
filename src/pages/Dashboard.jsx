@@ -307,10 +307,6 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
   }
 
   const totalPlayers = rows.length
-  const rankTitle =
-    rankBy === 'g' ? 'Top Scorer'
-    : rankBy === 'a' ? 'Most Assists'
-    : '종합(PTS)'
 
   return (
     <div className="overflow-hidden rounded-lg border border-stone-200">
@@ -329,8 +325,8 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
             <th colSpan={6} className="border-b px-2 py-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="text-xs text-stone-600">
-                  <span className="font-semibold mr-1">{rankTitle}</span>
-                  · 총 선수 {totalPlayers}명
+                  <span className="font-semibold mr-1"></span>
+                  총 선수 {totalPlayers}명
                 </div>
                 <div className="flex items-center gap-2">
                   {controls}
