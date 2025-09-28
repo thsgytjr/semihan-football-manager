@@ -11,7 +11,7 @@ const isMember = (mem) => {
   return s === 'member' || s.includes('정회원')
 }
 
-// 날짜 키: YYYY-MM-DD
+// 날짜 키: MM/DD/YYYY
 function extractDateKey(m) {
   const cand = m?.dateISO ?? m?.dateIso ?? m?.dateiso ?? m?.date ?? m?.dateStr ?? null
   if (!cand) return null
@@ -66,7 +66,7 @@ function extractStatsByPlayer(m) {
   return out
 }
 
-// 공격포인트 집계
+// 공격포인트 집계(개인 누적)
 function computeAttackRows(players = [], matches = []) {
   const index = new Map()
   const idToPlayer = new Map(players.map(p => [toStr(p.id), p]))
@@ -100,7 +100,29 @@ function computeAttackRows(players = [], matches = []) {
   return [...index.values()]
     .filter(r => r.gp > 0)
     .map(r => ({ ...r, pts: r.g + r.a, isGuest: !isMember(r.membership) }))
-    .sort((a, b) => b.pts - a.pts || b.g - a.g || a.name.localeCompare(b.name))
+}
+
+/* --------------------- 정렬/순위 유틸 --------------------- */
+function sortComparator(rankBy) {
+  if (rankBy === 'g') {
+    return (a, b) => (b.g - a.g) || (b.a - a.a) || a.name.localeCompare(b.name)
+  }
+  if (rankBy === 'a') {
+    return (a, b) => (b.a - a.a) || (b.g - a.g) || a.name.localeCompare(b.name)
+  }
+  return (a, b) => (b.pts - a.pts) || (b.g - a.g) || a.name.localeCompare(b.name)
+}
+function addRanks(rows, rankBy) {
+  const sorted = [...rows].sort(sortComparator(rankBy))
+  let lastRank = 0
+  let lastKey = null
+  return sorted.map((r, i) => {
+    const keyVal = rankBy === 'g' ? r.g : (rankBy === 'a' ? r.a : r.pts)
+    const rank = (i === 0) ? 1 : (keyVal === lastKey ? lastRank : i + 1)
+    lastRank = rank
+    lastKey = keyVal
+    return { ...r, rank }
+  })
 }
 
 /* --------------------- 에러 바운더리 ---------------------- */
@@ -110,7 +132,7 @@ class ErrorBoundary extends React.Component {
     this.state = { hasError: false }
   }
   static getDerivedStateFromError() { return { hasError: true } }
-  componentDidCatch(error, info) { /* 필요시 로깅 */ }
+  componentDidCatch(error, info) {}
   render() {
     if (this.state.hasError) {
       return this.props.fallback ?? <div className="text-sm text-stone-500">문제가 발생했어요.</div>
@@ -121,7 +143,6 @@ class ErrorBoundary extends React.Component {
 
 /* -------------------------- 메인 -------------------------- */
 export default function Dashboard({ players = [], matches = [], isAdmin, onUpdateMatch }) {
-  // 날짜 드롭다운: 'all' = 토탈
   const [apDateKey, setApDateKey] = useState('all')
   const dateOptions = useMemo(() => {
     const set = new Set()
@@ -136,18 +157,40 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
     () => apDateKey === 'all' ? matches : matches.filter(m => extractDateKey(m) === apDateKey),
     [matches, apDateKey]
   )
-  const totalsRows = useMemo(() => computeAttackRows(players, filteredMatches), [players, filteredMatches])
-  const [showAllTotals, setShowAllTotals] = useState(false)
+
+  const baseRows = useMemo(() => computeAttackRows(players, filteredMatches), [players, filteredMatches])
+
+  // 탭: 종합(pts) / Top Scorer(g) / Most Assists(a)
+  const [tab, setTab] = useState('pts')
+  const rankedRows = useMemo(() => addRanks(baseRows, tab), [baseRows, tab])
+
+  const [showAll, setShowAll] = useState(false)
+
+  // 골/어시 동일 하이라이트 색 (메달 색과 비충돌)
+  const colHi = (col) => {
+    if (tab === 'g' && col === 'g') return 'bg-indigo-50/80 font-semibold'
+    if (tab === 'a' && col === 'a') return 'bg-indigo-50/80 font-semibold'
+    return ''
+  }
+  const headHi = (col) => {
+    if (tab === 'g' && col === 'g') return 'bg-indigo-100/70 text-stone-900'
+    if (tab === 'a' && col === 'a') return 'bg-indigo-100/70 text-stone-900'
+    return ''
+  }
 
   return (
     <div className="grid gap-6">
-      {/* 공격포인트 */}
-      <Card title="공격포인트">
+      {/* 리더보드 */}
+      <Card title="리더보드">
+        <LeaderboardTabs tab={tab} onChange={setTab} />
+
         <AttackPointsTable
-          rows={totalsRows}
-          showAll={showAllTotals}
-          onToggle={() => setShowAllTotals(s => !s)}
-          /* 컨트롤 UI (토탈 드롭다운 + 전체 보기) */
+          rows={rankedRows}
+          showAll={showAll}
+          onToggle={() => setShowAll(s => !s)}
+          rankBy={tab}
+          headHi={headHi}
+          colHi={colHi}
           controls={
             <>
               <select
@@ -163,18 +206,18 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
                 ))}
               </select>
               <button
-                onClick={() => setShowAllTotals(s => !s)}
+                onClick={() => setShowAll(s => !s)}
                 className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50"
-                title={showAllTotals ? '접기' : '전체 보기'}
+                title={showAll ? '접기' : '전체 보기'}
               >
-                {showAllTotals ? '접기' : '전체 보기'}
+                {showAll ? '접기' : '전체 보기'}
               </button>
             </>
           }
         />
       </Card>
 
-      {/* 매치 히스토리 (CSS로만 OVR 숨김) */}
+      {/* 매치 히스토리 (OVR 표시 숨김 가능) */}
       <Card title="매치 히스토리">
         <ErrorBoundary fallback={<div className="text-sm text-stone-500">목록을 불러오는 중 문제가 발생했어요.</div>}>
           <div className="saved-matches-no-ovr text-[13px] leading-tight">
@@ -183,12 +226,11 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
               players={players}
               isAdmin={isAdmin}
               onUpdateMatch={onUpdateMatch}
-              hideOVR={true} 
+              hideOVR={true}
             />
           </div>
         </ErrorBoundary>
 
-        {/* 방어적 CSS: OVR 관련 셀렉터 숨김 (React 트리 무손상) */}
         <style>{`
           .saved-matches-no-ovr [data-ovr],
           .saved-matches-no-ovr .ovr,
@@ -206,37 +248,55 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
   )
 }
 
+/* ----------------------- 탭 컴포넌트 ---------------------- */
+function LeaderboardTabs({ tab, onChange }) {
+  const TabBtn = ({ id, label, sub }) => {
+    const active = tab === id
+    return (
+      <button
+        onClick={() => onChange(id)}
+        aria-pressed={active}
+        className={`w-full sm:w-auto rounded-xl px-3.5 py-2 text-sm font-medium border transition
+          flex flex-col items-center justify-center text-center
+          focus:outline-none focus:ring-2 focus:ring-stone-400/60
+          ${active
+            ? 'bg-stone-900 text-white border-stone-900'
+            : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
+          }`}
+      >
+        <span className="leading-tight">{label}</span>
+        {sub && <span className={`text-[11px] ${active ? 'text-stone-200' : 'text-stone-500'}`}>{sub}</span>}
+      </button>
+    )
+  }
+
+  return (
+    <div className="mb-3 flex flex-col sm:flex-row gap-2 w-full">
+      <TabBtn id="pts" label="종합" sub="공격포인트 (G+A)" />
+      <TabBtn id="g" label="Top Scorer" sub="골 순위" />
+      <TabBtn id="a" label="Most Assists" sub="어시스트 순위" />
+    </div>
+  )
+}
+
 /* --------------- 공격포인트 테이블 컴포넌트 --------------- */
-function AttackPointsTable({ rows, showAll, onToggle, controls }) {
-  // 공동순위 계산
-  const rankedAll = React.useMemo(() => {
-    let lastRank = 0
-    let lastPts = null
-    return rows.map((r, i) => {
-      const rank = (i === 0) ? 1 : (r.pts === lastPts ? lastRank : i + 1)
-      lastRank = rank
-      lastPts = r.pts
-      return { ...r, rank }
-    })
-  }, [rows])
+function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', headHi, colHi }) {
+  const data = showAll ? rows : rows.slice(0, 5)
 
-  const data = showAll ? rankedAll : rankedAll.slice(0, 5)
-
-  // 이전 순위 저장(로컬)
   const [prevRanks, setPrevRanks] = useState({})
   useEffect(() => {
     try {
-      const v2 = localStorage.getItem('ap_prevRanks_v2')
+      const v2 = localStorage.getItem(`ap_prevRanks_${rankBy}_v1`)
       if (v2) setPrevRanks(JSON.parse(v2) || {})
     } catch {}
-  }, [])
+  }, [rankBy])
   useEffect(() => {
     try {
       const mapping = {}
-      rankedAll.forEach(r => { mapping[String(r.id || r.name)] = r.rank })
-      localStorage.setItem('ap_prevRanks_v2', JSON.stringify(mapping))
+      rows.forEach(r => { mapping[String(r.id || r.name)] = r.rank })
+      localStorage.setItem(`ap_prevRanks_${rankBy}_v1`, JSON.stringify(mapping))
     } catch {}
-  }, [rankedAll])
+  }, [rows, rankBy])
 
   const deltaFor = (id, currentRank) => {
     const prevRank = prevRanks[String(id)]
@@ -246,9 +306,11 @@ function AttackPointsTable({ rows, showAll, onToggle, controls }) {
     return { diff, dir: diff > 0 ? 'up' : 'down' }
   }
 
-  // 합계(같은 라인에 표시)
   const totalPlayers = rows.length
-  const totalPts = rows.reduce((a, r) => a + (r.g + r.a), 0)
+  const rankTitle =
+    rankBy === 'g' ? 'Top Scorer'
+    : rankBy === 'a' ? 'Most Assists'
+    : '종합(PTS)'
 
   return (
     <div className="overflow-hidden rounded-lg border border-stone-200">
@@ -262,13 +324,13 @@ function AttackPointsTable({ rows, showAll, onToggle, controls }) {
           <col style={{ width: '56px' }} />
         </colgroup>
 
-        {/* 헤더 1행: 왼쪽 합계, 오른쪽 컨트롤(같은 라인) */}
         <thead>
           <tr>
             <th colSpan={6} className="border-b px-2 py-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="text-xs text-stone-500">
-                  총 선수 {totalPlayers}명
+                <div className="text-xs text-stone-600">
+                  <span className="font-semibold mr-1">{rankTitle}</span>
+                  · 총 선수 {totalPlayers}명
                 </div>
                 <div className="flex items-center gap-2">
                   {controls}
@@ -280,8 +342,8 @@ function AttackPointsTable({ rows, showAll, onToggle, controls }) {
             <th className="border-b px-1.5 py-1.5 md:px-3 md:py-2">순위</th>
             <th className="border-b px-2 py-1.5 md:px-3 md:py-2">선수</th>
             <th className="border-b px-2 py-1.5 md:px-3 md:py-2">출전</th>
-            <th className="border-b px-2 py-1.5 md:px-3 md:py-2">G</th>
-            <th className="border-b px-2 py-1.5 md:px-3 md:py-2">A</th>
+            <th className={`border-b px-2 py-1.5 md:px-3 md:py-2 ${headHi('g')}`}>G</th>
+            <th className={`border-b px-2 py-1.5 md:px-3 md:py-2 ${headHi('a')}`}>A</th>
             <th className="border-b px-2 py-1.5 md:px-3 md:py-2">PTS</th>
           </tr>
         </thead>
@@ -332,8 +394,8 @@ function AttackPointsTable({ rows, showAll, onToggle, controls }) {
                 </td>
 
                 <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.gp}</td>
-                <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.g}</td>
-                <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.a}</td>
+                <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg} ${colHi('g')}`}>{r.g}</td>
+                <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg} ${colHi('a')}`}>{r.a}</td>
                 <td className={`border-b px-2 py-1.5 font-semibold tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.pts}</td>
               </tr>
             )
