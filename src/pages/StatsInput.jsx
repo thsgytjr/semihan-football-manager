@@ -177,29 +177,27 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
   }
 
   // Parse bulk text lines into { date:Date, type:'goal'|'assist', name }
+  // Strict format checker: [date]goal[name] or [date]assist[name]
+  function isStrictLine(line) {
+    if (!line) return false
+    return /^\s*\[[^\]]+\]\s*(?:goal|assist)\s*\[[^\]]+\]\s*$/i.test(line)
+  }
   function parseBulkLines(text) {
     const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean)
     const out = []
     for (const line of lines) {
-      // find first [...] as date, last [...] as name
-      const first = line.match(/\[([^\]]+)\]/)
-      const last = line.match(/\[([^\]]+)\]([^\[]*$)/) // fallback
-      const dateStr = first ? first[1] : null
-      // find name as last bracket pair
-      const nameMatches = Array.from(line.matchAll(/\[([^\]]+)\]/g))
-      const name = nameMatches.length >= 2 ? nameMatches[nameMatches.length - 1][1] : (nameMatches[0] ? nameMatches[0][1] : null)
-
-      // determine type by emoji presence
-      const hasGoal = /⚽|⚽️/.test(line)
-      const hasAssist = /🤟|🎯|🅰️|A\b|assists?|assist/i.test(line)
-      const type = hasGoal ? 'goals' : hasAssist ? 'assists' : null
-
+      // Enforce strict format: require explicit 'goal' or 'assist' between brackets
+      if (!isStrictLine(line)) return []
+      const bracketMatches = Array.from(line.matchAll(/\[([^\]]+)\]/g)).map(m => m[1])
+      const dateStr = bracketMatches[0]
+      const name = bracketMatches[bracketMatches.length - 1]
+      // extract the literal word between the first and last bracket group
+      const betweenMatch = line.replace(/\[([^\]]+)\]/g, '¤').split('¤')[1] || ''
+      let type = null
+      if (/\bgoal\b/i.test(betweenMatch)) type = 'goals'
+      else if (/\bassist\b/i.test(betweenMatch)) type = 'assists'
       const dt = parseLooseDate(dateStr)
-      if (!dt || !type || !name) {
-        // try looser heuristics: maybe date exists elsewhere
-        // ignore invalid lines
-        continue
-      }
+      if (!dt || !type || !name) return []
       out.push({ date: dt, type, name: String(name).trim() })
     }
     return out
@@ -209,6 +207,13 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
   async function applyBulkToDraft() {
     setBulkMsg('')
     if (!bulkText.trim()) { setBulkMsg('붙여넣을 데이터가 비어 있습니다.'); return }
+    // Quick strict validation: every non-empty line must match the required pattern
+    const rawLines = String(bulkText || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+    const bad = rawLines.filter(l => !isStrictLine(l))
+    if (bad.length > 0) {
+      setBulkMsg('모든 줄이 [date]goal[name] 또는 [date]assist[name] 형식이어야 합니다. 오류 예시: ' + (bad.slice(0,3).join('; ')))
+      return
+    }
     const parsed = parseBulkLines(bulkText)
     if (parsed.length === 0) { setBulkMsg('파싱된 항목이 없습니다. 형식을 확인해 주세요.'); return }
 
@@ -266,11 +271,14 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       deltas.set(pid, cur)
     }
 
+    // If any parsed name does not match a known player, abort the whole bulk apply.
+    if (unmatched.length > 0) {
+      setBulkMsg('일치하지 않는 선수명이 있습니다: ' + Array.from(new Set(unmatched)).slice(0,10).join(', '))
+      return
+    }
+
     if (deltas.size === 0) {
-      const parts = []
-      if (unmatched.length) parts.push('이름 불일치: ' + unmatched.slice(0,5).join(', '))
-      if (excludedByDate && excludedByDate.length) parts.push('선택된 매치 날짜와 불일치(모두 제외됨): ' + excludedByDate.slice(0,5).join(', '))
-      setBulkMsg(parts.length ? parts.join(' · ') : '일치하는 선수가 없습니다.')
+      setBulkMsg('일치하는 선수가 없습니다.')
       return
     }
 
@@ -293,7 +301,6 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
 
     let parts = [`초안에 적용되었습니다: ${deltas.size}명 업데이트`]
     if (unmatched.length) parts.push(`이름 불일치: ${unmatched.slice(0,5).join(', ')}`)
-    if (excludedByDate && excludedByDate.length) parts.push(`선택된 매치 날짜와 불일치(제외됨): ${excludedByDate.slice(0,5).join(', ')}`)
     setBulkMsg(parts.join(' · '))
   }
 
@@ -379,8 +386,8 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
 
                 {/* Right: bulk textarea and actions */}
                 <div className="space-y-2">
-                  <label className="text-xs text-gray-500 block">Bulk 입력 (예: [10/04/2025 9:15AM]⚽️or🤟 [홍길동])</label>
-                  <textarea value={bulkText} onChange={e=>setBulkText(e.target.value)} placeholder="각 줄마다 날짜·아이콘·이름을 대괄호로 감싸 입력하세요." className="w-full h-28 md:h-36 rounded border border-gray-300 bg-white px-3 py-2 text-sm resize-vertical" />
+                  <label className="text-xs text-gray-500 block">Bulk 입력 (예: [10/04/2025 9:15AM]goal[홍길동] or [10/04/2025 9:15AM]assist[홍길동])</label>
+                  <textarea value={bulkText} onChange={e=>setBulkText(e.target.value)} placeholder="각 줄마다 날짜·goal·이름 또는 날짜·assist·이름을 대괄호로 감싸 입력하세요." className="w-full h-28 md:h-36 rounded border border-gray-300 bg-white px-3 py-2 text-sm resize-vertical" />
                   <div className="flex items-center gap-2">
                     <button onClick={applyBulkToDraft} className="rounded bg-amber-500 px-3 py-1 text-xs text-white">파싱하여 초안에 적용</button>
                     <button onClick={()=>{setBulkText(''); setBulkMsg('')}} className="rounded border px-2 py-1 text-xs">지우기</button>
@@ -400,7 +407,11 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
                       <span className="text-xs text-gray-500">{p.position||p.pos||'-'}</span>
                     </div>
                     <button
-                      onClick={()=>setPanelIds(prev => prev.includes(p.id)? prev : [...prev, p.id])}
+                      onClick={()=>{
+                        // When adding to panel, reset this player's draft stats to zero (per user request)
+                        setDraft(prev=>({ ...(prev||{}), [p.id]: { goals: 0, assists: 0 } }))
+                        setPanelIds(prev => prev.includes(p.id)? prev : [...prev, p.id])
+                      }}
                       className="rounded bg-stone-900 px-2 py-1 text-xs text-white"
                     >
                       패널에 추가
@@ -418,6 +429,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
               panelIds={panelIds}
               setPanelIds={setPanelIds}
               draft={draft}
+              setDraft={setDraft}
               setVal={setVal}
               onSave={save}
             />
@@ -430,13 +442,23 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
   )
 }
 
-function EditorPanel({ players, panelIds, setPanelIds, draft, setVal, onSave }){
+function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, onSave }){
   return (
     <div className="rounded border border-gray-200 bg-white">
       <div className="flex items-center justify-between border-b px-3 py-2 text-xs">
         <div className="font-semibold">편집 패널 · {panelIds.length}명</div>
         <div className="flex items-center gap-2">
-          <button onClick={()=>setPanelIds([])} className="rounded border px-2 py-1">모두 제거</button>
+          <button onClick={()=>{
+            // Reset goals/assists for players currently in the panel, then clear the panel.
+            setDraft(prev=>{
+              const next = { ...prev }
+              for (const pid of panelIds) {
+                next[pid] = { goals: 0, assists: 0 }
+              }
+              return next
+            })
+            setPanelIds([])
+          }} className="rounded border px-2 py-1">모두 제거</button>
           <button onClick={onSave} className="rounded bg-emerald-600 px-3 py-1 text-white">저장</button>
         </div>
       </div>
@@ -467,7 +489,15 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setVal, onSave }){
                 onInc={()=>setVal(p.id,'assists',(rec.assists||0)+1)}
               />
 
-              <button onClick={()=>setPanelIds(prev=>prev.filter(id=>id!==pid))}
+              <button onClick={()=>{
+                  // Reset this player's draft stats to zero when removed from panel
+                  setDraft(prev=>{
+                    const next = { ...(prev||{}) }
+                    next[pid] = { goals: 0, assists: 0 }
+                    return next
+                  })
+                  setPanelIds(prev=>prev.filter(id=>id!==pid))
+                }}
                       className="ml-1 rounded border px-2 py-1 text-xs">
                 제거
               </button>
