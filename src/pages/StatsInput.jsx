@@ -43,24 +43,53 @@ function extractStatsByPlayer(m) {
   const src = m?.stats ?? m?.records ?? m?.playerStats ?? m?.ga ?? m?.scoreboard ?? null
   const out = {}
   if (!src) return out
+
+  // If src is an object mapping playerId -> { goals, assists } or -> { events: [...] }
   if (!Array.isArray(src) && typeof src === 'object') {
     for (const [k, v] of Object.entries(src)) {
       const pid = toStr(k)
       if (!pid) continue
-      out[pid] = { goals: Number(v?.goals || 0), assists: Number(v?.assists || 0) }
+      // normalize: v may be number counts or object
+      const goals = Number(v?.goals || v?.G || 0)
+      const assists = Number(v?.assists || v?.A || 0)
+      const events = Array.isArray(v?.events) ? (v.events.map(e=>({ type: e.type || e.event || (e?.isAssist? 'assist':'goal'), date: e.dateISO || e.date || e.ts || e.time || e?.dateISO }))).filter(Boolean) : []
+      out[pid] = { goals, assists, events }
     }
     return out
   }
+
+  // If src is an array of event records: { playerId, type/goal/assist, date }
   if (Array.isArray(src)) {
     for (const rec of src) {
-      const pid = toStr(rec?.playerId ?? rec?.id ?? rec?.user_id ?? rec?.uid)
+      const pid = toStr(rec?.playerId ?? rec?.id ?? rec?.user_id ?? rec?.uid ?? rec?.player)
       if (!pid) continue
-      out[pid] = {
-        goals: (out[pid]?.goals || 0) + Number(rec?.goals || 0),
-        assists: (out[pid]?.assists || 0) + Number(rec?.assists || 0)
+      const type = (rec?.type || (rec?.goal ? 'goals' : rec?.assist ? 'assists' : null) || (rec?.action) || '').toString().toLowerCase()
+      const isGoal = /goal/i.test(type)
+      const isAssist = /assist/i.test(type)
+      const date = rec?.dateISO || rec?.date || rec?.time || rec?.ts || null
+      out[pid] = out[pid] || { goals: 0, assists: 0, events: [] }
+      if (isGoal) {
+        out[pid].goals = (out[pid].goals || 0) + Number(rec?.goals || 1)
+        out[pid].events.push({ type: 'goal', date: date || null })
+      } else if (isAssist) {
+        out[pid].assists = (out[pid].assists || 0) + Number(rec?.assists || 1)
+        out[pid].events.push({ type: 'assist', date: date || null })
+      } else {
+        // fallback: if record has numeric goals/assists properties
+        const g = Number(rec?.goals || 0), a = Number(rec?.assists || 0)
+        if (g) {
+          out[pid].goals = (out[pid].goals || 0) + g
+          for (let i = 0; i < g; i++) out[pid].events.push({ type: 'goal', date: date || null })
+        }
+        if (a) {
+          out[pid].assists = (out[pid].assists || 0) + a
+          for (let i = 0; i < a; i++) out[pid].events.push({ type: 'assist', date: date || null })
+        }
       }
     }
+    return out
   }
+
   return out
 }
 
@@ -94,13 +123,36 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     for (const p of players) {
       if (!ids.has(toStr(p.id))) continue
       const rec = src?.[toStr(p.id)] || {}
-      next[p.id] = { goals: Number(rec.goals || 0), assists: Number(rec.assists || 0) }
+      next[p.id] = { goals: Number(rec.goals || 0), assists: Number(rec.assists || 0), events: Array.isArray(rec.events)? rec.events.slice() : [] }
     }
     setDraft(next)
   }, [editingMatch, players])
 
   const setVal = (pid, key, v) =>
-    setDraft(prev => ({ ...prev, [pid]: { ...prev[pid], [key]: Math.max(0, v || 0) } }))
+    setDraft(prev => {
+      const now = new Date().toISOString()
+      const prevRec = prev?.[pid] || { goals: 0, assists: 0, events: [] }
+      const prevVal = Number(prevRec[key] || 0)
+      const nextVal = Math.max(0, Number(v || 0))
+      const diff = nextVal - prevVal
+      const next = { ...(prev || {}) }
+      const rec = { goals: prevRec.goals || 0, assists: prevRec.assists || 0, events: Array.isArray(prevRec.events)? prevRec.events.slice() : [] }
+      if (diff > 0) {
+        // add timestamped events for increments
+        for (let i=0;i<diff;i++) rec.events.push({ type: key === 'goals' ? 'goal' : 'assist', date: now })
+      } else if (diff < 0) {
+        // remove latest events of this type when decrementing
+        let toRemove = -diff
+        for (let i = rec.events.length - 1; i >= 0 && toRemove > 0; i--) {
+          if (rec.events[i].type === (key === 'goals' ? 'goal' : 'assist')) {
+            rec.events.splice(i, 1); toRemove--
+          }
+        }
+      }
+      rec[key] = nextVal
+      next[pid] = rec
+      return next
+    })
 
   // Bulk paste states: raw text and status message
   const [bulkText, setBulkText] = useState('')
@@ -231,13 +283,11 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     })
     if (!matchForWeek) { setBulkMsg('해당 주에 저장된 매치를 찾을 수 없습니다.'); return }
 
-    // If user already has a match selected in the dropdown and it does NOT match the parsed week, abort
     if (editingMatchId && toStr(editingMatchId) !== toStr(matchForWeek.id)) {
       setBulkMsg('현재 선택된 매치와 붙여넣은 데이터의 날짜(주)가 일치하지 않습니다. 먼저 해당 주의 매치를 선택하거나, 선택을 비운 후 다시 시도하세요.')
       return
     }
 
-    // Only auto-switch editing match when none is currently selected
     if (!editingMatchId) setEditingMatchId(toStr(matchForWeek.id))
 
     // determine selected match full-day key (YYYY-MM-DD)
@@ -259,15 +309,17 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     const nameMap = new Map(players.map(p => [String((p.name||'').trim()).toLowerCase(), p]))
 
     // accumulate deltas from parsed lines (all lines match the selected date at this point)
-    const deltas = new Map() // pid -> {goals,assists}
+    // store counts and events
+    const deltas = new Map() // pid -> {goals,assists, events: [{type,date}]}
     const unmatched = []
     for (const item of parsed) {
       const key = String((item.name || '').trim()).toLowerCase()
       const player = nameMap.get(key)
       if (!player) { unmatched.push(item.name); continue }
       const pid = player.id
-      const cur = deltas.get(pid) || { goals: 0, assists: 0 }
-      cur[item.type] = (cur[item.type] || 0) + 1
+      const cur = deltas.get(pid) || { goals: 0, assists: 0, events: [] }
+      if (item.type === 'goals' || item.type === 'goal') { cur.goals = (cur.goals || 0) + 1; cur.events.push({ type: 'goal', date: item.date.toISOString() }) }
+      else if (item.type === 'assists' || item.type === 'assist') { cur.assists = (cur.assists || 0) + 1; cur.events.push({ type: 'assist', date: item.date.toISOString() }) }
       deltas.set(pid, cur)
     }
 
@@ -284,10 +336,13 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
 
     // apply deltas to current draft (for the matched match)
     setDraft(prev => {
-      const next = { ...prev }
+      const next = { ...(prev || {}) }
       for (const [pid, delta] of deltas.entries()) {
-        const now = next[pid] || { goals: 0, assists: 0 }
-        next[pid] = { goals: (now.goals || 0) + (delta.goals || 0), assists: (now.assists || 0) + (delta.assists || 0) }
+        const now = next[pid] || { goals: 0, assists: 0, events: [] }
+        const events = Array.isArray(now.events) ? now.events.slice() : []
+        // append parsed events
+        for (const e of (delta.events || [])) events.push({ type: e.type, date: e.date })
+        next[pid] = { goals: (now.goals || 0) + (delta.goals || 0), assists: (now.assists || 0) + (delta.assists || 0), events }
       }
       return next
     })
@@ -409,7 +464,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
                     <button
                       onClick={()=>{
                         // When adding to panel, reset this player's draft stats to zero (per user request)
-                        setDraft(prev=>({ ...(prev||{}), [p.id]: { goals: 0, assists: 0 } }))
+                        setDraft(prev=>({ ...(prev||{}), [p.id]: { goals: 0, assists: 0, events: [] } }))
                         setPanelIds(prev => prev.includes(p.id)? prev : [...prev, p.id])
                       }}
                       className="rounded bg-stone-900 px-2 py-1 text-xs text-white"
@@ -453,7 +508,7 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
             setDraft(prev=>{
               const next = { ...prev }
               for (const pid of panelIds) {
-                next[pid] = { goals: 0, assists: 0 }
+                next[pid] = { goals: 0, assists: 0, events: [] }
               }
               return next
             })
@@ -465,7 +520,7 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
       <ul className="divide-y divide-gray-100">
         {panelIds.map(pid => {
           const p = players.find(pp => toStr(pp.id)===toStr(pid))
-          const rec = draft[pid] || { goals:0, assists:0 }
+          const rec = draft[pid] || { goals:0, assists:0, events:[] }
           if (!p) return null
           return (
             <li key={toStr(pid)} className="flex items-center gap-3 px-3 py-2">
@@ -493,7 +548,7 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
                   // Reset this player's draft stats to zero when removed from panel
                   setDraft(prev=>{
                     const next = { ...(prev||{}) }
-                    next[pid] = { goals: 0, assists: 0 }
+                    next[pid] = { goals: 0, assists: 0, events: [] }
                     return next
                   })
                   setPanelIds(prev=>prev.filter(id=>id!==pid))
