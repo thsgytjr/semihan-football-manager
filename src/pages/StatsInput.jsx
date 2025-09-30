@@ -123,15 +123,17 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     for (const p of players) {
       if (!ids.has(toStr(p.id))) continue
       const rec = src?.[toStr(p.id)] || {}
-      next[p.id] = { goals: Number(rec.goals || 0), assists: Number(rec.assists || 0), events: Array.isArray(rec.events)? rec.events.slice() : [] }
+      // normalize key to string to avoid mismatches with panelIds which are strings
+      next[toStr(p.id)] = { goals: Number(rec.goals || 0), assists: Number(rec.assists || 0), events: Array.isArray(rec.events)? rec.events.slice() : [] }
     }
     setDraft(next)
   }, [editingMatch, players])
 
   const setVal = (pid, key, v) =>
     setDraft(prev => {
+      const k = toStr(pid)
       const now = new Date().toISOString()
-      const prevRec = prev?.[pid] || { goals: 0, assists: 0, events: [] }
+      const prevRec = prev?.[k] || { goals: 0, assists: 0, events: [] }
       const prevVal = Number(prevRec[key] || 0)
       const nextVal = Math.max(0, Number(v || 0))
       const diff = nextVal - prevVal
@@ -150,7 +152,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
         }
       }
       rec[key] = nextVal
-      next[pid] = rec
+      next[k] = rec
       return next
     })
 
@@ -338,11 +340,12 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     setDraft(prev => {
       const next = { ...(prev || {}) }
       for (const [pid, delta] of deltas.entries()) {
-        const now = next[pid] || { goals: 0, assists: 0, events: [] }
+        const k = toStr(pid)
+        const now = next[k] || { goals: 0, assists: 0, events: [] }
         const events = Array.isArray(now.events) ? now.events.slice() : []
         // append parsed events
         for (const e of (delta.events || [])) events.push({ type: e.type, date: e.date })
-        next[pid] = { goals: (now.goals || 0) + (delta.goals || 0), assists: (now.assists || 0) + (delta.assists || 0), events }
+        next[k] = { goals: (now.goals || 0) + (delta.goals || 0), assists: (now.assists || 0) + (delta.assists || 0), events }
       }
       return next
     })
@@ -350,7 +353,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     // 자동으로 편집 패널(panelIds)에 반영 (저장하지 않음)
     setPanelIds(prev => {
       const nextSet = new Set(Array.isArray(prev) ? prev.map(String) : [])
-      for (const pid of deltas.keys()) nextSet.add(String(pid))
+      for (const pid of deltas.keys()) nextSet.add(toStr(pid))
       return Array.from(nextSet)
     })
 
@@ -463,9 +466,19 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
                     </div>
                     <button
                       onClick={()=>{
-                        // When adding to panel, reset this player's draft stats to zero (per user request)
-                        setDraft(prev=>({ ...(prev||{}), [p.id]: { goals: 0, assists: 0, events: [] } }))
-                        setPanelIds(prev => prev.includes(p.id)? prev : [...prev, p.id])
+                        // When adding to panel, preserve existing draft stats if present; otherwise initialize to zero
+                        setDraft(prev=>{
+                          const next = { ...(prev||{}) }
+                          const k = toStr(p.id)
+                          if (!next[k]) {
+                            next[k] = { goals: 0, assists: 0, events: [] }
+                          }
+                          return next
+                        })
+                        setPanelIds(prev => {
+                          const sval = toStr(p.id)
+                          return (Array.isArray(prev) && prev.includes(sval)) ? prev : [...(Array.isArray(prev)?prev:[]), sval]
+                        })
                       }}
                       className="rounded bg-stone-900 px-2 py-1 text-xs text-white"
                     >
@@ -508,7 +521,7 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
             setDraft(prev=>{
               const next = { ...prev }
               for (const pid of panelIds) {
-                next[pid] = { goals: 0, assists: 0, events: [] }
+                next[toStr(pid)] = { goals: 0, assists: 0, events: [] }
               }
               return next
             })
@@ -520,7 +533,7 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
       <ul className="divide-y divide-gray-100">
         {panelIds.map(pid => {
           const p = players.find(pp => toStr(pp.id)===toStr(pid))
-          const rec = draft[pid] || { goals:0, assists:0, events:[] }
+          const rec = draft[toStr(pid)] || { goals:0, assists:0, events:[] }
           if (!p) return null
           return (
             <li key={toStr(pid)} className="flex items-center gap-3 px-3 py-2">
@@ -548,10 +561,10 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
                   // Reset this player's draft stats to zero when removed from panel
                   setDraft(prev=>{
                     const next = { ...(prev||{}) }
-                    next[pid] = { goals: 0, assists: 0, events: [] }
+                    next[toStr(pid)] = { goals: 0, assists: 0, events: [] }
                     return next
                   })
-                  setPanelIds(prev=>prev.filter(id=>id!==pid))
+                  setPanelIds(prev=>prev.filter(id=>id!==toStr(pid)))
                 }}
                       className="ml-1 rounded border px-2 py-1 text-xs">
                 제거
