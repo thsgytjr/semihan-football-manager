@@ -1,0 +1,32 @@
+[
+  {
+    "id": "1",
+    "name": "김세민",
+    "position": "FW",
+    "membership": "local",
+    "photoUrl": "/src/assets/semihan-football-manager-logo.png",
+    "stats": {},
+    "created_at": "2025-01-01T00:00:00.000Z",
+    "updated_at": "2025-01-01T00:00:00.000Z"
+  },
+  {
+    "id": "2",
+    "name": "이준호",
+    "position": "MF",
+    "membership": "local",
+    "photoUrl": null,
+    "stats": {},
+    "created_at": "2025-01-02T00:00:00.000Z",
+    "updated_at": "2025-01-02T00:00:00.000Z"
+  },
+  {
+    "id": "3",
+    "name": "박지훈",
+    "position": "DF",
+    "membership": "local",
+    "photoUrl": null,
+    "stats": {},
+    "created_at": "2025-01-03T00:00:00.000Z",
+    "updated_at": "2025-01-03T00:00:00.000Z"
+  }
+]

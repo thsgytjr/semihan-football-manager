@@ -1,0 +1,767 @@
+[
+  {
+    "id": "78f6e73c-25c2-4eab-ad1d-dd9b1740c9db",
+    "name": "장상희",
+    "position": "FW",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(352%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(22%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%9E%A5%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 72,
+      "Passing": 72,
+      "Stamina": 50,
+      "Physical": 72,
+      "Shooting": 73,
+      "Dribbling": 72
+    },
+    "created_at": "2025-09-28T04:05:54.833644+00:00",
+    "updated_at": "2025-09-28T04:05:54.594+00:00"
+  },
+  {
+    "id": "d905c93f-2a8e-4c55-886d-51132e50285c",
+    "name": "김현우",
+    "position": "MF",
+    "membership": "게스트",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(260%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(290%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EA%B9%80%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 83,
+      "Passing": 80,
+      "Stamina": 77,
+      "Physical": 78,
+      "Shooting": 80,
+      "Dribbling": 82
+    },
+    "created_at": "2025-09-25T17:42:11.658042+00:00",
+    "updated_at": "2025-09-25T17:42:11.164+00:00"
+  },
+  {
+    "id": "a7756a52-80ba-4d57-a620-1f928702315c",
+    "name": "Josh",
+    "position": "DF",
+    "membership": "게스트",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(74%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(104%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20J%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 50,
+      "Passing": 50,
+      "Stamina": 50,
+      "Physical": 50,
+      "Shooting": 50,
+      "Dribbling": 50
+    },
+    "created_at": "2025-09-25T17:40:42.709257+00:00",
+    "updated_at": "2025-09-25T17:40:42.516+00:00"
+  },
+  {
+    "id": "7ef04947-3e04-43a5-948b-f53fb73927ac",
+    "name": "이대영",
+    "position": "DF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(213%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(243%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%9D%B4%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 63,
+      "Passing": 67,
+      "Stamina": 69,
+      "Physical": 64,
+      "Shooting": 70,
+      "Dribbling": 70
+    },
+    "created_at": "2025-09-20T15:09:50.160668+00:00",
+    "updated_at": "2025-09-20T15:09:49.797+00:00"
+  },
+  {
+    "id": "926bee3e-2b31-4327-880f-a3bf7d84fc29",
+    "name": "김진영",
+    "position": "FW",
+    "membership": "게스트",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(69%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(99%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EA%B9%80%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 71,
+      "Passing": 70,
+      "Stamina": 64,
+      "Physical": 68,
+      "Shooting": 66,
+      "Dribbling": 67
+    },
+    "created_at": "2025-09-19T21:45:17.706551+00:00",
+    "updated_at": "2025-09-20T19:01:27.904+00:00"
+  },
+  {
+    "id": "ae1fa230-43a2-4768-9c23-57c52a4d2c5c",
+    "name": "윤대완",
+    "position": "MF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(80%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(110%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%9C%A4%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 70,
+      "Passing": 82,
+      "Stamina": 66,
+      "Physical": 68,
+      "Shooting": 66,
+      "Dribbling": 77
+    },
+    "created_at": "2025-09-19T21:44:37.761527+00:00",
+    "updated_at": "2025-09-20T19:02:45.55+00:00"
+  },
+  {
+    "id": "0af62857-3c09-4af8-b703-10d8a500beaf",
+    "name": "이진현",
+    "position": "MF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(300%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(330%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%9D%B4%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 66,
+      "Passing": 68,
+      "Stamina": 50,
+      "Physical": 66,
+      "Shooting": 68,
+      "Dribbling": 68
+    },
+    "created_at": "2025-09-19T04:07:03.853163+00:00",
+    "updated_at": "2025-09-19T04:07:03.634+00:00"
+  },
+  {
+    "id": "3c33208e-5908-46d5-ab4f-e0a074079bb1",
+    "name": "이승호",
+    "position": "DF",
+    "membership": "게스트",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 68,
+      "Passing": 70,
+      "Stamina": 63,
+      "Physical": 64,
+      "Shooting": 57,
+      "Dribbling": 61
+    },
+    "created_at": "2025-09-17T08:31:17.917878+00:00",
+    "updated_at": "2025-09-20T17:24:29.166+00:00"
+  },
+  {
+    "id": "d8e78c4e-32db-44cd-9e04-5a2e1218dc85",
+    "name": "김재성",
+    "position": "DF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 80,
+      "Passing": 74,
+      "Stamina": 74,
+      "Physical": 84,
+      "Shooting": 69,
+      "Dribbling": 79
+    },
+    "created_at": "2025-09-16T23:04:06.965288+00:00",
+    "updated_at": "2025-09-20T17:25:18.988+00:00"
+  },
+  {
+    "id": "848b4ae7-238b-4382-8f2e-ac2566e3b966",
+    "name": "박경태",
+    "position": "DF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 71,
+      "Passing": 65,
+      "Stamina": 59,
+      "Physical": 74,
+      "Shooting": 65,
+      "Dribbling": 62
+    },
+    "created_at": "2025-09-15T02:45:40.073217+00:00",
+    "updated_at": "2025-09-15T02:46:52.923+00:00"
+  },
+  {
+    "id": "898cf774-6ab1-41af-bae2-23dcf751fa37",
+    "name": "조상래",
+    "position": "MF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 71,
+      "Passing": 68,
+      "Stamina": 68,
+      "Physical": 65,
+      "Shooting": 69,
+      "Dribbling": 71
+    },
+    "created_at": "2025-09-15T02:44:10.32647+00:00",
+    "updated_at": "2025-09-15T02:44:45.073+00:00"
+  },
+  {
+    "id": "466b4a6a-8413-47a6-a123-686accf7467b",
+    "name": "이광제",
+    "position": "DF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 84,
+      "Passing": 88,
+      "Stamina": 65,
+      "Physical": 70,
+      "Shooting": 75,
+      "Dribbling": 81
+    },
+    "created_at": "2025-09-15T02:43:25.566732+00:00",
+    "updated_at": "2025-09-15T02:44:05.173+00:00"
+  },
+  {
+    "id": "f0b16eb3-84c4-4ba6-9211-e04979bdf336",
+    "name": "윤양훈",
+    "position": "FW",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 58,
+      "Passing": 57,
+      "Stamina": 61,
+      "Physical": 62,
+      "Shooting": 59,
+      "Dribbling": 61
+    },
+    "created_at": "2025-09-15T02:42:47.28955+00:00",
+    "updated_at": "2025-09-20T19:02:58.819+00:00"
+  },
+  {
+    "id": "f9dfa22c-4a3f-42fa-aab6-8051835c72ac",
+    "name": "이승현",
+    "position": "MF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 82,
+      "Passing": 83,
+      "Stamina": 80,
+      "Physical": 79,
+      "Shooting": 81,
+      "Dribbling": 80
+    },
+    "created_at": "2025-09-15T02:42:06.274613+00:00",
+    "updated_at": "2025-09-15T02:42:35.653+00:00"
+  },
+  {
+    "id": "ff200161-cff6-4561-b95a-8347219d77a6",
+    "name": "Jason",
+    "position": "MF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 85,
+      "Passing": 81,
+      "Stamina": 81,
+      "Physical": 82,
+      "Shooting": 86,
+      "Dribbling": 85
+    },
+    "created_at": "2025-09-15T02:41:31.916394+00:00",
+    "updated_at": "2025-09-15T02:42:01.572+00:00"
+  },
+  {
+    "id": "5687c53a-4c73-4047-a24f-740a52b1875c",
+    "name": "Brandon",
+    "position": "DF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 63,
+      "Passing": 63,
+      "Stamina": 63,
+      "Physical": 68,
+      "Shooting": 69,
+      "Dribbling": 65
+    },
+    "created_at": "2025-09-15T02:40:08.790828+00:00",
+    "updated_at": "2025-09-15T02:40:51.706+00:00"
+  },
+  {
+    "id": "3995551e-5f55-4fed-849c-284aa897cdd9",
+    "name": "Adu",
+    "position": "DF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 63,
+      "Passing": 64,
+      "Stamina": 72,
+      "Physical": 70,
+      "Shooting": 61,
+      "Dribbling": 69
+    },
+    "created_at": "2025-09-15T02:32:26.265856+00:00",
+    "updated_at": "2025-09-17T19:00:00.686+00:00"
+  },
+  {
+    "id": "f7a61634-313b-430b-a092-4aaef18e66e4",
+    "name": "이석제",
+    "position": "FW",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 90,
+      "Passing": 69,
+      "Stamina": 81,
+      "Physical": 91,
+      "Shooting": 81,
+      "Dribbling": 71
+    },
+    "created_at": "2025-09-15T02:31:34.447751+00:00",
+    "updated_at": "2025-09-15T02:32:22.633+00:00"
+  },
+  {
+    "id": "48b0cada-3b8a-4ea2-b21f-b31f570a4bb6",
+    "name": "Peter",
+    "position": "MF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 79,
+      "Passing": 83,
+      "Stamina": 75,
+      "Physical": 59,
+      "Shooting": 69,
+      "Dribbling": 86
+    },
+    "created_at": "2025-09-15T02:30:44.855239+00:00",
+    "updated_at": "2025-09-20T18:14:40.905+00:00"
+  },
+  {
+    "id": "ff30a3c9-d1a7-4bec-9c83-2fac487d0760",
+    "name": "이현민",
+    "position": "DF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 69,
+      "Passing": 80,
+      "Stamina": 58,
+      "Physical": 65,
+      "Shooting": 64,
+      "Dribbling": 68
+    },
+    "created_at": "2025-09-15T00:38:59.050955+00:00",
+    "updated_at": "2025-09-15T00:40:08.981+00:00"
+  },
+  {
+    "id": "77b529e8-a528-4e09-805b-2c37f1f249ba",
+    "name": "공호건",
+    "position": "MF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 75,
+      "Passing": 65,
+      "Stamina": 68,
+      "Physical": 61,
+      "Shooting": 70,
+      "Dribbling": 61
+    },
+    "created_at": "2025-09-13T03:04:35.783513+00:00",
+    "updated_at": "2025-09-20T21:24:45.15+00:00"
+  },
+  {
+    "id": "08e9d281-cb26-457b-8bbf-6a2ac96ac3cc",
+    "name": "오인택",
+    "position": "MF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 82,
+      "Passing": 83,
+      "Stamina": 81,
+      "Physical": 75,
+      "Shooting": 79,
+      "Dribbling": 88
+    },
+    "created_at": "2025-09-12T23:29:22.550024+00:00",
+    "updated_at": "2025-09-19T23:15:13.333+00:00"
+  },
+  {
+    "id": "0138e8b1-eae8-443e-8a6e-3b56fb8e052e",
+    "name": "션",
+    "position": "FW",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 70,
+      "Passing": 77,
+      "Stamina": 70,
+      "Physical": 71,
+      "Shooting": 82,
+      "Dribbling": 78
+    },
+    "created_at": "2025-09-12T22:11:02.279455+00:00",
+    "updated_at": "2025-09-21T03:36:47.898+00:00"
+  },
+  {
+    "id": "89b68672-9cc5-4454-b550-514029cb487b",
+    "name": "김동수",
+    "position": "FW",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 66,
+      "Passing": 71,
+      "Stamina": 65,
+      "Physical": 64,
+      "Shooting": 79,
+      "Dribbling": 65
+    },
+    "created_at": "2025-09-12T21:48:44.692309+00:00",
+    "updated_at": "2025-09-12T21:49:25.656+00:00"
+  },
+  {
+    "id": "7ee3b378-37b6-4a01-9042-d4f3dbcc5371",
+    "name": "백동철",
+    "position": "FW",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 60,
+      "Passing": 60,
+      "Stamina": 71,
+      "Physical": 73,
+      "Shooting": 53,
+      "Dribbling": 67
+    },
+    "created_at": "2025-09-12T19:59:14.735582+00:00",
+    "updated_at": "2025-09-21T03:39:17.518+00:00"
+  },
+  {
+    "id": "7ce316e5-93c8-4b7d-8c24-29bf3031fee8",
+    "name": "손효석",
+    "position": "FW",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 71,
+      "Passing": 64,
+      "Stamina": 73,
+      "Physical": 68,
+      "Shooting": 68,
+      "Dribbling": 57
+    },
+    "created_at": "2025-09-11T09:22:51.721532+00:00",
+    "updated_at": "2025-09-15T02:45:26.69+00:00"
+  },
+  {
+    "id": "7f79b6a1-9585-4181-8134-1e7b422a1b77",
+    "name": "황진영",
+    "position": "DF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 68,
+      "Passing": 59,
+      "Stamina": 80,
+      "Physical": 82,
+      "Shooting": 68,
+      "Dribbling": 53
+    },
+    "created_at": "2025-09-11T09:22:15.021916+00:00",
+    "updated_at": "2025-09-14T07:00:36.4+00:00"
+  },
+  {
+    "id": "b91cc0b5-39ec-438b-ac44-aaac036dc26f",
+    "name": "최성우",
+    "position": "MF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 88,
+      "Passing": 64,
+      "Stamina": 82,
+      "Physical": 77,
+      "Shooting": 65,
+      "Dribbling": 73
+    },
+    "created_at": "2025-09-11T09:21:47.988077+00:00",
+    "updated_at": "2025-09-14T07:13:03.56+00:00"
+  },
+  {
+    "id": "39f8aa9a-1251-49b4-8033-64d6c0423ec0",
+    "name": "정연제",
+    "position": "MF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 70,
+      "Passing": 60,
+      "Stamina": 73,
+      "Physical": 72,
+      "Shooting": 58,
+      "Dribbling": 61
+    },
+    "created_at": "2025-09-11T09:21:28.181338+00:00",
+    "updated_at": "2025-09-14T07:01:38.781+00:00"
+  },
+  {
+    "id": "aa6697af-6723-4958-9ea3-d02c573042f4",
+    "name": "이승환",
+    "position": "DF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 70,
+      "Passing": 70,
+      "Stamina": 67,
+      "Physical": 75,
+      "Shooting": 63,
+      "Dribbling": 54
+    },
+    "created_at": "2025-09-11T09:21:06.485204+00:00",
+    "updated_at": "2025-09-20T19:04:18.882+00:00"
+  },
+  {
+    "id": "4fd6b939-2410-401f-a799-162883be8fa7",
+    "name": "박성완",
+    "position": "DF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 71,
+      "Passing": 81,
+      "Stamina": 70,
+      "Physical": 68,
+      "Shooting": 78,
+      "Dribbling": 66
+    },
+    "created_at": "2025-09-11T09:20:34.944777+00:00",
+    "updated_at": "2025-09-21T03:37:26.396+00:00"
+  },
+  {
+    "id": "8d4196a2-09d6-40fa-bc2c-6bb0d8b3bc4e",
+    "name": "김지하",
+    "position": "GK",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 50,
+      "Passing": 50,
+      "Stamina": 50,
+      "Physical": 50,
+      "Shooting": 50,
+      "Dribbling": 50
+    },
+    "created_at": "2025-09-11T09:20:16.871395+00:00",
+    "updated_at": "2025-09-11T09:20:27.352+00:00"
+  },
+  {
+    "id": "40a35c0c-0682-497e-bd35-21e06a82967d",
+    "name": "김준호",
+    "position": "MF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 73,
+      "Passing": 75,
+      "Stamina": 65,
+      "Physical": 73,
+      "Shooting": 69,
+      "Dribbling": 80
+    },
+    "created_at": "2025-09-11T09:19:59.01981+00:00",
+    "updated_at": "2025-09-21T03:37:06.277+00:00"
+  },
+  {
+    "id": "4e2cf343-082f-4d83-a2ea-386fe82b3dfa",
+    "name": "김광욱",
+    "position": "MF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 68,
+      "Passing": 72,
+      "Stamina": 70,
+      "Physical": 64,
+      "Shooting": 60,
+      "Dribbling": 77
+    },
+    "created_at": "2025-09-11T09:19:34.653938+00:00",
+    "updated_at": "2025-09-21T03:38:35.952+00:00"
+  },
+  {
+    "id": "2bd4ff05-599b-4fc1-990a-477e39d418a1",
+    "name": "박성민",
+    "position": "FW",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 76,
+      "Passing": 61,
+      "Stamina": 73,
+      "Physical": 70,
+      "Shooting": 66,
+      "Dribbling": 63
+    },
+    "created_at": "2025-09-11T09:19:10.662785+00:00",
+    "updated_at": "2025-09-14T06:59:25.915+00:00"
+  },
+  {
+    "id": "b4a53f87-708f-446b-a4ff-c7145a70a11d",
+    "name": "권오정",
+    "position": "FW",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 68,
+      "Passing": 65,
+      "Stamina": 72,
+      "Physical": 78,
+      "Shooting": 76,
+      "Dribbling": 54
+    },
+    "created_at": "2025-09-11T09:18:41.430493+00:00",
+    "updated_at": "2025-09-13T18:17:25.103+00:00"
+  },
+  {
+    "id": "b96a7f90-fbc9-45c9-9026-dee8d2bde782",
+    "name": "김정민",
+    "position": "DF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 69,
+      "Passing": 74,
+      "Stamina": 68,
+      "Physical": 73,
+      "Shooting": 59,
+      "Dribbling": 53
+    },
+    "created_at": "2025-09-11T09:18:14.742876+00:00",
+    "updated_at": "2025-09-11T12:47:55.885+00:00"
+  },
+  {
+    "id": "baa8468f-eb8c-40f6-82a6-ee9824856cec",
+    "name": "이재기",
+    "position": "FW",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 81,
+      "Passing": 63,
+      "Stamina": 83,
+      "Physical": 79,
+      "Shooting": 77,
+      "Dribbling": 65
+    },
+    "created_at": "2025-09-11T09:17:49.267397+00:00",
+    "updated_at": "2025-09-21T03:36:38.886+00:00"
+  },
+  {
+    "id": "a9103b1a-da58-4b42-92de-f14c36b11d3b",
+    "name": "황현석",
+    "position": "DF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 67,
+      "Passing": 69,
+      "Stamina": 59,
+      "Physical": 76,
+      "Shooting": 78,
+      "Dribbling": 67
+    },
+    "created_at": "2025-09-11T09:17:18.074552+00:00",
+    "updated_at": "2025-09-20T21:24:10.668+00:00"
+  },
+  {
+    "id": "3614b3a8-6e18-466c-9faf-99d0a82e8204",
+    "name": "박희량",
+    "position": "MF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 68,
+      "Passing": 63,
+      "Stamina": 66,
+      "Physical": 74,
+      "Shooting": 66,
+      "Dribbling": 68
+    },
+    "created_at": "2025-09-11T09:16:45.795928+00:00",
+    "updated_at": "2025-09-21T03:37:51.451+00:00"
+  },
+  {
+    "id": "62106cfc-f476-465f-9d51-fd5086b98e2e",
+    "name": "DK",
+    "position": "DF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 67,
+      "Passing": 81,
+      "Stamina": 72,
+      "Physical": 77,
+      "Shooting": 66,
+      "Dribbling": 70
+    },
+    "created_at": "2025-09-11T09:14:53.860025+00:00",
+    "updated_at": "2025-09-11T12:57:24.471+00:00"
+  },
+  {
+    "id": "35315a1d-62a8-4be8-b9f6-eef50a737ba6",
+    "name": "박철홍",
+    "position": "MF",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 68,
+      "Passing": 67,
+      "Stamina": 77,
+      "Physical": 71,
+      "Shooting": 65,
+      "Dribbling": 65
+    },
+    "created_at": "2025-09-11T09:14:31.05731+00:00",
+    "updated_at": "2025-09-20T19:02:12.549+00:00"
+  },
+  {
+    "id": "7e4bab4e-0aef-4ed3-ba60-67693c24f6de",
+    "name": "김치환",
+    "position": "FW",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 72,
+      "Passing": 59,
+      "Stamina": 75,
+      "Physical": 57,
+      "Shooting": 53,
+      "Dribbling": 60
+    },
+    "created_at": "2025-09-11T09:13:48.4824+00:00",
+    "updated_at": "2025-09-14T07:07:21.153+00:00"
+  },
+  {
+    "id": "d61f8420-6d5a-4924-96f4-333f156982f6",
+    "name": "Alex Kim",
+    "position": "FW",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 91,
+      "Passing": 73,
+      "Stamina": 77,
+      "Physical": 84,
+      "Shooting": 81,
+      "Dribbling": 75
+    },
+    "created_at": "2025-09-11T09:09:32.500726+00:00",
+    "updated_at": "2025-09-21T03:36:05.108+00:00"
+  },
+  {
+    "id": "fe2300e9-6df3-4ed7-b54a-8cf22e0fad6f",
+    "name": "Alex Lee",
+    "position": "FW",
+    "membership": "정회원",
+    "photo_url": "data:image/svg+xml;utf8,%0A%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22128%22%20height%3D%22128%22%3E%0A%20%20%20%20%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%25%22%20stop-color%3D%22hsl(312%2C70%25%2C60%25)%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%22100%25%22%20stop-color%3D%22hsl(342%2C70%25%2C55%25)%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20rx%3D%2264%22%20ry%3D%2264%22%20fill%3D%22url(%23g)%22%2F%3E%0A%20%20%20%20%3Ctext%20x%3D%2250%25%22%20y%3D%2254%25%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%0A%20%20%20%20%20%20%20%20%20%20font-family%3D%22system-ui%2C%20-apple-system%2C%20Segoe%20UI%2C%20Roboto%2C%20Inter%2C%20Helvetica%2C%20Arial%22%0A%20%20%20%20%20%20%20%20%20%20font-weight%3D%22700%22%20font-size%3D%2264%22%20fill%3D%22rgba(255%2C255%2C255%2C0.9)%22%3E%0A%20%20%20%20%20%20%EC%83%88%0A%20%20%20%20%3C%2Ftext%3E%0A%20%20%3C%2Fsvg%3E",
+    "stats": {
+      "Pace": 69,
+      "Passing": 51,
+      "Stamina": 66,
+      "Physical": 67,
+      "Shooting": 72,
+      "Dribbling": 51
+    },
+    "created_at": "2025-09-11T09:08:56.550591+00:00",
+    "updated_at": "2025-09-11T12:57:04.035+00:00"
+  }
+]

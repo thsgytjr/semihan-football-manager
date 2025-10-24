@@ -1,0 +1,1070 @@
+{
+  "visits": 355,
+  "matches": [
+    {
+      "id": "0cdfc61f-e629-4e6c-aa9d-0277886f666c",
+      "mode": "11v11",
+      "board": [
+        [
+          {
+            "x": 35,
+            "y": 72,
+            "id": "aa6697af-6723-4958-9ea3-d02c573042f4",
+            "name": "이승환",
+            "role": "DF"
+          },
+          {
+            "x": 78,
+            "y": 71.19354838709677,
+            "id": "4fd6b939-2410-401f-a799-162883be8fa7",
+            "name": "박성완",
+            "role": "DF"
+          },
+          {
+            "x": 65,
+            "y": 72,
+            "id": "a9103b1a-da58-4b42-92de-f14c36b11d3b",
+            "name": "황현석",
+            "role": "DF"
+          },
+          {
+            "x": 65,
+            "y": 72,
+            "id": "40a35c0c-0682-497e-bd35-21e06a82967d",
+            "name": "김준호",
+            "role": "MF"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "b4a53f87-708f-446b-a4ff-c7145a70a11d",
+            "name": "권오정",
+            "role": "FW"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "2bd4ff05-599b-4fc1-990a-477e39d418a1",
+            "name": "박성민",
+            "role": "FW"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "89b68672-9cc5-4454-b550-514029cb487b",
+            "name": "김동수",
+            "role": "FW"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "fe2300e9-6df3-4ed7-b54a-8cf22e0fad6f",
+            "name": "Alex Lee",
+            "role": "FW"
+          },
+          {
+            "x": 52.25,
+            "y": 18.54838709677419,
+            "id": "d61f8420-6d5a-4924-96f4-333f156982f6",
+            "name": "Alex Kim",
+            "role": "FW"
+          },
+          {
+            "x": 85.5,
+            "y": 34.03225806451613,
+            "id": "0138e8b1-eae8-443e-8a6e-3b56fb8e052e",
+            "name": "션",
+            "role": "FW"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "7ce316e5-93c8-4b7d-8c24-29bf3031fee8",
+            "name": "손효석",
+            "role": "FW"
+          },
+          {
+            "x": 50,
+            "y": 92,
+            "id": "8d4196a2-09d6-40fa-bc2c-6bb0d8b3bc4e",
+            "name": "김지하",
+            "role": "GK"
+          }
+        ],
+        [
+          {
+            "x": 65,
+            "y": 72,
+            "id": "b96a7f90-fbc9-45c9-9026-dee8d2bde782",
+            "name": "김정민",
+            "role": "DF"
+          },
+          {
+            "x": 35,
+            "y": 72,
+            "id": "7f79b6a1-9585-4181-8134-1e7b422a1b77",
+            "name": "황진영",
+            "role": "DF"
+          },
+          {
+            "x": 65,
+            "y": 72,
+            "id": "7e4bab4e-0aef-4ed3-ba60-67693c24f6de",
+            "name": "김치환",
+            "role": "MF"
+          },
+          {
+            "x": 75,
+            "y": 50,
+            "id": "08e9d281-cb26-457b-8bbf-6a2ac96ac3cc",
+            "name": "현수",
+            "role": "MF"
+          },
+          {
+            "x": 50,
+            "y": 50,
+            "id": "77b529e8-a528-4e09-805b-2c37f1f249ba",
+            "name": "공호건",
+            "role": "MF"
+          },
+          {
+            "x": 29.75,
+            "y": 49.354838709677416,
+            "id": "b91cc0b5-39ec-438b-ac44-aaac036dc26f",
+            "name": "최성우",
+            "role": "MF"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "35315a1d-62a8-4be8-b9f6-eef50a737ba6",
+            "name": "박철홍",
+            "role": "MF"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "3614b3a8-6e18-466c-9faf-99d0a82e8204",
+            "name": "박희량",
+            "role": "MF"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "4e2cf343-082f-4d83-a2ea-386fe82b3dfa",
+            "name": "김광욱",
+            "role": "MF"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "7ee3b378-37b6-4a01-9042-d4f3dbcc5371",
+            "name": "백동철",
+            "role": "FW"
+          },
+          {
+            "x": 84.75,
+            "y": 26.935483870967747,
+            "id": "baa8468f-eb8c-40f6-82a6-ee9824856cec",
+            "name": "이재기",
+            "role": "FW"
+          }
+        ]
+      ],
+      "stats": {
+        "0138e8b1-eae8-443e-8a6e-3b56fb8e052e": {
+          "goals": 3,
+          "assists": 1
+        },
+        "2bd4ff05-599b-4fc1-990a-477e39d418a1": {
+          "goals": 2,
+          "assists": 3
+        },
+        "35315a1d-62a8-4be8-b9f6-eef50a737ba6": {
+          "goals": 0,
+          "assists": 1
+        },
+        "3614b3a8-6e18-466c-9faf-99d0a82e8204": {
+          "goals": 1,
+          "assists": 1
+        },
+        "40a35c0c-0682-497e-bd35-21e06a82967d": {
+          "goals": 0,
+          "assists": 0
+        },
+        "4e2cf343-082f-4d83-a2ea-386fe82b3dfa": {
+          "goals": 0,
+          "assists": 2
+        },
+        "4fd6b939-2410-401f-a799-162883be8fa7": {
+          "goals": 0,
+          "assists": 1
+        },
+        "77b529e8-a528-4e09-805b-2c37f1f249ba": {
+          "goals": 1,
+          "assists": 0
+        },
+        "7ce316e5-93c8-4b7d-8c24-29bf3031fee8": {
+          "goals": 0,
+          "assists": 2
+        },
+        "7e4bab4e-0aef-4ed3-ba60-67693c24f6de": {
+          "goals": 0,
+          "assists": 0
+        },
+        "7ee3b378-37b6-4a01-9042-d4f3dbcc5371": {
+          "goals": 0,
+          "assists": 0
+        },
+        "7f79b6a1-9585-4181-8134-1e7b422a1b77": {
+          "goals": 0,
+          "assists": 0
+        },
+        "89b68672-9cc5-4454-b550-514029cb487b": {
+          "goals": 0,
+          "assists": 0
+        },
+        "8d4196a2-09d6-40fa-bc2c-6bb0d8b3bc4e": {
+          "goals": 0,
+          "assists": 0
+        },
+        "a9103b1a-da58-4b42-92de-f14c36b11d3b": {
+          "goals": 3,
+          "assists": 1
+        },
+        "aa6697af-6723-4958-9ea3-d02c573042f4": {
+          "goals": 0,
+          "assists": 0
+        },
+        "b4a53f87-708f-446b-a4ff-c7145a70a11d": {
+          "goals": 3,
+          "assists": 2
+        },
+        "b91cc0b5-39ec-438b-ac44-aaac036dc26f": {
+          "goals": 0,
+          "assists": 1
+        },
+        "b96a7f90-fbc9-45c9-9026-dee8d2bde782": {
+          "goals": 1,
+          "assists": 0
+        },
+        "baa8468f-eb8c-40f6-82a6-ee9824856cec": {
+          "goals": 3,
+          "assists": 0
+        },
+        "d61f8420-6d5a-4924-96f4-333f156982f6": {
+          "goals": 1,
+          "assists": 2
+        },
+        "fe2300e9-6df3-4ed7-b54a-8cf22e0fad6f": {
+          "goals": 0,
+          "assists": 0
+        }
+      },
+      "locked": true,
+      "videos": [],
+      "dateISO": "2025-09-13T06:45",
+      "location": {
+        "name": "Indoor Soccer Zone",
+        "preset": "indoor-soccer-zone",
+        "address": "2323 Crown Rd, Dallas, TX 75229"
+      },
+      "snapshot": [
+        [
+          "b4a53f87-708f-446b-a4ff-c7145a70a11d",
+          "2bd4ff05-599b-4fc1-990a-477e39d418a1",
+          "aa6697af-6723-4958-9ea3-d02c573042f4",
+          "40a35c0c-0682-497e-bd35-21e06a82967d",
+          "89b68672-9cc5-4454-b550-514029cb487b",
+          "fe2300e9-6df3-4ed7-b54a-8cf22e0fad6f",
+          "d61f8420-6d5a-4924-96f4-333f156982f6",
+          "0138e8b1-eae8-443e-8a6e-3b56fb8e052e",
+          "7ce316e5-93c8-4b7d-8c24-29bf3031fee8",
+          "4fd6b939-2410-401f-a799-162883be8fa7",
+          "a9103b1a-da58-4b42-92de-f14c36b11d3b",
+          "8d4196a2-09d6-40fa-bc2c-6bb0d8b3bc4e"
+        ],
+        [
+          "7e4bab4e-0aef-4ed3-ba60-67693c24f6de",
+          "77b529e8-a528-4e09-805b-2c37f1f249ba",
+          "b91cc0b5-39ec-438b-ac44-aaac036dc26f",
+          "b96a7f90-fbc9-45c9-9026-dee8d2bde782",
+          "7ee3b378-37b6-4a01-9042-d4f3dbcc5371",
+          "35315a1d-62a8-4be8-b9f6-eef50a737ba6",
+          "baa8468f-eb8c-40f6-82a6-ee9824856cec",
+          "3614b3a8-6e18-466c-9faf-99d0a82e8204",
+          "7f79b6a1-9585-4181-8134-1e7b422a1b77",
+          "4e2cf343-082f-4d83-a2ea-386fe82b3dfa"
+        ]
+      ],
+      "criterion": "overall",
+      "teamCount": 2,
+      "formations": [
+        "2-3-1",
+        "2-3-1"
+      ],
+      "attendeeIds": [
+        "b4a53f87-708f-446b-a4ff-c7145a70a11d",
+        "2bd4ff05-599b-4fc1-990a-477e39d418a1",
+        "aa6697af-6723-4958-9ea3-d02c573042f4",
+        "40a35c0c-0682-497e-bd35-21e06a82967d",
+        "89b68672-9cc5-4454-b550-514029cb487b",
+        "fe2300e9-6df3-4ed7-b54a-8cf22e0fad6f",
+        "d61f8420-6d5a-4924-96f4-333f156982f6",
+        "0138e8b1-eae8-443e-8a6e-3b56fb8e052e",
+        "7ce316e5-93c8-4b7d-8c24-29bf3031fee8",
+        "4fd6b939-2410-401f-a799-162883be8fa7",
+        "a9103b1a-da58-4b42-92de-f14c36b11d3b",
+        "8d4196a2-09d6-40fa-bc2c-6bb0d8b3bc4e",
+        "7e4bab4e-0aef-4ed3-ba60-67693c24f6de",
+        "77b529e8-a528-4e09-805b-2c37f1f249ba",
+        "b91cc0b5-39ec-438b-ac44-aaac036dc26f",
+        "b96a7f90-fbc9-45c9-9026-dee8d2bde782",
+        "7ee3b378-37b6-4a01-9042-d4f3dbcc5371",
+        "35315a1d-62a8-4be8-b9f6-eef50a737ba6",
+        "baa8468f-eb8c-40f6-82a6-ee9824856cec",
+        "3614b3a8-6e18-466c-9faf-99d0a82e8204",
+        "7f79b6a1-9585-4181-8134-1e7b422a1b77",
+        "4e2cf343-082f-4d83-a2ea-386fe82b3dfa"
+      ],
+      "selectionMode": "manual"
+    },
+    {
+      "id": "fe64097e-447e-4498-8699-675c1b17709c",
+      "fees": {
+        "total": 230,
+        "premium": 1.2,
+        "guestFee": 11,
+        "memberFee": 9
+      },
+      "mode": "11v11",
+      "board": [
+        [
+          {
+            "x": 50,
+            "y": 92,
+            "id": "d8e78c4e-32db-44cd-9e04-5a2e1218dc85",
+            "name": "이재성",
+            "role": "DF"
+          },
+          {
+            "x": 35,
+            "y": 72,
+            "id": "a9103b1a-da58-4b42-92de-f14c36b11d3b",
+            "name": "황현석",
+            "role": "DF"
+          },
+          {
+            "x": 35,
+            "y": 72,
+            "id": "3614b3a8-6e18-466c-9faf-99d0a82e8204",
+            "name": "박희량",
+            "role": "MF"
+          },
+          {
+            "x": 25,
+            "y": 50,
+            "id": "898cf774-6ab1-41af-bae2-23dcf751fa37",
+            "name": "조상래",
+            "role": "MF"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "d61f8420-6d5a-4924-96f4-333f156982f6",
+            "name": "Alex Kim",
+            "role": "FW"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "b4a53f87-708f-446b-a4ff-c7145a70a11d",
+            "name": "권오정",
+            "role": "FW"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "2bd4ff05-599b-4fc1-990a-477e39d418a1",
+            "name": "박성민",
+            "role": "FW"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "7ce316e5-93c8-4b7d-8c24-29bf3031fee8",
+            "name": "손효석",
+            "role": "FW"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "7ee3b378-37b6-4a01-9042-d4f3dbcc5371",
+            "name": "백동철",
+            "role": "FW"
+          }
+        ],
+        [
+          {
+            "x": 50,
+            "y": 92,
+            "id": "ff30a3c9-d1a7-4bec-9c83-2fac487d0760",
+            "name": "이현민",
+            "role": "DF"
+          },
+          {
+            "x": 65,
+            "y": 72,
+            "id": "48b0cada-3b8a-4ea2-b21f-b31f570a4bb6",
+            "name": "Peter",
+            "role": "MF"
+          },
+          {
+            "x": 25,
+            "y": 50,
+            "id": "40a35c0c-0682-497e-bd35-21e06a82967d",
+            "name": "김준호",
+            "role": "MF"
+          },
+          {
+            "x": 50,
+            "y": 50,
+            "id": "35315a1d-62a8-4be8-b9f6-eef50a737ba6",
+            "name": "박철홍",
+            "role": "MF"
+          },
+          {
+            "x": 75,
+            "y": 50,
+            "id": "94ef8caa-d024-43ae-b4ff-69d0804a0db9",
+            "name": "Josh",
+            "role": "MF"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "0af62857-3c09-4af8-b703-10d8a500beaf",
+            "name": "이진현",
+            "role": "MF"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "fe2300e9-6df3-4ed7-b54a-8cf22e0fad6f",
+            "name": "Alex Lee",
+            "role": "FW"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "f0b16eb3-84c4-4ba6-9211-e04979bdf336",
+            "name": "윤양훈",
+            "role": "FW"
+          }
+        ],
+        [
+          {
+            "x": 30,
+            "y": 75,
+            "id": "926bee3e-2b31-4327-880f-a3bf7d84fc29",
+            "name": "김진영",
+            "role": "DF"
+          },
+          {
+            "x": 30,
+            "y": 75,
+            "id": "3c33208e-5908-46d5-ab4f-e0a074079bb1",
+            "name": "이승호",
+            "role": "DF"
+          },
+          {
+            "x": 50,
+            "y": 75,
+            "id": "aa6697af-6723-4958-9ea3-d02c573042f4",
+            "name": "이승환",
+            "role": "DF"
+          },
+          {
+            "x": 50,
+            "y": 75,
+            "id": "08e9d281-cb26-457b-8bbf-6a2ac96ac3cc",
+            "name": "오인택",
+            "role": "MF"
+          },
+          {
+            "x": 70,
+            "y": 75,
+            "id": "ae1fa230-43a2-4768-9c23-57c52a4d2c5c",
+            "name": "윤대완",
+            "role": "MF"
+          },
+          {
+            "x": 50,
+            "y": 55,
+            "id": "77b529e8-a528-4e09-805b-2c37f1f249ba",
+            "name": "공호건",
+            "role": "MF"
+          },
+          {
+            "x": 32,
+            "y": 55,
+            "id": "baa8468f-eb8c-40f6-82a6-ee9824856cec",
+            "name": "이재기",
+            "role": "FW"
+          },
+          {
+            "x": 12,
+            "y": 55,
+            "id": "0138e8b1-eae8-443e-8a6e-3b56fb8e052e",
+            "name": "션",
+            "role": "FW"
+          }
+        ]
+      ],
+      "stats": {
+        "0138e8b1-eae8-443e-8a6e-3b56fb8e052e": {
+          "goals": 4,
+          "assists": 1
+        },
+        "08e9d281-cb26-457b-8bbf-6a2ac96ac3cc": {
+          "goals": 5,
+          "assists": 0
+        },
+        "0af62857-3c09-4af8-b703-10d8a500beaf": {
+          "goals": 0,
+          "assists": 0
+        },
+        "2bd4ff05-599b-4fc1-990a-477e39d418a1": {
+          "goals": 1,
+          "assists": 2
+        },
+        "35315a1d-62a8-4be8-b9f6-eef50a737ba6": {
+          "goals": 0,
+          "assists": 1
+        },
+        "3614b3a8-6e18-466c-9faf-99d0a82e8204": {
+          "goals": 1,
+          "assists": 0
+        },
+        "3c33208e-5908-46d5-ab4f-e0a074079bb1": {
+          "goals": 0,
+          "assists": 0
+        },
+        "40a35c0c-0682-497e-bd35-21e06a82967d": {
+          "goals": 0,
+          "assists": 1
+        },
+        "48b0cada-3b8a-4ea2-b21f-b31f570a4bb6": {
+          "goals": 1,
+          "assists": 0
+        },
+        "77b529e8-a528-4e09-805b-2c37f1f249ba": {
+          "goals": 0,
+          "assists": 0
+        },
+        "7ce316e5-93c8-4b7d-8c24-29bf3031fee8": {
+          "goals": 2,
+          "assists": 0
+        },
+        "7ee3b378-37b6-4a01-9042-d4f3dbcc5371": {
+          "goals": 0,
+          "assists": 0
+        },
+        "898cf774-6ab1-41af-bae2-23dcf751fa37": {
+          "goals": 2,
+          "assists": 2
+        },
+        "926bee3e-2b31-4327-880f-a3bf7d84fc29": {
+          "goals": 0,
+          "assists": 1
+        },
+        "a9103b1a-da58-4b42-92de-f14c36b11d3b": {
+          "goals": 1,
+          "assists": 1
+        },
+        "aa6697af-6723-4958-9ea3-d02c573042f4": {
+          "goals": 0,
+          "assists": 0
+        },
+        "ae1fa230-43a2-4768-9c23-57c52a4d2c5c": {
+          "goals": 0,
+          "assists": 1
+        },
+        "b4a53f87-708f-446b-a4ff-c7145a70a11d": {
+          "goals": 2,
+          "assists": 2
+        },
+        "baa8468f-eb8c-40f6-82a6-ee9824856cec": {
+          "goals": 3,
+          "assists": 0
+        },
+        "d61f8420-6d5a-4924-96f4-333f156982f6": {
+          "goals": 4,
+          "assists": 1
+        },
+        "d8e78c4e-32db-44cd-9e04-5a2e1218dc85": {
+          "goals": 0,
+          "assists": 1
+        },
+        "f0b16eb3-84c4-4ba6-9211-e04979bdf336": {
+          "goals": 0,
+          "assists": 3
+        },
+        "ff30a3c9-d1a7-4bec-9c83-2fac487d0760": {
+          "goals": 1,
+          "assists": 0
+        }
+      },
+      "locked": true,
+      "videos": [
+        {
+          "url": "https://www.youtube.com/watch?v=CLpDiFX4zFo",
+          "title": "9/20/2025 Full Match"
+        },
+        {
+          "url": "https://www.youtube.com/watch?v=Tj_c3jrl6-A",
+          "title": "09/20/2025 Highlights"
+        },
+        {
+          "url": "dd",
+          "title": "dd"
+        },
+        {
+          "url": "dd",
+          "title": "test"
+        }
+      ],
+      "dateISO": "2025-09-20T06:30",
+      "location": {
+        "name": "Indoor Soccer Zone",
+        "preset": "indoor-soccer-zone",
+        "address": "2323 Crown Rd, Dallas, TX 75229"
+      },
+      "snapshot": [
+        [
+          "d8e78c4e-32db-44cd-9e04-5a2e1218dc85",
+          "a9103b1a-da58-4b42-92de-f14c36b11d3b",
+          "3614b3a8-6e18-466c-9faf-99d0a82e8204",
+          "898cf774-6ab1-41af-bae2-23dcf751fa37",
+          "d61f8420-6d5a-4924-96f4-333f156982f6",
+          "b4a53f87-708f-446b-a4ff-c7145a70a11d",
+          "2bd4ff05-599b-4fc1-990a-477e39d418a1",
+          "7ce316e5-93c8-4b7d-8c24-29bf3031fee8",
+          "7ee3b378-37b6-4a01-9042-d4f3dbcc5371"
+        ],
+        [
+          "ff30a3c9-d1a7-4bec-9c83-2fac487d0760",
+          "48b0cada-3b8a-4ea2-b21f-b31f570a4bb6",
+          "40a35c0c-0682-497e-bd35-21e06a82967d",
+          "35315a1d-62a8-4be8-b9f6-eef50a737ba6",
+          "0af62857-3c09-4af8-b703-10d8a500beaf",
+          "f0b16eb3-84c4-4ba6-9211-e04979bdf336"
+        ],
+        [
+          "926bee3e-2b31-4327-880f-a3bf7d84fc29",
+          "3c33208e-5908-46d5-ab4f-e0a074079bb1",
+          "08e9d281-cb26-457b-8bbf-6a2ac96ac3cc",
+          "aa6697af-6723-4958-9ea3-d02c573042f4",
+          "ae1fa230-43a2-4768-9c23-57c52a4d2c5c",
+          "77b529e8-a528-4e09-805b-2c37f1f249ba",
+          "baa8468f-eb8c-40f6-82a6-ee9824856cec",
+          "0138e8b1-eae8-443e-8a6e-3b56fb8e052e"
+        ]
+      ],
+      "criterion": "pos-aware",
+      "teamCount": 3,
+      "formations": [
+        "2-3-1",
+        "2-3-1",
+        "3-5-2"
+      ],
+      "youtubeUrl": null,
+      "attendeeIds": [
+        "d8e78c4e-32db-44cd-9e04-5a2e1218dc85",
+        "a9103b1a-da58-4b42-92de-f14c36b11d3b",
+        "3614b3a8-6e18-466c-9faf-99d0a82e8204",
+        "898cf774-6ab1-41af-bae2-23dcf751fa37",
+        "d61f8420-6d5a-4924-96f4-333f156982f6",
+        "b4a53f87-708f-446b-a4ff-c7145a70a11d",
+        "2bd4ff05-599b-4fc1-990a-477e39d418a1",
+        "7ce316e5-93c8-4b7d-8c24-29bf3031fee8",
+        "7ee3b378-37b6-4a01-9042-d4f3dbcc5371",
+        "ff30a3c9-d1a7-4bec-9c83-2fac487d0760",
+        "48b0cada-3b8a-4ea2-b21f-b31f570a4bb6",
+        "40a35c0c-0682-497e-bd35-21e06a82967d",
+        "35315a1d-62a8-4be8-b9f6-eef50a737ba6",
+        "0af62857-3c09-4af8-b703-10d8a500beaf",
+        "f0b16eb3-84c4-4ba6-9211-e04979bdf336",
+        "926bee3e-2b31-4327-880f-a3bf7d84fc29",
+        "3c33208e-5908-46d5-ab4f-e0a074079bb1",
+        "08e9d281-cb26-457b-8bbf-6a2ac96ac3cc",
+        "aa6697af-6723-4958-9ea3-d02c573042f4",
+        "ae1fa230-43a2-4768-9c23-57c52a4d2c5c",
+        "77b529e8-a528-4e09-805b-2c37f1f249ba",
+        "baa8468f-eb8c-40f6-82a6-ee9824856cec",
+        "0138e8b1-eae8-443e-8a6e-3b56fb8e052e"
+      ],
+      "youtubeTitle": null,
+      "selectionMode": "manual"
+    },
+    {
+      "id": "85d269ab-c53f-4127-a177-04bac8e61dfe",
+      "mode": "11v11",
+      "board": [
+        [
+          {
+            "x": 35,
+            "y": 72,
+            "id": "aa6697af-6723-4958-9ea3-d02c573042f4",
+            "name": "이승환",
+            "role": "DF"
+          },
+          {
+            "x": 65,
+            "y": 72,
+            "id": "b96a7f90-fbc9-45c9-9026-dee8d2bde782",
+            "name": "김정민",
+            "role": "DF"
+          },
+          {
+            "x": 65,
+            "y": 72,
+            "id": "ff30a3c9-d1a7-4bec-9c83-2fac487d0760",
+            "name": "이현민",
+            "role": "DF"
+          },
+          {
+            "x": 25,
+            "y": 50,
+            "id": "08e9d281-cb26-457b-8bbf-6a2ac96ac3cc",
+            "name": "오인택",
+            "role": "MF"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "f9dfa22c-4a3f-42fa-aab6-8051835c72ac",
+            "name": "이승현",
+            "role": "MF"
+          },
+          {
+            "x": 75,
+            "y": 50,
+            "id": "d905c93f-2a8e-4c55-886d-51132e50285c",
+            "name": "김현우",
+            "role": "MF"
+          },
+          {
+            "x": 50,
+            "y": 50,
+            "id": "48b0cada-3b8a-4ea2-b21f-b31f570a4bb6",
+            "name": "Peter",
+            "role": "MF"
+          },
+          {
+            "x": 75,
+            "y": 50,
+            "id": "b91cc0b5-39ec-438b-ac44-aaac036dc26f",
+            "name": "최성우",
+            "role": "MF"
+          },
+          {
+            "x": 75,
+            "y": 50,
+            "id": "40a35c0c-0682-497e-bd35-21e06a82967d",
+            "name": "김준호",
+            "role": "MF"
+          },
+          {
+            "x": 75,
+            "y": 50,
+            "id": "4e2cf343-082f-4d83-a2ea-386fe82b3dfa",
+            "name": "김광욱",
+            "role": "MF"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "baa8468f-eb8c-40f6-82a6-ee9824856cec",
+            "name": "이재기",
+            "role": "FW"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "fe2300e9-6df3-4ed7-b54a-8cf22e0fad6f",
+            "name": "Alex Lee",
+            "role": "FW"
+          }
+        ],
+        [
+          {
+            "x": 50,
+            "y": 92,
+            "id": "a9103b1a-da58-4b42-92de-f14c36b11d3b",
+            "name": "황현석",
+            "role": "DF"
+          },
+          {
+            "x": 50,
+            "y": 92,
+            "id": "7f79b6a1-9585-4181-8134-1e7b422a1b77",
+            "name": "황진영",
+            "role": "DF"
+          },
+          {
+            "x": 75,
+            "y": 50,
+            "id": "898cf774-6ab1-41af-bae2-23dcf751fa37",
+            "name": "조상래",
+            "role": "MF"
+          },
+          {
+            "x": 75,
+            "y": 50,
+            "id": "3614b3a8-6e18-466c-9faf-99d0a82e8204",
+            "name": "박희량",
+            "role": "MF"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "0af62857-3c09-4af8-b703-10d8a500beaf",
+            "name": "이진현",
+            "role": "MF"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "d61f8420-6d5a-4924-96f4-333f156982f6",
+            "name": "Alex Kim",
+            "role": "FW"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "b4a53f87-708f-446b-a4ff-c7145a70a11d",
+            "name": "권오정",
+            "role": "FW"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "2bd4ff05-599b-4fc1-990a-477e39d418a1",
+            "name": "박성민",
+            "role": "FW"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "7ce316e5-93c8-4b7d-8c24-29bf3031fee8",
+            "name": "손효석",
+            "role": "FW"
+          },
+          {
+            "x": 50,
+            "y": 92,
+            "id": "8d4196a2-09d6-40fa-bc2c-6bb0d8b3bc4e",
+            "name": "김지하",
+            "role": "GK"
+          },
+          {
+            "x": 50,
+            "y": 30,
+            "id": "89b68672-9cc5-4454-b550-514029cb487b",
+            "name": "김동수",
+            "role": "FW"
+          }
+        ]
+      ],
+      "stats": {
+        "08e9d281-cb26-457b-8bbf-6a2ac96ac3cc": {
+          "goals": 2,
+          "assists": 2
+        },
+        "0af62857-3c09-4af8-b703-10d8a500beaf": {
+          "goals": 0,
+          "assists": 0
+        },
+        "2bd4ff05-599b-4fc1-990a-477e39d418a1": {
+          "goals": 0,
+          "assists": 0
+        },
+        "3614b3a8-6e18-466c-9faf-99d0a82e8204": {
+          "goals": 0,
+          "assists": 0
+        },
+        "40a35c0c-0682-497e-bd35-21e06a82967d": {
+          "goals": 0,
+          "assists": 0
+        },
+        "48b0cada-3b8a-4ea2-b21f-b31f570a4bb6": {
+          "goals": 2,
+          "assists": 0
+        },
+        "4e2cf343-082f-4d83-a2ea-386fe82b3dfa": {
+          "goals": 0,
+          "assists": 0
+        },
+        "7ce316e5-93c8-4b7d-8c24-29bf3031fee8": {
+          "goals": 0,
+          "assists": 0
+        },
+        "7f79b6a1-9585-4181-8134-1e7b422a1b77": {
+          "goals": 0,
+          "assists": 0
+        },
+        "898cf774-6ab1-41af-bae2-23dcf751fa37": {
+          "goals": 1,
+          "assists": 2
+        },
+        "89b68672-9cc5-4454-b550-514029cb487b": {
+          "goals": 0,
+          "assists": 0
+        },
+        "8d4196a2-09d6-40fa-bc2c-6bb0d8b3bc4e": {
+          "goals": 0,
+          "assists": 0
+        },
+        "a9103b1a-da58-4b42-92de-f14c36b11d3b": {
+          "goals": 0,
+          "assists": 0
+        },
+        "aa6697af-6723-4958-9ea3-d02c573042f4": {
+          "goals": 0,
+          "assists": 0
+        },
+        "ae1fa230-43a2-4768-9c23-57c52a4d2c5c": {
+          "goals": 0,
+          "assists": 0
+        },
+        "b4a53f87-708f-446b-a4ff-c7145a70a11d": {
+          "goals": 3,
+          "assists": 1
+        },
+        "b91cc0b5-39ec-438b-ac44-aaac036dc26f": {
+          "goals": 0,
+          "assists": 1
+        },
+        "b96a7f90-fbc9-45c9-9026-dee8d2bde782": {
+          "goals": 1,
+          "assists": 0
+        },
+        "baa8468f-eb8c-40f6-82a6-ee9824856cec": {
+          "goals": 2,
+          "assists": 1
+        },
+        "d61f8420-6d5a-4924-96f4-333f156982f6": {
+          "goals": 3,
+          "assists": 2
+        },
+        "d905c93f-2a8e-4c55-886d-51132e50285c": {
+          "goals": 3,
+          "assists": 0
+        },
+        "f9dfa22c-4a3f-42fa-aab6-8051835c72ac": {
+          "goals": 0,
+          "assists": 1
+        },
+        "fe2300e9-6df3-4ed7-b54a-8cf22e0fad6f": {
+          "goals": 0,
+          "assists": 0
+        },
+        "ff30a3c9-d1a7-4bec-9c83-2fac487d0760": {
+          "goals": 0,
+          "assists": 1
+        }
+      },
+      "total": 220,
+      "locked": true,
+      "videos": [
+        {
+          "url": "https://youtu.be/ZNn-VGcgLDg?si=amE_ktOoNxRsSYhR",
+          "title": "09/27/2025 Full Match"
+        },
+        {
+          "url": "https://youtu.be/ZNn-VGcgLDg?si=amE_ktOoNxRsSYhR",
+          "title": "09/27/2025 Highlights"
+        },
+        {
+          "url": "https://youtu.be/lNzqhUtU3X0?si=rA9kaxEra-IuFdni",
+          "title": "09/27/2025 Highlights"
+        }
+      ],
+      "dateISO": "2025-09-27T06:45",
+      "guestFee": 12,
+      "location": {
+        "name": "Indoor Soccer Zone",
+        "preset": "indoor-soccer-zone",
+        "address": "2323 Crown Rd, Dallas, TX 75229"
+      },
+      "snapshot": [
+        [
+          "baa8468f-eb8c-40f6-82a6-ee9824856cec",
+          "fe2300e9-6df3-4ed7-b54a-8cf22e0fad6f",
+          "08e9d281-cb26-457b-8bbf-6a2ac96ac3cc",
+          "f9dfa22c-4a3f-42fa-aab6-8051835c72ac",
+          "d905c93f-2a8e-4c55-886d-51132e50285c",
+          "48b0cada-3b8a-4ea2-b21f-b31f570a4bb6",
+          "b91cc0b5-39ec-438b-ac44-aaac036dc26f",
+          "40a35c0c-0682-497e-bd35-21e06a82967d",
+          "4e2cf343-082f-4d83-a2ea-386fe82b3dfa",
+          "aa6697af-6723-4958-9ea3-d02c573042f4",
+          "b96a7f90-fbc9-45c9-9026-dee8d2bde782",
+          "ff30a3c9-d1a7-4bec-9c83-2fac487d0760"
+        ],
+        [
+          "d61f8420-6d5a-4924-96f4-333f156982f6",
+          "b4a53f87-708f-446b-a4ff-c7145a70a11d",
+          "2bd4ff05-599b-4fc1-990a-477e39d418a1",
+          "7ce316e5-93c8-4b7d-8c24-29bf3031fee8",
+          "898cf774-6ab1-41af-bae2-23dcf751fa37",
+          "3614b3a8-6e18-466c-9faf-99d0a82e8204",
+          "0af62857-3c09-4af8-b703-10d8a500beaf",
+          "a9103b1a-da58-4b42-92de-f14c36b11d3b",
+          "7f79b6a1-9585-4181-8134-1e7b422a1b77",
+          "8d4196a2-09d6-40fa-bc2c-6bb0d8b3bc4e",
+          "89b68672-9cc5-4454-b550-514029cb487b",
+          "ae1fa230-43a2-4768-9c23-57c52a4d2c5c"
+        ]
+      ],
+      "criterion": "pos-aware",
+      "memberFee": 10,
+      "teamCount": 2,
+      "formations": [
+        "2-3-1",
+        "2-3-1"
+      ],
+      "youtubeUrl": null,
+      "attendeeIds": [
+        "baa8468f-eb8c-40f6-82a6-ee9824856cec",
+        "fe2300e9-6df3-4ed7-b54a-8cf22e0fad6f",
+        "08e9d281-cb26-457b-8bbf-6a2ac96ac3cc",
+        "f9dfa22c-4a3f-42fa-aab6-8051835c72ac",
+        "d905c93f-2a8e-4c55-886d-51132e50285c",
+        "48b0cada-3b8a-4ea2-b21f-b31f570a4bb6",
+        "b91cc0b5-39ec-438b-ac44-aaac036dc26f",
+        "40a35c0c-0682-497e-bd35-21e06a82967d",
+        "4e2cf343-082f-4d83-a2ea-386fe82b3dfa",
+        "aa6697af-6723-4958-9ea3-d02c573042f4",
+        "b96a7f90-fbc9-45c9-9026-dee8d2bde782",
+        "ff30a3c9-d1a7-4bec-9c83-2fac487d0760",
+        "d61f8420-6d5a-4924-96f4-333f156982f6",
+        "b4a53f87-708f-446b-a4ff-c7145a70a11d",
+        "2bd4ff05-599b-4fc1-990a-477e39d418a1",
+        "7ce316e5-93c8-4b7d-8c24-29bf3031fee8",
+        "898cf774-6ab1-41af-bae2-23dcf751fa37",
+        "3614b3a8-6e18-466c-9faf-99d0a82e8204",
+        "0af62857-3c09-4af8-b703-10d8a500beaf",
+        "a9103b1a-da58-4b42-92de-f14c36b11d3b",
+        "7f79b6a1-9585-4181-8134-1e7b422a1b77",
+        "8d4196a2-09d6-40fa-bc2c-6bb0d8b3bc4e",
+        "89b68672-9cc5-4454-b550-514029cb487b",
+        "ae1fa230-43a2-4768-9c23-57c52a4d2c5c"
+      ],
+      "youtubeTitle": null,
+      "selectionMode": "manual"
+    }
+  ],
+  "players": []
+}
