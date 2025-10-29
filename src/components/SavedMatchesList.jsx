@@ -651,13 +651,13 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
         })()
       )}
 
-      {/* 표기: C 주장, G 게스트 */}
+      {/* 표기: C 주장, G 게스트 (실제 배지 사용) */}
       <div className="mb-1 flex justify-end">
-        <div className="flex items-center gap-1 text-[11px] text-gray-500 whitespace-nowrap">
-          <span>표기:</span>
-          <span>C</span><span>주장</span>
-          <span className="mx-1">·</span>
-          <span>G</span><span>게스트</span>
+        <div className="flex items-center gap-2 text-[11px] text-gray-600 whitespace-nowrap">
+          <span className="text-gray-500">표기:</span>
+          <span className="inline-flex items-center gap-1"><CaptainBadge /> <span>주장</span></span>
+          <span className="mx-1 text-gray-400">·</span>
+          <span className="inline-flex items-center gap-1"><GuestBadge /> <span>게스트</span></span>
         </div>
       </div>
 
