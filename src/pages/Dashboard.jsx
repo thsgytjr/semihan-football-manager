@@ -4,6 +4,15 @@ import Card from '../components/Card'
 import InitialAvatar from '../components/InitialAvatar'
 import SavedMatchesList from '../components/SavedMatchesList'
 
+/* --------------------------------------------------------
+   MOBILE-FIRST LEADERBOARD (Compact Segmented Tabs)
+   - Tabs collapse into scrollable chips on small screens
+   - G/A/출전 헤더 클릭 시 해당 탭으로 전환
+   - Most Appearances(gp) 탭 추가
+   - 드롭다운(날짜) + 전체보기/접기 왼쪽 정렬
+   - OVR 요소는 히스토리에서 숨김
+--------------------------------------------------------- */
+
 /* -------------------------- 유틸 -------------------------- */
 const toStr = (v) => (v === null || v === undefined) ? '' : String(v)
 const isMember = (mem) => {
@@ -236,7 +245,6 @@ function sortComparator(rankBy) {
   if (rankBy === 'a') {
     return (a, b) => (b.a - a.a) || (b.g - a.g) || a.name.localeCompare(b.name)
   }
-  // 새 기준: 출전 수(gp)
   if (rankBy === 'gp') {
     return (a, b) => (b.gp - a.gp) || (b.g - a.g) || (b.a - a.a) || a.name.localeCompare(b.name)
   }
@@ -317,39 +325,18 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
   }
 
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-4 sm:gap-6">
       {/* 리더보드 */}
       <Card title="리더보드">
-        <LeaderboardTabs tab={tab} onChange={(id)=>{ setTab(id); setShowAll(false) }} />
+        {/* 모바일-우선: 콤팩트 세그먼트 탭 (가로 스크롤 + 자동 줄바꿈) */}
+        <LeaderboardTabsMobile tab={tab} onChange={(id)=>{ setTab(id); setShowAll(false) }} />
 
         {tab === 'duo' ? (
           <DuoTable
             rows={duoRows}
             showAll={showAll}
             onToggle={() => setShowAll(s => !s)}
-            controls={
-              <>
-                <select
-                  value={apDateKey}
-                  onChange={(e) => setApDateKey(e.target.value)}
-                  className="rounded border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
-                  title="토탈 또는 날짜별 보기"
-                >
-                  {dateOptions.map(v => (
-                    <option key={v} value={v}>
-                      {v === 'all' ? '모든 매치' : v}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => setShowAll(s => !s)}
-                  className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50"
-                  title={showAll ? '접기' : '전체 보기'}
-                >
-                  {showAll ? '접기' : '전체 보기'}
-                </button>
-              </>
-            }
+            controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} showAll={showAll} setShowAll={setShowAll} />}
           />
         ) : (
           <AttackPointsTable
@@ -360,34 +347,12 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
             headHi={headHi}
             colHi={colHi}
             onRequestTab={(id)=>{ setTab(id); setShowAll(false) }}
-            controls={
-              <>
-                <select
-                  value={apDateKey}
-                  onChange={(e) => setApDateKey(e.target.value)}
-                  className="rounded border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
-                  title="토탈 또는 날짜별 보기"
-                >
-                  {dateOptions.map(v => (
-                    <option key={v} value={v}>
-                      {v === 'all' ? '모든 매치' : v}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  onClick={() => setShowAll(s => !s)}
-                  className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50"
-                  title={showAll ? '접기' : '전체 보기'}
-                >
-                  {showAll ? '접기' : '전체 보기'}
-                </button>
-              </>
-            }
+            controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} showAll={showAll} setShowAll={setShowAll} />}
           />
         )}
       </Card>
 
-      {/* 매치 히스토리 (OVR 표시 숨김 가능) */}
+      {/* 매치 히스토리 (OVR 표시 숨김) */}
       <Card title="매치 히스토리">
         <ErrorBoundary fallback={<div className="text-sm text-stone-500">목록을 불러오는 중 문제가 발생했어요.</div>}>
           <div className="saved-matches-no-ovr text-[13px] leading-tight">
@@ -402,6 +367,11 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
         </ErrorBoundary>
 
         <style>{`
+          /* 모바일 친화: 가로 스크롤 탭의 스크롤바 감춤 */
+          .no-scrollbar::-webkit-scrollbar { display: none; }
+          .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+          /* SavedMatchesList 내 OVR 관련 요소 모두 숨김 */
           .saved-matches-no-ovr [data-ovr],
           .saved-matches-no-ovr .ovr,
           .saved-matches-no-ovr .ovr-badge,
@@ -418,35 +388,68 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
   )
 }
 
-/* ----------------------- 탭 컴포넌트 ---------------------- */
-function LeaderboardTabs({ tab, onChange }) {
-  const TabBtn = ({ id, label, sub }) => {
-    const active = tab === id
-    return (
-      <button
-        onClick={() => onChange(id)}
-        aria-pressed={active}
-        className={`w-full sm:w-auto rounded-xl px-3.5 py-2 text-sm font-medium border transition
-          flex flex-col items-center justify-center text-center
-          focus:outline-none focus:ring-2 focus:ring-stone-400/60
-          ${active
-            ? 'bg-stone-900 text-white border-stone-900'
-            : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
-          }`}
+/* ----------------------- 컨트롤 (좌측 정렬) ---------------------- */
+function ControlsLeft({ apDateKey, setApDateKey, showAll, setShowAll }) {
+  return (
+    <div className="flex items-center gap-2">
+      <select
+        value={apDateKey}
+        onChange={(e) => setApDateKey(e.target.value)}
+        className="rounded border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
+        title="토탈 또는 날짜별 보기"
       >
-        <span className="leading-tight">{label}</span>
-        {sub && <span className={`text-[11px] ${active ? 'text-stone-200' : 'text-stone-500'}`}>{sub}</span>}
+        <option value="all">모든 매치</option>
+      </select>
+      <button
+        onClick={() => setShowAll(s => !s)}
+        className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50"
+        title={showAll ? '접기' : '전체 보기'}
+      >
+        {showAll ? '접기' : '전체 보기'}
       </button>
-    )
-  }
+    </div>
+  )
+}
+
+/* ----------------------- 모바일 탭 컴포넌트 ---------------------- */
+function LeaderboardTabsMobile({ tab, onChange }) {
+  const tabs = [
+    { id: 'pts', label: '종합', short: '종합', icon: '🏆' },
+    { id: 'g',   label: 'Top Scorer', short: '득점', icon: '⚽️' },
+    { id: 'a',   label: 'Most Assists', short: '어시', icon: '🎯' },
+    { id: 'gp',  label: 'Most Appearances', short: '출전', icon: '👟' },
+    { id: 'duo', label: '환상의 듀오', short: '듀오', icon: '🤝' },
+  ]
 
   return (
-    <div className="mb-3 flex flex-col sm:flex-row gap-2 w-full">
-      <TabBtn id="pts" label="종합" sub="공격포인트 (G+A)" />
-      <TabBtn id="g" label="Top Scorer" sub="골 순위" />
-      <TabBtn id="a" label="Most Assists" sub="어시스트 순위" />
-      <TabBtn id="gp" label="Most Appearances" sub="출전 순위" />
-      <TabBtn id="duo" label="환상의 듀오" sub="어시 → 골 콤비" />
+    <div className="mb-2">
+      {/* 상단: 현재 탭 요약 (모바일에서 높이 절약) */}
+      <div className="mb-2 flex items-center justify-between">
+        <div className="text-sm text-stone-700 font-medium">
+          {tabs.find(t => t.id === tab)?.label}
+        </div>
+      </div>
+
+      {/* 하단: 스크롤 가능한 칩 버튼들 */}
+      <div className="relative">
+        <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-1 -mx-2 px-2">
+          {tabs.map(t => {
+            const active = tab === t.id
+            return (
+              <button
+                key={t.id}
+                onClick={() => onChange(t.id)}
+                aria-pressed={active}
+                className={`flex-shrink-0 inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[13px] border transition
+                  ${active ? 'bg-stone-900 text-white border-stone-900' : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'}`}
+              >
+                <span className="text-base leading-none">{t.icon}</span>
+                <span className="leading-none">{t.short}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }
@@ -483,80 +486,46 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
 
   return (
     <div className="overflow-hidden rounded-lg border border-stone-200">
-      <table className="w-full text-sm md:table-fixed">
-        <colgroup className="hidden md:table-column-group">
-          <col style={{ width: '48px' }} />
-          <col />
-          <col style={{ width: '64px' }} />
-          <col style={{ width: '42px' }} />
-          <col style={{ width: '42px' }} />
-          <col style={{ width: '56px' }} />
-        </colgroup>
-
+      <table className="w-full text-sm">
         <thead>
           <tr>
             <th colSpan={6} className="border-b px-2 py-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="text-xs text-stone-600">
-                  <span className="font-semibold mr-1"></span>
-                  총 선수 {totalPlayers}명
-                </div>
-                <div className="flex items-center gap-2">
-                  {controls}
-                </div>
+                <div className="text-xs text-stone-600">총 선수 <span className="font-semibold">{totalPlayers}</span>명</div>
+                <div className="ml-auto">{controls}</div>
               </div>
             </th>
           </tr>
           <tr className="text-left text-[13px] text-stone-600">
-            <th className="border-b px-1.5 py-1.5 md:px-3 md:py-2">순위</th>
-            <th className="border-b px-2 py-1.5 md:px-3 md:py-2">선수</th>
+            <th className="border-b px-1.5 py-1.5">순위</th>
+            <th className="border-b px-2 py-1.5">선수</th>
 
             {/* 출전 헤더 클릭 -> Most Appearances(gp) 탭으로 */}
-            <th
-              className={`border-b px-2 py-1.5 md:px-3 md:py-2 ${headHi('gp')}`}
-              scope="col"
-            >
-              <button
-                type="button"
-                onClick={() => onRequestTab && onRequestTab('gp')}
-                className={headerBtnCls}
-                title="Most Appearances 보기"
-              >
+            <th className={`border-b px-2 py-1.5 ${headHi('gp')}`} scope="col">
+              <button type="button" onClick={() => onRequestTab && onRequestTab('gp')} className={headerBtnCls} title="Most Appearances 보기">
                 출전
               </button>
             </th>
 
             {/* G 헤더 클릭 -> Top Scorer(g) 탭으로 */}
-            <th
-              className={`border-b px-2 py-1.5 md:px-3 md:py-2 ${headHi('g')}`}
-              scope="col"
-            >
-              <button
-                type="button"
-                onClick={() => onRequestTab && onRequestTab('g')}
-                className={headerBtnCls}
-                title="Top Scorer 보기"
-              >
+            <th className={`border-b px-2 py-1.5 ${headHi('g')}`} scope="col">
+              <button type="button" onClick={() => onRequestTab && onRequestTab('g')} className={headerBtnCls} title="Top Scorer 보기">
                 G
               </button>
             </th>
 
             {/* A 헤더 클릭 -> Most Assists(a) 탭으로 */}
-            <th
-              className={`border-b px-2 py-1.5 md:px-3 md:py-2 ${headHi('a')}`}
-              scope="col"
-            >
-              <button
-                type="button"
-                onClick={() => onRequestTab && onRequestTab('a')}
-                className={headerBtnCls}
-                title="Most Assists 보기"
-              >
+            <th className={`border-b px-2 py-1.5 ${headHi('a')}`} scope="col">
+              <button type="button" onClick={() => onRequestTab && onRequestTab('a')} className={headerBtnCls} title="Most Assists 보기">
                 A
               </button>
             </th>
 
-            <th className="border-b px-2 py-1.5 md:px-3 md:py-2">PTS</th>
+            <th className="border-b px-2 py-1.5" scope="col">
+              <button type="button" onClick={() => onRequestTab && onRequestTab('pts')} className={headerBtnCls} title="종합(공격포인트) 보기">
+                PTS
+              </button>
+            </th>
           </tr>
         </thead>
 
@@ -567,7 +536,7 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
             const delta = deltaFor(r.id || r.name, rank)
             return (
               <tr key={r.id || `${r.name}-${idx}`} className={`${tone.rowBg}`}>
-                <td className={`border-b align-middle px-1.5 py-1.5 md:px-3 md:py-2 ${tone.cellBg}`}>
+                <td className={`border-b align-middle px-1.5 py-1.5 ${tone.cellBg}`}>
                   <div className="grid items-center" style={{ gridTemplateColumns: '16px 1fr 22px', columnGap: 4 }}>
                     <div className="flex items-center justify-center">
                       <Medal rank={rank} />
@@ -575,11 +544,7 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
                     <div className="text-center tabular-nums">{rank}</div>
                     <div className="text-right hidden sm:block">
                       {delta && delta.diff !== 0 ? (
-                        <span
-                          className={`inline-block min-w-[20px] text-[11px] font-medium ${
-                            delta.dir === 'up' ? 'text-emerald-700' : 'text-rose-700'
-                          }`}
-                        >
+                        <span className={`inline-block min-w-[20px] text-[11px] font-medium ${delta.dir === 'up' ? 'text-emerald-700' : 'text-rose-700'}`}>
                           {delta.dir === 'up' ? '▲' : '▼'} {Math.abs(delta.diff)}
                         </span>
                       ) : (
@@ -589,7 +554,7 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
                   </div>
                 </td>
 
-                <td className={`border-b px-2 py-1.5 md:px-3 md:py-2 ${tone.cellBg}`}>
+                <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
                   <div className="grid items-center min-w-0" style={{ gridTemplateColumns: 'auto 1fr auto', columnGap: 6 }}>
                     <div className="shrink-0">
                       <InitialAvatar id={r.id || r.name} name={r.name} size={20} />
@@ -605,10 +570,10 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
                   </div>
                 </td>
 
-                <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg} ${colHi('gp')}`}>{r.gp}</td>
-                <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg} ${colHi('g')}`}>{r.g}</td>
-                <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg} ${colHi('a')}`}>{r.a}</td>
-                <td className={`border-b px-2 py-1.5 font-semibold tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.pts}</td>
+                <td className={`border-b px-2 py-1.5 tabular-nums ${tone.cellBg} ${colHi('gp')}`}>{r.gp}</td>
+                <td className={`border-b px-2 py-1.5 tabular-nums ${tone.cellBg} ${colHi('g')}`}>{r.g}</td>
+                <td className={`border-b px-2 py-1.5 tabular-nums ${tone.cellBg} ${colHi('a')}`}>{r.a}</td>
+                <td className={`border-b px-2 py-1.5 font-semibold tabular-nums ${tone.cellBg}`}>{r.pts}</td>
               </tr>
             )
           })}
@@ -632,31 +597,20 @@ function DuoTable({ rows, showAll, onToggle, controls }) {
 
   return (
     <div className="overflow-hidden rounded-lg border border-stone-200">
-      <table className="w-full text-sm md:table-fixed">
-        <colgroup className="hidden md:table-column-group">
-          <col style={{ width: '48px' }} />
-          <col />
-          <col style={{ width: '72px' }} />
-        </colgroup>
-
+      <table className="w-full text-sm">
         <thead>
           <tr>
             <th colSpan={3} className="border-b px-2 py-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="text-xs text-stone-600">
-                  <span className="font-semibold mr-1"></span>
-                  총 듀오 {totalDuos}쌍
-                </div>
-                <div className="flex items-center gap-2">
-                  {controls}
-                </div>
+                <div className="text-xs text-stone-600">총 듀오 <span className="font-semibold">{totalDuos}</span>쌍</div>
+                <div className="ml-auto">{controls}</div>
               </div>
             </th>
           </tr>
           <tr className="text-left text-[13px] text-stone-600">
-            <th className="border-b px-1.5 py-1.5 md:px-3 md:py-2">순위</th>
-            <th className="border-b px-2 py-1.5 md:px-3 md:py-2">듀오 (Assist → Goal)</th>
-            <th className="border-b px-2 py-1.5 md:px-3 md:py-2">점수</th>
+            <th className="border-b px-1.5 py-1.5">순위</th>
+            <th className="border-b px-2 py-1.5">듀오 (Assist → Goal)</th>
+            <th className="border-b px-2 py-1.5">점수</th>
           </tr>
         </thead>
 
@@ -665,13 +619,13 @@ function DuoTable({ rows, showAll, onToggle, controls }) {
             const tone = rankTone(r.rank)
             return (
               <tr key={r.id || idx} className={`${tone.rowBg}`}>
-                <td className={`border-b align-middle px-1.5 py-1.5 md:px-3 md:py-2 ${tone.cellBg}`}>
+                <td className={`border-b align-middle px-1.5 py-1.5 ${tone.cellBg}`}>
                   <div className="flex items-center gap-2">
                     <Medal rank={r.rank} />
                     <span className="tabular-nums">{r.rank}</span>
                   </div>
                 </td>
-                <td className={`border-b px-2 py-1.5 md:px-3 md:py-2 ${tone.cellBg}`}>
+                <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
                   <div className="flex items-center gap-2">
                     <InitialAvatar id={r.assistId} name={r.aName} size={20} />
                     <span className="font-medium">{r.aName}</span>
@@ -680,7 +634,7 @@ function DuoTable({ rows, showAll, onToggle, controls }) {
                     <span className="font-medium">{r.gName}</span>
                   </div>
                 </td>
-                <td className={`border-b px-2 py-1.5 md:px-3 md:py-2 font-semibold tabular-nums ${tone.cellBg}`}>{r.count}</td>
+                <td className={`border-b px-2 py-1.5 font-semibold tabular-nums ${tone.cellBg}`}>{r.count}</td>
               </tr>
             )
           })}
