@@ -336,7 +336,7 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
             rows={duoRows}
             showAll={showAll}
             onToggle={() => setShowAll(s => !s)}
-            controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} showAll={showAll} setShowAll={setShowAll} />}
+            controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
           />
         ) : (
           <AttackPointsTable
@@ -347,7 +347,7 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
             headHi={headHi}
             colHi={colHi}
             onRequestTab={(id)=>{ setTab(id); setShowAll(false) }}
-            controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} showAll={showAll} setShowAll={setShowAll} />}
+            controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
           />
         )}
       </Card>
@@ -389,7 +389,7 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
 }
 
 /* ----------------------- 컨트롤 (좌측 정렬) ---------------------- */
-function ControlsLeft({ apDateKey, setApDateKey, showAll, setShowAll }) {
+function ControlsLeft({ apDateKey, setApDateKey, dateOptions = [], showAll, setShowAll }) {
   return (
     <div className="flex items-center gap-2">
       <select
@@ -398,7 +398,11 @@ function ControlsLeft({ apDateKey, setApDateKey, showAll, setShowAll }) {
         className="rounded border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
         title="토탈 또는 날짜별 보기"
       >
-        <option value="all">모든 매치</option>
+        {dateOptions.map(v => (
+          <option key={v} value={v}>
+            {v === 'all' ? '모든 매치' : v}
+          </option>
+        ))}
       </select>
       <button
         onClick={() => setShowAll(s => !s)}
