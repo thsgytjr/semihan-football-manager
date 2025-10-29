@@ -159,14 +159,27 @@ function extractTimelineEventsFromMatch(m) {
       const bracketMatches = Array.from(line.matchAll(/\[([^\]]+)\]/g)).map(mm => mm[1])
       if (bracketMatches.length >= 2) {
         const dateStr = bracketMatches[0]
-        const name = bracketMatches[bracketMatches.length - 1]
+        const namesField = bracketMatches[bracketMatches.length - 1]
         const between = line.replace(/\[([^\]]+)\]/g, '¤').split('¤')[1] || ''
-        let type = null
-        if (/\bgoal\b/i.test(between) || /[⚽️]/.test(line)) type = 'goal'
-        else if (/\bassist\b/i.test(between) || /[👉☝👆]/.test(line)) type = 'assist'
         const ts = parseLooseDate(dateStr)
-        if (type && name) {
-          out.push({ pid: `__name__:${name}`, type, ts: Number.isNaN(ts) ? 0 : ts, rawIdx: seq++, raw: line })
+        const hasBoth = /goal\s*:\s*assist/i.test(between)
+        if (hasBoth) {
+          const parts = String(namesField || '').trim().split(/\s+/).filter(Boolean)
+          if (parts.length >= 2) {
+            const scorer = parts[0]
+            const assister = parts[parts.length - 1]
+            // Push goal first, then assist (ordering aligns with duo pairing logic)
+            out.push({ pid: `__name__:${scorer}`, type: 'goal', ts: Number.isNaN(ts) ? 0 : ts, rawIdx: seq++, raw: line })
+            out.push({ pid: `__name__:${assister}`, type: 'assist', ts: Number.isNaN(ts) ? 0 : ts, rawIdx: seq++, raw: line })
+          }
+        } else {
+          let type = null
+          if (/\bgoal\b/i.test(between) || /[⚽️]/.test(line)) type = 'goal'
+          else if (/\bassist\b/i.test(between) || /[👉☝👆]/.test(line)) type = 'assist'
+          const name = namesField
+          if (type && name) {
+            out.push({ pid: `__name__:${name}`, type, ts: Number.isNaN(ts) ? 0 : ts, rawIdx: seq++, raw: line })
+          }
         }
       }
     }

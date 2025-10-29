@@ -231,10 +231,10 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
   }
 
   // Parse bulk text lines into { date:Date, type:'goal'|'assist', name }
-  // Strict format checker: [date]goal[name] or [date]assist[name]
+  // Strict format checker: [date]goal[name] or [date]assist[name] or [date]goal:assist[scorer assister]
   function isStrictLine(line) {
     if (!line) return false
-    return /^\s*\[[^\]]+\]\s*(?:goal|assist)\s*\[[^\]]+\]\s*$/i.test(line)
+    return /^\s*\[[^\]]+\]\s*(?:goal|assist|goal\s*:\s*assist)\s*\[[^\]]+\]\s*$/i.test(line)
   }
   function parseBulkLines(text) {
     const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean)
@@ -244,15 +244,27 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       if (!isStrictLine(line)) return []
       const bracketMatches = Array.from(line.matchAll(/\[([^\]]+)\]/g)).map(m => m[1])
       const dateStr = bracketMatches[0]
-      const name = bracketMatches[bracketMatches.length - 1]
+      const namesField = bracketMatches[bracketMatches.length - 1]
       // extract the literal word between the first and last bracket group
       const betweenMatch = line.replace(/\[([^\]]+)\]/g, '¤').split('¤')[1] || ''
+      const hasBoth = /goal\s*:\s*assist/i.test(betweenMatch)
       let type = null
-      if (/\bgoal\b/i.test(betweenMatch)) type = 'goals'
-      else if (/\bassist\b/i.test(betweenMatch)) type = 'assists'
+      if (!hasBoth && /\bgoal\b/i.test(betweenMatch)) type = 'goals'
+      else if (!hasBoth && /\bassist\b/i.test(betweenMatch)) type = 'assists'
       const dt = parseLooseDate(dateStr)
-      if (!dt || !type || !name) return []
-      out.push({ date: dt, type, name: String(name).trim() })
+      if (!dt) return []
+      if (hasBoth) {
+        // support: [date]goal:assist[scorer assister]
+        const parts = String(namesField || '').trim().split(/\s+/).filter(Boolean)
+        if (parts.length < 2) return []
+        const scorer = parts[0]
+        const assister = parts[parts.length - 1]
+        out.push({ date: dt, type: 'goals', name: scorer })
+        out.push({ date: dt, type: 'assists', name: assister })
+      } else {
+        if (!type || !namesField) return []
+        out.push({ date: dt, type, name: String(namesField).trim() })
+      }
     }
     return out
   }
@@ -444,8 +456,8 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
 
                 {/* Right: bulk textarea and actions */}
                 <div className="space-y-2">
-                  <label className="text-xs text-gray-500 block">Bulk 입력 (예: [10/04/2025 9:15AM]goal[홍길동] or [10/04/2025 9:15AM]assist[홍길동])</label>
-                  <textarea value={bulkText} onChange={e=>setBulkText(e.target.value)} placeholder="각 줄마다 날짜·goal·이름 또는 날짜·assist·이름을 대괄호로 감싸 입력하세요." className="w-full h-28 md:h-36 rounded border border-gray-300 bg-white px-3 py-2 text-sm resize-vertical" />
+                  <label className="text-xs text-gray-500 block">Bulk 입력 (예: [10/04/2025 9:15AM]goal[홍길동] · [10/04/2025 9:15AM]assist[홍길동] · [10/04/2025 9:15AM]goal:assist[홍길동 고길동])</label>
+                  <textarea value={bulkText} onChange={e=>setBulkText(e.target.value)} placeholder="각 줄마다 [날짜]goal[이름] 또는 [날짜]assist[이름] 또는 [날짜]goal:assist[득점자 도움자] 형식으로 입력하세요." className="w-full h-28 md:h-36 rounded border border-gray-300 bg-white px-3 py-2 text-sm resize-vertical" />
                   <div className="flex items-center gap-2">
                     <button onClick={applyBulkToDraft} className="rounded bg-amber-500 px-3 py-1 text-xs text-white">파싱하여 초안에 적용</button>
                     <button onClick={()=>{setBulkText(''); setBulkMsg('')}} className="rounded border px-2 py-1 text-xs">지우기</button>
