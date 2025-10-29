@@ -314,6 +314,7 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
   const [apTab, setApTab] = useState('pts')           // 'pts' | 'g' | 'a' | 'gp'
   const [draftTab, setDraftTab] = useState('playerWins') // 'playerWins' | 'captainWins'
   const rankedRows = useMemo(() => addRanks(baseRows, apTab), [baseRows, apTab])
+  const duoRows = useMemo(() => computeDuoRows(players, filteredMatches), [players, filteredMatches])
 
   const [showAll, setShowAll] = useState(false)
 
@@ -361,16 +362,25 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
             />
           )
         ) : (
-          <AttackPointsTable
-            rows={rankedRows}
-            showAll={showAll}
-            onToggle={() => setShowAll(s => !s)}
-            rankBy={apTab}
-            headHi={headHi}
-            colHi={colHi}
-            onRequestTab={(id)=>{ setApTab(id); setPrimaryTab('pts'); setShowAll(false) }}
-            controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
-          />
+          apTab === 'duo' ? (
+            <DuoTable
+              rows={duoRows}
+              showAll={showAll}
+              onToggle={() => setShowAll(s => !s)}
+              controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+            />
+          ) : (
+            <AttackPointsTable
+              rows={rankedRows}
+              showAll={showAll}
+              onToggle={() => setShowAll(s => !s)}
+              rankBy={apTab}
+              headHi={headHi}
+              colHi={colHi}
+              onRequestTab={(id)=>{ setApTab(id); setPrimaryTab('pts'); setShowAll(false) }}
+              controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+            />
+          )
         )}
       </Card>
 
@@ -654,6 +664,7 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
     { id: 'g', label: '득점' },
     { id: 'a', label: '어시' },
     { id: 'gp', label: '출전' },
+    { id: 'duo', label: '듀오' },
   ]
   const DraftOptions = [
     { id: 'playerWins', label: '선수승점' },
