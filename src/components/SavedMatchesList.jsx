@@ -8,8 +8,53 @@ import { formatMatchLabel } from "../lib/matchLabel"
 const S = (v)=>v==null?"":String(v)
 const isMember = (m)=>{ const s=S(m).trim().toLowerCase(); return s==="member"||s.includes("정회원") }
 const GuestBadge = ()=>(
-  <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200">G</span>
+  <span className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700" title="게스트">
+    G
+  </span>
 )
+const CaptainBadge = () => (
+  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800" title="주장">
+    C
+  </span>
+)
+
+/* ---------------------- G/A 집계 유틸 ---------------------- */
+const toStr = (v) => (v === null || v === undefined) ? '' : String(v)
+/**
+ * extractStatsByPlayerForOneMatch:
+ * - 다양한 호환 필드(m.stats | m.records | m.playerStats | m.ga | m.scoreboard)를 받아
+ *   playerId 별 { goals, assists }를 반환
+ */
+function extractStatsByPlayerForOneMatch(m){
+  const src = m?.stats ?? m?.records ?? m?.playerStats ?? m?.ga ?? m?.scoreboard ?? null
+  const out = {}
+  if (!src) return out
+  if (!Array.isArray(src) && typeof src === 'object') {
+    for (const [k, v] of Object.entries(src)) {
+      const pid = toStr(k)
+      if (!pid) continue
+      const goals = Number(v?.goals || v?.G || 0)
+      const assists = Number(v?.assists || v?.A || 0)
+      out[pid] = { goals, assists }
+    }
+    return out
+  }
+  if (Array.isArray(src)) {
+    for (const rec of src) {
+      const pid = toStr(rec?.playerId ?? rec?.id ?? rec?.user_id ?? rec?.uid ?? rec?.player)
+      if (!pid) continue
+      const type = (rec?.type || (rec?.goal ? 'goals' : rec?.assist ? 'assists' : null) || (rec?.action) || '').toString().toLowerCase()
+      const isGoal = /goal/i.test(type)
+      const isAssist = /assist/i.test(type)
+      const g = Number(rec?.goals || (isGoal ? 1 : 0) || 0)
+      const a = Number(rec?.assists || (isAssist ? 1 : 0) || 0)
+      const prev = out[pid] || { goals: 0, assists: 0 }
+      out[pid] = { goals: prev.goals + (g||0), assists: prev.assists + (a||0) }
+    }
+    return out
+  }
+  return out
+}
 
 /* ---------------------- 공통 요금 유틸 ---------------------- */
 /** 
@@ -315,20 +360,27 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
   const [draftSnap,setDraftSnap]=useState(initialSnap), [dirty,setDirty]=useState(false)
   const [captainIds, setCaptainIds] = useState([])
   const [quarterScores, setQuarterScores] = useState(null)
+  const [localDraftMode, setLocalDraftMode] = useState((m.selectionMode === 'draft') || !!m?.draftMode || !!m?.draft)
   const byId=useMemo(()=>new Map(players.map(p=>[String(p.id),p])),[players])
   const draftTeams=useMemo(()=>draftSnap.map(ids=>ids.map(id=>byId.get(String(id))).filter(Boolean)),[draftSnap,byId])
   const draftCount=useMemo(()=>draftSnap.flat().length,[draftSnap])
   const label=useMemo(()=>formatMatchLabel({...m,snapshot:draftSnap},{withDate:true,withCount:true,count:draftCount}),[m,draftSnap,draftCount])
   const fees=useMemo(()=>deriveFeesFromSnapshot({...m,snapshot:draftSnap},players),[m,draftSnap,players])
   const formatLabel=deriveFormatByLocation(m)
-  const isDraftMode = (m.selectionMode === 'draft') || !!m?.draftMode || !!m?.draft
+  const isDraftMode = localDraftMode
+
+  // ✅ 이 매치의 선수별 G/A 매핑 계산
+  const gaByPlayer = useMemo(()=>extractStatsByPlayerForOneMatch(m), [m])
+  
+  // ✅ G/A 표시 토글: 2팀이면 기본 켜짐, 3팀 이상이면 기본 꺼짐
+  const [showGA, setShowGA] = useState(draftTeams.length <= 2)
 
   // ✅ 초안 변경은 반드시 setSnap 경유 → dirty 플래그 유지
   const setSnap=(next)=>{ setDraftSnap(next); setDirty(true) }
-  const resetDraft=()=>{ setDraftSnap(initialSnap); setDirty(false) }
+  const resetDraft=()=>{ setDraftSnap(initialSnap); setDirty(false); setLocalDraftMode((m.selectionMode === 'draft') || !!m?.draftMode || !!m?.draft) }
   const saveDraft=()=>{ onUpdateMatch?.(m.id,{snapshot:draftSnap,attendeeIds:draftSnap.flat()}); setDirty(false) }
 
-  useEffect(()=>{ setDraftSnap(initialSnap); setDirty(false) }, [m.id, initialSnap.join('|')])
+  useEffect(()=>{ setDraftSnap(initialSnap); setDirty(false); setLocalDraftMode((m.selectionMode === 'draft') || !!m?.draftMode || !!m?.draft) }, [m.id, initialSnap.join('|')])
   useEffect(()=>{
     // initialize captains and quarter scores from m.draft or fallback
     const caps = (m?.draft?.captains && Array.isArray(m.draft.captains)) ? m.draft.captains.map(String) : (Array.isArray(m.captains)?m.captains.map(String):(Array.isArray(m.captainIds)?m.captainIds.map(String):[]))
@@ -394,12 +446,19 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
           {dirty && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-800 border border-amber-200">수정됨(저장 필요)</span>}
         </div>
         <div className="flex items-center gap-3">
+          {/* G/A 표시 토글 버튼 */}
+          <button
+            onClick={() => setShowGA(prev => !prev)}
+            className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] hover:bg-gray-50"
+            title={showGA ? "골/어시 숨기기" : "골/어시 표시"}
+          >
+            {showGA ? "⚽🎯 숨기기" : "⚽🎯 표시"}
+          </button>
           {isAdmin && (
             <label className="flex items-center gap-2 text-xs">
-              <input type="checkbox" checked={isDraftMode} onChange={e=>{
-                const val = e.target.checked
-                const patch = val ? { selectionMode: 'draft' } : { selectionMode: null }
-                onUpdateMatch?.(m.id, patch)
+              <input type="checkbox" checked={localDraftMode} onChange={e=>{
+                setLocalDraftMode(e.target.checked)
+                setDirty(true)
               }} />
               <span>Draft 모드</span>
             </label>
@@ -544,20 +603,45 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
               <ul className="divide-y divide-gray-100">
                 {listOrdered.map(p=>{
                   const member=isMember(p.membership)
+                  const rec = gaByPlayer[toStr(p.id)] || { goals: 0, assists: 0 }
                   return (
                     <li key={p.id} className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
-                      <span className="flex items-center gap-2 min-w-0 flex-1">
-                        <InitialAvatar id={p.id} name={p.name} size={22}/>
-                        <span className="truncate">{p.name}
-                          {(p.position||p.pos)==="GK"&&<em className="ml-1 text-xs text-gray-400">(GK)</em>}
-                          {isDraftMode && captainIds[i] === String(p.id) && (
-                            <span className="ml-1 inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800">
-                              C
-                            </span>
-                          )}
-                        </span>
-                        {!member&&<GuestBadge/>}
-                      </span>
+                      {/* Left block: avatar (with badges) | name | stats */}
+                      <div className={`grid items-center gap-2 min-w-0 flex-1 ${showGA ? 'grid-cols-[auto_1fr_auto]' : 'grid-cols-[auto_1fr]'}`}>
+                        <div className="shrink-0">
+                          {(() => {
+                            const isCaptain = isDraftMode && captainIds[i] === String(p.id)
+                            const badges = [
+                              ...(isCaptain ? ['C'] : []),
+                              ...(!member ? ['G'] : []),
+                            ]
+                            return <InitialAvatar id={p.id} name={p.name} size={22} badges={badges} />
+                          })()}
+                        </div>
+                        <div className="min-w-0 truncate font-medium">
+                          {p.name}
+                          {(p.position||p.pos)==="GK"&&<em className="ml-1 text-xs font-normal text-gray-400">(GK)</em>}
+                        </div>
+                        {/* Stats: Goals / Assists (조건부 표시) */}
+                        {showGA && (
+                          <div className="flex items-center gap-1 justify-self-end">
+                            {rec.goals>0 && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-stone-800 text-white px-1.5 py-0.5 text-[10px]" title="Goals">
+                                <span role="img" aria-label="goals">⚽️</span>
+                                <span className="tabular-nums">{rec.goals}</span>
+                              </span>
+                            )}
+                            {rec.assists>0 && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-stone-700 text-white px-1.5 py-0.5 text-[10px]" title="Assists">
+                                <span role="img" aria-label="assists">🎯</span>
+                                <span className="tabular-nums">{rec.assists}</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Right block: admin actions */}
                       <span className="flex items-center gap-2 shrink-0">
                         {isAdmin&&(
                           <div className="flex items-center gap-2">
@@ -698,8 +782,19 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                 setQuarterScores(initialSnap.map(()=>[]))
               }}>Reset Draft Data (Clear)</button>
               <button className="rounded bg-blue-600 text-white px-3 py-1.5" onClick={()=>{
-                // save snapshot + draft info
-                const patch = { selectionMode: 'draft', snapshot: draftSnap, attendeeIds: draftSnap.flat(), draft: { ...(m.draft||{}), captains: captainIds, quarterScores } }
+                // save snapshot + draft info + draft mode
+                const patch = { 
+                  snapshot: draftSnap, 
+                  attendeeIds: draftSnap.flat(), 
+                  draft: { ...(m.draft||{}), captains: captainIds, quarterScores }
+                }
+                if (localDraftMode) {
+                  patch.selectionMode = 'draft'
+                } else {
+                  patch.selectionMode = null
+                  patch.draftMode = null
+                  patch.draft = null
+                }
                 onUpdateMatch?.(m.id, patch); setDirty(false)
               }}>저장 (Draft)</button>
               {/* Removed Clear Draft button per request */}

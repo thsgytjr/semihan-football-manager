@@ -699,18 +699,18 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
                 </td>
 
                 <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
-                  <div className="grid items-center min-w-0" style={{ gridTemplateColumns: 'auto 1fr auto', columnGap: 6 }}>
+                  <div className="flex items-center gap-2 min-w-0">
                     <div className="shrink-0">
-                      <InitialAvatar id={r.id || r.name} name={r.name} size={20} />
+                      <InitialAvatar 
+                        id={r.id || r.name} 
+                        name={r.name} 
+                        size={20} 
+                        badges={r.isGuest ? ['G'] : []}
+                      />
                     </div>
                     <div className="min-w-0">
                       <span className="block font-medium truncate whitespace-nowrap">{r.name}</span>
                     </div>
-                    {r.isGuest && (
-                      <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200">
-                        G
-                      </span>
-                    )}
                   </div>
                 </td>
 
