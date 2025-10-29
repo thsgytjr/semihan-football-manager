@@ -420,7 +420,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
       {isDraftMode && (
         <div className="absolute -top-3 -left-2 z-10 pointer-events-none">
           <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 bg-amber-100 border border-amber-300 shadow-sm">
-            <span aria-hidden="true">👑</span>
+            <span aria-hidden="true">📋</span>
             <span>Draft</span>
           </span>
         </div>
