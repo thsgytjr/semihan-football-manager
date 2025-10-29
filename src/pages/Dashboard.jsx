@@ -111,31 +111,22 @@ function computeAttackRows(players = [], matches = []) {
 }
 
 /* --------------------- 듀오 유틸 --------------------- */
-
-// 느슨한 날짜 파서(문자열에 이모지 등 섞여 있어도 최대한 시간 추출)
 function parseLooseDate(s) {
   if (!s) return NaN
   if (typeof s === 'number') return Number.isFinite(s) ? s : NaN
-  // [10/11/2025 7:31AM] 같은 패턴 내부 추출
   const inBracket = /\[([^\]]+)\]/.exec(String(s))
   const cand = inBracket ? inBracket[1] : String(s)
   const t = Date.parse(cand)
   return Number.isNaN(t) ? NaN : t
 }
-
-// 이모지/문자 단서로 이벤트 타입 추정
 function inferTypeFromRaw(raw) {
   const s = (raw || '').toString()
   if (/goal/i.test(s)) return 'goal'
   if (/assist/i.test(s)) return 'assist'
-  // 이모지 기반(과거 데이터)
   if (/[⚽️]/.test(s)) return 'goal'
-  if (/[👉☝👆]/.test(s)) return 'assist'
+  if (/[🤟]/.test(s)) return 'assist'
   return null
 }
-
-// 하나의 매치에서 "선수별 events"를 "타임라인 events"로 변환
-// 출력: [{ pid, type:'goal'|'assist', ts:number, rawIdx:number, raw:any }]
 function extractTimelineEventsFromMatch(m) {
   const stats = extractStatsByPlayer(m)
   const out = []
@@ -144,20 +135,17 @@ function extractTimelineEventsFromMatch(m) {
     const arr = Array.isArray(rec?.events) ? rec.events : []
     for (const e of arr) {
       let type = e?.type
-      if (!type) type = inferTypeFromRaw(e?.date) // 오래된 데이터가 date 칸에 원문이 들어있을 수 있음
+      if (!type) type = inferTypeFromRaw(e?.date)
       type = type === 'goals' ? 'goal' : (type === 'assists' ? 'assist' : type)
       if (type !== 'goal' && type !== 'assist') continue
       const ts = parseLooseDate(e?.date)
       out.push({ pid: toStr(pid), type, ts: Number.isNaN(ts) ? 0 : ts, rawIdx: seq++, raw: e })
     }
   }
-
-  // 혹시 match.log 혹은 match.events 텍스트가 있는 경우(이모지 기록) 보조 파싱
   const extraText = m?.log || m?.events || m?.notes || ''
   if (typeof extraText === 'string' && extraText.trim()) {
     const lines = extraText.split(/\r?\n/).map(x => x.trim()).filter(Boolean)
     for (const line of lines) {
-      // 예: [10/11/2025 7:31AM]assist[박선규]
       const bracketMatches = Array.from(line.matchAll(/\[([^\]]+)\]/g)).map(mm => mm[1])
       if (bracketMatches.length >= 2) {
         const dateStr = bracketMatches[0]
@@ -173,23 +161,15 @@ function extractTimelineEventsFromMatch(m) {
       }
     }
   }
-
   return out
 }
-
-// 듀오 집계: 스택 방식(goal을 쌓고 assist가 나오면 최근 goal과 매칭)
-// 동일 시각이면 goal을 assist보다 먼저 처리되도록 정렬에서 보장
 function computeDuoRows(players = [], matches = []) {
   const idToPlayer = new Map(players.map(p => [toStr(p.id), p]))
   const nameToId = new Map(players.map(p => [toStr(p.name).trim().toLowerCase(), toStr(p.id)]))
-
-  // 타임라인 이벤트 모으기(모든 매치 포함)
   let evts = []
   for (const m of (matches || [])) {
     evts = evts.concat(extractTimelineEventsFromMatch(m))
   }
-
-  // 이름만 있는 이벤트의 pid 채우기
   evts.forEach(e => {
     if (e.pid?.startsWith('__name__:')) {
       const name = e.pid.slice('__name__:'.length).trim().toLowerCase()
@@ -197,38 +177,28 @@ function computeDuoRows(players = [], matches = []) {
       if (pid) e.pid = pid
     }
   })
-  // 알 수 없는 선수 제거
   evts = evts.filter(e => idToPlayer.has(toStr(e.pid)))
-
-  // ✅ 시간(있으면) 오름차순, 시간이 같으면 goal 우선, 그다음 원본 입력 순서(rawIdx)
   const typePri = (t) => (t === 'goal' ? 0 : 1)
   evts.sort((a, b) => {
     if (a.ts !== b.ts) return a.ts - b.ts
     if (typePri(a.type) !== typePri(b.type)) return typePri(a.type) - typePri(b.type)
     return a.rawIdx - b.rawIdx
   })
-
-  // 매칭
-  const unmatchedGoals = [] // stack of goal events
-  const duoCount = new Map() // key: assistPid|goalPid
+  const unmatchedGoals = []
+  const duoCount = new Map()
   for (const e of evts) {
     if (e.type === 'goal') {
       unmatchedGoals.push(e)
     } else if (e.type === 'assist') {
       while (unmatchedGoals.length > 0) {
         const g = unmatchedGoals.pop()
-        if (toStr(g.pid) === toStr(e.pid)) {
-          // 자기 자신 어시는 스킵하고 계속 탐색
-          continue
-        }
+        if (toStr(g.pid) === toStr(e.pid)) continue
         const key = `${toStr(e.pid)}|${toStr(g.pid)}`
         duoCount.set(key, (duoCount.get(key) || 0) + 1)
         break
       }
     }
   }
-
-  // rows 생성
   const rows = []
   for (const [key, cnt] of duoCount.entries()) {
     const [assistId, goalId] = key.split('|')
@@ -245,11 +215,7 @@ function computeDuoRows(players = [], matches = []) {
       count: cnt
     })
   }
-
-  // 정렬: 점수 desc → 이름(보조)
   rows.sort((x, y) => (y.count - x.count) || x.duoLabel.localeCompare(y.duoLabel))
-
-  // 순위 부여(타이 동순)
   let lastRank = 0
   let lastKey = null
   const ranked = rows.map((r, i) => {
@@ -259,7 +225,6 @@ function computeDuoRows(players = [], matches = []) {
     lastKey = keyVal
     return { ...r, rank }
   })
-
   return ranked
 }
 
@@ -271,6 +236,10 @@ function sortComparator(rankBy) {
   if (rankBy === 'a') {
     return (a, b) => (b.a - a.a) || (b.g - a.g) || a.name.localeCompare(b.name)
   }
+  // 새 기준: 출전 수(gp)
+  if (rankBy === 'gp') {
+    return (a, b) => (b.gp - a.gp) || (b.g - a.g) || (b.a - a.a) || a.name.localeCompare(b.name)
+  }
   return (a, b) => (b.pts - a.pts) || (b.g - a.g) || a.name.localeCompare(b.name)
 }
 function addRanks(rows, rankBy) {
@@ -278,7 +247,11 @@ function addRanks(rows, rankBy) {
   let lastRank = 0
   let lastKey = null
   return sorted.map((r, i) => {
-    const keyVal = rankBy === 'g' ? r.g : (rankBy === 'a' ? r.a : r.pts)
+    const keyVal =
+      rankBy === 'g' ? r.g :
+      rankBy === 'a' ? r.a :
+      rankBy === 'gp' ? r.gp :
+      r.pts
     const rank = (i === 0) ? 1 : (keyVal === lastKey ? lastRank : i + 1)
     lastRank = rank
     lastKey = keyVal
@@ -321,7 +294,7 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
 
   const baseRows = useMemo(() => computeAttackRows(players, filteredMatches), [players, filteredMatches])
 
-  // 탭: 종합(pts) / Top Scorer(g) / Most Assists(a) / 환상의 듀오(duo)
+  // 탭: 종합(pts) / Top Scorer(g) / Most Assists(a) / Most Appearances(gp) / 환상의 듀오(duo)
   const [tab, setTab] = useState('pts')
   const rankedRows = useMemo(() => addRanks(baseRows, tab), [baseRows, tab])
 
@@ -333,11 +306,13 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
   const colHi = (col) => {
     if (tab === 'g' && col === 'g') return 'bg-indigo-50/80 font-semibold'
     if (tab === 'a' && col === 'a') return 'bg-indigo-50/80 font-semibold'
+    if (tab === 'gp' && col === 'gp') return 'bg-indigo-50/80 font-semibold'
     return ''
   }
   const headHi = (col) => {
     if (tab === 'g' && col === 'g') return 'bg-indigo-100/70 text-stone-900'
     if (tab === 'a' && col === 'a') return 'bg-indigo-100/70 text-stone-900'
+    if (tab === 'gp' && col === 'gp') return 'bg-indigo-100/70 text-stone-900'
     return ''
   }
 
@@ -384,6 +359,7 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
             rankBy={tab}
             headHi={headHi}
             colHi={colHi}
+            onRequestTab={(id)=>{ setTab(id); setShowAll(false) }}
             controls={
               <>
                 <select
@@ -469,13 +445,14 @@ function LeaderboardTabs({ tab, onChange }) {
       <TabBtn id="pts" label="종합" sub="공격포인트 (G+A)" />
       <TabBtn id="g" label="Top Scorer" sub="골 순위" />
       <TabBtn id="a" label="Most Assists" sub="어시스트 순위" />
+      <TabBtn id="gp" label="Most Appearances" sub="출전 순위" />
       <TabBtn id="duo" label="환상의 듀오" sub="어시 → 골 콤비" />
     </div>
   )
 }
 
 /* --------------- 공격포인트 테이블 --------------- */
-function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', headHi, colHi }) {
+function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', headHi, colHi, onRequestTab }) {
   const data = showAll ? rows : rows.slice(0, 5)
 
   const [prevRanks, setPrevRanks] = useState({})
@@ -502,6 +479,7 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
   }
 
   const totalPlayers = rows.length
+  const headerBtnCls = "inline-flex items-center gap-1 hover:underline cursor-pointer select-none"
 
   return (
     <div className="overflow-hidden rounded-lg border border-stone-200">
@@ -509,7 +487,7 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
         <colgroup className="hidden md:table-column-group">
           <col style={{ width: '48px' }} />
           <col />
-          <col style={{ width: '56px' }} />
+          <col style={{ width: '64px' }} />
           <col style={{ width: '42px' }} />
           <col style={{ width: '42px' }} />
           <col style={{ width: '56px' }} />
@@ -532,9 +510,52 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
           <tr className="text-left text-[13px] text-stone-600">
             <th className="border-b px-1.5 py-1.5 md:px-3 md:py-2">순위</th>
             <th className="border-b px-2 py-1.5 md:px-3 md:py-2">선수</th>
-            <th className="border-b px-2 py-1.5 md:px-3 md:py-2">출전</th>
-            <th className={`border-b px-2 py-1.5 md:px-3 md:py-2 ${headHi('g')}`}>G</th>
-            <th className={`border-b px-2 py-1.5 md:px-3 md:py-2 ${headHi('a')}`}>A</th>
+
+            {/* 출전 헤더 클릭 -> Most Appearances(gp) 탭으로 */}
+            <th
+              className={`border-b px-2 py-1.5 md:px-3 md:py-2 ${headHi('gp')}`}
+              scope="col"
+            >
+              <button
+                type="button"
+                onClick={() => onRequestTab && onRequestTab('gp')}
+                className={headerBtnCls}
+                title="Most Appearances 보기"
+              >
+                출전
+              </button>
+            </th>
+
+            {/* G 헤더 클릭 -> Top Scorer(g) 탭으로 */}
+            <th
+              className={`border-b px-2 py-1.5 md:px-3 md:py-2 ${headHi('g')}`}
+              scope="col"
+            >
+              <button
+                type="button"
+                onClick={() => onRequestTab && onRequestTab('g')}
+                className={headerBtnCls}
+                title="Top Scorer 보기"
+              >
+                G
+              </button>
+            </th>
+
+            {/* A 헤더 클릭 -> Most Assists(a) 탭으로 */}
+            <th
+              className={`border-b px-2 py-1.5 md:px-3 md:py-2 ${headHi('a')}`}
+              scope="col"
+            >
+              <button
+                type="button"
+                onClick={() => onRequestTab && onRequestTab('a')}
+                className={headerBtnCls}
+                title="Most Assists 보기"
+              >
+                A
+              </button>
+            </th>
+
             <th className="border-b px-2 py-1.5 md:px-3 md:py-2">PTS</th>
           </tr>
         </thead>
@@ -584,7 +605,7 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
                   </div>
                 </td>
 
-                <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.gp}</td>
+                <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg} ${colHi('gp')}`}>{r.gp}</td>
                 <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg} ${colHi('g')}`}>{r.g}</td>
                 <td className={`border-b px-2 py-1.5 tabular-nums md:px-3 md:py-2 ${tone.cellBg} ${colHi('a')}`}>{r.a}</td>
                 <td className={`border-b px-2 py-1.5 font-semibold tabular-nums md:px-3 md:py-2 ${tone.cellBg}`}>{r.pts}</td>
