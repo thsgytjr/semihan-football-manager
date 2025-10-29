@@ -302,7 +302,10 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
 
   const baseRows = useMemo(() => computeAttackRows(players, filteredMatches), [players, filteredMatches])
 
-  // 탭: 종합(pts) / Top Scorer(g) / Most Assists(a) / Most Appearances(gp) / 환상의 듀오(duo)
+  // Draft 전용: 선수별 승 수 집계 (드래프트 매치만)
+  const draftWinRows = useMemo(() => computeDraftWinsRows(players, filteredMatches), [players, filteredMatches])
+
+  // 탭: 종합(pts) / Top Scorer(g) / Most Assists(a) / Most Appearances(gp) / 환상의 듀오(duo) / Draft(draft)
   const [tab, setTab] = useState('pts')
   const rankedRows = useMemo(() => addRanks(baseRows, tab), [baseRows, tab])
 
@@ -334,6 +337,13 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
         {tab === 'duo' ? (
           <DuoTable
             rows={duoRows}
+            showAll={showAll}
+            onToggle={() => setShowAll(s => !s)}
+            controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+          />
+        ) : tab === 'draft' ? (
+          <DraftWinsTable
+            rows={draftWinRows}
             showAll={showAll}
             onToggle={() => setShowAll(s => !s)}
             controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
@@ -388,6 +398,135 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
   )
 }
 
+/* ------------------- Draft 승리 집계 유틸 ------------------- */
+function coerceQuarterScores(m) {
+  if (!m) return null
+  if (m?.draft && Array.isArray(m.draft.quarterScores)) return m.draft.quarterScores
+  if (Array.isArray(m.quarterScores) && m.quarterScores.length) {
+    if (Array.isArray(m.quarterScores[0])) return m.quarterScores
+    if (m.quarterScores[0] && Array.isArray(m.quarterScores[0].teamScores)) return m.quarterScores.map(t => t.teamScores)
+  }
+  if (Array.isArray(m.scores) && Array.isArray(m.snapshot) && m.scores.length === m.snapshot.length) {
+    return m.snapshot.map((_, i) => [m.scores[i]])
+  }
+  return null
+}
+
+function isDraftMatch(m){
+  return (m?.selectionMode === 'draft') || !!m?.draft || !!m?.draftMode || Array.isArray(m?.captains) || Array.isArray(m?.captainIds)
+}
+
+function winnerIndexFromQuarterScores(qs){
+  if (!Array.isArray(qs) || qs.length < 2) return -1
+  const teamLen = qs.length
+  const maxQ = Math.max(0, ...qs.map(a => Array.isArray(a) ? a.length : 0))
+  const wins = Array.from({length: teamLen}, () => 0)
+  const totals = qs.map(arr => (Array.isArray(arr) ? arr.reduce((a,b)=>a+Number(b||0),0) : 0))
+  for (let qi=0; qi<maxQ; qi++){
+    const scores = qs.map(arr => Array.isArray(arr) ? Number(arr[qi] || 0) : 0)
+    const mx = Math.max(...scores)
+    const winners = scores.map((v,i)=>v===mx?i:-1).filter(i=>i>=0)
+    if (winners.length === 1) wins[winners[0]] += 1
+  }
+  const maxWins = Math.max(...wins)
+  const tied = wins.map((w,i)=>w===maxWins?i:-1).filter(i=>i>=0)
+  if (tied.length === 1) return tied[0]
+  // tie-breaker by total goals
+  const maxTotal = Math.max(...tied.map(i=>totals[i]))
+  const final = tied.filter(i=>totals[i]===maxTotal)
+  return final.length === 1 ? final[0] : -1
+}
+
+function computeDraftWinsRows(players=[], matches=[]) {
+  const idToPlayer = new Map(players.map(p=>[toStr(p.id), p]))
+  const rows = new Map()
+  for (const m of matches) {
+    if (!isDraftMatch(m)) continue
+    const qs = coerceQuarterScores(m)
+    const winnerIdx = winnerIndexFromQuarterScores(qs)
+    if (winnerIdx < 0) continue
+    const snap = Array.isArray(m?.snapshot) ? m.snapshot : null
+    if (!snap || !Array.isArray(snap[winnerIdx])) continue
+    for (const pidRaw of snap[winnerIdx]){
+      const pid = toStr(pidRaw?.id ?? pidRaw)
+      if (!pid) continue
+      const p = idToPlayer.get(pid)
+      const cur = rows.get(pid) || { id: pid, name: p?.name || pid, wins: 0 }
+      cur.wins += 1
+      rows.set(pid, cur)
+    }
+  }
+  const out = Array.from(rows.values()).sort((a,b)=> (b.wins - a.wins) || a.name.localeCompare(b.name))
+  // add rank
+  let lastRank=0, lastKey=null
+  return out.map((r,i)=>{
+    const key=r.wins
+    const rank = (i===0)?1:(key===lastKey?lastRank:i+1)
+    lastRank=rank; lastKey=key
+    return { ...r, rank }
+  })
+}
+
+/* ---------------- Draft 승리 테이블 ---------------- */
+function DraftWinsTable({ rows, showAll, onToggle, controls }){
+  const data = showAll ? rows : rows.slice(0,5)
+  const totalPlayers = rows.length
+  return (
+    <div className="overflow-hidden rounded-lg border border-stone-200">
+      <table className="w-full text-sm">
+        <thead>
+          <tr>
+            <th colSpan={3} className="border-b px-2 py-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="text-xs text-stone-600">Draft 승리 선수 <span className="font-semibold">{totalPlayers}</span>명</div>
+                <div className="ml-auto">{controls}</div>
+              </div>
+            </th>
+          </tr>
+          <tr className="text-left text-[13px] text-stone-600">
+            <th className="border-b px-1.5 py-1.5">순위</th>
+            <th className="border-b px-2 py-1.5">선수</th>
+            <th className="border-b px-2 py-1.5">Wins</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((r, idx) => {
+            const tone = rankTone(r.rank)
+            return (
+              <tr key={r.id || idx} className={`${tone.rowBg}`}>
+                <td className={`border-b align-middle px-1.5 py-1.5 ${tone.cellBg}`}>
+                  <div className="flex items-center gap-2">
+                    <Medal rank={r.rank} />
+                    <span className="tabular-nums">{r.rank}</span>
+                  </div>
+                </td>
+                <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
+                  <div className="flex items-center gap-2">
+                    <InitialAvatar id={r.id} name={r.name} size={20} />
+                    <span className="font-medium truncate">{r.name}</span>
+                  </div>
+                </td>
+                <td className={`border-b px-2 py-1.5 font-semibold tabular-nums ${tone.cellBg}`}>{r.wins}</td>
+              </tr>
+            )
+          })}
+          {data.length===0 && (
+            <tr>
+              <td className="px-3 py-4 text-sm text-stone-500" colSpan={3}>표시할 기록이 없습니다.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      <div className="flex items-center justify-end p-2">
+        <button
+          onClick={() => onToggle && onToggle()}
+          className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50"
+        >{showAll ? '접기' : '전체 보기'}</button>
+      </div>
+    </div>
+  )
+}
+
 /* ----------------------- 컨트롤 (좌측 정렬) ---------------------- */
 function ControlsLeft({ apDateKey, setApDateKey, dateOptions = [], showAll, setShowAll }) {
   return (
@@ -423,6 +562,7 @@ function LeaderboardTabsMobile({ tab, onChange }) {
     { id: 'a',   label: 'Most Assists', short: '어시', icon: '🎯' },
     { id: 'gp',  label: 'Most Appearances', short: '출전', icon: '👟' },
     { id: 'duo', label: '환상의 듀오', short: '듀오', icon: '🤝' },
+    { id: 'draft', label: 'Draft 리더보드', short: 'Draft', icon: '👑' },
   ]
 
   return (

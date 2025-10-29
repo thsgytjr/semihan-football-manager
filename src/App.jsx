@@ -172,6 +172,7 @@ export default function App(){
           {isAdmin&&<TabButton icon={<Users size={16}/>} label="선수 관리" onClick={()=>setTab("players")} active={tab==="players"}/>}
           {isAdmin&&<TabButton icon={<CalendarDays size={16}/>} label="매치 플래너" onClick={()=>setTab("planner")} active={tab==="planner"}/>}
           <TabButton icon={<IconPitch size={16}/>} label="포메이션 보드" onClick={()=>setTab("formation")} active={tab==="formation"}/>
+          
           {isAdmin&&<TabButton icon={<ListChecks size={16}/>} label="기록 입력" onClick={()=>setTab("stats")} active={tab==="stats"}/>}
           <div className="ml-2 pl-2 border-l border-stone-300">
             {isAdmin?(
@@ -203,8 +204,9 @@ export default function App(){
         />
       )}
       {tab==="planner"&&isAdmin&&(<MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
-      {tab==="formation"&&(<FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>)}
-      {tab==="stats"&&isAdmin&&(<StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
+  {tab==="formation"&&(<FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>)}
+  
+  {tab==="stats"&&isAdmin&&(<StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
     </main>
 
     <footer className="mx-auto mt-10 max-w-6xl px-4 pb-8">

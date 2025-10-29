@@ -313,12 +313,15 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
   const hydrated=useMemo(()=>hydrateMatch(m,players),[m,players])
   const initialSnap=useMemo(()=>normalizeSnapshot(m,hydrated.teams||[]),[m,hydrated.teams])
   const [draftSnap,setDraftSnap]=useState(initialSnap), [dirty,setDirty]=useState(false)
+  const [captainIds, setCaptainIds] = useState([])
+  const [quarterScores, setQuarterScores] = useState(null)
   const byId=useMemo(()=>new Map(players.map(p=>[String(p.id),p])),[players])
   const draftTeams=useMemo(()=>draftSnap.map(ids=>ids.map(id=>byId.get(String(id))).filter(Boolean)),[draftSnap,byId])
   const draftCount=useMemo(()=>draftSnap.flat().length,[draftSnap])
   const label=useMemo(()=>formatMatchLabel({...m,snapshot:draftSnap},{withDate:true,withCount:true,count:draftCount}),[m,draftSnap,draftCount])
   const fees=useMemo(()=>deriveFeesFromSnapshot({...m,snapshot:draftSnap},players),[m,draftSnap,players])
   const formatLabel=deriveFormatByLocation(m)
+  const isDraftMode = (m.selectionMode === 'draft') || !!m?.draftMode || !!m?.draft
 
   // ✅ 초안 변경은 반드시 setSnap 경유 → dirty 플래그 유지
   const setSnap=(next)=>{ setDraftSnap(next); setDirty(true) }
@@ -326,6 +329,14 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
   const saveDraft=()=>{ onUpdateMatch?.(m.id,{snapshot:draftSnap,attendeeIds:draftSnap.flat()}); setDirty(false) }
 
   useEffect(()=>{ setDraftSnap(initialSnap); setDirty(false) }, [m.id, initialSnap.join('|')])
+  useEffect(()=>{
+    // initialize captains and quarter scores from m.draft or fallback
+    const caps = (m?.draft?.captains && Array.isArray(m.draft.captains)) ? m.draft.captains.map(String) : (Array.isArray(m.captains)?m.captains.map(String):(Array.isArray(m.captainIds)?m.captainIds.map(String):[]))
+    if(caps && caps.length) setCaptainIds(caps)
+    else setCaptainIds(initialSnap.map(team=>team[0]?String(team[0]):null))
+    const qs = (m?.draft?.quarterScores && Array.isArray(m.draft.quarterScores)) ? m.draft.quarterScores : (Array.isArray(m.scores) ? m.scores.map(v=>[v]) : null)
+    setQuarterScores(qs || (initialSnap.length? initialSnap.map(()=>[]): null))
+  }, [m.id, initialSnap.join('|')])
 
   const teamCols = Math.max(1, Math.min(4, draftTeams.length))
   const gridStyle = { gridTemplateColumns: `repeat(${teamCols}, minmax(0, 1fr))` }
@@ -345,12 +356,27 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
   }
 
   const locLink = getLocationLink(m)
+  const displayedQuarterScores = useMemo(()=>{
+    if (m?.draft && Array.isArray(m.draft.quarterScores)) return m.draft.quarterScores
+    if (Array.isArray(m.quarterScores)) return m.quarterScores
+    if (Array.isArray(m.scores) && Array.isArray(draftSnap) && m.scores.length===draftSnap.length) return draftSnap.map((_,i)=>[m.scores[i]])
+    return null
+  },[m, draftSnap])
 
   return (
-    <li className="rounded border border-gray-200 bg-white p-3">
+    <li className="relative rounded border border-gray-200 bg-white p-3">
+      {isDraftMode && (
+        <div className="absolute -top-3 -left-2 z-10 pointer-events-none">
+          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 bg-amber-100 border border-amber-300 shadow-sm">
+            <span aria-hidden="true">👑</span>
+            <span>Draft</span>
+          </span>
+        </div>
+      )}
       <div className="mb-1 flex items-center justify-between">
         <div className="text-sm">
           <b>{label}</b> · {formatLabel} · {m.teamCount}팀
+          {/* draft badge moved to overlay */}
           {m.location?.name && (
             <> · 장소 {locLink ? (
               <a 
@@ -368,6 +394,16 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
           {dirty && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-800 border border-amber-200">수정됨(저장 필요)</span>}
         </div>
         <div className="flex items-center gap-3">
+          {isAdmin && (
+            <label className="flex items-center gap-2 text-xs">
+              <input type="checkbox" checked={isDraftMode} onChange={e=>{
+                const val = e.target.checked
+                const patch = val ? { selectionMode: 'draft' } : { selectionMode: null }
+                onUpdateMatch?.(m.id, patch)
+              }} />
+              <span>Draft 모드</span>
+            </label>
+          )}
           {enableLoadToPlanner&&<button className="text-xs rounded border border-gray-300 bg-white px-2 py-1" onClick={()=>onLoadToPlanner?.(m)}>팀배정에 로드</button>}
           {isAdmin&&onDeleteMatch&&<button className="text-xs text-red-600" onClick={()=>{ if(window.confirm("정말 삭제하시겠어요?\n삭제 시 대시보드의 공격포인트/기록 집계에 영향을 줄 수 있습니다.")) onDeleteMatch(m.id) }}>삭제</button>}
         </div>
@@ -380,10 +416,96 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
         )}
       </div>
 
-      {/* 표기: G 게스트 */}
+      {displayedQuarterScores && (
+        (() => {
+          const maxQ = Math.max(...displayedQuarterScores.map(a=>Array.isArray(a)?a.length:1))
+          const teamTotals = displayedQuarterScores.map(a=>Array.isArray(a)?a.reduce((s,v)=>s+Number(v||0),0):Number(a||0))
+          const maxTotal = Math.max(...teamTotals)
+          const winners = teamTotals.map((t,i)=>t===maxTotal?i:-1).filter(i=>i>=0)
+          return (
+            <div className="mb-3 rounded border border-gray-100 bg-gray-50 p-2">
+              <div className="text-xs font-medium text-stone-600 mb-2">쿼터별 점수</div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm table-auto border-collapse">
+                  <thead>
+                    <tr className="text-xs text-stone-600">
+                      <th className="text-left px-2 py-1">팀</th>
+                      {Array.from({length: maxQ}).map((_,qi)=>(<th key={qi} className="px-2 py-1 text-center">Q{qi+1}</th>))}
+                      <th className="px-2 py-1 text-center">쿼터<br/>승리</th>
+                      <th className="px-2 py-1 text-right">점수<br/>합계</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {displayedQuarterScores.map((arr,ti)=>{
+                      const isWinner = (winners.length===1 && winners[0]===ti)
+                      // Calculate quarter wins
+                      // Calculate quarter wins for this team
+                      const quarterWins = Array.from({length: maxQ}).map((_,qi) => {
+                        const scores = displayedQuarterScores.map(teamScores => 
+                          Array.isArray(teamScores) ? (teamScores[qi] ?? 0) : (qi===0 ? (teamScores||0) : 0)
+                        )
+                        const maxScore = Math.max(...scores)
+                        return scores[ti] === maxScore && scores.filter(s => s === maxScore).length === 1
+                      })
+                      const totalWins = quarterWins.filter(Boolean).length
+
+                      // Calculate all teams' wins for determining the winner
+                      const allTeamWins = displayedQuarterScores.map((_, teamIdx) => {
+                        return Array.from({length: maxQ}).filter((_,qi) => {
+                          const scores = displayedQuarterScores.map(teamScores => 
+                            Array.isArray(teamScores) ? (teamScores[qi] ?? 0) : (qi===0 ? (teamScores||0) : 0)
+                          )
+                          const maxScore = Math.max(...scores)
+                          return scores[teamIdx] === maxScore && scores.filter(s => s === maxScore).length === 1
+                        }).length
+                      })
+                      
+                      // Find max wins and teams with that many wins
+                      const maxWins = Math.max(...allTeamWins)
+                      const teamsWithMaxWins = allTeamWins
+                        .map((wins, idx) => wins === maxWins ? idx : -1)
+                        .filter(idx => idx !== -1)
+
+                      // If there's a tie in wins, use total score as tiebreaker
+                      const isMatchWinner = teamsWithMaxWins.length > 1 
+                        ? teamsWithMaxWins.includes(ti) && teamTotals[ti] === Math.max(...teamsWithMaxWins.map(idx => teamTotals[idx]))
+                        : allTeamWins[ti] === maxWins
+
+                      return (
+                        <tr key={ti} className={`${isMatchWinner ? 'bg-amber-50 font-semibold':''}`}>
+                          <td className="px-2 py-1">팀 {ti+1} {isMatchWinner ? <span className="ml-1">👑</span>:null}</td>
+                          {Array.from({length:maxQ}).map((_,qi)=>{
+                            const v = Array.isArray(arr) ? (arr[qi] ?? 0) : (qi===0? (arr||0) : 0)
+                            const wonQuarter = quarterWins[qi]
+                            return (
+                              <td key={qi} className="px-2 py-1 text-center">
+                                <span className="inline-flex items-center justify-center gap-1">
+                                  <span className={`tabular-nums ${wonQuarter ? 'font-semibold' : ''}`}>{v}</span>
+                                  <span aria-hidden="true" className={`inline-block h-1.5 w-1.5 rounded-full bg-amber-600 ${wonQuarter ? 'opacity-100' : 'opacity-0'}`}></span>
+                                </span>
+                              </td>
+                            )
+                          })}
+                          <td className="px-2 py-1 text-center font-medium">{totalWins}</td>
+                          <td className="px-2 py-1 text-right">{teamTotals[ti]}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        })()
+      )}
+
+      {/* 표기: C 주장, G 게스트 */}
       <div className="mb-1 flex justify-end">
         <div className="flex items-center gap-1 text-[11px] text-gray-500 whitespace-nowrap">
-          <span>표기:</span><span>G</span><span>게스트</span>
+          <span>표기:</span>
+          <span>C</span><span>주장</span>
+          <span className="mx-1">·</span>
+          <span>G</span><span>게스트</span>
         </div>
       </div>
 
@@ -391,31 +513,71 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
         {draftTeams.map((list,i)=>{
           const kit=kitForTeam(i), nonGK=list.filter(p=>(p.position||p.pos)!=="GK")
           const sum=nonGK.reduce((a,p)=>a+(p.ovr??overall(p)),0), avg=nonGK.length?Math.round(sum/nonGK.length):0
+          const capId=(captainIds&&captainIds[i])?String(captainIds[i]):null
+          const listOrdered=(isDraftMode&&capId)?[...list].sort((a,b)=>{
+            const aid=String(a.id),bid=String(b.id)
+            if(aid===capId && bid!==capId) return -1
+            if(bid===capId && aid!==capId) return 1
+            return 0
+          }):list
           return (
             <div key={i} className="space-y-1 overflow-hidden rounded border border-gray-200">
               <div className={`flex items-center justify-between px-3 py-1.5 text-xs ${kit.headerClass}`}>
-                <div className="font-semibold">팀 {i+1}</div>
+                <div className="font-semibold">팀 {i+1} { /* winner crown */ }
+                  {(() => {
+                    // compute winner index from quarterScores or m.scores
+                    let teamTotals = null
+                    if (Array.isArray(quarterScores) && Array.isArray(quarterScores[i])) teamTotals = quarterScores.map(arr => Array.isArray(arr)?arr.reduce((a,b)=>a+Number(b||0),0):0)
+                    else if (Array.isArray(m.scores) && m.scores.length) teamTotals = m.scores.map(Number)
+                    if (teamTotals && teamTotals.length) {
+                      const max = Math.max(...teamTotals)
+                      const winners = teamTotals.map((v,idx)=>v===max?idx:-1).filter(idx=>idx>=0)
+                      if (winners.length === 1 && winners[0] === i) return (<span className="ml-2">👑</span>)
+                    }
+                    return null
+                  })()
+                  }</div>
                 {isAdmin && !hideOVR
                   ? <div className="opacity-80">{kit.label} · {list.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</div>
                   : <div className="opacity-80">{kit.label} · {list.length}명</div>}
               </div>
               <ul className="divide-y divide-gray-100">
-                {list.map(p=>{
+                {listOrdered.map(p=>{
                   const member=isMember(p.membership)
                   return (
                     <li key={p.id} className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
                       <span className="flex items-center gap-2 min-w-0 flex-1">
                         <InitialAvatar id={p.id} name={p.name} size={22}/>
-                        <span className="truncate">{p.name}{(p.position||p.pos)==="GK"&&<em className="ml-1 text-xs text-gray-400">(GK)</em>}</span>
+                        <span className="truncate">{p.name}
+                          {(p.position||p.pos)==="GK"&&<em className="ml-1 text-xs text-gray-400">(GK)</em>}
+                          {isDraftMode && captainIds[i] === String(p.id) && (
+                            <span className="ml-1 inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800">
+                              C
+                            </span>
+                          )}
+                        </span>
                         {!member&&<GuestBadge/>}
                       </span>
                       <span className="flex items-center gap-2 shrink-0">
                         {isAdmin&&(
-                          <button
-                            className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-100"
-                            title="이 팀에서 제외 (저장 전 초안)"
-                            onClick={()=>setSnap(draftSnap.map((arr,idx)=>idx===i?arr.filter(id=>String(id)!==String(p.id)):arr))}
-                          >제외</button>
+                          <div className="flex items-center gap-2">
+                            {isDraftMode && (
+                              <button
+                                className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-800 hover:bg-amber-100"
+                                title="이 선수를 주장으로 지정"
+                                onClick={()=>{
+                                  const next=[...(captainIds||[])]
+                                  next[i]=String(p.id)
+                                  setCaptainIds(next)
+                                }}
+                              >주장</button>
+                            )}
+                            <button
+                              className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-100"
+                              title="이 팀에서 제외 (저장 전 초안)"
+                              onClick={()=>setSnap(draftSnap.map((arr,idx)=>idx===i?arr.filter(id=>String(id)!==String(p.id)):arr))}
+                            >제외</button>
+                          </div>
                         )}
                       </span>
                     </li>
@@ -427,6 +589,124 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
           )
         })}
       </div>
+
+      {/* Admin: Draft editors (simplified UI) */}
+      {isAdmin && isDraftMode && (() => {
+        // Normalize quarter scores to match current team count
+        const teamLen = draftTeams.length
+        const qs = (quarterScores && Array.isArray(quarterScores))
+          ? quarterScores.map(a => Array.isArray(a) ? a.slice() : [])
+          : Array.from({ length: teamLen }, () => [])
+        while (qs.length < teamLen) qs.push([])
+        if (qs.length > teamLen) qs.length = teamLen
+        const maxQ = Math.max(0, ...qs.map(a => a.length))
+
+        return (
+          <div className="mt-3 space-y-3">
+            {/* Captains grid */}
+            <div className="rounded border p-3 bg-white">
+              <div className="text-sm font-medium mb-2">주장 설정</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                {draftTeams.map((list, ti) => (
+                  <div key={`cap-${ti}`} className="flex items-center gap-2">
+                    <div className="text-xs w-14 shrink-0 text-stone-600">팀 {ti+1}</div>
+                    <select
+                      className="w-full rounded border border-gray-300 bg-white text-stone-900 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      value={captainIds[ti]||''}
+                      onChange={e=>{
+                        const next = [...(captainIds||[])]
+                        next[ti] = e.target.value || null
+                        setCaptainIds(next)
+                      }}
+                    >
+                      <option value="">-- none --</option>
+                      {list.map(p=> <option key={p.id} value={String(p.id)}>{p.name}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Quarter scores: global grid */}
+            <div className="rounded border p-3 bg-white">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium">쿼터 점수 (전체 팀)</div>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="rounded border px-2 py-1 text-sm"
+                    onClick={()=>{
+                      const next = qs.map(arr => [...arr, 0])
+                      setQuarterScores(next)
+                    }}
+                  >Add Quarter</button>
+                  <button
+                    className="rounded border px-2 py-1 text-sm disabled:opacity-50"
+                    disabled={maxQ===0}
+                    onClick={()=>{
+                      const newLen = Math.max(0, maxQ - 1)
+                      const next = qs.map(arr => arr.slice(0, newLen))
+                      setQuarterScores(next)
+                    }}
+                  >Remove Last</button>
+                </div>
+              </div>
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full text-sm table-auto border-collapse">
+                  <thead>
+                    <tr className="text-xs text-stone-600">
+                      <th className="text-left px-2 py-1">팀</th>
+                      {Array.from({length: Math.max(1, maxQ)}).map((_,qi)=>(
+                        <th key={qi} className="px-2 py-1 text-center">Q{qi+1}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {draftTeams.map((_, ti) => (
+                      <tr key={`qrow-${ti}`}> 
+                        <td className="px-2 py-1">팀 {ti+1}</td>
+                        {Array.from({length: Math.max(1, maxQ)}).map((_,qi)=>{
+                          const val = qs[ti][qi] ?? 0
+                          return (
+                            <td key={`qcell-${ti}-${qi}`} className="px-2 py-1 text-center">
+                              <input
+                                type="number"
+                                className="w-20 rounded border border-gray-300 bg-white text-stone-900 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                value={val}
+                                onChange={e=>{
+                                  const next = qs.map(a=>a.slice())
+                                  const n = Number(e.target.value||0)
+                                  // ensure length
+                                  while(next[ti].length < qi+1) next[ti].push(0)
+                                  next[ti][qi] = n
+                                  setQuarterScores(next)
+                                }}
+                              />
+                            </td>
+                          )
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <button className="rounded border px-3 py-1.5" title="주장/쿼터 점수 입력값을 모두 비웁니다." onClick={()=>{
+                // reset editors to a clearly empty state
+                setCaptainIds(initialSnap.map(()=>null))
+                setQuarterScores(initialSnap.map(()=>[]))
+              }}>Reset Draft Data (Clear)</button>
+              <button className="rounded bg-blue-600 text-white px-3 py-1.5" onClick={()=>{
+                // save snapshot + draft info
+                const patch = { selectionMode: 'draft', snapshot: draftSnap, attendeeIds: draftSnap.flat(), draft: { ...(m.draft||{}), captains: captainIds, quarterScores } }
+                onUpdateMatch?.(m.id, patch); setDirty(false)
+              }}>저장 (Draft)</button>
+              {/* Removed Clear Draft button per request */}
+            </div>
+          </div>
+        )
+      })()}
 
       {isAdmin&&<QuickAttendanceEditor players={players} snapshot={draftSnap} onDraftChange={setSnap}/>}
       {isAdmin&&dirty&&(
