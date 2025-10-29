@@ -460,7 +460,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
                 {roster.map(p => (
                   <li key={toStr(p.id)} className="flex items-center justify-between px-3 py-2 hover:bg-stone-50">
                     <div className="flex items-center gap-2">
-                      <InitialAvatar id={p.id} name={p.name} size={20} />
+                      <InitialAvatar id={p.id} name={p.name} size={20} badges={(() => { const s=toStr(p.membership).toLowerCase(); return (s==='member'||s.includes('정회원'))?[]:['G'] })()} />
                       <span className="text-sm">{p.name}</span>
                       <span className="text-xs text-gray-500">{p.position||p.pos||'-'}</span>
                     </div>
@@ -537,7 +537,7 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
           if (!p) return null
           return (
             <li key={toStr(pid)} className="flex items-center gap-3 px-3 py-2">
-              <InitialAvatar id={p.id} name={p.name} size={22} />
+              <InitialAvatar id={p.id} name={p.name} size={22} badges={(() => { const s=toStr(p.membership).toLowerCase(); return (s==='member'||s.includes('정회원'))?[]:['G'] })()} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">
                   {p.name} <span className="ml-1 text-xs text-gray-500">{p.position||p.pos||'-'}</span>

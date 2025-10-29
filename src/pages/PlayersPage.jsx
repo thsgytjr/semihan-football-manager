@@ -14,13 +14,6 @@ const isMember = (m) => {
   return s === "member" || s.includes("정회원")
 }
 
-function GuestBadge() {
-  return (
-    <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200">
-      G
-    </span>
-  )
-}
 function PosChip({ pos }) {
   if (!pos) return null
   const isGK = pos === "GK"
@@ -115,18 +108,14 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
         <div className="sticky top-0 z-10 px-4 py-3 border-b border-stone-200 bg-white">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <InitialAvatar id={draft.id} name={draft.name} size={36} />
+              <InitialAvatar id={draft.id} name={draft.name} size={36} badges={isGuest?['G']:[]} />
               <h3 className="font-semibold">선수 편집</h3>
             </div>
             <div className="flex items-center gap-2 text-[11px] text-stone-500">
               <span className="inline-flex items-center rounded bg-stone-800 px-2 py-1 text-white">
                 OVR&nbsp;{liveOVR}
               </span>
-              {isGuest && (
-                <span className="inline-flex items-center gap-1">
-                  <GuestBadge /> 게스트
-                </span>
-              )}
+              {/* Guest is indicated on the avatar via badges */}
               <button className="ml-2 text-stone-500 hover:text-stone-800" onClick={onClose} aria-label="닫기">✕</button>
             </div>
           </div>
@@ -434,13 +423,13 @@ export default function PlayersPage({
               className={`flex items-center gap-3 px-3 py-2 ${selectedId === p.id ? "bg-emerald-50" : ""}`}
               onClick={() => onSelect(p.id)}
             >
-              <InitialAvatar id={p.id} name={p.name} size={36} />
+              <InitialAvatar id={p.id} name={p.name} size={36} badges={guest?['G']:[]} />
 
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-stone-800 flex items-center gap-2">
                   <span className="truncate">{p.name || "이름없음"}</span>
                   {pos && <PosChip pos={pos} />}
-                  {guest && <GuestBadge />}
+                  {/* Guest is indicated on the avatar via badges */}
                   <span className="inline-flex items-center rounded bg-stone-800 px-2 py-0.5 text-[11px] text-white">
                     OVR&nbsp;{overall(p)}
                   </span>

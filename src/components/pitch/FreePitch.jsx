@@ -13,6 +13,9 @@ import { CSS } from "@dnd-kit/utilities"
 import PitchLines from "../PitchLines"
 import InitialAvatar from "../InitialAvatar"
 
+const S=(v)=>v==null?"":String(v)
+const isMember=(m)=>{const s=S(m).trim().toLowerCase();return s==='member'||s.includes('정회원')}
+
 const clamp = (n, min, max) => Math.max(min, Math.min(max, n))
 const pct = (v) => clamp(v, 0, 100)
 
@@ -356,7 +359,7 @@ function FieldDot({ data }) {
       style={style}
       title={`${data.name}${data.role ? ` (${data.role})` : ""}`}
     >
-      <InitialAvatar id={data.id} name={data.name} size={36} />
+      <InitialAvatar id={data.id} name={data.name} size={36} badges={!isMember(data?.membership)?['G']:[]} />
       <div className="mt-1 text-center text-xs text-white">
         <div className="font-semibold">{data.name}</div>
         {data.role && <div className="text-gray-300">{data.role}</div>}

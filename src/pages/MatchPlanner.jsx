@@ -192,11 +192,10 @@ export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,
               return(
                 <label key={p.id} className={`flex items-center gap-2 rounded border px-3 py-2 ${attendeeIds.includes(p.id)?'border-emerald-400 bg-emerald-50':'border-gray-200 bg-white hover:bg-gray-50'}`}>
                   <input type="checkbox" checked={attendeeIds.includes(p.id)} onChange={()=>toggle(p.id)}/>
-                  <InitialAvatar id={p.id} name={p.name} size={24}/>
+                  <InitialAvatar id={p.id} name={p.name} size={24} badges={!member?['G']:[]} />
                   <span className="text-sm flex-1 whitespace-normal break-words">
                     {p.name}{(p.position||p.pos)==='GK'&&<em className="ml-1 text-xs text-gray-400">(GK)</em>}
                   </span>
-                  {!member&&<GuestBadge/>}
                   {isAdmin&&!hideOVR&&(p.position||p.pos)!=='GK'&&<span className="text-xs text-gray-500 shrink-0">OVR {p.ovr??overall(p)}</span>}
                 </label>
               )
@@ -313,7 +312,7 @@ function PlayerRow({player,showOVR}){
   return(
     <li ref={setNodeRef} style={style} className="flex items-start gap-2 border-t border-gray-100 pt-1 first:border-0 first:pt-0 touch-manipulation cursor-grab active:cursor-grabbing" {...attributes}{...listeners}>
       <span className="flex items-center gap-2 min-w-0 flex-1">
-        <InitialAvatar id={player.id} name={player.name} size={24} />
+  <InitialAvatar id={player.id} name={player.name} size={24} badges={!member?['G']:[]} />
         <span className="whitespace-normal break-words">{player.name}</span>
         <span
           className={`ml-1 inline-flex items-center rounded-full px-2 py-[2px] text-[11px] ${
@@ -326,7 +325,7 @@ function PlayerRow({player,showOVR}){
         >
           {pos}
         </span>
-        {!member&&<GuestBadge />}
+  {/* guest badge is shown on avatar */}
       </span>
 
       {!isGK && showOVR && <span className="ovr-chip shrink-0 rounded-full bg-stone-900 text-white text-[11px] px-2 py-[2px]" data-ovr>
@@ -352,9 +351,9 @@ function kitForTeam(i){return[
 function DragGhost({player,showOVR}){if(!player)return null;const pos=positionGroupOf(player),isGK=pos==='GK',ovrVal=player.ovr??overall(player);const member=isMember(player.membership);return(
   <div className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 shadow-lg">
     <div className="flex items-center gap-2 text-sm">
-      <InitialAvatar id={player.id} name={player.name} size={22}/>
+  <InitialAvatar id={player.id} name={player.name} size={22} badges={!member?['G']:[]} />
       <span className="truncate">{player.name}</span>
-      {!member&&<GuestBadge/>}
+  {/* guest badge is shown on avatar */}
       <span className={`ml-1 inline-flex items-center rounded-full px-2 py-[2px] text-[11px] ${isGK?'bg-amber-100 text-amber-800':pos==='DF'?'bg-blue-100 text-blue-800':pos==='MF'?'bg-emerald-100 text-emerald-800':pos==='FW'?'bg-purple-100 text-purple-800':'bg-stone-100 text-stone-700'}`}>{pos}</span>
       {showOVR&&!isGK&&<span className="text-xs text-gray-600">OVR {ovrVal}</span>}
     </div>

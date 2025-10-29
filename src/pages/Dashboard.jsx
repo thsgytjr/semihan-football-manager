@@ -1,5 +1,6 @@
 // src/pages/Dashboard.jsx
 import React, { useMemo, useState, useEffect } from 'react'
+import { Tab } from '@headlessui/react'
 import Card from '../components/Card'
 import InitialAvatar from '../components/InitialAvatar'
 import SavedMatchesList from '../components/SavedMatchesList'
@@ -221,7 +222,9 @@ function computeDuoRows(players = [], matches = []) {
       duoLabel: `${aP.name} → ${gP.name}`,
       aName: aP.name,
       gName: gP.name,
-      count: cnt
+      count: cnt,
+      aIsGuest: !isMember(aP.membership),
+      gIsGuest: !isMember(gP.membership)
     })
   }
   rows.sort((x, y) => (y.count - x.count) || x.duoLabel.localeCompare(y.duoLabel))
@@ -302,28 +305,28 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
 
   const baseRows = useMemo(() => computeAttackRows(players, filteredMatches), [players, filteredMatches])
 
-  // Draft 전용: 선수별 승 수 집계 (드래프트 매치만)
+  // Draft 전용: 선수/주장 승리 집계
   const draftWinRows = useMemo(() => computeDraftWinsRows(players, filteredMatches), [players, filteredMatches])
+  const captainWinRows = useMemo(() => computeCaptainWinsRows(players, filteredMatches), [players, filteredMatches])
 
-  // 탭: 종합(pts) / Top Scorer(g) / Most Assists(a) / Most Appearances(gp) / 환상의 듀오(duo) / Draft(draft)
-  const [tab, setTab] = useState('pts')
-  const rankedRows = useMemo(() => addRanks(baseRows, tab), [baseRows, tab])
-
-  // 듀오 rows
-  const duoRows = useMemo(() => computeDuoRows(players, filteredMatches), [players, filteredMatches])
+  // 탭 구조 개편: 1차(종합|draft), 2차(종합: pts/g/a/gp | draft: playerWins/captainWins)
+  const [primaryTab, setPrimaryTab] = useState('pts') // 'pts' | 'draft'
+  const [apTab, setApTab] = useState('pts')           // 'pts' | 'g' | 'a' | 'gp'
+  const [draftTab, setDraftTab] = useState('playerWins') // 'playerWins' | 'captainWins'
+  const rankedRows = useMemo(() => addRanks(baseRows, apTab), [baseRows, apTab])
 
   const [showAll, setShowAll] = useState(false)
 
   const colHi = (col) => {
-    if (tab === 'g' && col === 'g') return 'bg-indigo-50/80 font-semibold'
-    if (tab === 'a' && col === 'a') return 'bg-indigo-50/80 font-semibold'
-    if (tab === 'gp' && col === 'gp') return 'bg-indigo-50/80 font-semibold'
+    if (apTab === 'g' && col === 'g') return 'bg-indigo-50/80 font-semibold'
+    if (apTab === 'a' && col === 'a') return 'bg-indigo-50/80 font-semibold'
+    if (apTab === 'gp' && col === 'gp') return 'bg-indigo-50/80 font-semibold'
     return ''
   }
   const headHi = (col) => {
-    if (tab === 'g' && col === 'g') return 'bg-indigo-100/70 text-stone-900'
-    if (tab === 'a' && col === 'a') return 'bg-indigo-100/70 text-stone-900'
-    if (tab === 'gp' && col === 'gp') return 'bg-indigo-100/70 text-stone-900'
+    if (apTab === 'g' && col === 'g') return 'bg-indigo-100/70 text-stone-900'
+    if (apTab === 'a' && col === 'a') return 'bg-indigo-100/70 text-stone-900'
+    if (apTab === 'gp' && col === 'gp') return 'bg-indigo-100/70 text-stone-900'
     return ''
   }
 
@@ -331,32 +334,41 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
     <div className="grid gap-4 sm:gap-6">
       {/* 리더보드 */}
       <Card title="리더보드">
-        {/* 모바일-우선: 콤팩트 세그먼트 탭 (가로 스크롤 + 자동 줄바꿈) */}
-        <LeaderboardTabsMobile tab={tab} onChange={(id)=>{ setTab(id); setShowAll(false) }} />
+        {/* 상단: 1차 탭 (종합 | Draft) + 2차 탭 (조건부) */}
+        <PrimarySecondaryTabs
+          primary={primaryTab}
+          setPrimary={(val)=>{ setPrimaryTab(val); setShowAll(false) }}
+          apTab={apTab}
+          setApTab={(val)=>{ setApTab(val); setPrimaryTab('pts'); setShowAll(false) }}
+          draftTab={draftTab}
+          setDraftTab={(val)=>{ setDraftTab(val); setPrimaryTab('draft'); setShowAll(false) }}
+        />
 
-        {tab === 'duo' ? (
-          <DuoTable
-            rows={duoRows}
-            showAll={showAll}
-            onToggle={() => setShowAll(s => !s)}
-            controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
-          />
-        ) : tab === 'draft' ? (
-          <DraftWinsTable
-            rows={draftWinRows}
-            showAll={showAll}
-            onToggle={() => setShowAll(s => !s)}
-            controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
-          />
+        {primaryTab === 'draft' ? (
+          draftTab === 'captainWins' ? (
+            <CaptainWinsTable
+              rows={captainWinRows}
+              showAll={showAll}
+              onToggle={() => setShowAll(s => !s)}
+              controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+            />
+          ) : (
+            <DraftWinsTable
+              rows={draftWinRows}
+              showAll={showAll}
+              onToggle={() => setShowAll(s => !s)}
+              controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+            />
+          )
         ) : (
           <AttackPointsTable
             rows={rankedRows}
             showAll={showAll}
             onToggle={() => setShowAll(s => !s)}
-            rankBy={tab}
+            rankBy={apTab}
             headHi={headHi}
             colHi={colHi}
-            onRequestTab={(id)=>{ setTab(id); setShowAll(false) }}
+            onRequestTab={(id)=>{ setApTab(id); setPrimaryTab('pts'); setShowAll(false) }}
             controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
           />
         )}
@@ -451,7 +463,7 @@ function computeDraftWinsRows(players=[], matches=[]) {
       const pid = toStr(pidRaw?.id ?? pidRaw)
       if (!pid) continue
       const p = idToPlayer.get(pid)
-      const cur = rows.get(pid) || { id: pid, name: p?.name || pid, wins: 0 }
+      const cur = rows.get(pid) || { id: pid, name: p?.name || pid, wins: 0, isGuest: p ? !isMember(p.membership) : false }
       cur.wins += 1
       rows.set(pid, cur)
     }
@@ -467,6 +479,90 @@ function computeDraftWinsRows(players=[], matches=[]) {
   })
 }
 
+// 주장 승리 집계: 각 드래프트 매치의 승리 팀 주장에게 1승 가산
+function computeCaptainWinsRows(players=[], matches=[]) {
+  const idToPlayer = new Map(players.map(p=>[toStr(p.id), p]))
+  const rows = new Map()
+  for (const m of matches) {
+    if (!isDraftMatch(m)) continue
+    const qs = coerceQuarterScores(m)
+    const winnerIdx = winnerIndexFromQuarterScores(qs)
+    if (winnerIdx < 0) continue
+    // 주장 id 결정: m.draft.captains 또는 captains/captainIds
+    let capId = null
+    if (Array.isArray(m?.draft?.captains)) capId = m.draft.captains[winnerIdx]
+    if (!capId && Array.isArray(m?.captains)) capId = m.captains[winnerIdx]
+    if (!capId && Array.isArray(m?.captainIds)) capId = m.captainIds[winnerIdx]
+    const pid = toStr(capId)
+    if (!pid) continue
+    const p = idToPlayer.get(pid)
+    const cur = rows.get(pid) || { id: pid, name: p?.name || pid, wins: 0, isGuest: p ? !isMember(p.membership) : false }
+    cur.wins += 1
+    rows.set(pid, cur)
+  }
+  const out = Array.from(rows.values()).sort((a,b)=> (b.wins - a.wins) || a.name.localeCompare(b.name))
+  // add rank
+  let lastRank=0, lastKey=null
+  return out.map((r,i)=>{
+    const key=r.wins
+    const rank = (i===0)?1:(key===lastKey?lastRank:i+1)
+    lastRank=rank; lastKey=key
+    return { ...r, rank }
+  })
+}
+
+function CaptainWinsTable({ rows, showAll, onToggle, controls }){
+  const data = showAll ? rows : rows.slice(0,5)
+  const totalPlayers = rows.length
+  return (
+    <div className="overflow-hidden rounded-lg border border-stone-200">
+      <table className="w-full text-sm">
+        <thead>
+          <tr>
+            <th colSpan={3} className="border-b px-2 py-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="text-xs text-stone-600">Draft 승리 주장 <span className="font-semibold">{totalPlayers}</span>명</div>
+                <div className="ml-auto">{controls}</div>
+              </div>
+            </th>
+          </tr>
+          <tr className="text-left text-[13px] text-stone-600">
+            <th className="border-b px-1.5 py-1.5">순위</th>
+            <th className="border-b px-2 py-1.5">주장</th>
+            <th className="border-b px-2 py-1.5">Wins</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((r, idx) => {
+            const tone = rankTone(r.rank)
+            return (
+              <tr key={r.id || idx} className={`${tone.rowBg}`}>
+                <td className={`border-b align-middle px-1.5 py-1.5 ${tone.cellBg}`}>
+                  <div className="flex items-center gap-2">
+                    <Medal rank={r.rank} />
+                    <span className="tabular-nums">{r.rank}</span>
+                  </div>
+                </td>
+                <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
+                  <div className="flex items-center gap-2">
+                    <InitialAvatar id={r.id} name={r.name} size={20} badges={r.isGuest?['G']:[]} />
+                    <span className="font-medium truncate">{r.name}</span>
+                  </div>
+                </td>
+                <td className={`border-b px-2 py-1.5 font-semibold tabular-nums ${tone.cellBg}`}>{r.wins}</td>
+              </tr>
+            )
+          })}
+          {data.length===0 && (
+            <tr>
+              <td className="px-3 py-4 text-sm text-stone-500" colSpan={3}>표시할 기록이 없습니다.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  )
+}
 /* ---------------- Draft 승리 테이블 ---------------- */
 function DraftWinsTable({ rows, showAll, onToggle, controls }){
   const data = showAll ? rows : rows.slice(0,5)
@@ -502,7 +598,7 @@ function DraftWinsTable({ rows, showAll, onToggle, controls }){
                 </td>
                 <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
                   <div className="flex items-center gap-2">
-                    <InitialAvatar id={r.id} name={r.name} size={20} />
+                    <InitialAvatar id={r.id} name={r.name} size={20} badges={r.isGuest?['G']:[]} />
                     <span className="font-medium truncate">{r.name}</span>
                   </div>
                 </td>
@@ -517,12 +613,6 @@ function DraftWinsTable({ rows, showAll, onToggle, controls }){
           )}
         </tbody>
       </table>
-      <div className="flex items-center justify-end p-2">
-        <button
-          onClick={() => onToggle && onToggle()}
-          className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50"
-        >{showAll ? '접기' : '전체 보기'}</button>
-      </div>
     </div>
   )
 }
@@ -555,45 +645,77 @@ function ControlsLeft({ apDateKey, setApDateKey, dateOptions = [], showAll, setS
 }
 
 /* ----------------------- 모바일 탭 컴포넌트 ---------------------- */
-function LeaderboardTabsMobile({ tab, onChange }) {
-  const tabs = [
-    { id: 'pts', label: '종합', short: '종합', icon: '🏆' },
-    { id: 'g',   label: 'Top Scorer', short: '득점', icon: '⚽️' },
-    { id: 'a',   label: 'Most Assists', short: '어시', icon: '🎯' },
-    { id: 'gp',  label: 'Most Appearances', short: '출전', icon: '👟' },
-    { id: 'duo', label: '환상의 듀오', short: '듀오', icon: '🤝' },
-    { id: 'draft', label: 'Draft 리더보드', short: 'Draft', icon: '👑' },
+function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, setDraftTab }) {
+  const primaryIndex = primary === 'draft' ? 1 : 0
+  const onPrimaryChange = (idx) => setPrimary && setPrimary(idx === 1 ? 'draft' : 'pts')
+
+  const ApOptions = [
+    { id: 'pts', label: '종합' },
+    { id: 'g', label: '득점' },
+    { id: 'a', label: '어시' },
+    { id: 'gp', label: '출전' },
+  ]
+  const DraftOptions = [
+    { id: 'playerWins', label: '선수승점' },
+    { id: 'captainWins', label: '주장승점' },
   ]
 
   return (
-    <div className="mb-2">
-      {/* 상단: 현재 탭 요약 (모바일에서 높이 절약) */}
-      <div className="mb-2 flex items-center justify-between">
-        <div className="text-sm text-stone-700 font-medium">
-          {tabs.find(t => t.id === tab)?.label}
-        </div>
-      </div>
+    <div className="mb-2 space-y-2">
+      {/* Primary tabs */}
+      <Tab.Group selectedIndex={primaryIndex} onChange={onPrimaryChange}>
+        <Tab.List className="inline-flex rounded-full border border-stone-300 bg-white p-1 shadow-sm">
+          {[
+            { id: 'pts', label: '종합' },
+            { id: 'draft', label: 'Draft' },
+          ].map((t, i) => (
+            <Tab key={t.id} className={({ selected }) =>
+              `px-3 py-1.5 text-[13px] rounded-full outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${selected ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-50'}`
+            }>
+              {t.label}
+            </Tab>
+          ))}
+        </Tab.List>
+      </Tab.Group>
 
-      {/* 하단: 스크롤 가능한 칩 버튼들 */}
-      <div className="relative">
-        <div className="flex gap-1.5 overflow-x-auto no-scrollbar py-1 -mx-2 px-2">
-          {tabs.map(t => {
-            const active = tab === t.id
-            return (
-              <button
-                key={t.id}
-                onClick={() => onChange(t.id)}
-                aria-pressed={active}
-                className={`flex-shrink-0 inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[13px] border transition
-                  ${active ? 'bg-stone-900 text-white border-stone-900' : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'}`}
-              >
-                <span className="text-base leading-none">{t.icon}</span>
-                <span className="leading-none">{t.short}</span>
-              </button>
-            )
-          })}
+      {/* Secondary controls: mobile select + desktop segmented */}
+      {primary === 'pts' ? (
+        <div className="overflow-x-auto no-scrollbar">
+          <div className="inline-flex rounded-full border border-stone-300 bg-white p-1 shadow-sm">
+            {ApOptions.map(o => {
+              const active = apTab === o.id
+              return (
+                <button
+                  key={o.id}
+                  onClick={()=>setApTab && setApTab(o.id)}
+                  className={`px-3 py-1.5 text-[13px] rounded-full ${active ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-50'}`}
+                  aria-pressed={active}
+                >
+                  {o.label}
+                </button>
+              )
+            })}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="overflow-x-auto no-scrollbar">
+          <div className="inline-flex rounded-full border border-stone-300 bg-white p-1 shadow-sm">
+            {DraftOptions.map(o => {
+              const active = draftTab === o.id
+              return (
+                <button
+                  key={o.id}
+                  onClick={()=>setDraftTab && setDraftTab(o.id)}
+                  className={`px-3 py-1.5 text-[13px] rounded-full ${active ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-50'}`}
+                  aria-pressed={active}
+                >
+                  {o.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -771,10 +893,10 @@ function DuoTable({ rows, showAll, onToggle, controls }) {
                 </td>
                 <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
                   <div className="flex items-center gap-2">
-                    <InitialAvatar id={r.assistId} name={r.aName} size={20} />
+                    <InitialAvatar id={r.assistId} name={r.aName} size={20} badges={r.aIsGuest?['G']:[]} />
                     <span className="font-medium">{r.aName}</span>
                     <span className="mx-1 text-stone-400">→</span>
-                    <InitialAvatar id={r.goalId} name={r.gName} size={20} />
+                    <InitialAvatar id={r.goalId} name={r.gName} size={20} badges={r.gIsGuest?['G']:[]} />
                     <span className="font-medium">{r.gName}</span>
                   </div>
                 </td>

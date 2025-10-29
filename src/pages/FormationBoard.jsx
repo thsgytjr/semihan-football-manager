@@ -296,11 +296,11 @@ export default function FormationBoard({
                       onChange={() => toggle(p.id)}
                       className="mr-1"
                     />
-                    <InitialAvatar id={p.id} name={p.name} size={24} />
+                    <InitialAvatar id={p.id} name={p.name} size={24} badges={(() => { const mem=String(p.membership||"").trim(); const isMember = mem === "member" || mem.includes("정회원"); return isMember?[]:["G"]; })()} />
                     <span className="text-sm flex-1 whitespace-normal break-words">
                       {p.name} {(p.position||p.pos)==='GK' && <em className="ml-1 text-xs text-gray-400">(GK)</em>}
                     </span>
-                    {!isMember && <GuestBadge />}
+                    {/* Guest shown on avatar via badges */}
                   </label>
                 )
               })}
