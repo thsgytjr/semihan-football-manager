@@ -5,6 +5,99 @@ import { overall } from "../lib/players"
 import { hydrateMatch } from "../lib/match"
 import { formatMatchLabel } from "../lib/matchLabel"
 
+/* ---------------------- 폭죽 효과 컴포넌트 ---------------------- */
+function Confetti() {
+  const canvasRef = useRef(null)
+  
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    
+    const ctx = canvas.getContext('2d')
+    const particles = []
+    const particleCount = 50
+    const colors = ['#fbbf24', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#3b82f6', '#10b981']
+    
+    // 캔버스 크기 설정
+    const updateSize = () => {
+      canvas.width = canvas.offsetWidth
+      canvas.height = canvas.offsetHeight
+    }
+    updateSize()
+    window.addEventListener('resize', updateSize)
+    
+    // 파티클 생성
+    class Particle {
+      constructor() {
+        this.reset()
+      }
+      
+      reset() {
+        this.x = Math.random() * canvas.width
+        this.y = -10
+        this.size = Math.random() * 6 + 2
+        this.speedY = Math.random() * 3 + 2
+        this.speedX = Math.random() * 2 - 1
+        this.color = colors[Math.floor(Math.random() * colors.length)]
+        this.rotation = Math.random() * 360
+        this.rotationSpeed = Math.random() * 10 - 5
+      }
+      
+      update() {
+        this.y += this.speedY
+        this.x += this.speedX
+        this.rotation += this.rotationSpeed
+        
+        if (this.y > canvas.height) {
+          this.reset()
+        }
+      }
+      
+      draw() {
+        ctx.save()
+        ctx.translate(this.x, this.y)
+        ctx.rotate(this.rotation * Math.PI / 180)
+        ctx.fillStyle = this.color
+        ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size)
+        ctx.restore()
+      }
+    }
+    
+    // 파티클 초기화
+    for (let i = 0; i < particleCount; i++) {
+      particles.push(new Particle())
+    }
+    
+    // 애니메이션
+    let animationId
+    const animate = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      
+      particles.forEach(particle => {
+        particle.update()
+        particle.draw()
+      })
+      
+      animationId = requestAnimationFrame(animate)
+    }
+    
+    animate()
+    
+    return () => {
+      window.removeEventListener('resize', updateSize)
+      cancelAnimationFrame(animationId)
+    }
+  }, [])
+  
+  return (
+    <canvas 
+      ref={canvasRef} 
+      className="absolute inset-0 pointer-events-none z-0"
+      style={{ width: '100%', height: '100%' }}
+    />
+  )
+}
+
 const S = (v)=>v==null?"":String(v)
 const isMember = (m)=>{ const s=S(m).trim().toLowerCase(); return s==="member"||s.includes("정회원") }
 const GuestBadge = ()=>(
@@ -579,28 +672,33 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
             if(bid===capId && aid!==capId) return 1
             return 0
           }):list
+          
+          // compute winner index from quarterScores or m.scores
+          let teamTotals = null
+          let isWinner = false
+          if (Array.isArray(quarterScores) && Array.isArray(quarterScores[i])) {
+            teamTotals = quarterScores.map(arr => Array.isArray(arr)?arr.reduce((a,b)=>a+Number(b||0),0):0)
+          } else if (Array.isArray(m.scores) && m.scores.length) {
+            teamTotals = m.scores.map(Number)
+          }
+          if (teamTotals && teamTotals.length) {
+            const max = Math.max(...teamTotals)
+            const winners = teamTotals.map((v,idx)=>v===max?idx:-1).filter(idx=>idx>=0)
+            if (winners.length === 1 && winners[0] === i) {
+              isWinner = true
+            }
+          }
+          
           return (
-            <div key={i} className="space-y-1 overflow-hidden rounded border border-gray-200">
-              <div className={`flex items-center justify-between px-3 py-1.5 text-xs ${kit.headerClass}`}>
-                <div className="font-semibold">팀 {i+1} { /* winner crown */ }
-                  {(() => {
-                    // compute winner index from quarterScores or m.scores
-                    let teamTotals = null
-                    if (Array.isArray(quarterScores) && Array.isArray(quarterScores[i])) teamTotals = quarterScores.map(arr => Array.isArray(arr)?arr.reduce((a,b)=>a+Number(b||0),0):0)
-                    else if (Array.isArray(m.scores) && m.scores.length) teamTotals = m.scores.map(Number)
-                    if (teamTotals && teamTotals.length) {
-                      const max = Math.max(...teamTotals)
-                      const winners = teamTotals.map((v,idx)=>v===max?idx:-1).filter(idx=>idx>=0)
-                      if (winners.length === 1 && winners[0] === i) return (<span className="ml-2">👑</span>)
-                    }
-                    return null
-                  })()
-                  }</div>
+            <div key={i} className="space-y-1 overflow-hidden rounded border border-gray-200 relative">
+              {isWinner && <Confetti />}
+              <div className={`flex items-center justify-between px-3 py-1.5 text-xs ${kit.headerClass} relative z-10`}>
+                <div className="font-semibold">팀 {i+1} {isWinner && <span className="ml-2">👑</span>}</div>
                 {isAdmin && !hideOVR
                   ? <div className="opacity-80">{kit.label} · {list.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</div>
                   : <div className="opacity-80">{kit.label} · {list.length}명</div>}
               </div>
-              <ul className="divide-y divide-gray-100">
+              <ul className="divide-y divide-gray-100 relative z-10">
                 {listOrdered.map(p=>{
                   const member=isMember(p.membership)
                   const rec = gaByPlayer[toStr(p.id)] || { goals: 0, assists: 0 }

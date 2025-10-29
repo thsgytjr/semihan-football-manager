@@ -403,6 +403,79 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
           .no-scrollbar::-webkit-scrollbar { display: none; }
           .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+          /* 1등 챔피언: 과한 테두리/이모지 없이 텍스트만 고급스러운 금빛 반짝임 */
+          @keyframes gold-glint {
+            0%, 100% {
+              filter: brightness(1) contrast(1);
+              text-shadow: 0 0 1px rgba(0,0,0,0.15), 0 0 6px rgba(255, 223, 128, 0.25);
+            }
+            50% {
+              filter: brightness(1.08) contrast(1.05);
+              text-shadow: 0 0 1px rgba(0,0,0,0.15), 0 0 12px rgba(255, 235, 170, 0.45);
+            }
+          }
+          @keyframes gold-shift {
+            0%, 100% { background-position: 50% 50%; }
+            50% { background-position: 52% 48%; }
+          }
+          .champion-gold-text {
+            display: inline-block;
+            background-image: linear-gradient(135deg,
+              #fff6d0 0%,
+              #f1d28b 20%,
+              #cfa645 40%,
+              #fff2b8 60%,
+              #d1a54b 75%,
+              #fff7cf 90%,
+              #c9992e 100%
+            );
+            background-size: 250% 250%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: gold-glint 1.8s ease-in-out infinite, gold-shift 3s ease-in-out infinite;
+            filter: drop-shadow(0 0 0.6px rgba(0,0,0,0.25));
+          }
+
+          /* 셀 전체 금빛 반짝임 (텍스트 가리지 않도록 오버레이) */
+          @keyframes gold-sweep {
+            0%   { transform: translateX(-120%) skewX(-15deg); }
+            100% { transform: translateX(220%)  skewX(-15deg); }
+          }
+          .champion-gold-cell {
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 0 1px rgba(215, 160, 40, 0.12), inset 0 0 18px rgba(255, 220, 100, 0.10);
+            isolation: isolate;
+          }
+          .champion-gold-cell::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+              radial-gradient(150% 120% at 30% 20%, rgba(255, 235, 160, 0.20), rgba(255, 215, 120, 0.10) 35%, transparent 70%),
+              linear-gradient(180deg, rgba(255, 240, 180, 0.12), rgba(255, 210, 110, 0.08) 40%, rgba(230, 170, 60, 0.06) 100%);
+            mix-blend-mode: overlay;
+            pointer-events: none;
+            z-index: 0;
+          }
+          .champion-gold-cell::after {
+            content: '';
+            position: absolute;
+            top: -20%;
+            left: -30%;
+            width: 40%;
+            height: 140%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+            filter: blur(2px);
+            transform: translateX(-120%) skewX(-15deg);
+            animation: gold-sweep 2.4s ease-in-out infinite;
+            opacity: 0.7;
+            mix-blend-mode: screen;
+            pointer-events: none;
+            z-index: 1;
+          }
+
           /* SavedMatchesList 내 OVR 관련 요소 모두 숨김 */
           .saved-matches-no-ovr [data-ovr],
           .saved-matches-no-ovr .ovr,
@@ -438,6 +511,34 @@ function isDraftMatch(m){
   return (m?.selectionMode === 'draft') || !!m?.draft || !!m?.draftMode || Array.isArray(m?.captains) || Array.isArray(m?.captainIds)
 }
 
+// draft 유틸: 팀별 선수 id 배열 추출
+function extractSnapshotTeams(m){
+  const snap = Array.isArray(m?.snapshot) ? m.snapshot : null
+  if (!snap || !snap.every(Array.isArray)) return []
+  return snap.map(team => team.map(v => {
+    if (typeof v === 'object' && v !== null) {
+      const cand = v.id ?? v.playerId ?? v.user_id ?? v.userId ?? v.pid ?? v.uid
+      return toStr(cand)
+    }
+    return toStr(v)
+  }).filter(Boolean))
+}
+// draft 유틸: 팀별 주장 id 배열 추출 (스냅샷 인덱스와 정렬 동일하다고 가정)
+function extractCaptainsByTeam(m){
+  const arr = (m?.draft && Array.isArray(m.draft.captains)) ? m.draft.captains
+            : Array.isArray(m?.captains) ? m.captains
+            : Array.isArray(m?.captainIds) ? m.captainIds
+            : []
+  return Array.isArray(arr) ? arr.map(x => toStr(x?.id ?? x)) : []
+}
+// 매치 타임스탬프(정렬용)
+function extractMatchTS(m){
+  const c = m?.dateISO ?? m?.dateIso ?? m?.dateiso ?? m?.date ?? m?.dateStr ?? m?.createdAt ?? m?.updatedAt ?? null
+  if (!c) return 0
+  const t = (typeof c === 'number') ? c : Date.parse(String(c))
+  return Number.isFinite(t) ? t : 0
+}
+
 function winnerIndexFromQuarterScores(qs){
   if (!Array.isArray(qs) || qs.length < 2) return -1
   const teamLen = qs.length
@@ -462,20 +563,37 @@ function winnerIndexFromQuarterScores(qs){
 function computeDraftWinsRows(players=[], matches=[]) {
   const idToPlayer = new Map(players.map(p=>[toStr(p.id), p]))
   const rows = new Map()
-  for (const m of matches) {
-    if (!isDraftMatch(m)) continue
+  const last5Map = new Map() // pid -> chronological results array ['W'|'L'|'D']
+  const sorted = [...(matches||[])].filter(isDraftMatch).sort((a,b)=>extractMatchTS(a)-extractMatchTS(b))
+  for (const m of sorted) {
     const qs = coerceQuarterScores(m)
     const winnerIdx = winnerIndexFromQuarterScores(qs)
-    if (winnerIdx < 0) continue
-    const snap = Array.isArray(m?.snapshot) ? m.snapshot : null
-    if (!snap || !Array.isArray(snap[winnerIdx])) continue
-    for (const pidRaw of snap[winnerIdx]){
-      const pid = toStr(pidRaw?.id ?? pidRaw)
-      if (!pid) continue
-      const p = idToPlayer.get(pid)
-      const cur = rows.get(pid) || { id: pid, name: p?.name || pid, wins: 0, isGuest: p ? !isMember(p.membership) : false }
-      cur.wins += 1
-      rows.set(pid, cur)
+    const teams = extractSnapshotTeams(m)
+    if (teams.length === 0) continue
+    const isDraw = winnerIdx < 0
+    for (let ti=0; ti<teams.length; ti++){
+      const res = isDraw ? 'D' : (ti === winnerIdx ? 'W' : 'L')
+      for (const pid of teams[ti]){
+        // last5 누적
+        const list = last5Map.get(pid) || []
+        list.push(res)
+        last5Map.set(pid, list)
+        // 승리 카운트 누적(승리팀만)
+        if (res === 'W'){
+          const p = idToPlayer.get(pid)
+          const cur = rows.get(pid) || { id: pid, name: p?.name || pid, wins: 0, isGuest: p ? !isMember(p.membership) : false }
+          cur.wins += 1
+          rows.set(pid, cur)
+        } else {
+          // 이름/게스트 정보는 필요 시 채움
+          if (!rows.has(pid)){
+            const p = idToPlayer.get(pid)
+            if (p){
+              rows.set(pid, { id: pid, name: p.name || pid, wins: 0, isGuest: !isMember(p.membership) })
+            }
+          }
+        }
+      }
     }
   }
   const out = Array.from(rows.values()).sort((a,b)=> (b.wins - a.wins) || a.name.localeCompare(b.name))
@@ -485,7 +603,8 @@ function computeDraftWinsRows(players=[], matches=[]) {
     const key=r.wins
     const rank = (i===0)?1:(key===lastKey?lastRank:i+1)
     lastRank=rank; lastKey=key
-    return { ...r, rank }
+    const last5 = (last5Map.get(r.id) || []).slice(-5)
+    return { ...r, rank, last5 }
   })
 }
 
@@ -493,22 +612,33 @@ function computeDraftWinsRows(players=[], matches=[]) {
 function computeCaptainWinsRows(players=[], matches=[]) {
   const idToPlayer = new Map(players.map(p=>[toStr(p.id), p]))
   const rows = new Map()
-  for (const m of matches) {
-    if (!isDraftMatch(m)) continue
+  const last5Map = new Map() // captainId -> results
+  const sorted = [...(matches||[])].filter(isDraftMatch).sort((a,b)=>extractMatchTS(a)-extractMatchTS(b))
+  for (const m of sorted) {
     const qs = coerceQuarterScores(m)
     const winnerIdx = winnerIndexFromQuarterScores(qs)
-    if (winnerIdx < 0) continue
-    // 주장 id 결정: m.draft.captains 또는 captains/captainIds
-    let capId = null
-    if (Array.isArray(m?.draft?.captains)) capId = m.draft.captains[winnerIdx]
-    if (!capId && Array.isArray(m?.captains)) capId = m.captains[winnerIdx]
-    if (!capId && Array.isArray(m?.captainIds)) capId = m.captainIds[winnerIdx]
-    const pid = toStr(capId)
-    if (!pid) continue
-    const p = idToPlayer.get(pid)
-    const cur = rows.get(pid) || { id: pid, name: p?.name || pid, wins: 0, isGuest: p ? !isMember(p.membership) : false }
-    cur.wins += 1
-    rows.set(pid, cur)
+    const isDraw = winnerIdx < 0
+    const caps = extractCaptainsByTeam(m)
+    if (!Array.isArray(caps) || caps.length === 0) continue
+    for (let ti=0; ti<caps.length; ti++){
+      const pid = toStr(caps[ti])
+      if (!pid) continue
+      const res = isDraw ? 'D' : (ti===winnerIdx ? 'W' : 'L')
+      const list = last5Map.get(pid) || []
+      list.push(res)
+      last5Map.set(pid, list)
+      if (res === 'W'){
+        const p = idToPlayer.get(pid)
+        const cur = rows.get(pid) || { id: pid, name: p?.name || pid, wins: 0, isGuest: p ? !isMember(p.membership) : false }
+        cur.wins += 1
+        rows.set(pid, cur)
+      } else {
+        if (!rows.has(pid)){
+          const p = idToPlayer.get(pid)
+          if (p){ rows.set(pid, { id: pid, name: p.name || pid, wins: 0, isGuest: !isMember(p.membership) }) }
+        }
+      }
+    }
   }
   const out = Array.from(rows.values()).sort((a,b)=> (b.wins - a.wins) || a.name.localeCompare(b.name))
   // add rank
@@ -517,7 +647,8 @@ function computeCaptainWinsRows(players=[], matches=[]) {
     const key=r.wins
     const rank = (i===0)?1:(key===lastKey?lastRank:i+1)
     lastRank=rank; lastKey=key
-    return { ...r, rank }
+    const last5 = (last5Map.get(r.id) || []).slice(-5)
+    return { ...r, rank, last5 }
   })
 }
 
@@ -529,7 +660,7 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls }){
       <table className="w-full text-sm">
         <thead>
           <tr>
-            <th colSpan={3} className="border-b px-2 py-2">
+            <th colSpan={4} className="border-b px-2 py-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="text-xs text-stone-600">Draft 승리 주장 <span className="font-semibold">{totalPlayers}</span>명</div>
                 <div className="ml-auto">{controls}</div>
@@ -540,11 +671,13 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls }){
             <th className="border-b px-1.5 py-1.5">순위</th>
             <th className="border-b px-2 py-1.5">주장</th>
             <th className="border-b px-2 py-1.5">Wins</th>
+            <th className="border-b px-2 py-1.5 text-right">Last 5</th>
           </tr>
         </thead>
         <tbody>
           {data.map((r, idx) => {
             const tone = rankTone(r.rank)
+            const isChampion = r.rank === 1
             return (
               <tr key={r.id || idx} className={`${tone.rowBg}`}>
                 <td className={`border-b align-middle px-1.5 py-1.5 ${tone.cellBg}`}>
@@ -553,19 +686,22 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls }){
                     <span className="tabular-nums">{r.rank}</span>
                   </div>
                 </td>
-                <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
+                <td className={`border-b px-2 py-1.5 ${tone.cellBg} ${isChampion ? 'champion-gold-cell' : ''}`}>
                   <div className="flex items-center gap-2">
                     <InitialAvatar id={r.id} name={r.name} size={20} badges={r.isGuest?['G']:[]} />
-                    <span className="font-medium truncate">{r.name}</span>
+                    <span className={`font-medium truncate`}>{r.name}</span>
                   </div>
                 </td>
                 <td className={`border-b px-2 py-1.5 font-semibold tabular-nums ${tone.cellBg}`}>{r.wins}</td>
+                <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
+                  <FormDots form={r.last5 || []} />
+                </td>
               </tr>
             )
           })}
           {data.length===0 && (
             <tr>
-              <td className="px-3 py-4 text-sm text-stone-500" colSpan={3}>표시할 기록이 없습니다.</td>
+              <td className="px-3 py-4 text-sm text-stone-500" colSpan={4}>표시할 기록이 없습니다.</td>
             </tr>
           )}
         </tbody>
@@ -582,7 +718,7 @@ function DraftWinsTable({ rows, showAll, onToggle, controls }){
       <table className="w-full text-sm">
         <thead>
           <tr>
-            <th colSpan={3} className="border-b px-2 py-2">
+            <th colSpan={4} className="border-b px-2 py-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="text-xs text-stone-600">Draft 승리 선수 <span className="font-semibold">{totalPlayers}</span>명</div>
                 <div className="ml-auto">{controls}</div>
@@ -593,11 +729,13 @@ function DraftWinsTable({ rows, showAll, onToggle, controls }){
             <th className="border-b px-1.5 py-1.5">순위</th>
             <th className="border-b px-2 py-1.5">선수</th>
             <th className="border-b px-2 py-1.5">Wins</th>
+            <th className="border-b px-2 py-1.5 text-right">Last 5</th>
           </tr>
         </thead>
         <tbody>
           {data.map((r, idx) => {
             const tone = rankTone(r.rank)
+            const isChampion = r.rank === 1
             return (
               <tr key={r.id || idx} className={`${tone.rowBg}`}>
                 <td className={`border-b align-middle px-1.5 py-1.5 ${tone.cellBg}`}>
@@ -606,19 +744,22 @@ function DraftWinsTable({ rows, showAll, onToggle, controls }){
                     <span className="tabular-nums">{r.rank}</span>
                   </div>
                 </td>
-                <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
+                <td className={`border-b px-2 py-1.5 ${tone.cellBg} ${isChampion ? 'champion-gold-cell' : ''}`}>
                   <div className="flex items-center gap-2">
                     <InitialAvatar id={r.id} name={r.name} size={20} badges={r.isGuest?['G']:[]} />
-                    <span className="font-medium truncate">{r.name}</span>
+                    <span className={`font-medium truncate`}>{r.name}</span>
                   </div>
                 </td>
                 <td className={`border-b px-2 py-1.5 font-semibold tabular-nums ${tone.cellBg}`}>{r.wins}</td>
+                <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
+                  <FormDots form={r.last5 || []} />
+                </td>
               </tr>
             )
           })}
           {data.length===0 && (
             <tr>
-              <td className="px-3 py-4 text-sm text-stone-500" colSpan={3}>표시할 기록이 없습니다.</td>
+              <td className="px-3 py-4 text-sm text-stone-500" colSpan={4}>표시할 기록이 없습니다.</td>
             </tr>
           )}
         </tbody>
@@ -811,6 +952,7 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
             const rank = r.rank
             const tone = rankTone(rank)
             const delta = deltaFor(r.id || r.name, rank)
+            const isChampion = rank === 1
             return (
               <tr key={r.id || `${r.name}-${idx}`} className={`${tone.rowBg}`}>
                 <td className={`border-b align-middle px-1.5 py-1.5 ${tone.cellBg}`}>
@@ -831,8 +973,8 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
                   </div>
                 </td>
 
-                <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
-                  <div className="flex items-center gap-2 min-w-0">
+                <td className={`border-b px-2 py-1.5 ${tone.cellBg} ${isChampion ? 'champion-gold-cell' : ''}`}>
+                  <div className={`flex items-center gap-2 min-w-0`}>
                     <div className="shrink-0">
                       <InitialAvatar 
                         id={r.id || r.name} 
@@ -842,7 +984,7 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
                       />
                     </div>
                     <div className="min-w-0">
-                      <span className="block font-medium truncate whitespace-nowrap">{r.name}</span>
+                      <span className={`block font-medium truncate whitespace-nowrap`}>{r.name}</span>
                     </div>
                   </div>
                 </td>
@@ -894,6 +1036,7 @@ function DuoTable({ rows, showAll, onToggle, controls }) {
         <tbody>
           {data.map((r, idx) => {
             const tone = rankTone(r.rank)
+            const isChampion = r.rank === 1
             return (
               <tr key={r.id || idx} className={`${tone.rowBg}`}>
                 <td className={`border-b align-middle px-1.5 py-1.5 ${tone.cellBg}`}>
@@ -902,13 +1045,13 @@ function DuoTable({ rows, showAll, onToggle, controls }) {
                     <span className="tabular-nums">{r.rank}</span>
                   </div>
                 </td>
-                <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
-                  <div className="flex items-center gap-2">
+                <td className={`border-b px-2 py-1.5 ${tone.cellBg} ${isChampion ? 'champion-gold-cell' : ''}`}>
+                  <div className={`flex items-center gap-2`}>
                     <InitialAvatar id={r.assistId} name={r.aName} size={20} badges={r.aIsGuest?['G']:[]} />
-                    <span className="font-medium">{r.aName}</span>
+                    <span className={`font-medium`}>{r.aName}</span>
                     <span className="mx-1 text-stone-400">→</span>
                     <InitialAvatar id={r.goalId} name={r.gName} size={20} badges={r.gIsGuest?['G']:[]} />
-                    <span className="font-medium">{r.gName}</span>
+                    <span className={`font-medium`}>{r.gName}</span>
                   </div>
                 </td>
                 <td className={`border-b px-2 py-1.5 font-semibold tabular-nums ${tone.cellBg}`}>{r.count}</td>
@@ -934,6 +1077,28 @@ function Medal({ rank }) {
   if (rank === 2) return <span role="img" aria-label="silver" className="text-base">🥈</span>
   if (rank === 3) return <span role="img" aria-label="bronze" className="text-base">🥉</span>
   return <span className="inline-block w-4 text-center text-stone-400">—</span>
+}
+function FormDots({ form = [] }) {
+  // Ensure we always show 5 icons: left padded with empties if needed
+  const tail = (form || []).slice(-5)
+  const display = Array(5 - tail.length).fill(null).concat(tail)
+  const clsFor = (v) => v === 'W' ? 'bg-emerald-600' : v === 'L' ? 'bg-rose-600' : v === 'D' ? 'bg-stone-400' : 'bg-stone-200'
+  const labelFor = (v) => v === 'W' ? 'Win' : v === 'L' ? 'Loss' : v === 'D' ? 'Draw' : 'No match'
+  const textFor = (v) => v === 'W' || v === 'L' || v === 'D' ? v : ''
+  return (
+    <div className="flex items-center justify-end gap-1">
+      {display.map((v, i) => (
+        <span
+          key={i}
+          className={`inline-flex h-5 w-5 items-center justify-center rounded-full text-[10px] leading-none font-bold text-white ${clsFor(v)}`}
+          title={labelFor(v)}
+          aria-label={labelFor(v)}
+        >
+          {textFor(v)}
+        </span>
+      ))}
+    </div>
+  )
 }
 function rankTone(rank){
   if (rank === 1) return { rowBg: 'bg-yellow-50', cellBg: 'bg-yellow-50' }
