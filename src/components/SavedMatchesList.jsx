@@ -854,26 +854,18 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
           )}
           {dirty && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-800 border border-amber-200">수정됨(저장 필요)</span>}
         </div>
-        <div className="flex items-center gap-3">
-          {/* G/A 표시 토글 버튼 */}
-          <button
-            onClick={() => setShowGA(prev => !prev)}
-            className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] hover:bg-gray-50"
-            title={showGA ? "골/어시 숨기기" : "골/어시 표시"}
-          >
-            {showGA ? "⚽🎯 숨기기" : "⚽🎯 표시"}
-          </button>
+        <div className="flex items-center gap-2">
           {isAdmin && (
-            <label className="flex items-center gap-2 text-xs">
-              <input type="checkbox" checked={localDraftMode} onChange={e=>{
+            <label className="flex items-center gap-1 text-[10px] leading-tight">
+              <input type="checkbox" className="w-3 h-3" checked={localDraftMode} onChange={e=>{
                 setLocalDraftMode(e.target.checked)
                 setDirty(true)
               }} />
-              <span>Draft 모드</span>
+              <span>Draft</span>
             </label>
           )}
-          {enableLoadToPlanner&&<button className="text-xs rounded border border-gray-300 bg-white px-2 py-1" onClick={()=>onLoadToPlanner?.(m)}>팀배정에 로드</button>}
-          {isAdmin&&onDeleteMatch&&<button className="text-xs text-red-600" onClick={()=>{ if(window.confirm("정말 삭제하시겠어요?\n삭제 시 대시보드의 공격포인트/기록 집계에 영향을 줄 수 있습니다.")) onDeleteMatch(m.id) }}>삭제</button>}
+          {enableLoadToPlanner&&<button className="text-[10px] rounded border border-blue-300 bg-blue-50 text-blue-700 px-1.5 py-0.5 hover:bg-blue-100 transition-colors leading-tight" onClick={()=>onLoadToPlanner?.(m)}>로드</button>}
+          {isAdmin&&onDeleteMatch&&<button className="text-[10px] rounded border border-red-300 bg-red-50 text-red-700 px-1.5 py-0.5 hover:bg-red-100 transition-colors leading-tight" onClick={()=>{ if(window.confirm("정말 삭제하시겠어요?\n삭제 시 대시보드의 공격포인트/기록 집계에 영향을 줄 수 있습니다.")) onDeleteMatch(m.id) }}>삭제</button>}
         </div>
       </div>
 
@@ -967,10 +959,31 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
         })()
       )}
 
-      {/* 표기: C 주장, G 게스트 (실제 배지 사용) */}
-      <div className="mb-1 flex justify-end">
-        <div className="flex items-center gap-2 text-[11px] text-gray-600 whitespace-nowrap">
-          <span className="text-gray-500">표기:</span>
+      {/* 골/어시 토글과 표기 설명을 한 줄에 */}
+      <div className="mb-1 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {/* G/A 표시 슬라이드 토글 */}
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-gray-600">⚽🎯</span>
+            <button
+              onClick={() => setShowGA(prev => !prev)}
+              className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 ${
+                showGA ? 'bg-emerald-500' : 'bg-gray-300'
+              }`}
+              title={showGA ? "골/어시 숨기기" : "골/어시 표시"}
+              role="switch"
+              aria-checked={showGA}
+            >
+              <span
+                className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                  showGA ? 'translate-x-3.5' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-2 text-[10px] text-gray-600 whitespace-nowrap">
           <span className="inline-flex items-center gap-1"><CaptainBadge /> <span>주장</span></span>
           <span className="mx-1 text-gray-400">·</span>
           <span className="inline-flex items-center gap-1"><GuestBadge /> <span>게스트</span></span>

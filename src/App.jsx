@@ -1,5 +1,5 @@
 // src/App.jsx
-import React,{useEffect,useMemo,useState}from"react"
+import React,{useEffect,useMemo,useState,useCallback}from"react"
 import{Home,Users,CalendarDays,ListChecks,ShieldCheck,Lock,Eye,EyeOff,AlertCircle,CheckCircle2,X}from"lucide-react"
 import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB}from"./services/storage.service"
 import{mkPlayer}from"./lib/players";import{notify}from"./components/Toast"
@@ -15,6 +15,7 @@ export default function App(){
   const[tab,setTab]=useState("dashboard"),[db,setDb]=useState({players:[],matches:[],visits:0}),[selectedPlayerId,setSelectedPlayerId]=useState(null)
   const[isAdmin,setIsAdmin]=useState(()=>localStorage.getItem("isAdmin")==="1"),[loginOpen,setLoginOpen]=useState(false)
   const[loading,setLoading]=useState(true)
+  const[pageLoading,setPageLoading]=useState(false)
 
   useEffect(()=>{let mounted=true;(async()=>{
     try{
@@ -46,6 +47,33 @@ export default function App(){
     const attendanceProxy=Math.round(60+players.length*2)
     return{count:cnt,goals:goalsProxy,attendance:attendanceProxy}
   },[players])
+
+  // 탭 전환 함수 메모이제이션 (즉시 반영 + 로딩 상태)
+  const handleTabChange = useCallback((newTab) => {
+    if (newTab === tab) return; // 같은 탭이면 아무것도 하지 않음
+    
+    // 즉시 탭 상태 변경
+    setTab(newTab);
+    
+    // 로딩 상태 시작
+    setPageLoading(true);
+    
+    // 의도적인 지연으로 로딩 시뮬레이션 (실제 컴포넌트 로딩 시간을 고려)
+    const delay = newTab === 'dashboard' ? 200 : newTab === 'formation' ? 400 : 300;
+    
+    setTimeout(() => {
+      setPageLoading(false);
+    }, delay);
+  }, [tab]);
+
+  // 메모이제이션된 탭 버튼들
+  const tabButtons = useMemo(() => [
+    { key: 'dashboard', icon: <Home size={16}/>, label: '대시보드', show: true },
+    { key: 'players', icon: <Users size={16}/>, label: '선수 관리', show: isAdmin },
+    { key: 'planner', icon: <CalendarDays size={16}/>, label: '매치 플래너', show: isAdmin },
+    { key: 'formation', icon: <IconPitch size={16}/>, label: '포메이션 보드', show: true },
+    { key: 'stats', icon: <ListChecks size={16}/>, label: '기록 입력', show: isAdmin }
+  ], [isAdmin]);
 
   // ⬇️ 기존 기본값 생성 방식은 유지(필요시 다른 곳에서 사용)
   async function handleCreatePlayer(){if(!isAdmin)return notify("Admin만 가능합니다.");const p=mkPlayer("새 선수","MF");setDb(prev=>({...prev,players:[p,...(prev.players||[])]}));setSelectedPlayerId(p.id);notify("새 선수를 추가했습니다.");try{await upsertPlayer(p)}catch(e){console.error(e)}}
@@ -163,26 +191,33 @@ export default function App(){
   return(
   <div className="min-h-screen bg-stone-100 text-stone-800 antialiased leading-relaxed">
     <ToastHub/>
-    <header className="sticky top-0 z-[200] border-b border-stone-300 bg-white/80 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-2">
-          <img src={logoUrl} alt="Semihan Football Manager Logo" className="h-7 w-7 object-contain" width={28} height={28} decoding="async"/>
-          <h1 className="text-base font-semibold tracking-tight">Semihan-FM</h1>
+    <header className="sticky top-0 z-[200] border-b border-stone-300 bg-white/90 backdrop-blur-md backdrop-saturate-150 will-change-transform">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 min-h-[60px] gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <img src={logoUrl} alt="Semihan Football Manager Logo" className="h-6 w-6 sm:h-7 sm:w-7 object-contain flex-shrink-0" width={28} height={28} decoding="async"/>
+          <h1 className="text-sm sm:text-base font-semibold tracking-tight whitespace-nowrap">Semihan-FM</h1>
         </div>
-        <nav className="flex gap-1 items-center">
-          <TabButton icon={<Home size={16}/>} label="대시보드" onClick={()=>setTab("dashboard")} active={tab==="dashboard"}/>
-          {isAdmin&&<TabButton icon={<Users size={16}/>} label="선수 관리" onClick={()=>setTab("players")} active={tab==="players"}/>}
-          {isAdmin&&<TabButton icon={<CalendarDays size={16}/>} label="매치 플래너" onClick={()=>setTab("planner")} active={tab==="planner"}/>}
-          <TabButton icon={<IconPitch size={16}/>} label="포메이션 보드" onClick={()=>setTab("formation")} active={tab==="formation"}/>
-          
-          {isAdmin&&<TabButton icon={<ListChecks size={16}/>} label="기록 입력" onClick={()=>setTab("stats")} active={tab==="stats"}/>}
-          <div className="ml-2 pl-2 border-l border-stone-300">
+        <nav className="flex gap-1 sm:gap-2 items-center min-w-0">
+          <div className="flex gap-1 sm:gap-2 items-center min-w-0">
+            {tabButtons.filter(btn => btn.show).map(btn => (
+              <TabButton 
+                key={btn.key}
+                icon={btn.icon} 
+                label={btn.label} 
+                onClick={() => handleTabChange(btn.key)} 
+                active={tab === btn.key}
+                loading={pageLoading && tab === btn.key}
+              />
+            ))}
+          </div>
+          <div className="ml-2 sm:ml-3 pl-2 sm:pl-3 border-l border-stone-300 flex-shrink-0">
             {isAdmin?(
               <button
                 onClick={adminLogout}
                 aria-label="Admin 로그아웃"
                 title="Admin 로그아웃"
-                className="inline-flex items-center rounded-lg bg-stone-900 p-2 text-sm font-semibold text-white shadow-sm hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-400"
+                className="inline-flex items-center rounded-lg bg-stone-900 p-2.5 sm:p-3 text-sm font-semibold text-white shadow-sm hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-400 min-h-[42px] min-w-[42px] sm:min-h-[44px] sm:min-w-[44px] touch-manipulation transition-all duration-200 active:scale-95"
+                style={{touchAction: 'manipulation'}}
               >
                 <X size={16}/>
               </button>
@@ -191,7 +226,8 @@ export default function App(){
                 onClick={()=>setLoginOpen(true)}
                 aria-label="Admin 로그인"
                 title="Admin 로그인"
-                className="inline-flex items-center rounded-lg border border-stone-300 bg-gradient-to-r from-emerald-500 to-emerald-600 p-2 text-sm font-semibold text-white shadow-sm hover:from-emerald-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+                className="inline-flex items-center rounded-lg border border-stone-300 bg-gradient-to-r from-emerald-500 to-emerald-600 p-2.5 sm:p-3 text-sm font-semibold text-white shadow-sm hover:from-emerald-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 min-h-[42px] min-w-[42px] sm:min-h-[44px] sm:min-w-[44px] touch-manipulation transition-all duration-200 active:scale-95"
+                style={{touchAction: 'manipulation'}}
               >
                 <Lock size={16}/>
               </button>
@@ -221,24 +257,30 @@ export default function App(){
           </div>
         </div>
       ) : (
-        <>
-          {tab==="dashboard"&&(<Dashboard totals={totals} players={players} matches={matches} isAdmin={isAdmin} onUpdateMatch={handleUpdateMatch}/>)}
-          {tab==="players"&&isAdmin&&(
-            <PlayersPage
-              players={players}
-              selectedId={selectedPlayerId}
-              onSelect={setSelectedPlayerId}
-              onCreate={handleCreatePlayerFromModal}  // ✅ 여기로 연결
-              onUpdate={handleUpdatePlayer}
-              onDelete={handleDeletePlayer}
-              onImport={handleImportPlayers}
-              onReset={handleResetPlayers}
-            />
+        <div className="will-change-contents">
+          {pageLoading ? (
+            <PageSkeleton tab={tab} />
+          ) : (
+            <>
+              {tab==="dashboard"&&(<Dashboard totals={totals} players={players} matches={matches} isAdmin={isAdmin} onUpdateMatch={handleUpdateMatch}/>)}
+              {tab==="players"&&isAdmin&&(
+                <PlayersPage
+                  players={players}
+                  selectedId={selectedPlayerId}
+                  onSelect={setSelectedPlayerId}
+                  onCreate={handleCreatePlayerFromModal}  // ✅ 여기로 연결
+                  onUpdate={handleUpdatePlayer}
+                  onDelete={handleDeletePlayer}
+                  onImport={handleImportPlayers}
+                  onReset={handleResetPlayers}
+                />
+              )}
+              {tab==="planner"&&isAdmin&&(<MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
+              {tab==="formation"&&(<FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>)}
+              {tab==="stats"&&isAdmin&&(<StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
+            </>
           )}
-          {tab==="planner"&&isAdmin&&(<MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
-          {tab==="formation"&&(<FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>)}
-          {tab==="stats"&&isAdmin&&(<StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
-        </>
+        </div>
       )}
     </main>
 
@@ -256,7 +298,114 @@ export default function App(){
 
     <AdminLoginDialog isOpen={loginOpen} onClose={()=>setLoginOpen(false)} onSuccess={onAdminSuccess} adminPass={ADMIN_PASS}/>
   </div>)}
-function TabButton({icon,label,active,onClick}){return(<button onClick={onClick} className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm transition ${active?"bg-emerald-500 text-white shadow-sm":"text-stone-700 hover:bg-stone-200 active:bg-stone-300"}`} aria-pressed={active}>{icon}<span className="hidden sm:inline">{label}</span></button>)}
+const TabButton = React.memo(function TabButton({icon,label,active,onClick,loading}){return(<button onClick={onClick} disabled={loading} className={`flex items-center gap-1.5 sm:gap-2 rounded-md px-2.5 sm:px-3 py-2.5 sm:py-3 text-sm transition-all duration-200 min-h-[42px] sm:min-h-[44px] touch-manipulation ${active?"bg-emerald-500 text-white shadow-sm":"text-stone-700 hover:bg-stone-200 active:bg-stone-300 active:scale-95"} ${loading?"opacity-75 cursor-wait":""}`} style={{touchAction: 'manipulation'}} aria-pressed={active}>{loading && active ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg> : <span className="w-4 h-4 flex-shrink-0">{icon}</span>}<span className="hidden sm:inline">{label}</span></button>)})
+
+// 페이지별 로딩 스켈레톤 컴포넌트
+const PageSkeleton = React.memo(function PageSkeleton({ tab }) {
+  const getSkeletonByTab = () => {
+    switch(tab) {
+      case 'dashboard':
+        return (
+          <div className="space-y-6 animate-pulse">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[1,2,3].map(i => (
+                <div key={i} className="bg-white rounded-lg border border-stone-200 p-6">
+                  <div className="h-4 bg-stone-200 rounded w-1/3 mb-3"></div>
+                  <div className="h-8 bg-stone-200 rounded w-2/3"></div>
+                </div>
+              ))}
+            </div>
+            <div className="bg-white rounded-lg border border-stone-200 p-6">
+              <div className="h-6 bg-stone-200 rounded w-1/4 mb-4"></div>
+              {[1,2,3,4,5].map(i => (
+                <div key={i} className="flex items-center space-x-4 py-3">
+                  <div className="h-10 w-10 bg-stone-200 rounded-full"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-stone-200 rounded w-1/3"></div>
+                    <div className="h-3 bg-stone-100 rounded w-1/2"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      
+      case 'players':
+        return (
+          <div className="space-y-4 animate-pulse">
+            <div className="flex justify-between items-center">
+              <div className="h-8 bg-stone-200 rounded w-48"></div>
+              <div className="h-10 bg-stone-200 rounded w-24"></div>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2">
+                {[1,2,3,4,5].map(i => (
+                  <div key={i} className="bg-white rounded-lg border border-stone-200 p-4 mb-3">
+                    <div className="flex items-center space-x-4">
+                      <div className="h-12 w-12 bg-stone-200 rounded-full"></div>
+                      <div className="flex-1 space-y-2">
+                        <div className="h-4 bg-stone-200 rounded w-1/3"></div>
+                        <div className="h-3 bg-stone-100 rounded w-1/2"></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="bg-white rounded-lg border border-stone-200 p-6">
+                <div className="h-6 bg-stone-200 rounded w-1/2 mb-4"></div>
+                <div className="space-y-3">
+                  {[1,2,3,4].map(i => (
+                    <div key={i} className="h-4 bg-stone-100 rounded"></div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      
+      case 'formation':
+        return (
+          <div className="space-y-4 animate-pulse">
+            <div className="h-8 bg-stone-200 rounded w-48 mb-4"></div>
+            <div className="bg-white rounded-lg border border-stone-200 p-6">
+              <div className="aspect-[3/2] bg-stone-100 rounded-lg flex items-center justify-center">
+                <div className="text-stone-400">
+                  <svg className="w-8 h-8 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/>
+                    <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      
+      default:
+        return (
+          <div className="space-y-4 animate-pulse">
+            <div className="h-8 bg-stone-200 rounded w-48 mb-4"></div>
+            <div className="bg-white rounded-lg border border-stone-200 p-6">
+              {[1,2,3,4,5].map(i => (
+                <div key={i} className="h-16 border-b border-stone-100 last:border-b-0 flex items-center px-4 gap-4">
+                  <div className="h-10 w-10 bg-stone-200 rounded"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-stone-200 rounded w-1/3"></div>
+                    <div className="h-3 bg-stone-100 rounded w-1/2"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+    }
+  };
+
+  return (
+    <div className="opacity-80">
+      {getSkeletonByTab()}
+    </div>
+  );
+})
 
 /* ── Admin Login Dialog (기존 코드 유지) ─────────────────── */
 function AdminLoginDialog({isOpen,onClose,onSuccess,adminPass}){const[pw,setPw]=useState(""),[show,setShow]=useState(false),[err,setErr]=useState(""),[caps,setCaps]=useState(false),[loading,setLoading]=useState(false)
