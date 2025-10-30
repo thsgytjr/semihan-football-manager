@@ -508,8 +508,105 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
     return null
   },[m, draftSnap])
 
+  // ✅ Check if match has any recorded stats (goals or assists)
+  const hasStats = useMemo(() => {
+    const statsObj = gaByPlayer || {}
+    return Object.values(statsObj).some(rec => (rec?.goals > 0 || rec?.assists > 0))
+  }, [gaByPlayer])
+
+  // ✅ Current time tracker for real-time status updates
+  const [currentTime, setCurrentTime] = useState(Date.now())
+
+  // ✅ Determine match status based on dateISO and stats
+  const matchStatus = useMemo(() => {
+    if (hasStats) return 'completed' // Has stats = already finished
+    if (!m?.dateISO) return null // No date = can't determine
+    
+    const matchTime = new Date(m.dateISO)
+    const now = new Date(currentTime)
+    const diffMs = matchTime - now
+    const diffHours = diffMs / (1000 * 60 * 60)
+    
+    // If match hasn't started yet = upcoming
+    if (diffMs > 0) return 'upcoming'
+    
+    // If match started and within 3 hours after = live
+    if (diffHours > -3) return 'live'
+    
+    // If match ended (more than 3 hours ago) but no stats = updating
+    if (diffHours <= -3) return 'updating'
+    
+    return null
+  }, [m?.dateISO, hasStats, currentTime])
+
+  // ✅ Countdown timer for upcoming matches
+  const [countdown, setCountdown] = useState('')
+  
+  useEffect(() => {
+    if (!m?.dateISO) return
+    
+    const updateCountdown = () => {
+      const matchTime = new Date(m.dateISO)
+      const now = new Date()
+      const diffMs = matchTime - now
+      
+      // Update current time to trigger matchStatus recalculation
+      setCurrentTime(Date.now())
+      
+      if (diffMs <= 0) {
+        setCountdown('')
+        return
+      }
+      
+      const days = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+      const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+      const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+      const seconds = Math.floor((diffMs % (1000 * 60)) / 1000)
+      
+      if (days > 0) {
+        setCountdown(`${days}d ${hours}h ${minutes}m`)
+      } else if (hours > 0) {
+        setCountdown(`${hours}h ${minutes}m ${seconds}s`)
+      } else if (minutes > 0) {
+        setCountdown(`${minutes}m ${seconds}s`)
+      } else {
+        setCountdown(`${seconds}s`)
+      }
+    }
+    
+    updateCountdown()
+    const interval = setInterval(updateCountdown, 1000) // Update every second
+    
+    return () => clearInterval(interval)
+  }, [m?.dateISO])
+
   return (
     <li className="relative rounded border border-gray-200 bg-white p-3">
+      {/* Status indicator based on match time and stats */}
+      {matchStatus === 'live' && (
+        <div className="absolute -top-3 -right-2 z-10 pointer-events-none">
+          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white bg-gradient-to-r from-red-500 to-red-600 border border-red-400 shadow-sm animate-pulse">
+            <span className="inline-block h-2 w-2 rounded-full bg-white animate-ping"></span>
+            <span>LIVE</span>
+          </span>
+        </div>
+      )}
+      {matchStatus === 'upcoming' && (
+        <div className="absolute -top-3 -right-2 z-10 pointer-events-none">
+          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-300 shadow-sm">
+            <span aria-hidden="true">📅</span>
+            <span>{countdown || 'UPCOMING'}</span>
+          </span>
+        </div>
+      )}
+      {matchStatus === 'updating' && (
+        <div className="absolute -top-3 -right-2 z-10 pointer-events-none">
+          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-300 shadow-sm">
+            <span className="inline-block h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
+            <span className="animate-pulse">UPDATING SCORES</span>
+          </span>
+        </div>
+      )}
       {isDraftMode && (
         <div className="absolute -top-3 -left-2 z-10 pointer-events-none">
           <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 bg-amber-100 border border-amber-300 shadow-sm">
