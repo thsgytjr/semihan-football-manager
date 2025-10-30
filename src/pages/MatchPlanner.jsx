@@ -194,14 +194,17 @@ export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,
               const mem=String(p.membership||'').trim().toLowerCase()
               const member=(mem==='member'||mem.includes('정회원'))
               const unknown=isUnknownPlayer(p)
+              const pos=positionGroupOf(p)
+              const isGK=pos==='GK'
               return(
-                <label key={p.id} className={`flex items-center gap-2 rounded border px-3 py-2 ${attendeeIds.includes(p.id)?'border-emerald-400 bg-emerald-50':'border-gray-200 bg-white hover:bg-gray-50'} ${unknown?'opacity-60':''}`}>
+                <label key={p.id} className={`flex items-center gap-2 rounded border px-3 py-2 ${attendeeIds.includes(p.id)?'border-emerald-400 bg-emerald-50':'border-gray-200 bg-white hover:bg-gray-50'} ${unknown&&!isGK?'opacity-60':''}`}>
                   <input type="checkbox" checked={attendeeIds.includes(p.id)} onChange={()=>toggle(p.id)}/>
                   <InitialAvatar id={p.id} name={p.name} size={24} badges={!member?['G']:[]} />
                   <span className="text-sm flex-1 whitespace-normal break-words">
-                    {p.name}{unknown&&<em className="ml-1 text-xs text-amber-600">(Unknown)</em>}
+                    {p.name}{unknown&&!isGK&&<em className="ml-1 text-xs text-amber-600">(Unknown)</em>}
                   </span>
-                  {isAdmin&&!hideOVR&&<span className="text-xs text-gray-500 shrink-0">OVR {unknown?'?':p.ovr??overall(p)}</span>}
+                  {isAdmin&&!hideOVR&&!isGK&&<span className="text-xs text-gray-500 shrink-0">OVR {unknown?'?':p.ovr??overall(p)}</span>}
+                  {isAdmin&&!hideOVR&&isGK&&<span className="text-xs shrink-0 inline-flex items-center rounded-full px-2 py-[2px] bg-amber-100 text-amber-800">GK</span>}
                 </label>
               )
             })}
