@@ -4,6 +4,7 @@ import InitialAvatar from "./InitialAvatar"
 import { overall } from "../lib/players"
 import { hydrateMatch } from "../lib/match"
 import { formatMatchLabel } from "../lib/matchLabel"
+import draftIcon from "../assets/draft.png"
 
 /* ---------------------- 폭죽 효과 컴포넌트 ---------------------- */
 function Confetti() {
@@ -830,7 +831,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
         <div className="absolute -top-3 -left-2 z-10 pointer-events-none">
           <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 bg-amber-100 border border-amber-300 shadow-sm">
             <img 
-              src="/src/assets/draft.png" 
+              src={draftIcon} 
               alt="Draft" 
               className="w-3 h-3"
             />
