@@ -8,6 +8,8 @@ import { formatMatchLabel } from "../lib/matchLabel"
 /* ---------------------- 폭죽 효과 컴포넌트 ---------------------- */
 function Confetti() {
   const canvasRef = useRef(null)
+  const animationStartTime = useRef(null)
+  const ANIMATION_DURATION = 30000 // 30 seconds total animation
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -16,6 +18,9 @@ function Confetti() {
     const ctx = canvas.getContext('2d')
     const colors = ['#fbbf24', '#f59e0b', '#ef4444', '#3b82f6', '#10b981', '#a855f7', '#fde047', '#e11d48']
 
+    // Reset animation start time when component mounts
+    animationStartTime.current = null
+
     // DPI aware canvas sizing
     const resize = () => {
       const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1))
@@ -23,7 +28,7 @@ function Confetti() {
       const h = canvas.offsetHeight
       canvas.width = Math.max(1, Math.floor(w * dpr))
       canvas.height = Math.max(1, Math.floor(h * dpr))
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0) // scale drawing space
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
       ctx.clearRect(0, 0, w, h)
     }
     resize()
@@ -32,22 +37,24 @@ function Confetti() {
     // Firework shell and spark models
     const shells = []
     const sparks = []
-    const maxSparks = 500
-    const gravity = 0.05
-    const airDrag = 0.985
+    const maxSparks = 400 // Increased for bigger explosions
+    const gravity = 0.06 // Slightly reduced gravity for longer hang time
+    const airDrag = 0.985 // Less drag for wider spread
 
     let raf = 0
     let lastSpawn = 0
+    let finaleTriggered = false
 
     function spawnShell(now) {
       const w = canvas.offsetWidth
       const h = canvas.offsetHeight
-      const x = Math.random() * w * 0.8 + w * 0.1 // avoid edges
+      if (w <= 0 || h <= 0) return // Guard against invalid dimensions
+      
+      const x = Math.random() * w * 0.8 + w * 0.1 // Wider launch area
       const y = h + 10
-      const targetY = h * (0.25 + Math.random() * 0.35)
-      const vy = -(5 + Math.random() * 2.5)
-      // small lateral drift
-      const vx = (Math.random() - 0.5) * 1.2
+      const targetY = h * (0.2 + Math.random() * 0.3) // Higher explosions for better visibility
+      const vy = -(5 + Math.random() * 3) // More launch power
+      const vx = (Math.random() - 0.5) * 1.5 // More lateral movement
       const color = colors[Math.floor(Math.random() * colors.length)]
       shells.push({ x, y, vx, vy, targetY, color, trail: [] })
       lastSpawn = now
@@ -56,15 +63,15 @@ function Confetti() {
     function explode(shell) {
       const w = canvas.offsetWidth
       const h = canvas.offsetHeight
-      const count = 60 + Math.floor(Math.random() * 40)
+      const count = 80 + Math.floor(Math.random() * 40) // Increased particle count for bigger show
       const baseHue = shell.color
       for (let i = 0; i < count; i++) {
-        const ang = (i / count) * Math.PI * 2 + Math.random() * 0.15
-        const spd = 2.5 + Math.random() * 2.5
+        const ang = (i / count) * Math.PI * 2 + Math.random() * 0.2
+        const spd = 3.5 + Math.random() * 3.0 // Much higher speed for wider spread
         const vx = Math.cos(ang) * spd
         const vy = Math.sin(ang) * spd
-        const life = 40 + Math.floor(Math.random() * 30)
-        const size = 1 + Math.random() * 1.5
+        const life = 35 + Math.floor(Math.random() * 25) // Longer life for bigger show
+        const size = 1.5 + Math.random() * 1.5 // Larger particles
         sparks.push({
           x: shell.x,
           y: shell.y,
@@ -77,101 +84,234 @@ function Confetti() {
           trail: []
         })
       }
-      // cap sparks
-      if (sparks.length > maxSparks) sparks.splice(0, sparks.length - maxSparks)
+      // More aggressive spark cleanup
+      if (sparks.length > maxSparks) {
+        sparks.splice(0, sparks.length - maxSparks)
+      }
+    }
+
+    function spawnFinaleConfetti() {
+      const w = canvas.offsetWidth
+      const h = canvas.offsetHeight
+      const finaleCount = 200 + Math.floor(Math.random() * 150) // 200-350 particles for better coverage
+      
+      // Create multiple explosion points with better right-side coverage
+      const explosionPoints = [
+        { x: w * 0.1, y: h * 0.25 },  // Far left top
+        { x: w * 0.25, y: h * 0.35 }, // Left
+        { x: w * 0.4, y: h * 0.2 },   // Left-center top
+        { x: w * 0.5, y: h * 0.3 },   // Center
+        { x: w * 0.6, y: h * 0.2 },   // Right-center top
+        { x: w * 0.75, y: h * 0.35 }, // Right
+        { x: w * 0.9, y: h * 0.25 },  // Far right top
+        { x: w * 0.15, y: h * 0.5 },  // Left middle
+        { x: w * 0.85, y: h * 0.5 },  // Right middle
+        { x: w * 0.95, y: h * 0.4 },  // Very far right
+        { x: w * 0.05, y: h * 0.4 }   // Very far left
+      ]
+      
+      explosionPoints.forEach((point, pointIndex) => {
+        const particlesPerPoint = Math.floor(finaleCount / explosionPoints.length)
+        for (let i = 0; i < particlesPerPoint; i++) {
+          const ang = (i / particlesPerPoint) * Math.PI * 2 + Math.random() * 0.4
+          const spd = 5.0 + Math.random() * 5.0 // Even higher speed for better coverage
+          const vx = Math.cos(ang) * spd
+          const vy = Math.sin(ang) * spd
+          const life = 60 + Math.floor(Math.random() * 40) // Longer lasting finale
+          const size = 2.5 + Math.random() * 2.5 // Even larger particles
+          const color = colors[Math.floor(Math.random() * colors.length)]
+          
+          sparks.push({
+            x: point.x,
+            y: point.y,
+            vx,
+            vy,
+            life,
+            age: 0,
+            size,
+            color,
+            trail: [],
+            isFinale: true // Mark as finale particle
+          })
+        }
+      })
+      
+      // Cap total sparks
+      if (sparks.length > maxSparks * 2) { // Allow more for finale
+        sparks.splice(0, sparks.length - maxSparks * 2)
+      }
     }
 
     function step(now) {
+      // Initialize animation start time
+      if (animationStartTime.current === null) {
+        animationStartTime.current = now
+      }
+
+      // Check if animation should end
+      const elapsed = now - animationStartTime.current
+      if (elapsed > ANIMATION_DURATION) {
+        // Complete canvas clearing - multiple methods to ensure all traces are gone
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        ctx.clearRect(0, 0, canvas.offsetWidth, canvas.offsetHeight)
+        ctx.globalAlpha = 1
+        ctx.globalCompositeOperation = 'source-over'
+        // Clear all particle arrays
+        shells.length = 0
+        sparks.length = 0
+        return // Stop the animation loop
+      }
+
       const w = canvas.offsetWidth
       const h = canvas.offsetHeight
+      
+      // Clear entire canvas with proper dimensions - use canvas actual size
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      // Also clear with display dimensions as backup
       ctx.clearRect(0, 0, w, h)
 
-      // spawn shells periodically
-      if (now - lastSpawn > 700 + Math.random() * 600 && shells.length < 3) spawnShell(now)
+      // Spawn shells for first 25 seconds, with more frequent launches for bigger show
+      if (elapsed < 25000 && now - lastSpawn > 800 + Math.random() * 600 && shells.length < 3) {
+        spawnShell(now)
+      }
 
-      // update shells
+      // Trigger finale confetti at 27 seconds (3 seconds before end)
+      if (elapsed >= 27000 && !finaleTriggered) {
+        spawnFinaleConfetti()
+        finaleTriggered = true
+      }
+
+      // Update shells with bounds checking
       for (let i = shells.length - 1; i >= 0; i--) {
         const s = shells[i]
+        if (!s) continue // Safety check
+        
         s.trail.push({ x: s.x, y: s.y })
-        if (s.trail.length > 8) s.trail.shift()
+        if (s.trail.length > 6) s.trail.shift() // Shorter trail
+        
         s.x += s.vx
         s.y += s.vy
-        s.vy += gravity * 0.2
-        // draw shell trail
-        ctx.beginPath()
-        for (let t = 0; t < s.trail.length - 1; t++) {
-          const a = s.trail[t]
-          const b = s.trail[t + 1]
+        s.vy += gravity * 0.3
+        
+        // Draw shell trail with bounds checking
+        if (s.trail.length > 1) {
+          ctx.beginPath()
           ctx.strokeStyle = s.color
-          ctx.globalAlpha = (t + 1) / s.trail.length
-          ctx.lineWidth = 2
-          ctx.moveTo(a.x, a.y)
-          ctx.lineTo(b.x, b.y)
+          ctx.lineWidth = 1.5
+          for (let t = 0; t < s.trail.length - 1; t++) {
+            const a = s.trail[t]
+            const b = s.trail[t + 1]
+            if (a && b) {
+              ctx.globalAlpha = (t + 1) / s.trail.length * 0.7
+              ctx.moveTo(a.x, a.y)
+              ctx.lineTo(b.x, b.y)
+            }
+          }
+          ctx.stroke()
+          ctx.globalAlpha = 1
         }
-        ctx.stroke()
-        ctx.globalAlpha = 1
 
-        if (s.vy >= 0 || s.y <= s.targetY) { // apex: explode
+        // Check for explosion or removal
+        if (s.vy >= 0 || s.y <= s.targetY) {
           explode(s)
           shells.splice(i, 1)
-        } else if (s.x < -20 || s.x > w + 20 || s.y > h + 20) {
+        } else if (s.x < -50 || s.x > w + 50 || s.y > h + 50) {
           shells.splice(i, 1)
         }
       }
 
-      // update sparks
+      // Update sparks with more aggressive cleanup
       for (let i = sparks.length - 1; i >= 0; i--) {
         const p = sparks[i]
+        if (!p) continue // Safety check
+        
         p.trail.push({ x: p.x, y: p.y })
-        if (p.trail.length > 6) p.trail.shift()
+        if (p.trail.length > 4) p.trail.shift() // Much shorter trail
+        
         p.x += p.vx
         p.y += p.vy
         p.vx *= airDrag
         p.vy = p.vy * airDrag + gravity
         p.age++
 
-        // draw trail
-        ctx.beginPath()
-        for (let t = 0; t < p.trail.length - 1; t++) {
-          const a = p.trail[t]
-          const b = p.trail[t + 1]
+        const alpha = Math.max(0, 1 - p.age / p.life)
+        
+        // Draw trail with bounds checking
+        if (p.trail.length > 1 && alpha > 0.1) {
+          ctx.beginPath()
           ctx.strokeStyle = p.color
-          ctx.globalAlpha = Math.max(0, 1 - p.age / p.life) * ((t + 1) / p.trail.length)
-          ctx.lineWidth = p.size
-          ctx.moveTo(a.x, a.y)
-          ctx.lineTo(b.x, b.y)
+          ctx.lineWidth = Math.max(0.5, p.size * 0.8)
+          for (let t = 0; t < p.trail.length - 1; t++) {
+            const a = p.trail[t]
+            const b = p.trail[t + 1]
+            if (a && b) {
+              ctx.globalAlpha = alpha * ((t + 1) / p.trail.length) * 0.6
+              ctx.moveTo(a.x, a.y)
+              ctx.lineTo(b.x, b.y)
+            }
+          }
+          ctx.stroke()
         }
-        ctx.stroke()
+
+        // Draw spark head - make finale particles more prominent
+        if (alpha > 0.1) {
+          ctx.beginPath()
+          ctx.fillStyle = p.color
+          ctx.globalAlpha = alpha
+          const sparkSize = p.isFinale ? Math.max(1.0, p.size * 1.5) : Math.max(0.5, p.size)
+          ctx.arc(p.x, p.y, sparkSize, 0, Math.PI * 2)
+          ctx.fill()
+          
+          // Add extra glow for finale particles
+          if (p.isFinale && alpha > 0.3) {
+            ctx.beginPath()
+            ctx.globalAlpha = alpha * 0.3
+            ctx.arc(p.x, p.y, sparkSize * 2, 0, Math.PI * 2)
+            ctx.fill()
+          }
+        }
+        
+        // Always reset global alpha to prevent accumulation
         ctx.globalAlpha = 1
 
-        // draw spark head
-        ctx.beginPath()
-        ctx.fillStyle = p.color
-        ctx.globalAlpha = Math.max(0.1, 1 - p.age / p.life)
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
-        ctx.fill()
-        ctx.globalAlpha = 1
-
-        if (p.age > p.life || p.x < -30 || p.x > w + 30 || p.y > h + 30) {
+        // More aggressive removal conditions - but keep finale particles longer and allow wider spread
+        const isFinaleParticle = p.isFinale === true
+        const removalThreshold = isFinaleParticle ? 0.05 : 0.1
+        const boundary = isFinaleParticle ? 100 : 50 // Allow finale particles to go further off-screen
+        if (p.age > p.life || alpha <= removalThreshold || p.x < -boundary || p.x > w + boundary || p.y > h + boundary || 
+            (!isFinaleParticle && Math.abs(p.vx) < 0.1 && Math.abs(p.vy) < 0.1)) {
           sparks.splice(i, 1)
         }
       }
 
-      raf = requestAnimationFrame(step)
+      // Continue animation only if we haven't exceeded duration
+      if (elapsed < ANIMATION_DURATION) {
+        raf = requestAnimationFrame(step)
+      }
     }
 
     raf = requestAnimationFrame(step)
 
     return () => {
       window.removeEventListener('resize', resize)
-      cancelAnimationFrame(raf)
+      if (raf) {
+        cancelAnimationFrame(raf)
+      }
+      // Clear canvas on cleanup - multiple methods to ensure complete clearing
+      if (ctx && canvas) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        ctx.clearRect(0, 0, canvas.offsetWidth, canvas.offsetHeight)
+        // Reset canvas state
+        ctx.globalAlpha = 1
+        ctx.globalCompositeOperation = 'source-over'
+      }
     }
   }, [])
 
   return (
     <canvas
       ref={canvasRef}
-      className="absolute inset-0 pointer-events-none z-0"
+      className="absolute inset-0 pointer-events-none z-10"
       style={{ width: '100%', height: '100%' }}
     />
   )
