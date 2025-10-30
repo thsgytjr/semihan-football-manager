@@ -161,7 +161,7 @@ export default function App(){
   return(
   <div className="min-h-screen bg-stone-100 text-stone-800 antialiased leading-relaxed">
     <ToastHub/>
-    <header className="sticky top-0 z-10 border-b border-stone-300 bg-white/80 backdrop-blur">
+    <header className="sticky top-0 z-[200] border-b border-stone-300 bg-white/80 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
           <img src={logoUrl} alt="Semihan Football Manager Logo" className="h-7 w-7 object-contain" width={28} height={28} decoding="async"/>
@@ -176,12 +176,22 @@ export default function App(){
           {isAdmin&&<TabButton icon={<ListChecks size={16}/>} label="기록 입력" onClick={()=>setTab("stats")} active={tab==="stats"}/>}
           <div className="ml-2 pl-2 border-l border-stone-300">
             {isAdmin?(
-              <button onClick={adminLogout} className="inline-flex items-center gap-2 rounded-lg bg-stone-900 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-400">
-                <X size={14}/> Admin 로그아웃
+              <button
+                onClick={adminLogout}
+                aria-label="Admin 로그아웃"
+                title="Admin 로그아웃"
+                className="inline-flex items-center rounded-lg bg-stone-900 p-2 text-sm font-semibold text-white shadow-sm hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-400"
+              >
+                <X size={16}/>
               </button>
             ):(
-              <button onClick={()=>setLoginOpen(true)} className="inline-flex items-center gap-2 rounded-lg border border-stone-300 bg-gradient-to-r from-emerald-500 to-emerald-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:from-emerald-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400">
-                <Lock size={14}/> Admin 로그인
+              <button
+                onClick={()=>setLoginOpen(true)}
+                aria-label="Admin 로그인"
+                title="Admin 로그인"
+                className="inline-flex items-center rounded-lg border border-stone-300 bg-gradient-to-r from-emerald-500 to-emerald-600 p-2 text-sm font-semibold text-white shadow-sm hover:from-emerald-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+              >
+                <Lock size={16}/>
               </button>
             )}
           </div>

@@ -8,90 +8,169 @@ import { formatMatchLabel } from "../lib/matchLabel"
 /* ---------------------- 폭죽 효과 컴포넌트 ---------------------- */
 function Confetti() {
   const canvasRef = useRef(null)
-  
+
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    
+
     const ctx = canvas.getContext('2d')
-    const particles = []
-    const particleCount = 50
-    const colors = ['#fbbf24', '#f59e0b', '#ef4444', '#ec4899', '#8b5cf6', '#3b82f6', '#10b981']
-    
-    // 캔버스 크기 설정
-    const updateSize = () => {
-      canvas.width = canvas.offsetWidth
-      canvas.height = canvas.offsetHeight
+    const colors = ['#fbbf24', '#f59e0b', '#ef4444', '#3b82f6', '#10b981', '#a855f7', '#fde047', '#e11d48']
+
+    // DPI aware canvas sizing
+    const resize = () => {
+      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1))
+      const w = canvas.offsetWidth
+      const h = canvas.offsetHeight
+      canvas.width = Math.max(1, Math.floor(w * dpr))
+      canvas.height = Math.max(1, Math.floor(h * dpr))
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0) // scale drawing space
+      ctx.clearRect(0, 0, w, h)
     }
-    updateSize()
-    window.addEventListener('resize', updateSize)
-    
-    // 파티클 생성
-    class Particle {
-      constructor() {
-        this.reset()
+    resize()
+    window.addEventListener('resize', resize)
+
+    // Firework shell and spark models
+    const shells = []
+    const sparks = []
+    const maxSparks = 500
+    const gravity = 0.05
+    const airDrag = 0.985
+
+    let raf = 0
+    let lastSpawn = 0
+
+    function spawnShell(now) {
+      const w = canvas.offsetWidth
+      const h = canvas.offsetHeight
+      const x = Math.random() * w * 0.8 + w * 0.1 // avoid edges
+      const y = h + 10
+      const targetY = h * (0.25 + Math.random() * 0.35)
+      const vy = -(5 + Math.random() * 2.5)
+      // small lateral drift
+      const vx = (Math.random() - 0.5) * 1.2
+      const color = colors[Math.floor(Math.random() * colors.length)]
+      shells.push({ x, y, vx, vy, targetY, color, trail: [] })
+      lastSpawn = now
+    }
+
+    function explode(shell) {
+      const w = canvas.offsetWidth
+      const h = canvas.offsetHeight
+      const count = 60 + Math.floor(Math.random() * 40)
+      const baseHue = shell.color
+      for (let i = 0; i < count; i++) {
+        const ang = (i / count) * Math.PI * 2 + Math.random() * 0.15
+        const spd = 2.5 + Math.random() * 2.5
+        const vx = Math.cos(ang) * spd
+        const vy = Math.sin(ang) * spd
+        const life = 40 + Math.floor(Math.random() * 30)
+        const size = 1 + Math.random() * 1.5
+        sparks.push({
+          x: shell.x,
+          y: shell.y,
+          vx,
+          vy,
+          life,
+          age: 0,
+          size,
+          color: baseHue,
+          trail: []
+        })
       }
-      
-      reset() {
-        this.x = Math.random() * canvas.width
-        this.y = -10
-        this.size = Math.random() * 6 + 2
-        this.speedY = Math.random() * 3 + 2
-        this.speedX = Math.random() * 2 - 1
-        this.color = colors[Math.floor(Math.random() * colors.length)]
-        this.rotation = Math.random() * 360
-        this.rotationSpeed = Math.random() * 10 - 5
-      }
-      
-      update() {
-        this.y += this.speedY
-        this.x += this.speedX
-        this.rotation += this.rotationSpeed
-        
-        if (this.y > canvas.height) {
-          this.reset()
+      // cap sparks
+      if (sparks.length > maxSparks) sparks.splice(0, sparks.length - maxSparks)
+    }
+
+    function step(now) {
+      const w = canvas.offsetWidth
+      const h = canvas.offsetHeight
+      ctx.clearRect(0, 0, w, h)
+
+      // spawn shells periodically
+      if (now - lastSpawn > 700 + Math.random() * 600 && shells.length < 3) spawnShell(now)
+
+      // update shells
+      for (let i = shells.length - 1; i >= 0; i--) {
+        const s = shells[i]
+        s.trail.push({ x: s.x, y: s.y })
+        if (s.trail.length > 8) s.trail.shift()
+        s.x += s.vx
+        s.y += s.vy
+        s.vy += gravity * 0.2
+        // draw shell trail
+        ctx.beginPath()
+        for (let t = 0; t < s.trail.length - 1; t++) {
+          const a = s.trail[t]
+          const b = s.trail[t + 1]
+          ctx.strokeStyle = s.color
+          ctx.globalAlpha = (t + 1) / s.trail.length
+          ctx.lineWidth = 2
+          ctx.moveTo(a.x, a.y)
+          ctx.lineTo(b.x, b.y)
+        }
+        ctx.stroke()
+        ctx.globalAlpha = 1
+
+        if (s.vy >= 0 || s.y <= s.targetY) { // apex: explode
+          explode(s)
+          shells.splice(i, 1)
+        } else if (s.x < -20 || s.x > w + 20 || s.y > h + 20) {
+          shells.splice(i, 1)
         }
       }
-      
-      draw() {
-        ctx.save()
-        ctx.translate(this.x, this.y)
-        ctx.rotate(this.rotation * Math.PI / 180)
-        ctx.fillStyle = this.color
-        ctx.fillRect(-this.size / 2, -this.size / 2, this.size, this.size)
-        ctx.restore()
+
+      // update sparks
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const p = sparks[i]
+        p.trail.push({ x: p.x, y: p.y })
+        if (p.trail.length > 6) p.trail.shift()
+        p.x += p.vx
+        p.y += p.vy
+        p.vx *= airDrag
+        p.vy = p.vy * airDrag + gravity
+        p.age++
+
+        // draw trail
+        ctx.beginPath()
+        for (let t = 0; t < p.trail.length - 1; t++) {
+          const a = p.trail[t]
+          const b = p.trail[t + 1]
+          ctx.strokeStyle = p.color
+          ctx.globalAlpha = Math.max(0, 1 - p.age / p.life) * ((t + 1) / p.trail.length)
+          ctx.lineWidth = p.size
+          ctx.moveTo(a.x, a.y)
+          ctx.lineTo(b.x, b.y)
+        }
+        ctx.stroke()
+        ctx.globalAlpha = 1
+
+        // draw spark head
+        ctx.beginPath()
+        ctx.fillStyle = p.color
+        ctx.globalAlpha = Math.max(0.1, 1 - p.age / p.life)
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2)
+        ctx.fill()
+        ctx.globalAlpha = 1
+
+        if (p.age > p.life || p.x < -30 || p.x > w + 30 || p.y > h + 30) {
+          sparks.splice(i, 1)
+        }
       }
+
+      raf = requestAnimationFrame(step)
     }
-    
-    // 파티클 초기화
-    for (let i = 0; i < particleCount; i++) {
-      particles.push(new Particle())
-    }
-    
-    // 애니메이션
-    let animationId
-    const animate = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      
-      particles.forEach(particle => {
-        particle.update()
-        particle.draw()
-      })
-      
-      animationId = requestAnimationFrame(animate)
-    }
-    
-    animate()
-    
+
+    raf = requestAnimationFrame(step)
+
     return () => {
-      window.removeEventListener('resize', updateSize)
-      cancelAnimationFrame(animationId)
+      window.removeEventListener('resize', resize)
+      cancelAnimationFrame(raf)
     }
   }, [])
-  
+
   return (
-    <canvas 
-      ref={canvasRef} 
+    <canvas
+      ref={canvasRef}
       className="absolute inset-0 pointer-events-none z-0"
       style={{ width: '100%', height: '100%' }}
     />
@@ -447,7 +526,7 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
 }
 
 /* ------------------------- 매치 카드 ------------------------- */
-function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, onDeleteMatch, onUpdateMatch, onUpdateVideos, showTeamOVRForAdmin, hideOVR }){
+function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, onDeleteMatch, onUpdateMatch, onUpdateVideos, showTeamOVRForAdmin, hideOVR, latestDraftId }){
   const hydrated=useMemo(()=>hydrateMatch(m,players),[m,players])
   const initialSnap=useMemo(()=>normalizeSnapshot(m,hydrated.teams||[]),[m,hydrated.teams])
   const [draftSnap,setDraftSnap]=useState(initialSnap), [dirty,setDirty]=useState(false)
@@ -795,7 +874,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                   : <div className="opacity-80">{kit.label} · {list.length}명</div>}
               </div>
               <ul className="divide-y divide-gray-100 relative z-10">
-                {isWinner && <Confetti />}
+                {isWinner && isDraftMode && m?.id===latestDraftId && <Confetti />}
                 {listOrdered.map(p=>{
                   const member=isMember(p.membership)
                   const rec = gaByPlayer[toStr(p.id)] || { goals: 0, assists: 0 }
@@ -1066,6 +1145,13 @@ export default function SavedMatchesList({
   hideOVR=false
 }){
   const ordered = useMemo(()=>matches.slice().sort((a,b)=>_ts(b)-_ts(a)),[matches])
+  // ✅ 가장 최신 draft 매치의 ID를 계산
+  const latestDraftId = useMemo(()=>{
+    for (const mm of ordered){
+      if (mm?.selectionMode === 'draft' || mm?.draftMode || mm?.draft) return mm.id
+    }
+    return null
+  }, [ordered])
   return (
     <ul className="grid gap-3">
       {ordered.map(m=>(
@@ -1080,6 +1166,7 @@ export default function SavedMatchesList({
           onUpdateMatch={onUpdateMatch}
           showTeamOVRForAdmin={showTeamOVRForAdmin}
           hideOVR={hideOVR}
+          latestDraftId={latestDraftId}
         />
       ))}
       {ordered.length===0&&<li className="text-sm text-stone-500">표시할 매치가 없습니다.</li>}
