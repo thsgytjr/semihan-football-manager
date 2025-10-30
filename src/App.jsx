@@ -12,7 +12,7 @@ const ADMIN_PASS=import.meta.env.VITE_ADMIN_PASSWORD||"letmein"
 const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden role="img" className="shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5"/><rect x="2" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/><rect x="18.5" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>)
 
 export default function App(){
-  const[tab,setTab]=useState("dashboard"),[db,setDb]=useState({players:[],matches:[],visits:0}),[selectedPlayerId,setSelectedPlayerId]=useState(null)
+  const[tab,setTab]=useState("dashboard"),[db,setDb]=useState({players:[],matches:[],visits:0,upcomingMatches:[]}),[selectedPlayerId,setSelectedPlayerId]=useState(null)
   const[isAdmin,setIsAdmin]=useState(()=>localStorage.getItem("isAdmin")==="1"),[loginOpen,setLoginOpen]=useState(false)
   const[loading,setLoading]=useState(true)
   const[pageLoading,setPageLoading]=useState(false)
@@ -21,7 +21,12 @@ export default function App(){
     try{
       const playersFromDB=await listPlayers(),shared=await loadDB()
       if(!mounted)return
-      setDb({players:playersFromDB,matches:shared.matches||[],visits:typeof shared.visits==="number"?shared.visits:0})
+      setDb({
+        players:playersFromDB,
+        matches:shared.matches||[],
+        visits:typeof shared.visits==="number"?shared.visits:0,
+        upcomingMatches:shared.upcomingMatches||[]
+      })
 
       const host=window?.location?.hostname||""
       const isLocal=host==="localhost"||host==="127.0.0.1"||host==="::1"||host.endsWith?.(".local")
@@ -29,17 +34,17 @@ export default function App(){
       if(!isLocal&&!already){
         try{sessionStorage?.setItem(key,"1")}catch{}
         const next=(typeof shared.visits==="number"?shared.visits:0)+1
-        await saveDB({players:[],matches:shared.matches||[],visits:next})
+        await saveDB({players:[],matches:shared.matches||[],visits:next,upcomingMatches:shared.upcomingMatches||[]})
       }
     }catch(e){console.error("[App] initial load failed",e)}
     finally{if(mounted)setLoading(false)}
   })()
     const offP=subscribePlayers(list=>setDb(prev=>({...prev,players:list})))
-    const offDB=subscribeDB(next=>setDb(prev=>({...prev,matches:next.matches||prev.matches||[],visits:typeof next.visits==="number"?next.visits:(prev.visits||0)})))
+    const offDB=subscribeDB(next=>setDb(prev=>({...prev,matches:next.matches||prev.matches||[],visits:typeof next.visits==="number"?next.visits:(prev.visits||0),upcomingMatches:next.upcomingMatches||prev.upcomingMatches||[]})))
     return()=>{mounted=false;offP?.();offDB?.()}
   },[])
 
-  const players=db.players||[],matches=db.matches||[],visits=typeof db.visits==="number"?db.visits:0
+  const players=db.players||[],matches=db.matches||[],visits=typeof db.visits==="number"?db.visits:0,upcomingMatches=db.upcomingMatches||[]
 
   const totals=useMemo(()=>{
     const cnt=players.length
@@ -100,9 +105,13 @@ export default function App(){
   async function handleDeletePlayer(id){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,players:(prev.players||[]).filter(p=>p.id!==id)}));if(selectedPlayerId===id)setSelectedPlayerId(null);try{await deletePlayer(id);notify("선수를 삭제했습니다.")}catch(e){console.error(e)}}
   function handleImportPlayers(list){if(!isAdmin)return notify("Admin만 가능합니다.");const safe=Array.isArray(list)?list:[];setDb(prev=>({...prev,players:safe}));Promise.all(safe.map(upsertPlayer)).then(()=>notify("선수 목록을 가져왔습니다.")).catch(console.error);setSelectedPlayerId(null)}
   function handleResetPlayers(){if(!isAdmin)return notify("Admin만 가능합니다.");(async()=>{const fresh=await listPlayers();setDb(prev=>({...prev,players:fresh}));setSelectedPlayerId(null);notify("선수 목록을 리셋했습니다.")})()}
-  function handleSaveMatch(match){if(!isAdmin)return notify("Admin만 가능합니다.");const next=[...(db.matches||[]),match];setDb(prev=>({...prev,matches:next}));saveDB({players:[],matches:next,visits})}
-  function handleDeleteMatch(id){if(!isAdmin)return notify("Admin만 가능합니다.");const next=(db.matches||[]).filter(m=>m.id!==id);setDb(prev=>({...prev,matches:next}));saveDB({players:[],matches:next,visits});notify("매치를 삭제했습니다.")}
-  function handleUpdateMatch(id,patch){const next=(db.matches||[]).map(m=>m.id===id?{...m,...patch}:m);setDb(prev=>({...prev,matches:next}));saveDB({players:[],matches:next,visits});notify("업데이트되었습니다.")}
+  function handleSaveMatch(match){if(!isAdmin)return notify("Admin만 가능합니다.");const next=[...(db.matches||[]),match];setDb(prev=>({...prev,matches:next}));saveDB({players:[],matches:next,visits,upcomingMatches})}
+  function handleDeleteMatch(id){if(!isAdmin)return notify("Admin만 가능합니다.");const next=(db.matches||[]).filter(m=>m.id!==id);setDb(prev=>({...prev,matches:next}));saveDB({players:[],matches:next,visits,upcomingMatches});notify("매치를 삭제했습니다.")}
+  function handleUpdateMatch(id,patch){const next=(db.matches||[]).map(m=>m.id===id?{...m,...patch}:m);setDb(prev=>({...prev,matches:next}));saveDB({players:[],matches:next,visits,upcomingMatches});notify("업데이트되었습니다.")}
+  
+  function handleSaveUpcomingMatch(upcomingMatch){if(!isAdmin)return notify("Admin만 가능합니다.");const next=[...(db.upcomingMatches||[]),upcomingMatch];setDb(prev=>({...prev,upcomingMatches:next}));saveDB({players:[],matches,visits,upcomingMatches:next})}
+  function handleDeleteUpcomingMatch(id){if(!isAdmin)return notify("Admin만 가능합니다.");const next=(db.upcomingMatches||[]).filter(m=>m.id!==id);setDb(prev=>({...prev,upcomingMatches:next}));saveDB({players:[],matches,visits,upcomingMatches:next});notify("예정된 매치를 삭제했습니다.")}
+  function handleUpdateUpcomingMatch(id,patch){const next=(db.upcomingMatches||[]).map(m=>m.id===id?{...m,...patch}:m);setDb(prev=>({...prev,upcomingMatches:next}));saveDB({players:[],matches,visits,upcomingMatches:next});notify("예정된 매치가 업데이트되었습니다.")}
 
   function adminLogout(){localStorage.removeItem("isAdmin");setIsAdmin(false);notify("Admin 모드 해제")}
   function onAdminSuccess(){localStorage.setItem("isAdmin","1");setIsAdmin(true);setLoginOpen(false);notify("Admin 모드 활성화")}
@@ -262,7 +271,7 @@ export default function App(){
             <PageSkeleton tab={tab} />
           ) : (
             <>
-              {tab==="dashboard"&&(<Dashboard totals={totals} players={players} matches={matches} isAdmin={isAdmin} onUpdateMatch={handleUpdateMatch}/>)}
+              {tab==="dashboard"&&(<Dashboard totals={totals} players={players} matches={matches} isAdmin={isAdmin} onUpdateMatch={handleUpdateMatch} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>)}
               {tab==="players"&&isAdmin&&(
                 <PlayersPage
                   players={players}
@@ -275,7 +284,7 @@ export default function App(){
                   onReset={handleResetPlayers}
                 />
               )}
-              {tab==="planner"&&isAdmin&&(<MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
+              {tab==="planner"&&isAdmin&&(<MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>)}
               {tab==="formation"&&(<FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>)}
               {tab==="stats"&&isAdmin&&(<StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
             </>

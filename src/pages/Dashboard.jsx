@@ -7,6 +7,7 @@ import SavedMatchesList from '../components/SavedMatchesList'
 import LeaderboardTable, { RankCell, PlayerNameCell, StatCell, FormDotsCell } from '../components/LeaderboardTable'
 import Medal from '../components/ranking/Medal'
 import FormDots from '../components/ranking/FormDots'
+import UpcomingMatchesWidget from '../components/UpcomingMatchesWidget'
 import { toStr, extractDateKey } from '../lib/matchUtils'
 import { rankTone } from '../lib/rankingUtils'
 import { 
@@ -44,7 +45,16 @@ class ErrorBoundary extends React.Component {
 }
 
 /* -------------------------- 메인 -------------------------- */
-export default function Dashboard({ players = [], matches = [], isAdmin, onUpdateMatch }) {
+export default function Dashboard({ 
+  players = [], 
+  matches = [], 
+  isAdmin, 
+  onUpdateMatch,
+  upcomingMatches = [],
+  onSaveUpcomingMatch,
+  onDeleteUpcomingMatch,
+  onUpdateUpcomingMatch
+}) {
   const [apDateKey, setApDateKey] = useState('all')
   const dateOptions = useMemo(() => {
     const set = new Set()
@@ -90,6 +100,17 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
 
   return (
     <div className="grid gap-4 sm:gap-6">
+      {/* Upcoming Matches Widget */}
+      <UpcomingMatchesWidget
+        upcomingMatches={upcomingMatches}
+        players={players}
+        matches={matches}
+        isAdmin={isAdmin}
+        onSave={onSaveUpcomingMatch}
+        onDeleteUpcomingMatch={onDeleteUpcomingMatch}
+        onUpdateUpcomingMatch={onUpdateUpcomingMatch}
+      />
+
       {/* 리더보드 */}
       <Card title="리더보드">
         {/* 상단: 1차 탭 (종합 | Draft) + 2차 탭 (조건부) */}

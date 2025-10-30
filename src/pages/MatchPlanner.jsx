@@ -12,6 +12,7 @@ import FreePitch from'../components/pitch/FreePitch'
 import{assignToFormation,recommendFormation,countPositions}from'../lib/formation'
 import{seededShuffle}from'../utils/random'
 import SavedMatchesList from'../components/SavedMatchesList'
+import { createUpcomingMatch } from '../lib/upcomingMatch'
 
 /* ───────── 게스트 판별/뱃지 유틸 ───────── */
 const S=(v)=>v==null?'':String(v)
@@ -57,7 +58,18 @@ const sortByOVRDescWithSeed=(list,seed=0)=>seededShuffle(list.slice(),seed||0x9e
 })
 function splitKTeamsPosAware(players,k,seed=0){const teams=Array.from({length:k},()=>[]),meta=Array.from({length:k},()=>({nonGkOVR:0,counts:{GK:0,DF:0,MF:0,FW:0,OTHER:0}})),gs={GK:players.filter(p=>positionGroupOf(p)==='GK'),DF:players.filter(p=>positionGroupOf(p)==='DF'),MF:players.filter(p=>positionGroupOf(p)==='MF'),FW:players.filter(p=>positionGroupOf(p)==='FW'),OTHER:players.filter(p=>positionGroupOf(p)==='OTHER')};for(const key of Object.keys(gs))gs[key]=sortByOVRDescWithSeed(gs[key],seed+key.length);const place=key=>{const list=gs[key];let dir=1;while(list.length){const ordered=[...Array(k).keys()].sort((i,j)=>{const ci=meta[i].counts[key],cj=meta[j].counts[key];return ci!==cj?ci-cj:meta[i].nonGkOVR-meta[j].nonGkOVR}),pick=dir===1?ordered:ordered.slice().reverse();for(const ti of pick){if(!list.length)break;const p=list.shift();teams[ti].push(p);meta[ti].counts[key]++;if(key!=='GK'&&!isUnknownPlayer(p))meta[ti].nonGkOVR+=(p.ovr??overall(p))}dir*=-1}};['GK','DF','MF','FW','OTHER'].forEach(place);return{teams}}
 
-export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,onUpdateMatch,isAdmin}){
+export default function MatchPlanner({
+  players,
+  matches,
+  onSaveMatch,
+  onDeleteMatch,
+  onUpdateMatch,
+  isAdmin,
+  upcomingMatches = [],
+  onSaveUpcomingMatch,
+  onDeleteUpcomingMatch,
+  onUpdateUpcomingMatch
+}){
   const[dateISO,setDateISO]=useState(()=>nextSaturday0630Local()),[attendeeIds,setAttendeeIds]=useState([]),[criterion,setCriterion]=useState('overall'),[teamCount,setTeamCount]=useState(2),[hideOVR,setHideOVR]=useState(false),[shuffleSeed,setShuffleSeed]=useState(0)
   const[locationPreset,setLocationPreset]=useState('coppell-west'),[locationName,setLocationName]=useState('Coppell Middle School - West'),[locationAddress,setLocationAddress]=useState('2701 Ranch Trail, Coppell, TX 75019')
   const[feeMode,setFeeMode]=useState('preset'),[customBaseCost,setCustomBaseCost]=useState(0)
@@ -65,6 +77,7 @@ export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,
   const[formations,setFormations]=useState([]),[placedByTeam,setPlacedByTeam]=useState([]),latestTeamsRef=useRef([])
   const[editorOpen,setEditorOpen]=useState(false),[editingTeamIdx,setEditingTeamIdx]=useState(0),[editingMatchId,setEditingMatchId]=useState(null),[editorPlayers,setEditorPlayers]=useState([])
   const[posAware,setPosAware]=useState(true),[dropHint,setDropHint]=useState({team:null,index:null})
+  const[isDraftMode,setIsDraftMode]=useState(false)
   const count=attendeeIds.length,autoSuggestion=decideMode(count),mode=autoSuggestion.mode,teams=Math.max(2,Math.min(10,Number(teamCount)||2)),attendees=useMemo(()=>players.filter(p=>attendeeIds.includes(p.id)),[players,attendeeIds])
   const autoSplit=useMemo(()=>posAware?splitKTeamsPosAware(attendees,teams,shuffleSeed):splitKTeams(attendees,teams,criterion),[attendees,teams,criterion,posAware,shuffleSeed])
   const skipAutoResetRef=useRef(false);useEffect(()=>{if(skipAutoResetRef.current){skipAutoResetRef.current=false;return}setManualTeams(null);setShuffleSeed(0)},[attendees,teams,criterion,posAware])
@@ -123,6 +136,32 @@ export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,
     onSaveMatch(payload);notify('매치가 저장되었습니다 ✅')
   }
 
+  function saveAsUpcomingMatch(){
+    if(!isAdmin){notify('Admin만 가능합니다.');return}
+    if(!onSaveUpcomingMatch){notify('예정 매치 저장 기능이 없습니다.');return}
+    
+    const participantIds = attendeeIds.length > 0 ? attendeeIds : []
+    if (participantIds.length === 0) {
+      notify('참가자를 먼저 선택해주세요.');return
+    }
+
+    const upcomingMatch = createUpcomingMatch({
+      dateISO,
+      participantIds,
+      location: {
+        preset: locationPreset,
+        name: locationName,
+        address: locationAddress
+      },
+      totalCost: baseCost,
+      isDraftMode,
+      mode: decideMode(participantIds.length).mode
+    })
+
+    onSaveUpcomingMatch(upcomingMatch)
+    notify(`${isDraftMode ? '드래프트 ' : ''}예정 매치로 저장되었습니다 ✅`)
+  }
+
   const allSelected=attendeeIds.length===players.length&&players.length>0
   const toggleSelectAll=()=>allSelected?setAttendeeIds([]):setAttendeeIds(players.map(p=>p.id))
   const sensors=useSensors(useSensor(PointerSensor,{activationConstraint:{distance:4}}),useSensor(TouchSensor,{activationConstraint:{delay:120,tolerance:6}}))
@@ -136,6 +175,32 @@ export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,
   const showOVR=isAdmin&&!hideOVR
 
   function loadSavedIntoPlanner(match){if(!match)return;skipAutoResetRef.current=true;const h=hydrateMatch(match,players),ts=h.teams||[];if(ts.length===0){notify('불러올 팀 구성이 없습니다.');return}const ids=ts.flat().map(p=>p.id);setAttendeeIds(ids);setTeamCount(ts.length);if(match.criterion)setCriterion(match.criterion);if(match.location){setLocationPreset(match.location.preset||'other');setLocationName(match.location.name||'');setLocationAddress(match.location.address||'')}if(match.dateISO)setDateISO(match.dateISO.slice(0,16));setShuffleSeed(0);setManualTeams(ts);latestTeamsRef.current=ts;const baseFormations=Array.isArray(match.formations)&&match.formations.length===ts.length?match.formations.slice():ts.map(list=>recommendFormation({count:list.length,mode:match.mode||'11v11',positions:countPositions(list)}));setFormations(baseFormations);const baseBoard=Array.isArray(match.board)&&match.board.length===ts.length?match.board.map(a=>Array.isArray(a)?a.slice():[]):ts.map((list,i)=>assignToFormation({players:list,formation:baseFormations[i]||'4-3-3'}));setPlacedByTeam(baseBoard);notify('저장된 매치를 팀배정에 불러왔습니다 ✅')}
+
+  function loadUpcomingMatchIntoPlanner(upcomingMatch) {
+    if (!upcomingMatch) return
+    skipAutoResetRef.current = true
+    
+    const participantIds = upcomingMatch.participantIds || []
+    if (participantIds.length === 0) {
+      notify('불러올 참가자가 없습니다.')
+      return
+    }
+
+    // Load basic match data
+    setAttendeeIds(participantIds)
+    if (upcomingMatch.dateISO) setDateISO(upcomingMatch.dateISO.slice(0, 16))
+    if (upcomingMatch.location) {
+      setLocationPreset(upcomingMatch.location.preset || 'other')
+      setLocationName(upcomingMatch.location.name || '')
+      setLocationAddress(upcomingMatch.location.address || '')
+    }
+    
+    // Reset team formations since upcoming matches don't have team compositions yet
+    setManualTeams(null)
+    setShuffleSeed(0)
+    
+    notify('예정 매치를 불러왔습니다 ✅')
+  }
 
   return(
   <div className="grid gap-4 lg:grid-cols:[minmax(0,1fr)_600px]">
@@ -185,6 +250,7 @@ export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,
           <div className="flex items-center gap-3">
             <select className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" value={teams} onChange={e=>setTeamCount(Number(e.target.value))}>{Array.from({length:9},(_,i)=>i+2).map(n=><option key={n} value={n}>{n}팀</option>)}</select>
             <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={posAware} onChange={()=>setPosAware(v=>!v)}/>포지션 고려 매칭</label>
+            <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={isDraftMode} onChange={()=>setIsDraftMode(v=>!v)}/>드래프트 모드</label>
           </div>
         </Row>
 
@@ -212,7 +278,12 @@ export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,
         </Row>
 
         <div className="flex flex-wrap gap-2">
-          {isAdmin&&(<button onClick={save} className="rounded bg-emerald-500 px-4 py-2 text-white font-semibold">매치 저장</button>)}
+          {isAdmin&&(
+            <div className="flex items-center gap-2">
+              <button onClick={saveAsUpcomingMatch} className="rounded bg-blue-500 px-4 py-2 text-white font-semibold hover:bg-blue-600">예정 매치로 저장</button>
+              <button onClick={save} className="rounded bg-emerald-500 px-4 py-2 text-white font-semibold hover:bg-emerald-600">매치 저장</button>
+            </div>
+          )}
         </div>
       </div>
     </Card>
@@ -243,6 +314,75 @@ export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,
           </DragOverlay>
         </DndContext>
       </Card>
+
+      {/* Upcoming Matches Section */}
+      {upcomingMatches.length > 0 && (
+        <Card title="예정된 매치">
+          <div className="space-y-2">
+            {upcomingMatches.map(match => (
+              <div key={match.id} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <div>
+                  <div className="font-medium text-sm">
+                    {new Date(match.dateISO).toLocaleDateString('ko-KR', {
+                      month: 'short',
+                      day: 'numeric',
+                      weekday: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </div>
+                  <div className="text-xs text-gray-600">
+                    {match.location?.name || '장소 미정'} · {match.participantIds?.length || 0}명 참가 예정
+                    {match.isDraftMode && (
+                      <span className="ml-2 px-2 py-0.5 text-[10px] bg-yellow-200 text-yellow-800 rounded font-semibold">
+                        드래프트전
+                      </span>
+                    )}
+                    {match.status === 'drafting' && (
+                      <span 
+                        className="ml-2 px-2 py-1 text-[10px] text-white rounded font-semibold flex items-center gap-1"
+                        style={{
+                          background: 'linear-gradient(45deg, #f97316, #ea580c, #f97316)',
+                          backgroundSize: '200% 100%',
+                          animation: 'shimmer 2s infinite, pulse 1.5s infinite',
+                          boxShadow: '0 0 8px rgba(249, 115, 22, 0.4)'
+                        }}
+                      >
+                        <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" style={{animation: 'spin 2s linear infinite'}}>
+                          <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                        Drafting in Progress
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {isAdmin && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => loadUpcomingMatchIntoPlanner(match)}
+                      className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                    >
+                      불러오기
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm('이 예정된 매치를 삭제하시겠습니까?')) {
+                          onDeleteUpcomingMatch(match.id)
+                          notify('예정된 매치가 삭제되었습니다 ✅')
+                        }
+                      }}
+                      className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                      title="예정된 매치 삭제"
+                    >
+                      삭제
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       <Card title="저장된 매치" right={<div className="text-xs text-gray-500"><span className="font-medium">GK 평균 제외</span></div>}>
         <SavedMatchesList matches={matches} players={players} isAdmin={isAdmin} enableLoadToPlanner={true} onLoadToPlanner={loadSavedIntoPlanner} onDeleteMatch={onDeleteMatch} onUpdateMatch={onUpdateMatch} showTeamOVRForAdmin={true} hideOVR={true}/>
@@ -368,3 +508,23 @@ function DragGhost({player,showOVR}){if(!player)return null;const pos=positionGr
   </div>
 )}
 function FullscreenModal({children,onClose}){return(<div className="fixed inset-0 z-50 bg-black/50 p-4 overflow-auto"><div className="mx-auto max-w-5xl rounded-lg bg-white p-4">{children}<div className="mt-3 text-right"><button onClick={onClose} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm">닫기</button></div></div></div>)}
+
+<style>{`
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+  
+  @keyframes spin {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+`}</style>
