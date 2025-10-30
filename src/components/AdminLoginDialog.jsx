@@ -80,7 +80,7 @@ export default function AdminLoginDialog({
               onKeyUp={handleKey}
               onKeyDown={handleKey}
               placeholder="Admin Password"
-              className="w-full py-2 text-sm outline-none placeholder:text-stone-400"
+              className={`w-full py-2 text-sm outline-none placeholder:text-stone-400 bg-transparent ${err ? "text-rose-900" : "text-stone-900"}`}
               autoCapitalize="off"
               autoCorrect="off"
               autoComplete="current-password"

@@ -15,15 +15,32 @@ export default function ToastHub() {
     return () => window.removeEventListener('notify', onNotify)
   }, [])
 
+  const dismissToast = (id) => {
+    setToasts(prev => prev.filter(x => x.id !== id))
+  }
+
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-3 z-[100] flex flex-col items-center gap-2 px-2">
+    <div className="pointer-events-none fixed left-0 right-0 z-[250] flex flex-col items-center gap-2 px-2" style={{ top: '60px' }}>
       {toasts.map(t => (
         <div key={t.id}
-          className={`pointer-events-auto w-full max-w-sm rounded-xl border px-4 py-3 shadow-md backdrop-blur
+          className={`pointer-events-auto w-full max-w-sm rounded-xl border px-4 py-3 shadow-lg backdrop-blur flex items-center justify-between gap-3
             ${t.type==='error'
-              ? 'border-red-200 bg-red-50/90 text-red-800'
-              : 'border-emerald-200 bg-emerald-50/90 text-emerald-800'}`}>
-          {t.msg}
+              ? 'border-red-200 bg-red-50/95 text-red-800'
+              : 'border-emerald-200 bg-emerald-50/95 text-emerald-800'}`}>
+          <span className="flex-1">{t.msg}</span>
+          <button
+            onClick={() => dismissToast(t.id)}
+            className={`shrink-0 rounded p-1 transition-colors ${
+              t.type === 'error' 
+                ? 'hover:bg-red-100' 
+                : 'hover:bg-emerald-100'
+            }`}
+            aria-label="닫기"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
       ))}
     </div>

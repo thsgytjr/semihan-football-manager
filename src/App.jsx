@@ -14,6 +14,7 @@ const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24
 export default function App(){
   const[tab,setTab]=useState("dashboard"),[db,setDb]=useState({players:[],matches:[],visits:0}),[selectedPlayerId,setSelectedPlayerId]=useState(null)
   const[isAdmin,setIsAdmin]=useState(()=>localStorage.getItem("isAdmin")==="1"),[loginOpen,setLoginOpen]=useState(false)
+  const[loading,setLoading]=useState(true)
 
   useEffect(()=>{let mounted=true;(async()=>{
     try{
@@ -30,6 +31,7 @@ export default function App(){
         await saveDB({players:[],matches:shared.matches||[],visits:next})
       }
     }catch(e){console.error("[App] initial load failed",e)}
+    finally{if(mounted)setLoading(false)}
   })()
     const offP=subscribePlayers(list=>setDb(prev=>({...prev,players:list})))
     const offDB=subscribeDB(next=>setDb(prev=>({...prev,matches:next.matches||prev.matches||[],visits:typeof next.visits==="number"?next.visits:(prev.visits||0)})))
@@ -200,23 +202,44 @@ export default function App(){
     </header>
 
     <main className="mx-auto max-w-6xl p-4">
-      {tab==="dashboard"&&(<Dashboard totals={totals} players={players} matches={matches} isAdmin={isAdmin} onUpdateMatch={handleUpdateMatch}/>)}
-      {tab==="players"&&isAdmin&&(
-        <PlayersPage
-          players={players}
-          selectedId={selectedPlayerId}
-          onSelect={setSelectedPlayerId}
-          onCreate={handleCreatePlayerFromModal}  // ✅ 여기로 연결
-          onUpdate={handleUpdatePlayer}
-          onDelete={handleDeletePlayer}
-          onImport={handleImportPlayers}
-          onReset={handleResetPlayers}
-        />
+      {loading ? (
+        <div className="space-y-4">
+          <div className="animate-pulse">
+            <div className="h-8 bg-stone-200 rounded w-48 mb-4"></div>
+            <div className="border border-stone-200 rounded-lg overflow-hidden">
+              <div className="h-12 bg-stone-100"></div>
+              {[1,2,3,4,5].map(i => (
+                <div key={i} className="h-16 border-t border-stone-200 bg-white flex items-center px-4 gap-4">
+                  <div className="h-10 w-10 bg-stone-200 rounded-full"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-stone-200 rounded w-1/3"></div>
+                    <div className="h-3 bg-stone-100 rounded w-1/2"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {tab==="dashboard"&&(<Dashboard totals={totals} players={players} matches={matches} isAdmin={isAdmin} onUpdateMatch={handleUpdateMatch}/>)}
+          {tab==="players"&&isAdmin&&(
+            <PlayersPage
+              players={players}
+              selectedId={selectedPlayerId}
+              onSelect={setSelectedPlayerId}
+              onCreate={handleCreatePlayerFromModal}  // ✅ 여기로 연결
+              onUpdate={handleUpdatePlayer}
+              onDelete={handleDeletePlayer}
+              onImport={handleImportPlayers}
+              onReset={handleResetPlayers}
+            />
+          )}
+          {tab==="planner"&&isAdmin&&(<MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
+          {tab==="formation"&&(<FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>)}
+          {tab==="stats"&&isAdmin&&(<StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
+        </>
       )}
-      {tab==="planner"&&isAdmin&&(<MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
-  {tab==="formation"&&(<FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>)}
-  
-  {tab==="stats"&&isAdmin&&(<StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
     </main>
 
     <footer className="mx-auto mt-10 max-w-6xl px-4 pb-8">
@@ -248,7 +271,7 @@ function AdminLoginDialog({isOpen,onClose,onSuccess,adminPass}){const[pw,setPw]=
         <label className="block text-xs font-medium text-stone-600">비밀번호</label>
         <div className={`flex items-center rounded-lg border px-3 ${err?"border-rose-300 bg-rose-50":"border-stone-300 bg-white"}`}>
           <Lock size={16} className="mr-2 shrink-0 text-stone-500"/>
-          <input id="adminPw" type={show?"text":"password"} value={pw} onChange={e=>setPw(e.target.value)} onKeyUp={onKey} onKeyDown={onKey} placeholder="Admin Password" className="w-full py-2 text-sm outline-none placeholder:text-stone-400" autoCapitalize="off" autoCorrect="off" autoComplete="current-password"/>
+          <input id="adminPw" type={show?"text":"password"} value={pw} onChange={e=>setPw(e.target.value)} onKeyUp={onKey} onKeyDown={onKey} placeholder="Admin Password" className="w-full py-2 text-sm outline-none placeholder:text-stone-400 bg-transparent text-stone-900" style={{color: '#1c1917'}} autoCapitalize="off" autoCorrect="off" autoComplete="current-password"/>
           <button type="button" className="ml-2 rounded p-1 text-stone-500 hover:bg-stone-100" onClick={()=>setShow(v=>!v)} aria-label={show?"비밀번호 숨기기":"비밀번호 보기"}>{show?<EyeOff size={16}/>:<Eye size={16}/>}</button>
         </div>
         {caps&&(<div className="flex items-center gap-2 rounded-md bg-amber-50 px-2.5 py-1 text-[11px] text-amber-800"><AlertCircle size={12}/>Caps Lock이 켜져 있어요</div>)}
