@@ -22,6 +22,12 @@ export function overall(p) {
   return Math.round(avg)
 }
 
+// 선수가 Unknown(모든 능력치 50)인지 확인
+export function isUnknownPlayer(p) {
+  const ovr = overall(p)
+  return ovr === 50
+}
+
 // (예시) 기본 선수 목록 — 필요 시 기존 데이터 유지
 export const defaultPlayers = [
   // mkPlayer("오인택", "FW", { Pace: 78, Shooting: 82, Passing: 67, Dribbling: 74, Physical: 55, Stamina: 80 }),

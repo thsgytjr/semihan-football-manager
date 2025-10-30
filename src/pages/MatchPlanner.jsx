@@ -2,7 +2,7 @@
 import React,{useEffect,useMemo,useRef,useState}from'react'
 import Card from'../components/Card'
 import{mkMatch,decideMode,splitKTeams,hydrateMatch}from'../lib/match'
-import{overall}from'../lib/players'
+import{overall,isUnknownPlayer}from'../lib/players'
 import{notify}from'../components/Toast'
 import{DndContext,DragOverlay,pointerWithin,PointerSensor,TouchSensor,useSensor,useSensors,useDroppable}from'@dnd-kit/core'
 import{SortableContext,useSortable,verticalListSortingStrategy}from'@dnd-kit/sortable'
@@ -50,8 +50,12 @@ const nextSaturday0630Local=()=>{const n=new Date(),d=new Date(n),dow=n.getDay()
 const POS_ORDER=['GK','DF','MF','FW','OTHER']
 const positionGroupOf=p=>{const raw=String(p.position||p.pos||'').toUpperCase();if(raw==='GK'||raw.includes('GK'))return'GK';const df=['DF','CB','LB','RB','LWB','RWB','CBR','CBL','SW'],mf=['MF','CM','DM','AM','LM','RM','CDM','CAM','RDM','LDM','RCM','LCM'],fw=['FW','ST','CF','LW','RW','RF','LF'];if(df.some(k=>raw.includes(k)))return'DF';if(mf.some(k=>raw.includes(k)))return'MF';if(fw.some(k=>raw.includes(k)))return'FW';return'OTHER'}
 const posIndex=p=>POS_ORDER.indexOf(positionGroupOf(p))
-const sortByOVRDescWithSeed=(list,seed=0)=>seededShuffle(list.slice(),seed||0x9e3779b1).sort((a,b)=>(b.ovr??overall(b))-(a.ovr??overall(a)))
-function splitKTeamsPosAware(players,k,seed=0){const teams=Array.from({length:k},()=>[]),meta=Array.from({length:k},()=>({nonGkOVR:0,counts:{GK:0,DF:0,MF:0,FW:0,OTHER:0}})),gs={GK:players.filter(p=>positionGroupOf(p)==='GK'),DF:players.filter(p=>positionGroupOf(p)==='DF'),MF:players.filter(p=>positionGroupOf(p)==='MF'),FW:players.filter(p=>positionGroupOf(p)==='FW'),OTHER:players.filter(p=>positionGroupOf(p)==='OTHER')};for(const key of Object.keys(gs))gs[key]=sortByOVRDescWithSeed(gs[key],seed+key.length);const place=key=>{const list=gs[key];let dir=1;while(list.length){const ordered=[...Array(k).keys()].sort((i,j)=>{const ci=meta[i].counts[key],cj=meta[j].counts[key];return ci!==cj?ci-cj:meta[i].nonGkOVR-meta[j].nonGkOVR}),pick=dir===1?ordered:ordered.slice().reverse();for(const ti of pick){if(!list.length)break;const p=list.shift();teams[ti].push(p);meta[ti].counts[key]++;if(key!=='GK')meta[ti].nonGkOVR+=(p.ovr??overall(p))}dir*=-1}};['GK','DF','MF','FW','OTHER'].forEach(place);return{teams}}
+const sortByOVRDescWithSeed=(list,seed=0)=>seededShuffle(list.slice(),seed||0x9e3779b1).sort((a,b)=>{
+  const ovrA=isUnknownPlayer(a)?0:(b.ovr??overall(b))
+  const ovrB=isUnknownPlayer(b)?0:(b.ovr??overall(b))
+  return ovrB-ovrA
+})
+function splitKTeamsPosAware(players,k,seed=0){const teams=Array.from({length:k},()=>[]),meta=Array.from({length:k},()=>({nonGkOVR:0,counts:{GK:0,DF:0,MF:0,FW:0,OTHER:0}})),gs={GK:players.filter(p=>positionGroupOf(p)==='GK'),DF:players.filter(p=>positionGroupOf(p)==='DF'),MF:players.filter(p=>positionGroupOf(p)==='MF'),FW:players.filter(p=>positionGroupOf(p)==='FW'),OTHER:players.filter(p=>positionGroupOf(p)==='OTHER')};for(const key of Object.keys(gs))gs[key]=sortByOVRDescWithSeed(gs[key],seed+key.length);const place=key=>{const list=gs[key];let dir=1;while(list.length){const ordered=[...Array(k).keys()].sort((i,j)=>{const ci=meta[i].counts[key],cj=meta[j].counts[key];return ci!==cj?ci-cj:meta[i].nonGkOVR-meta[j].nonGkOVR}),pick=dir===1?ordered:ordered.slice().reverse();for(const ti of pick){if(!list.length)break;const p=list.shift();teams[ti].push(p);meta[ti].counts[key]++;if(key!=='GK'&&!isUnknownPlayer(p))meta[ti].nonGkOVR+=(p.ovr??overall(p))}dir*=-1}};['GK','DF','MF','FW','OTHER'].forEach(place);return{teams}}
 
 export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,onUpdateMatch,isAdmin}){
   const[dateISO,setDateISO]=useState(()=>nextSaturday0630Local()),[attendeeIds,setAttendeeIds]=useState([]),[criterion,setCriterion]=useState('overall'),[teamCount,setTeamCount]=useState(2),[hideOVR,setHideOVR]=useState(false),[shuffleSeed,setShuffleSeed]=useState(0)
@@ -184,19 +188,20 @@ export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,
           </div>
         </Row>
 
-        <Row label={<span className="flex items-center gap-2">참석 ({attendeeIds.length}명)<button type="button" onClick={toggleSelectAll} className="ml-2 rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-100">{allSelected?'모두 해제':'모두 선택'}</button></span>}>
+        <Row label={<span className="flex items-center gap-2">참석 ({attendeeIds.length}명){attendees.filter(p=>isUnknownPlayer(p)).length>0&&<span className="text-xs text-amber-600 font-medium">({attendees.filter(p=>isUnknownPlayer(p)).length}명 Unknown - 팀파워 계산 제외)</span>}<button type="button" onClick={toggleSelectAll} className="ml-2 rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-100">{allSelected?'모두 해제':'모두 선택'}</button></span>}>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
             {players.map(p=>{
               const mem=String(p.membership||'').trim().toLowerCase()
               const member=(mem==='member'||mem.includes('정회원'))
+              const unknown=isUnknownPlayer(p)
               return(
-                <label key={p.id} className={`flex items-center gap-2 rounded border px-3 py-2 ${attendeeIds.includes(p.id)?'border-emerald-400 bg-emerald-50':'border-gray-200 bg-white hover:bg-gray-50'}`}>
+                <label key={p.id} className={`flex items-center gap-2 rounded border px-3 py-2 ${attendeeIds.includes(p.id)?'border-emerald-400 bg-emerald-50':'border-gray-200 bg-white hover:bg-gray-50'} ${unknown?'opacity-60':''}`}>
                   <input type="checkbox" checked={attendeeIds.includes(p.id)} onChange={()=>toggle(p.id)}/>
                   <InitialAvatar id={p.id} name={p.name} size={24} badges={!member?['G']:[]} />
                   <span className="text-sm flex-1 whitespace-normal break-words">
-                    {p.name}{(p.position||p.pos)==='GK'&&<em className="ml-1 text-xs text-gray-400">(GK)</em>}
+                    {p.name}{unknown&&<em className="ml-1 text-xs text-amber-600">(Unknown)</em>}
                   </span>
-                  {isAdmin&&!hideOVR&&(p.position||p.pos)!=='GK'&&<span className="text-xs text-gray-500 shrink-0">OVR {p.ovr??overall(p)}</span>}
+                  {isAdmin&&!hideOVR&&<span className="text-xs text-gray-500 shrink-0">OVR {unknown?'?':p.ovr??overall(p)}</span>}
                 </label>
               )
             })}
@@ -274,7 +279,7 @@ function Toolbar({isAdmin,hideOVR,setHideOVR,reshuffleTeams,sortTeamsByOVR,sortT
   </div></div>)}
 
 /* 컬럼/플레이어 렌더 */
-function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint}){const id=`team-${teamIndex}`,{setNodeRef,isOver}=useDroppable({id}),non=players.filter(p=>(p.position||p.pos)!=='GK'),sum=non.reduce((a,p)=>a+(p.ovr??overall(p)),0),avg=non.length?Math.round(sum/non.length):0,showIndicator=dropHint?.team===teamIndex,indicator=(<li className="my-1 h-2 rounded bg-emerald-500/70 animate-pulse shadow-[0_0_0_2px_rgba(16,185,129,.35)]"/>);const rendered=[];for(let i=0;i<players.length;i++){if(showIndicator&&dropHint.index===i)rendered.push(<React.Fragment key={`hint-${i}`}>{indicator}</React.Fragment>);rendered.push(<PlayerRow key={players[i].id} player={players[i]} showOVR={showOVR}/>)}if(showIndicator&&dropHint.index===players.length)rendered.push(<React.Fragment key="hint-end">{indicator}</React.Fragment>)
+function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint}){const id=`team-${teamIndex}`,{setNodeRef,isOver}=useDroppable({id}),non=players.filter(p=>(p.position||p.pos)!=='GK'&&!isUnknownPlayer(p)),sum=non.reduce((a,p)=>a+(p.ovr??overall(p)),0),avg=non.length?Math.round(sum/non.length):0,showIndicator=dropHint?.team===teamIndex,indicator=(<li className="my-1 h-2 rounded bg-emerald-500/70 animate-pulse shadow-[0_0_0_2px_rgba(16,185,129,.35)]"/>);const rendered=[];for(let i=0;i<players.length;i++){if(showIndicator&&dropHint.index===i)rendered.push(<React.Fragment key={`hint-${i}`}>{indicator}</React.Fragment>);rendered.push(<PlayerRow key={players[i].id} player={players[i]} showOVR={showOVR}/>)}if(showIndicator&&dropHint.index===players.length)rendered.push(<React.Fragment key="hint-end">{indicator}</React.Fragment>)
   return(<div ref={setNodeRef} className={`rounded-lg border bg-white transition ${isOver?'border-emerald-500 ring-2 ring-emerald-200':'border-gray-200'}`}>
     <div className={`mb-1 flex items-center justify-between px-3 py-2 text-xs ${labelKit.headerClass}`}>
       <div className="font-semibold">팀 {teamIndex+1}</div>
@@ -307,7 +312,7 @@ function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint}){const
 function PlayerRow({player,showOVR}){
   const{attributes,listeners,setNodeRef,transform,transition,isDragging}=useSortable({id:String(player.id)})
   const style={transform:CSS.Transform.toString(transform),transition,opacity:isDragging?0.7:1,boxShadow:isDragging?'0 6px 18px rgba(0,0,0,.12)':undefined,borderRadius:8,background:isDragging?'rgba(16,185,129,0.06)':undefined}
-  const pos=positionGroupOf(player),isGK=pos==='GK',ovrVal=player.ovr??overall(player)
+  const pos=positionGroupOf(player),isGK=pos==='GK',unknown=isUnknownPlayer(player),ovrVal=unknown?'?':player.ovr??overall(player)
   const member=isMember(player.membership)
   return(
     <li ref={setNodeRef} style={style} className="flex items-start gap-2 border-t border-gray-100 pt-1 first:border-0 first:pt-0 touch-manipulation cursor-grab active:cursor-grabbing" {...attributes}{...listeners}>
@@ -328,8 +333,8 @@ function PlayerRow({player,showOVR}){
   {/* guest badge is shown on avatar */}
       </span>
 
-      {!isGK && showOVR && <span className="ovr-chip shrink-0 rounded-full bg-stone-900 text-white text-[11px] px-2 py-[2px]" data-ovr>
-        OVR {ovrVal}
+      {!isGK && showOVR && <span className={`ovr-chip shrink-0 rounded-full text-[11px] px-2 py-[2px] ${unknown?'bg-stone-300 text-stone-700':'bg-stone-900 text-white'}`} data-ovr>
+        {unknown ? '?' : `OVR ${ovrVal}`}
       </span>}
     </li>
   )
@@ -348,7 +353,7 @@ function kitForTeam(i){return[
   {label:"핑크",headerClass:"bg-pink-600 text-white border-b border-pink-700"},
   {label:"옐로",headerClass:"bg-yellow-400 text-stone-900 border-b border-yellow-500"},
 ][i%10]}
-function DragGhost({player,showOVR}){if(!player)return null;const pos=positionGroupOf(player),isGK=pos==='GK',ovrVal=player.ovr??overall(player);const member=isMember(player.membership);return(
+function DragGhost({player,showOVR}){if(!player)return null;const pos=positionGroupOf(player),isGK=pos==='GK',unknown=isUnknownPlayer(player),ovrVal=unknown?'?':player.ovr??overall(player);const member=isMember(player.membership);return(
   <div className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 shadow-lg">
     <div className="flex items-center gap-2 text-sm">
   <InitialAvatar id={player.id} name={player.name} size={22} badges={!member?['G']:[]} />
