@@ -690,8 +690,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
           }
           
           return (
-            <div key={i} className="space-y-1 overflow-hidden rounded border border-gray-200 relative">
-              {isWinner && <Confetti />}
+            <div key={i} className="overflow-hidden rounded border border-gray-200 relative">
               <div className={`flex items-center justify-between px-3 py-1.5 text-xs ${kit.headerClass} relative z-10`}>
                 <div className="font-semibold">팀 {i+1} {isWinner && <span className="ml-2">👑</span>}</div>
                 {isAdmin && !hideOVR
@@ -699,6 +698,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                   : <div className="opacity-80">{kit.label} · {list.length}명</div>}
               </div>
               <ul className="divide-y divide-gray-100 relative z-10">
+                {isWinner && <Confetti />}
                 {listOrdered.map(p=>{
                   const member=isMember(p.membership)
                   const rec = gaByPlayer[toStr(p.id)] || { goals: 0, assists: 0 }
