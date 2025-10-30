@@ -933,7 +933,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
 
                       return (
                         <tr key={ti} className={`${isMatchWinner ? 'bg-amber-50 font-semibold':''}`}>
-                          <td className="px-2 py-1">팀 {ti+1} {isMatchWinner ? <span className="ml-1">👑</span>:null}</td>
+                          <td className="px-2 py-1">팀 {ti+1} {isMatchWinner ? <span className="ml-1">🏆</span>:null}</td>
                           {Array.from({length:maxQ}).map((_,qi)=>{
                             const v = Array.isArray(arr) ? (arr[qi] ?? 0) : (qi===0? (arr||0) : 0)
                             const wonQuarter = quarterWins[qi]
@@ -946,7 +946,12 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                               </td>
                             )
                           })}
-                          <td className="px-2 py-1 text-center font-medium">{totalWins}</td>
+                          <td className="px-2 py-1 text-center font-medium">
+                            <span className="inline-flex items-center justify-center gap-1">
+                              <span className="tabular-nums">{totalWins}</span>
+                              <span aria-hidden="true" className={`inline-block h-1.5 w-1.5 rounded-full bg-green-500 ${totalWins > 0 ? 'opacity-100' : 'opacity-0'}`}></span>
+                            </span>
+                          </td>
                           <td className="px-2 py-1 text-right">{teamTotals[ti]}</td>
                         </tr>
                       )
@@ -1021,7 +1026,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
           return (
             <div key={i} className="overflow-hidden rounded border border-gray-200 relative">
               <div className={`flex items-center justify-between px-3 py-1.5 text-xs ${kit.headerClass} relative z-10`}>
-                <div className="font-semibold">팀 {i+1} {isWinner && <span className="ml-2">👑</span>}</div>
+                <div className="font-semibold">팀 {i+1} {isWinner && <span className="ml-2">🏆</span>}</div>
                 {isAdmin && !hideOVR
                   ? <div className="opacity-80">{kit.label} · {list.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</div>
                   : <div className="opacity-80">{kit.label} · {list.length}명</div>}
