@@ -155,7 +155,7 @@ export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,
 
             {/* 비용 안내 */}
             <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              <div><b>예상 구장비</b>: ${baseCost} / 2시간 {feeMode==='preset'?<span className="ml-2 opacity-70">(장소별 고정 금액)</span>:<span className="ml-2 opacity-70">(사용자 지정 금액)</span>}</div>
+              <div><b>예상 구장비</b>: ${baseCost} {feeMode==='preset'?<span className="ml-2 opacity-70">(장소별 고정 금액)</span>:<span className="ml-2 opacity-70">(사용자 지정 금액)</span>}</div>
             </div>
 
             {/* Freeform 입력 */}
