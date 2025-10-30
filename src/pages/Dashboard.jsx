@@ -690,7 +690,6 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls }){
         <tbody>
           {data.map((r, idx) => {
             const tone = rankTone(r.rank)
-            const isChampion = r.rank === 1
             return (
               <tr key={r.id || idx} className={`${tone.rowBg}`}>
                 <td className={`border-b align-middle px-1.5 py-1.5 ${tone.cellBg}`}>
@@ -699,7 +698,7 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls }){
                     <span className="tabular-nums">{r.rank}</span>
                   </div>
                 </td>
-                <td className={`border-b px-2 py-1.5 ${tone.cellBg} ${isChampion ? 'champion-gold-cell' : ''}`}>
+                <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
                   <div className="flex items-center gap-2">
                     <InitialAvatar id={r.id} name={r.name} size={20} badges={r.isGuest?['G']:[]} />
                     <span className={`font-medium truncate`}>{r.name}</span>
@@ -748,7 +747,6 @@ function DraftWinsTable({ rows, showAll, onToggle, controls }){
         <tbody>
           {data.map((r, idx) => {
             const tone = rankTone(r.rank)
-            const isChampion = r.rank === 1
             return (
               <tr key={r.id || idx} className={`${tone.rowBg}`}>
                 <td className={`border-b align-middle px-1.5 py-1.5 ${tone.cellBg}`}>
@@ -757,7 +755,7 @@ function DraftWinsTable({ rows, showAll, onToggle, controls }){
                     <span className="tabular-nums">{r.rank}</span>
                   </div>
                 </td>
-                <td className={`border-b px-2 py-1.5 ${tone.cellBg} ${isChampion ? 'champion-gold-cell' : ''}`}>
+                <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
                   <div className="flex items-center gap-2">
                     <InitialAvatar id={r.id} name={r.name} size={20} badges={r.isGuest?['G']:[]} />
                     <span className={`font-medium truncate`}>{r.name}</span>
@@ -965,7 +963,6 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
             const rank = r.rank
             const tone = rankTone(rank)
             const delta = deltaFor(r.id || r.name, rank)
-            const isChampion = rank === 1
             return (
               <tr key={r.id || `${r.name}-${idx}`} className={`${tone.rowBg}`}>
                 <td className={`border-b align-middle px-1.5 py-1.5 ${tone.cellBg}`}>
@@ -986,7 +983,7 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
                   </div>
                 </td>
 
-                <td className={`border-b px-2 py-1.5 ${tone.cellBg} ${isChampion ? 'champion-gold-cell' : ''}`}>
+                <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
                   <div className={`flex items-center gap-2 min-w-0`}>
                     <div className="shrink-0">
                       <InitialAvatar 
@@ -1049,7 +1046,6 @@ function DuoTable({ rows, showAll, onToggle, controls }) {
         <tbody>
           {data.map((r, idx) => {
             const tone = rankTone(r.rank)
-            const isChampion = r.rank === 1
             return (
               <tr key={r.id || idx} className={`${tone.rowBg}`}>
                 <td className={`border-b align-middle px-1.5 py-1.5 ${tone.cellBg}`}>
@@ -1058,7 +1054,7 @@ function DuoTable({ rows, showAll, onToggle, controls }) {
                     <span className="tabular-nums">{r.rank}</span>
                   </div>
                 </td>
-                <td className={`border-b px-2 py-1.5 ${tone.cellBg} ${isChampion ? 'champion-gold-cell' : ''}`}>
+                <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
                   <div className={`flex items-center gap-2`}>
                     <InitialAvatar id={r.assistId} name={r.aName} size={20} badges={r.aIsGuest?['G']:[]} />
                     <span className={`font-medium`}>{r.aName}</span>
