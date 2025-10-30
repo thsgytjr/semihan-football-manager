@@ -136,6 +136,7 @@ export default function Dashboard({ players = [], matches = [], isAdmin, onUpdat
               colHi={colHi}
               onRequestTab={(id)=>{ setApTab(id); setPrimaryTab('pts'); setShowAll(false) }}
               controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+              apDateKey={apDateKey}
             />
           )
         )}
@@ -416,27 +417,54 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
 }
 
 /* --------------- 공격포인트 테이블 --------------- */
-function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', headHi, colHi, onRequestTab }) {
+function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', headHi, colHi, onRequestTab, apDateKey }) {
   const data = showAll ? rows : rows.slice(0, 5)
 
-  const [prevRanks, setPrevRanks] = useState({})
+  // Baseline ranks for "모든 매치" only. We keep the first seen snapshot
+  // and compare against it when ranks change after new matches are recorded.
+  const [baselineRanks, setBaselineRanks] = useState({})
+  const baselineKey = `ap_baselineRanks_${rankBy}_v1`
+
+  // Load baseline on mount or when rankBy changes
   useEffect(() => {
     try {
-      const v2 = localStorage.getItem(`ap_prevRanks_${rankBy}_v1`)
-      if (v2) setPrevRanks(JSON.parse(v2) || {})
-    } catch {}
+      const saved = localStorage.getItem(baselineKey)
+      if (saved) setBaselineRanks(JSON.parse(saved) || {})
+      else setBaselineRanks({})
+    } catch {
+      setBaselineRanks({})
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rankBy])
+
+  // Initialize baseline IF missing and viewing 전체(모든 매치)
   useEffect(() => {
+    if (apDateKey !== 'all') return
     try {
+      const saved = localStorage.getItem(baselineKey)
+      if (saved) return // Baseline already exists; keep it
+      // Create a baseline from current rows (first visit) and do not show arrows this time
       const mapping = {}
       rows.forEach(r => { mapping[String(r.id || r.name)] = r.rank })
-      localStorage.setItem(`ap_prevRanks_${rankBy}_v1`, JSON.stringify(mapping))
+      if (Object.keys(mapping).length > 0) {
+        localStorage.setItem(baselineKey, JSON.stringify(mapping))
+        setBaselineRanks(mapping)
+      }
     } catch {}
-  }, [rows, rankBy])
+  }, [apDateKey, rows, baselineKey])
 
   const deltaFor = (id, currentRank) => {
-    const prevRank = prevRanks[String(id)]
-    if (!prevRank) return null
+    // Only show rank changes for 전체 보기("모든 매치")
+    if (apDateKey !== 'all') return null
+    if (!baselineRanks || Object.keys(baselineRanks).length === 0) return null
+
+    let prevRank = baselineRanks[String(id)]
+    // If this player wasn't in the baseline (new entry), treat as coming from bottom+1
+    if (prevRank == null) {
+      const maxPrev = Math.max(...Object.values(baselineRanks))
+      if (Number.isFinite(maxPrev)) prevRank = maxPrev + 1
+    }
+    if (prevRank == null) return null
     const diff = prevRank - currentRank
     if (diff === 0) return { diff: 0, dir: 'same' }
     return { diff, dir: diff > 0 ? 'up' : 'down' }
@@ -503,7 +531,7 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
                       <Medal rank={rank} />
                     </div>
                     <div className="text-center tabular-nums">{rank}</div>
-                    <div className="text-right hidden sm:block">
+                    <div className="text-right">
                       {delta && delta.diff !== 0 ? (
                         <span className={`inline-block min-w-[20px] text-[11px] font-medium ${delta.dir === 'up' ? 'text-emerald-700' : 'text-rose-700'}`}>
                           {delta.dir === 'up' ? '▲' : '▼'} {Math.abs(delta.diff)}
