@@ -335,10 +335,10 @@ function deriveFeesFromSnapshot(m, players){
     return { total, memberFee:m.fees.memberFee, guestFee:m.fees.guestFee, memberCount, guestCount, _estimated:false }
   }
 
-  // 3) 장소 프리셋별 총액(Indoor=220, Coppell=340)
+  // 3) 장소 프리셋별 총액(Indoor=220, Coppell=330)
   const preset=(m?.location?.preset||"").toLowerCase()
   const total = preset==="indoor-soccer-zone" ? 220
-              : preset==="coppell-west"        ? 340
+              : preset==="coppell-west"        ? 330
               : (m?.fees?.total||0)
 
   // 4) 새 규칙 계산

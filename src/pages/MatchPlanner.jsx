@@ -65,10 +65,10 @@ export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,
   const autoSplit=useMemo(()=>posAware?splitKTeamsPosAware(attendees,teams,shuffleSeed):splitKTeams(attendees,teams,criterion),[attendees,teams,criterion,posAware,shuffleSeed])
   const skipAutoResetRef=useRef(false);useEffect(()=>{if(skipAutoResetRef.current){skipAutoResetRef.current=false;return}setManualTeams(null);setShuffleSeed(0)},[attendees,teams,criterion,posAware])
 
-  // ✅ 프리셋 총액: Indoor=220 / Coppell=340
+  // ✅ 프리셋 총액: Indoor=220 / Coppell=330
   const baseCost=useMemo(()=>feeMode==='custom'
     ? Math.max(0,Number(customBaseCost)||0)
-    : (locationPreset==='indoor-soccer-zone'?220:locationPreset==='coppell-west'?340:0),
+    : (locationPreset==='indoor-soccer-zone'?220:locationPreset==='coppell-west'?330:0),
   [feeMode,customBaseCost,locationPreset])
 
   // ✅ 라이브 프리뷰 요금 (calcFees 사용)
@@ -114,7 +114,7 @@ export default function MatchPlanner({players,matches,onSaveMatch,onDeleteMatch,
         location:{preset:locationPreset,name:locationName,address:locationAddress},
         mode,snapshot,board:placedByTeam,formations,locked:true,videos:[]
       }),
-      ...fees
+      fees
     }
     onSaveMatch(payload);notify('매치가 저장되었습니다 ✅')
   }
