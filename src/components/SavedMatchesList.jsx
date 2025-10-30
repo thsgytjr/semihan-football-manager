@@ -829,30 +829,49 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
       {isDraftMode && (
         <div className="absolute -top-3 -left-2 z-10 pointer-events-none">
           <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 bg-amber-100 border border-amber-300 shadow-sm">
-            <span aria-hidden="true">📋</span>
+            <img 
+              src="/src/assets/draft.png" 
+              alt="Draft" 
+              className="w-3 h-3"
+            />
             <span>Draft Match</span>
           </span>
         </div>
       )}
-      <div className="mb-1 flex items-center justify-between">
-        <div className="text-sm">
-          <b>{label}</b> · {formatLabel} · {m.teamCount}팀
-          {/* draft badge moved to overlay */}
-          {m.location?.name && (
-            <> · 장소 {locLink ? (
-              <a 
-                href={locLink} 
-                target="_blank" 
-                rel="noreferrer"
-                className="text-blue-600 hover:underline"
-              >
-                {m.location.name}
-              </a>
-            ) : (
-              m.location.name
-            )}</>
-          )}
-          {dirty && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] text-amber-800 border border-amber-200">수정됨(저장 필요)</span>}
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="text-sm min-w-0 flex-1">
+          {/* 데스크탑: 한 줄, 모바일: 두 줄 */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
+            <div className="flex items-center gap-2">
+              <b className="truncate">{label}</b>
+              {dirty && <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800">수정됨</span>}
+            </div>
+            {m.location?.name && (
+              <div className="text-gray-500 sm:shrink-0">
+                @ {locLink ? (
+                  <a 
+                    href={locLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                    title="구글 지도에서 보기"
+                  >
+                    {m.location.name}
+                  </a>
+                ) : (
+                  <a 
+                    href={`https://www.google.com/maps/search/${encodeURIComponent(m.location.name)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:text-blue-800 hover:underline transition-colors"
+                    title="구글 지도에서 보기"
+                  >
+                    {m.location.name}
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {isAdmin && (
@@ -869,11 +888,15 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
         </div>
       </div>
 
-      <div className="mb-2 text-xs text-gray-800">
-        💰 총액 ${fees?.total??0}
+      <div className="mb-2 text-xs text-gray-600">
+        {m.teamCount}팀 ·💰총액 ${fees?.total??0}
         {typeof fees?.memberFee==="number"&&(
-          <> · 멤버 ${fees.memberFee}/인{fees?.guestCount>0&&typeof fees?.guestFee==="number"&&<> · 게스트 ${fees.guestFee}/인</>}{fees?._estimated&&<span className="opacity-70"> · 추정</span>}</>
+          <> · 정회원 ${fees.memberFee}/인</>
         )}
+        {fees?.guestCount>0&&typeof fees?.guestFee==="number"&&(
+          <> · 게스트 ${fees.guestFee}/인</>
+        )}
+        {fees?._estimated && <span className="opacity-70"> (추정)</span>}
       </div>
 
       {displayedQuarterScores && (
@@ -882,82 +905,90 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
           const teamTotals = displayedQuarterScores.map(a=>Array.isArray(a)?a.reduce((s,v)=>s+Number(v||0),0):Number(a||0))
           const maxTotal = Math.max(...teamTotals)
           const winners = teamTotals.map((t,i)=>t===maxTotal?i:-1).filter(i=>i>=0)
+          
+          // Calculate quarter wins for each team
+          const allTeamQuarterWins = displayedQuarterScores.map((_, teamIdx) => {
+            return Array.from({length: maxQ}).filter((_,qi) => {
+              const scores = displayedQuarterScores.map(teamScores => 
+                Array.isArray(teamScores) ? (teamScores[qi] ?? 0) : (qi===0 ? (teamScores||0) : 0)
+              )
+              const maxScore = Math.max(...scores)
+              return scores[teamIdx] === maxScore && scores.filter(s => s === maxScore).length === 1
+            }).length
+          })
+          
           return (
-            <div className="mb-3 rounded border border-gray-100 bg-gray-50 p-2">
-              <div className="text-xs font-medium text-stone-600 mb-2">쿼터별 점수</div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm table-auto border-collapse">
-                  <thead>
-                    <tr className="text-xs text-stone-600">
-                      <th className="text-left px-2 py-1">팀</th>
-                      {Array.from({length: maxQ}).map((_,qi)=>(<th key={qi} className="px-2 py-1 text-center">Q{qi+1}</th>))}
-                      <th className="px-2 py-1 text-center">쿼터<br/>승리</th>
-                      <th className="px-2 py-1 text-right">점수<br/>합계</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayedQuarterScores.map((arr,ti)=>{
-                      const isWinner = (winners.length===1 && winners[0]===ti)
-                      // Calculate quarter wins
-                      // Calculate quarter wins for this team
-                      const quarterWins = Array.from({length: maxQ}).map((_,qi) => {
-                        const scores = displayedQuarterScores.map(teamScores => 
-                          Array.isArray(teamScores) ? (teamScores[qi] ?? 0) : (qi===0 ? (teamScores||0) : 0)
-                        )
-                        const maxScore = Math.max(...scores)
-                        return scores[ti] === maxScore && scores.filter(s => s === maxScore).length === 1
-                      })
-                      const totalWins = quarterWins.filter(Boolean).length
-
-                      // Calculate all teams' wins for determining the winner
-                      const allTeamWins = displayedQuarterScores.map((_, teamIdx) => {
-                        return Array.from({length: maxQ}).filter((_,qi) => {
-                          const scores = displayedQuarterScores.map(teamScores => 
-                            Array.isArray(teamScores) ? (teamScores[qi] ?? 0) : (qi===0 ? (teamScores||0) : 0)
-                          )
-                          const maxScore = Math.max(...scores)
-                          return scores[teamIdx] === maxScore && scores.filter(s => s === maxScore).length === 1
-                        }).length
-                      })
-                      
-                      // Find max wins and teams with that many wins
-                      const maxWins = Math.max(...allTeamWins)
-                      const teamsWithMaxWins = allTeamWins
-                        .map((wins, idx) => wins === maxWins ? idx : -1)
-                        .filter(idx => idx !== -1)
-
-                      // If there's a tie in wins, use total score as tiebreaker
-                      const isMatchWinner = teamsWithMaxWins.length > 1 
-                        ? teamsWithMaxWins.includes(ti) && teamTotals[ti] === Math.max(...teamsWithMaxWins.map(idx => teamTotals[idx]))
-                        : allTeamWins[ti] === maxWins
-
-                      return (
-                        <tr key={ti} className={`${isMatchWinner ? 'bg-amber-50 font-semibold':''}`}>
-                          <td className="px-2 py-1">팀 {ti+1} {isMatchWinner ? <span className="ml-1">🏆</span>:null}</td>
+            <div className="mb-3 rounded border border-gray-200 bg-gray-50 p-3">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-xs font-medium text-gray-700">경기 결과</div>
+                <div className="text-[10px] text-gray-500">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    쿼터승리
+                  </span>
+                </div>
+              </div>
+              
+              {/* 컬럼 헤더 */}
+              <div className="flex items-center justify-between text-[10px] text-gray-500 mb-1 px-2">
+                <span>팀</span>
+                <div className="flex items-center gap-3">
+                  <div className="flex gap-1">
+                    {Array.from({length:maxQ}).map((_,qi)=>(
+                      <span key={qi} className="w-6 text-center">Q{qi+1}</span>
+                    ))}
+                  </div>
+                  <span className="w-8 text-center">승리</span>
+                  <span className="w-8 text-right">합계</span>
+                </div>
+              </div>
+              
+              <div className="space-y-1">
+                {displayedQuarterScores.map((arr,ti)=>{
+                  const teamTotal = teamTotals[ti]
+                  const isWinner = (winners.length===1 && winners[0]===ti)
+                  const quarterWins = allTeamQuarterWins[ti]
+                  
+                  // Calculate which quarters this team won
+                  const wonQuarters = Array.from({length: maxQ}).map((_,qi) => {
+                    const scores = displayedQuarterScores.map(teamScores => 
+                      Array.isArray(teamScores) ? (teamScores[qi] ?? 0) : (qi===0 ? (teamScores||0) : 0)
+                    )
+                    const maxScore = Math.max(...scores)
+                    return scores[ti] === maxScore && scores.filter(s => s === maxScore).length === 1
+                  })
+                  
+                  return (
+                    <div key={ti} className={`flex items-center justify-between text-sm py-2 px-2 rounded ${isWinner ? 'bg-amber-100 font-medium' : 'bg-white'}`}>
+                      <span className="flex items-center gap-2">
+                        팀 {ti+1}
+                        {isWinner && <span className="text-amber-600">🏆</span>}
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <div className="flex gap-1">
                           {Array.from({length:maxQ}).map((_,qi)=>{
                             const v = Array.isArray(arr) ? (arr[qi] ?? 0) : (qi===0? (arr||0) : 0)
-                            const wonQuarter = quarterWins[qi]
+                            const wonThisQuarter = wonQuarters[qi]
                             return (
-                              <td key={qi} className="px-2 py-1 text-center">
-                                <span className="inline-flex items-center justify-center gap-1">
-                                  <span className={`tabular-nums ${wonQuarter ? 'font-semibold' : ''}`}>{v}</span>
-                                  <span aria-hidden="true" className={`inline-block h-1.5 w-1.5 rounded-full bg-amber-600 ${wonQuarter ? 'opacity-100' : 'opacity-0'}`}></span>
-                                </span>
-                              </td>
+                              <div key={qi} className="w-6 text-center text-xs text-gray-600 relative">
+                                <span className={wonThisQuarter ? 'font-semibold' : ''}>{v}</span>
+                                {wonThisQuarter && (
+                                  <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                )}
+                              </div>
                             )
                           })}
-                          <td className="px-2 py-1 text-center font-medium">
-                            <span className="inline-flex items-center justify-center gap-1">
-                              <span className="tabular-nums">{totalWins}</span>
-                              <span aria-hidden="true" className={`inline-block h-1.5 w-1.5 rounded-full bg-green-500 ${totalWins > 0 ? 'opacity-100' : 'opacity-0'}`}></span>
-                            </span>
-                          </td>
-                          <td className="px-2 py-1 text-right">{teamTotals[ti]}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
+                        </div>
+                        <div className="w-8 text-center">
+                          <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-semibold ${quarterWins > 0 ? 'bg-emerald-100 text-emerald-700' : 'text-gray-400'}`}>
+                            {quarterWins}
+                          </span>
+                        </div>
+                        <span className="font-semibold w-8 text-right">{teamTotal}</span>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )

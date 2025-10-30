@@ -43,6 +43,7 @@ function appendNewlySelected(basePlaced, selectedPlayers){
       role: p.position || p.pos || "",
       x: pct(x),
       y: pct(y),
+      membership: p.membership, // 멤버십 정보 포함
     })
   })
 
@@ -139,7 +140,7 @@ export default function FormationBoard({
   return (
     <div className="grid gap-4">
       <Card
-        title="포메이션 보드"
+        title="포메이션 보드(Beta)"
         right={
           <div className="flex items-center gap-2 text-[11px] text-gray-500">
             표기: <span className="inline-flex items-center gap-1"><GuestBadge /> 게스트</span>
@@ -158,6 +159,7 @@ export default function FormationBoard({
               })
             }}
             height={680}
+            modalOpen={listOpen}
           />
 
           <button
@@ -171,26 +173,26 @@ export default function FormationBoard({
         </div>
       </Card>
 
-      {/* 하단 모달 */}
+      {/* 하단 모달 - z-index 낮춤 */}
       {listOpen && (
         <>
           <div
-            className="fixed inset-0 bg-black/40 z-40"
+            className="fixed inset-0 bg-black/40 z-10"
             onClick={() => setListOpen(false)}
           />
-          <div className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl bg-white shadow-xl max-h-[80vh] overflow-auto">
-            <div className="p-3 border-b sticky top-0 bg-white">
+          <div className="fixed inset-x-0 bottom-0 z-20 rounded-t-2xl bg-white shadow-xl max-h-[80vh] overflow-auto">
+            <div className="p-3 border-b sticky top-0 bg-white z-30 shadow-md">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2">
                   <input
                     value={query}
                     onChange={e => setQuery(e.target.value)}
                     placeholder="선수/포지션 검색"
-                    className="w-[240px] rounded border border-gray-300 px-3 py-2 text-sm"
+                    className="w-[240px] rounded border border-gray-300 px-3 py-2 text-sm bg-white text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   <button
                     onClick={toggleAll}
-                    className="shrink-0 rounded border border-gray-300 bg-white px-3 py-2 text-sm hover:bg-gray-50"
+                    className="shrink-0 rounded border border-gray-300 bg-white text-gray-900 px-3 py-2 text-sm hover:bg-gray-50 focus:ring-2 focus:ring-blue-500"
                   >
                     {allSelected ? "모두 해제" : "모두 선택"}
                   </button>
@@ -199,7 +201,11 @@ export default function FormationBoard({
                   {typeof fetchMatchTeams === "function" && (
                     <button
                       onClick={openTeamsPanel}
-                      className={`shrink-0 rounded px-3 py-2 text-sm font-semibold border ${teamsPanelOpen ? "bg-amber-100 border-amber-300" : "bg-amber-50 hover:bg-amber-100 border-amber-200"}`}
+                      className={`shrink-0 rounded px-3 py-2 text-sm font-semibold border transition-all ${
+                        teamsPanelOpen 
+                          ? "bg-amber-100 border-amber-300 text-amber-800" 
+                          : "bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-800"
+                      }`}
                       title="매치 히스토리에서 팀을 선택하여 불러오기"
                     >
                       팀 불러오기
@@ -210,7 +216,7 @@ export default function FormationBoard({
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setListOpen(false)}
-                    className="shrink-0 rounded bg-emerald-500 px-3 py-2 text-sm font-semibold text-white"
+                    className="shrink-0 rounded bg-emerald-500 text-white px-3 py-2 text-sm font-semibold hover:bg-emerald-600 transition-all focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
                   >
                     완료
                   </button>
@@ -233,17 +239,17 @@ export default function FormationBoard({
                         <select
                           value={activeMatchId}
                           onChange={(e) => setActiveMatchId(e.target.value)}
-                          className="rounded border border-gray-300 px-2 py-1 text-sm w-full sm:w-[260px]"
+                          className="rounded border border-gray-300 px-2 py-1 text-sm w-full sm:w-[260px] bg-white text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
                           {matches.map(m => (
-                            <option key={m.id} value={String(m.id)}>
+                            <option key={m.id} value={String(m.id)} className="bg-white text-gray-900">
                               {m.label || m.id}
                             </option>
                           ))}
                         </select>
                         <button
                           onClick={loadMatches}
-                          className="rounded border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50"
+                          className="rounded border border-gray-300 bg-white text-gray-900 px-2 py-1 text-xs hover:bg-gray-50 focus:ring-2 focus:ring-blue-500"
                           title="목록 새로고침"
                         >
                           새로고침
@@ -256,7 +262,7 @@ export default function FormationBoard({
                             <button
                               key={idx}
                               onClick={() => importTeamToBoard(t.playerIds || [])}
-                              className="rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold hover:bg-emerald-100"
+                              className="rounded-full border border-emerald-300 bg-emerald-50 text-emerald-800 px-3 py-1.5 text-xs font-semibold hover:bg-emerald-100 transition-all"
                               title="이 팀의 선수 전원을 포메이션 보드에 올리기"
                             >
                               {t.name || `Team ${idx+1}`} 불러오기
@@ -285,8 +291,10 @@ export default function FormationBoard({
                 return (
                   <label
                     key={p.id}
-                    className={`flex items-center gap-2 rounded border px-3 py-2 cursor-pointer ${
-                      checked ? "border-emerald-400 bg-emerald-50" : "border-gray-200 bg-white hover:bg-gray-50"
+                    className={`flex items-center gap-2 rounded border px-3 py-2 cursor-pointer transition-all ${
+                      checked 
+                        ? "border-emerald-400 bg-emerald-50 text-emerald-800 shadow-sm" 
+                        : "border-gray-200 bg-white text-gray-900 hover:bg-gray-50 hover:shadow-sm"
                     }`}
                     onClick={() => toggle(p.id)}
                   >
@@ -294,7 +302,7 @@ export default function FormationBoard({
                       type="checkbox"
                       checked={checked}
                       onChange={() => toggle(p.id)}
-                      className="mr-1"
+                      className="mr-1 w-4 h-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
                     />
                     <InitialAvatar id={p.id} name={p.name} size={24} badges={(() => { const mem=String(p.membership||"").trim(); const isMember = mem === "member" || mem.includes("정회원"); return isMember?[]:["G"]; })()} />
                     <span className="text-sm flex-1 whitespace-normal break-words">
