@@ -1112,20 +1112,26 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                           <div className="flex items-center gap-2">
                             {isDraftMode && (
                               <button
-                                className="rounded border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] text-amber-800 hover:bg-amber-100"
+                                className="rounded-full border border-amber-200 bg-white w-6 h-6 flex items-center justify-center text-amber-700 hover:bg-amber-50 p-0"
                                 title="이 선수를 주장으로 지정"
                                 onClick={()=>{
                                   const next=[...(captainIds||[])]
                                   next[i]=String(p.id)
                                   setCaptainIds(next)
                                 }}
-                              >주장</button>
+                                aria-label="주장 지정"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="10 2 12.59 7.36 18.51 7.97 14 12.14 15.18 18.02 10 15.1 4.82 18.02 6 12.14 1.49 7.97 7.41 7.36 10 2"/></svg>
+                              </button>
                             )}
                             <button
-                              className="rounded border border-gray-300 bg-white px-2 py-1 text-[11px] text-gray-700 hover:bg-gray-100"
+                              className="rounded-full border border-gray-300 bg-white w-6 h-6 flex items-center justify-center text-gray-700 hover:bg-gray-100 p-0"
                               title="이 팀에서 제외 (저장 전 초안)"
                               onClick={()=>setSnap(draftSnap.map((arr,idx)=>idx===i?arr.filter(id=>String(id)!==String(p.id)):arr))}
-                            >제외</button>
+                              aria-label="팀에서 제외"
+                            >
+                              <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="5" y1="5" x2="15" y2="15"/><line x1="15" y1="5" x2="5" y2="15"/></svg>
+                            </button>
                           </div>
                         )}
                       </span>
@@ -1151,30 +1157,8 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
         const maxQ = Math.max(0, ...qs.map(a => a.length))
 
         return (
+
           <div className="mt-3 space-y-3">
-            {/* Captains grid */}
-            <div className="rounded border p-3 bg-white">
-              <div className="text-sm font-medium mb-2">주장 설정</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                {draftTeams.map((list, ti) => (
-                  <div key={`cap-${ti}`} className="flex items-center gap-2">
-                    <div className="text-xs w-14 shrink-0 text-stone-600">팀 {ti+1}</div>
-                    <select
-                      className="w-full rounded border border-gray-300 bg-white text-stone-900 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      value={captainIds[ti]||''}
-                      onChange={e=>{
-                        const next = [...(captainIds||[])]
-                        next[ti] = e.target.value || null
-                        setCaptainIds(next)
-                      }}
-                    >
-                      <option value="">-- none --</option>
-                      {list.map(p=> <option key={p.id} value={String(p.id)}>{p.name}</option>)}
-                    </select>
-                  </div>
-                ))}
-              </div>
-            </div>
 
             {/* Quarter scores: global grid */}
             <div className="rounded border p-3 bg-white">
@@ -1216,14 +1200,19 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                         {Array.from({length: Math.max(1, maxQ)}).map((_,qi)=>{
                           const val = qs[ti][qi] ?? 0
                           return (
-                            <td key={`qcell-${ti}-${qi}`} className="px-2 py-1 text-center">
+                            <td key={`qcell-${ti}-${qi}`} className="px-1 py-1 text-center">
                               <input
                                 type="number"
-                                className="w-20 rounded border border-gray-300 bg-white text-stone-900 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                min="0"
+                                max="99"
+                                inputMode="numeric"
+                                className="w-12 sm:w-16 rounded border border-gray-300 bg-white text-stone-900 px-1 py-1 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                 value={val}
                                 onChange={e=>{
                                   const next = qs.map(a=>a.slice())
-                                  const n = Number(e.target.value||0)
+                                  let n = Number(e.target.value||0)
+                                  if (n < 0) n = 0
+                                  if (n > 99) n = 99
                                   // ensure length
                                   while(next[ti].length < qi+1) next[ti].push(0)
                                   next[ti][qi] = n
@@ -1240,13 +1229,16 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2">
-              <button className="rounded border px-3 py-1.5" title="주장/쿼터 점수 입력값을 모두 비웁니다." onClick={()=>{
+            <div className="flex flex-wrap items-center justify-end gap-2 mt-2">
+              <button className="rounded border px-3 py-1.5 text-xs sm:text-sm" title="쿼터 점수만 모두 비웁니다." onClick={()=>{
+                setQuarterScores(initialSnap.map(()=>[]))
+              }}>Clear All Quarters</button>
+              <button className="rounded border px-3 py-1.5 text-xs sm:text-sm" title="주장/쿼터 점수 입력값을 모두 비웁니다." onClick={()=>{
                 // reset editors to a clearly empty state
                 setCaptainIds(initialSnap.map(()=>null))
                 setQuarterScores(initialSnap.map(()=>[]))
               }}>Reset Draft Data (Clear)</button>
-              <button className="rounded bg-blue-600 text-white px-3 py-1.5" onClick={()=>{
+              <button className="rounded bg-blue-600 text-white px-3 py-1.5 text-xs sm:text-sm" onClick={()=>{
                 // save snapshot + draft info + draft mode
                 const patch = { 
                   snapshot: draftSnap, 
@@ -1262,7 +1254,6 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                 }
                 onUpdateMatch?.(m.id, patch); setDirty(false)
               }}>저장 (Draft)</button>
-              {/* Removed Clear Draft button per request */}
             </div>
           </div>
         )
