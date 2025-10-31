@@ -15,8 +15,8 @@ import {
   sortComparator, 
   addRanks,
   computeDuoRows,
-  computeDraftWinsRows,
-  computeCaptainWinsRows
+  computeDraftPlayerStatsRows,
+  computeCaptainStatsRows
 } from '../lib/leaderboardComputations'
 
 /* --------------------------------------------------------
@@ -73,8 +73,8 @@ export default function Dashboard({
   const baseRows = useMemo(() => computeAttackRows(players, filteredMatches), [players, filteredMatches])
 
   // Draft 전용: 선수/주장 승리 집계
-  const draftWinRows = useMemo(() => computeDraftWinsRows(players, filteredMatches), [players, filteredMatches])
-  const captainWinRows = useMemo(() => computeCaptainWinsRows(players, filteredMatches), [players, filteredMatches])
+  const draftWinRows = useMemo(() => computeDraftPlayerStatsRows(players, filteredMatches), [players, filteredMatches])
+  const captainWinRows = useMemo(() => computeCaptainStatsRows(players, filteredMatches), [players, filteredMatches])
 
   // 탭 구조 개편: 1차(종합|draft), 2차(종합: pts/g/a/gp | draft: playerWins/captainWins)
   const [primaryTab, setPrimaryTab] = useState('pts') // 'pts' | 'draft'
@@ -276,7 +276,7 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls }) {
   const columns = [
     { label: '순위', px: 1.5 },
     { label: '주장', px: 2 },
-    { label: 'Wins', px: 2 },
+    { label: '승점', px: 1.5 },
     { label: 'Last 5', px: 2, align: 'right' }
   ]
 
@@ -284,7 +284,7 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls }) {
     <>
       <RankCell rank={r.rank} tone={tone} />
       <PlayerNameCell id={r.id} name={r.name} isGuest={r.isGuest} tone={tone} />
-      <StatCell value={r.wins} tone={tone} />
+      <StatCell value={r.points} tone={tone} />
       <FormDotsCell form={r.last5} tone={tone} />
     </>
   )
@@ -295,7 +295,7 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls }) {
       showAll={showAll}
       onToggle={onToggle}
       controls={controls}
-      title="Draft 승리 주장"
+      title="Draft 주장 승점"
       columns={columns}
       renderRow={renderRow}
     />
@@ -307,7 +307,7 @@ function DraftWinsTable({ rows, showAll, onToggle, controls }) {
   const columns = [
     { label: '순위', px: 1.5 },
     { label: '선수', px: 2 },
-    { label: 'Wins', px: 2 },
+    { label: '승점', px: 1.5 },
     { label: 'Last 5', px: 2, align: 'right' }
   ]
 
@@ -315,7 +315,7 @@ function DraftWinsTable({ rows, showAll, onToggle, controls }) {
     <>
       <RankCell rank={r.rank} tone={tone} />
       <PlayerNameCell id={r.id} name={r.name} isGuest={r.isGuest} tone={tone} />
-      <StatCell value={r.wins} tone={tone} />
+      <StatCell value={r.points} tone={tone} />
       <FormDotsCell form={r.last5} tone={tone} />
     </>
   )
@@ -326,7 +326,7 @@ function DraftWinsTable({ rows, showAll, onToggle, controls }) {
       showAll={showAll}
       onToggle={onToggle}
       controls={controls}
-      title="Draft 승리 선수"
+      title="Draft 선수 승점"
       columns={columns}
       renderRow={renderRow}
     />
