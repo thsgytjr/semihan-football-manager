@@ -10,7 +10,7 @@ export function createUpcomingMatch(input = {}) {
   const {
     id,
     dateISO,
-    location = { name: '', address: '' },
+    location = { name: '', address: '', preset: 'other' },
     mode = '7v7',
     attendeeIds = [],
     participantIds = [],
@@ -21,24 +21,30 @@ export function createUpcomingMatch(input = {}) {
     totalCost = 0
   } = input
 
-  const ids = participantIds.length > 0 ? participantIds : attendeeIds
+  // 참가자 ID는 participantIds 우선, 없으면 attendeeIds 사용
+  const ids = (participantIds && participantIds.length > 0) ? participantIds : attendeeIds
 
   return {
     id: id || crypto.randomUUID?.() || `upcoming_${Date.now()}`,
     type: 'upcoming', // 기존 매치와 구분하기 위한 타입
     dateISO,
-    location,
+    location: {
+      preset: location?.preset || 'other',
+      name: location?.name || '',
+      address: location?.address || ''
+    },
     mode,
-    attendeeIds: [...ids],
-    participantIds: [...ids], // 호환성을 위해 두 필드 모두 포함
+    attendeeIds: [...ids], // 호환성을 위해 유지
+    participantIds: [...ids], // 주 필드
     status,
     createdAt,
     isDraftMode,
-    totalCost,
+    totalCost: Number(totalCost) || 0,
     captainIds: [...captainIds],
     // 드래프트 관련 필드
     draftStartedAt: null,
     draftCompletedAt: null,
+    isDraftComplete: false,
     teams: [], // 팀이 구성되면 여기에 저장
     snapshot: [] // 최종 팀 구성 스냅샷
   }
@@ -205,8 +211,9 @@ export function isMatchExpired(dateISO) {
     const matchTime = new Date(dateISO)
     const now = new Date()
     
-    // 매치 시간이 현재 시간보다 지났으면 즉시 만료된 것으로 간주
-    return now > matchTime
+    // 매치 시간 + 6시간 후에 만료 (매치 후 정리 시간 포함)
+    const expirationTime = new Date(matchTime.getTime() + 6 * 60 * 60 * 1000)
+    return now > expirationTime
   } catch (error) {
     console.error('Error checking match expiration:', error)
     return false

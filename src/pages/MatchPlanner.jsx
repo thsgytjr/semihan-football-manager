@@ -174,6 +174,7 @@ export default function MatchPlanner({
       mode: decideMode(participantIds.length).mode
     })
 
+    console.log('Saving upcoming match:', upcomingMatch)
     onSaveUpcomingMatch(upcomingMatch)
     notify(`${isDraftMode ? '드래프트 ' : ''}예정 매치로 저장되었습니다 ✅`)
   }
@@ -196,7 +197,8 @@ export default function MatchPlanner({
     if (!upcomingMatch) return
     skipAutoResetRef.current = true
     
-    const participantIds = upcomingMatch.participantIds || []
+    // 두 필드 모두 확인하여 참가자 ID 목록을 얻음
+    const participantIds = upcomingMatch.participantIds || upcomingMatch.attendeeIds || []
     if (participantIds.length === 0) {
       notify('불러올 참가자가 없습니다.')
       return
@@ -211,8 +213,33 @@ export default function MatchPlanner({
       setLocationAddress(upcomingMatch.location.address || '')
     }
     
-    // Reset team formations since upcoming matches don't have team compositions yet
-    setManualTeams(null)
+    // 드래프트 모드 설정
+    if (upcomingMatch.isDraftMode) {
+      setIsDraftMode(true)
+    }
+    
+    // 총 구장비 설정
+    if (upcomingMatch.totalCost) {
+      setFeeMode('custom')
+      setCustomBaseCost(upcomingMatch.totalCost)
+    }
+    
+    // 원래 순서를 보존하기 위해 수동 팀을 미리 구성하여 자동 밸런싱 방지
+    const playersByIds = new Map(players.map(p => [p.id, p]))
+    const attendeesInOrder = participantIds.map(id => playersByIds.get(id)).filter(Boolean)
+    if (attendeesInOrder.length > 0) {
+      // 간단한 순차 배정으로 원래 순서 유지
+      const teamCount = Math.max(2, Math.min(10, 2)) // 일단 2팀으로 시작
+      const simpleTeams = Array.from({length: teamCount}, () => [])
+      attendeesInOrder.forEach((player, index) => {
+        simpleTeams[index % teamCount].push(player)
+      })
+      setManualTeams(simpleTeams)
+      latestTeamsRef.current = simpleTeams
+    } else {
+      setManualTeams(null)
+    }
+    
     setShuffleSeed(0)
     
     notify('예정 매치를 불러왔습니다 ✅')
@@ -333,11 +360,14 @@ export default function MatchPlanner({
 
       {/* Upcoming Matches Section */}
       {(() => {
+        console.log('Original upcomingMatches:', upcomingMatches)
         const activeMatches = filterExpiredMatches(upcomingMatches)
+        console.log('Active matches after filtering:', activeMatches)
         
         // 만료된 매치가 있다면 자동으로 DB에서 제거
         if (activeMatches.length !== upcomingMatches.length && upcomingMatches.length > 0) {
           const expiredCount = upcomingMatches.length - activeMatches.length
+          console.log('Found expired matches:', expiredCount)
           setTimeout(() => {
             // 비동기로 만료된 매치들을 DB에서 제거
             activeMatches.forEach((match, index) => {
