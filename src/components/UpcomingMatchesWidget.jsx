@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import UpcomingMatchCard from './UpcomingMatchCard'
-import { updateMatchStatus, convertToRegularMatch } from '../lib/upcomingMatch'
+import { updateMatchStatus, convertToRegularMatch, filterExpiredMatches } from '../lib/upcomingMatch'
 
 export default function UpcomingMatchesWidget({
   upcomingMatches = [],
@@ -11,8 +11,25 @@ export default function UpcomingMatchesWidget({
   onUpdateUpcomingMatch
 }) {
   const [isMinimized, setIsMinimized] = useState(false)
+  
+  // 실시간으로 만료된 매치들을 필터링
+  const activeMatches = filterExpiredMatches(upcomingMatches)
+  
+  // 만료된 매치가 있으면 자동으로 삭제
+  useEffect(() => {
+    if (activeMatches.length !== upcomingMatches.length && upcomingMatches.length > 0) {
+      const expiredMatches = upcomingMatches.filter(match => 
+        !activeMatches.find(active => active.id === match.id)
+      )
+      
+      // 만료된 매치들을 자동으로 삭제
+      expiredMatches.forEach(expiredMatch => {
+        onDeleteUpcomingMatch?.(expiredMatch.id)
+      })
+    }
+  }, [upcomingMatches, activeMatches, onDeleteUpcomingMatch])
 
-  if (upcomingMatches.length === 0) {
+  if (activeMatches.length === 0) {
     return null
   }
 
@@ -70,7 +87,7 @@ export default function UpcomingMatchesWidget({
             <line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" strokeWidth="2"/>
             <circle cx="12" cy="16" r="2" fill="currentColor"/>
           </svg>
-          {upcomingMatches.length > 0 && (
+          {activeMatches.length > 0 && (
             <div 
               style={{
                 position: 'absolute',
@@ -91,7 +108,7 @@ export default function UpcomingMatchesWidget({
                 zIndex: 10
               }}
             >
-              {upcomingMatches.length > 9 ? '9+' : upcomingMatches.length}
+              {activeMatches.length > 9 ? '9+' : activeMatches.length}
             </div>
           )}
         </div>
@@ -132,7 +149,7 @@ export default function UpcomingMatchesWidget({
                 color: '#1d4ed8'
               }}
             >
-              {upcomingMatches.length}개
+              {activeMatches.length}개
             </span>
             <button
               onClick={() => setIsMinimized(true)}
@@ -172,7 +189,7 @@ export default function UpcomingMatchesWidget({
           }}
         >
           <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
-            {upcomingMatches.map(upcomingMatch => (
+            {activeMatches.map(upcomingMatch => (
               <UpcomingMatchCard
                 key={upcomingMatch.id}
                 upcomingMatch={upcomingMatch}

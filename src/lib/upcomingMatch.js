@@ -192,3 +192,34 @@ export function getNextSaturday630() {
   
   return `${year}-${month}-${day}T${hours}:${minutes}`
 }
+
+/**
+ * 매치 시간이 지났는지 확인
+ * @param {string} dateISO - 매치 날짜 (ISO 형식)
+ * @returns {boolean} 매치 시간이 지났으면 true
+ */
+export function isMatchExpired(dateISO) {
+  if (!dateISO) return false
+  
+  try {
+    const matchTime = new Date(dateISO)
+    const now = new Date()
+    
+    // 매치 시간이 현재 시간보다 지났으면 즉시 만료된 것으로 간주
+    return now > matchTime
+  } catch (error) {
+    console.error('Error checking match expiration:', error)
+    return false
+  }
+}
+
+/**
+ * 만료된 예정 매치들을 필터링
+ * @param {Array} upcomingMatches - 예정된 매치 배열
+ * @returns {Array} 만료되지 않은 매치들
+ */
+export function filterExpiredMatches(upcomingMatches) {
+  if (!Array.isArray(upcomingMatches)) return []
+  
+  return upcomingMatches.filter(match => !isMatchExpired(match.dateISO))
+}

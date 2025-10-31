@@ -12,7 +12,7 @@ import FreePitch from'../components/pitch/FreePitch'
 import{assignToFormation,recommendFormation,countPositions}from'../lib/formation'
 import{seededShuffle}from'../utils/random'
 import SavedMatchesList from'../components/SavedMatchesList'
-import { createUpcomingMatch } from '../lib/upcomingMatch'
+import { createUpcomingMatch, filterExpiredMatches } from '../lib/upcomingMatch'
 
 /* ───────── 게스트 판별/뱃지 유틸 ───────── */
 const S=(v)=>v==null?'':String(v)
@@ -123,17 +123,33 @@ export default function MatchPlanner({
     const ids=snapshot.flat()
     const objs=players.filter(p=>ids.includes(p.id))
     const fees=computeFeesAtSave({baseCostValue:baseCost,attendees:objs})
+    
+    // 드래프트 모드일 때 추가 필드들
+    const draftFields = isDraftMode ? {
+      selectionMode: 'draft',
+      draftMode: true,
+      draft: true,
+      // 주장이 선택되어 있다면 추가
+      ...(baseTeams.length === 2 && {
+        captains: [], // 나중에 주장 선택 기능에서 설정
+        captainIds: []
+      })
+    } : {
+      selectionMode: 'manual'
+    }
+    
     const payload={
       ...mkMatch({
         id:crypto.randomUUID?.()||String(Date.now()),
         dateISO,attendeeIds:ids,criterion:posAware?'pos-aware':criterion,players,
-        selectionMode:'manual',teamCount:baseTeams.length,
+        teamCount:baseTeams.length,
         location:{preset:locationPreset,name:locationName,address:locationAddress},
-        mode,snapshot,board:placedByTeam,formations,locked:true,videos:[]
+        mode,snapshot,board:placedByTeam,formations,locked:true,videos:[],
+        ...draftFields
       }),
       fees
     }
-    onSaveMatch(payload);notify('매치가 저장되었습니다 ✅')
+    onSaveMatch(payload);notify(`${isDraftMode ? '드래프트 ' : ''}매치가 저장되었습니다 ✅`)
   }
 
   function saveAsUpcomingMatch(){
@@ -316,73 +332,118 @@ export default function MatchPlanner({
       </Card>
 
       {/* Upcoming Matches Section */}
-      {upcomingMatches.length > 0 && (
-        <Card title="예정된 매치">
-          <div className="space-y-2">
-            {upcomingMatches.map(match => (
-              <div key={match.id} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <div>
-                  <div className="font-medium text-sm">
-                    {new Date(match.dateISO).toLocaleDateString('ko-KR', {
-                      month: 'short',
-                      day: 'numeric',
-                      weekday: 'short',
-                      hour: '2-digit',
-                      minute: '2-digit'
-                    })}
+      {(() => {
+        const activeMatches = filterExpiredMatches(upcomingMatches)
+        
+        // 만료된 매치가 있다면 자동으로 DB에서 제거
+        if (activeMatches.length !== upcomingMatches.length && upcomingMatches.length > 0) {
+          const expiredCount = upcomingMatches.length - activeMatches.length
+          setTimeout(() => {
+            // 비동기로 만료된 매치들을 DB에서 제거
+            activeMatches.forEach((match, index) => {
+              const originalMatch = upcomingMatches.find(m => m.id === match.id)
+              if (originalMatch) {
+                onUpdateUpcomingMatch(match.id, match)
+              }
+            })
+            
+            // 만료된 매치들 삭제
+            upcomingMatches.forEach(match => {
+              if (!activeMatches.find(m => m.id === match.id)) {
+                onDeleteUpcomingMatch(match.id)
+              }
+            })
+            
+            if (expiredCount > 0) {
+              notify(`${expiredCount}개의 만료된 예정 매치가 자동으로 제거되었습니다 🗑️`)
+            }
+          }, 100)
+        }
+        
+        return activeMatches.length > 0 ? (
+          <Card title="예정된 매치">
+            <div className="space-y-2">
+              {activeMatches.map(match => {
+              const isDraftComplete = match.isDraftComplete || false
+              return (
+                <div key={match.id} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="flex-1">
+                    <div className="font-medium text-sm">
+                      {new Date(match.dateISO).toLocaleDateString('ko-KR', {
+                        month: 'short',
+                        day: 'numeric',
+                        weekday: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                    </div>
+                    <div className="text-xs text-gray-600 flex items-center flex-wrap gap-2">
+                      <span>{match.location?.name || '장소 미정'} · {match.participantIds?.length || 0}명 참가 예정</span>
+                      {match.isDraftMode && (
+                        <span 
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] rounded-full font-semibold ${
+                            isDraftComplete 
+                              ? 'bg-emerald-100 text-emerald-800' 
+                              : 'bg-yellow-100 text-yellow-800 draft-status-badge-enhanced'
+                          }`}
+                          style={!isDraftComplete ? {
+                            position: 'relative',
+                            overflow: 'hidden',
+                            boxShadow: '0 0 12px rgba(245, 158, 11, 0.5), 0 0 24px rgba(245, 158, 11, 0.2)',
+                            background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 50%, #fef3c7 100%)',
+                            backgroundSize: '200% 100%',
+                            border: '1px solid #fcd34d'
+                          } : {}}
+                        >
+                          <span style={{zIndex: 1, position: 'relative', fontWeight: '600'}}>{isDraftComplete ? 'Draft Complete' : 'Draft in Progress'}</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-xs text-gray-600">
-                    {match.location?.name || '장소 미정'} · {match.participantIds?.length || 0}명 참가 예정
-                    {match.isDraftMode && (
-                      <span className="ml-2 px-2 py-0.5 text-[10px] bg-yellow-200 text-yellow-800 rounded font-semibold">
-                        드래프트전
-                      </span>
-                    )}
-                    {match.status === 'drafting' && (
-                      <span 
-                        className="ml-2 px-2 py-1 text-[10px] text-white rounded font-semibold flex items-center gap-1"
-                        style={{
-                          background: 'linear-gradient(45deg, #f97316, #ea580c, #f97316)',
-                          backgroundSize: '200% 100%',
-                          animation: 'shimmer 2s infinite, pulse 1.5s infinite',
-                          boxShadow: '0 0 8px rgba(249, 115, 22, 0.4)'
-                        }}
+                  {isAdmin && (
+                    <div className="flex items-center gap-2">
+                      {match.isDraftMode && (
+                        <label className="inline-flex items-center gap-1 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={isDraftComplete}
+                            onChange={(e) => {
+                              const updatedMatch = { ...match, isDraftComplete: e.target.checked }
+                              onUpdateUpcomingMatch(match.id, updatedMatch)
+                              notify(e.target.checked ? '드래프트가 완료로 표시되었습니다 ✅' : '드래프트가 진행중으로 표시되었습니다 ✅')
+                            }}
+                            className="w-3 h-3 text-emerald-600 bg-gray-100 border-gray-300 rounded focus:ring-emerald-500 focus:ring-2"
+                          />
+                          <span className="text-gray-700">완료</span>
+                        </label>
+                      )}
+                      <button
+                        onClick={() => loadUpcomingMatchIntoPlanner(match)}
+                        className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
                       >
-                        <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor" style={{animation: 'spin 2s linear infinite'}}>
-                          <circle cx="12" cy="12" r="3"/>
-                        </svg>
-                        Drafting in Progress
-                      </span>
-                    )}
-                  </div>
+                        불러오기
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (window.confirm('이 예정된 매치를 삭제하시겠습니까?')) {
+                            onDeleteUpcomingMatch(match.id)
+                            notify('예정된 매치가 삭제되었습니다 ✅')
+                          }
+                        }}
+                        className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                        title="예정된 매치 삭제"
+                      >
+                        삭제
+                      </button>
+                    </div>
+                  )}
                 </div>
-                {isAdmin && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => loadUpcomingMatchIntoPlanner(match)}
-                      className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
-                    >
-                      불러오기
-                    </button>
-                    <button
-                      onClick={() => {
-                        if (window.confirm('이 예정된 매치를 삭제하시겠습니까?')) {
-                          onDeleteUpcomingMatch(match.id)
-                          notify('예정된 매치가 삭제되었습니다 ✅')
-                        }
-                      }}
-                      className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
-                      title="예정된 매치 삭제"
-                    >
-                      삭제
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
+              )
+            })}
           </div>
         </Card>
-      )}
+        ) : null
+      })()}
 
       <Card title="저장된 매치" right={<div className="text-xs text-gray-500"><span className="font-medium">GK 평균 제외</span></div>}>
         <SavedMatchesList matches={matches} players={players} isAdmin={isAdmin} enableLoadToPlanner={true} onLoadToPlanner={loadSavedIntoPlanner} onDeleteMatch={onDeleteMatch} onUpdateMatch={onUpdateMatch} showTeamOVRForAdmin={true} hideOVR={true}/>
@@ -525,6 +586,50 @@ function FullscreenModal({children,onClose}){return(<div className="fixed inset-
     }
     100% {
       transform: rotate(360deg);
+    }
+  }
+  
+
+  
+  @keyframes draftStatusPulse {
+    0%, 100% {
+      box-shadow: 0 0 12px rgba(245, 158, 11, 0.5), 0 0 24px rgba(245, 158, 11, 0.2);
+      transform: scale(1);
+    }
+    50% {
+      box-shadow: 0 0 20px rgba(245, 158, 11, 0.7), 0 0 40px rgba(245, 158, 11, 0.3);
+      transform: scale(1.05);
+    }
+  }
+  
+  @keyframes backgroundShift {
+    0% {
+      background-position: 0% 50%;
+    }
+    50% {
+      background-position: 100% 50%;
+    }
+    100% {
+      background-position: 0% 50%;
+    }
+  }
+  
+  .draft-status-badge-enhanced {
+    animation: 
+      draftStatusPulse 2s infinite ease-in-out,
+      backgroundShift 3s infinite ease-in-out;
+    will-change: transform, box-shadow, background-position;
+  }
+  
+  /* 접근성 - 애니메이션 감소 선호 사용자 */
+  @media (prefers-reduced-motion: reduce) {
+    .draft-status-badge-enhanced {
+      animation: none !important;
+    }
+    
+    .draft-status-badge-enhanced::before,
+    .draft-status-badge-enhanced::after {
+      animation: none !important;
     }
   }
 `}</style>

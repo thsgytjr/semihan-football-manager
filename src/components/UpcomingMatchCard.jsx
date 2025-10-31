@@ -2,7 +2,7 @@
 import React, { useMemo, useState } from 'react'
 import InitialAvatar from './InitialAvatar'
 import { getMatchStatus } from '../lib/upcomingMatch'
-import { computeCaptainWinsRows } from '../lib/leaderboardComputations'
+import { computeCaptainStatsRows } from '../lib/leaderboardComputations'
 
 const formatDateDisplay = (dateISO) => {
   if (!dateISO) return ''
@@ -74,24 +74,33 @@ const getLocationDisplayName = (location) => {
   return '미정'
 }
 
-const StatusBadge = ({ status, isDraftMode = false }) => {
+const StatusBadge = ({ status, isDraftMode = false, isDraftComplete = false }) => {
   // 사파리 호환성을 위해 인라인 스타일 사용
-  const getStatusStyle = (status, isDraftMode) => {
+  const getStatusStyle = (status, isDraftMode, isDraftComplete) => {
+    // 드래프트 모드에서 완료 상태
+    if (isDraftMode && isDraftComplete) {
+      return {
+        backgroundColor: '#d1fae5',
+        color: '#059669',
+        borderColor: '#6ee7b7'
+      }
+    }
+    
     // 드래프트 모드이고 upcoming일 때는 drafting 스타일 사용
     if (isDraftMode && status === 'upcoming') {
       return {
-        backgroundColor: '#fed7aa',
-        color: '#c2410c',
-        borderColor: '#fdba74'
+        backgroundColor: '#fef3c7',
+        color: '#d97706',
+        borderColor: '#fcd34d'
       }
     }
     
     switch(status) {
       case 'drafting':
         return {
-          backgroundColor: '#fed7aa',
-          color: '#c2410c',
-          borderColor: '#fdba74'
+          backgroundColor: '#fef3c7',
+          color: '#d97706',
+          borderColor: '#fcd34d'
         }
       case 'completed':
         return {
@@ -108,7 +117,11 @@ const StatusBadge = ({ status, isDraftMode = false }) => {
     }
   }
   
-  const getLabel = (status, isDraftMode) => {
+  const getLabel = (status, isDraftMode, isDraftComplete) => {
+    if (isDraftMode && isDraftComplete) {
+      return 'Draft Complete'
+    }
+    
     if (isDraftMode && status === 'upcoming') {
       return 'Draft in Progress'
     }
@@ -123,26 +136,27 @@ const StatusBadge = ({ status, isDraftMode = false }) => {
     }
   }
   
-  const statusStyle = getStatusStyle(status, isDraftMode)
-  const label = getLabel(status, isDraftMode)
-  const showPulse = status === 'drafting' || (isDraftMode && status === 'upcoming')
+  const statusStyle = getStatusStyle(status, isDraftMode, isDraftComplete)
+  const label = getLabel(status, isDraftMode, isDraftComplete)
+  const showAnimation = (status === 'drafting' || (isDraftMode && status === 'upcoming' && !isDraftComplete))
   
   return (
     <span 
-      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs font-medium border ${showPulse ? 'animate-pulse' : ''}`}
-      style={statusStyle}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium border transition-all duration-200 ${showAnimation ? 'draft-progress-badge-enhanced' : ''}`}
+      style={{
+        ...statusStyle,
+        ...(showAnimation && {
+          position: 'relative',
+          overflow: 'hidden',
+          boxShadow: '0 0 12px rgba(217, 119, 6, 0.5), 0 0 24px rgba(217, 119, 6, 0.2)',
+          background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 50%, #fef3c7 100%)',
+          backgroundSize: '200% 100%'
+        })
+      }}
     >
-      {showPulse && (
-        <span 
-          className="inline-block rounded-full animate-pulse"
-          style={{ 
-            width: '6px', 
-            height: '6px', 
-            backgroundColor: statusStyle.color 
-          }}
-        />
-      )}
-      <span>{label}</span>
+
+      
+      <span style={{zIndex: 1, position: 'relative', fontWeight: '600'}}>{label}</span>
     </span>
   )
 }
@@ -165,7 +179,8 @@ export default function UpcomingMatchCard({
     attendeeIds = [],
     participantIds = [],
     status,
-    isDraftMode
+    isDraftMode,
+    isDraftComplete = false
   } = upcomingMatch
   
   const attendees = useMemo(() => {
@@ -212,7 +227,7 @@ export default function UpcomingMatchCard({
       {/* 헤더 - 상태와 관리 버튼 */}
       <div style={{display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px'}}>
         <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
-          <StatusBadge status={matchStatus} isDraftMode={isDraftMode} />
+          <StatusBadge status={matchStatus} isDraftMode={isDraftMode} isDraftComplete={isDraftComplete} />
         </div>
         
         {isAdmin && (
@@ -384,15 +399,6 @@ export default function UpcomingMatchCard({
           }
         }
         
-        @keyframes shimmer {
-          0% {
-            background-position: -200% 0;
-          }
-          100% {
-            background-position: 200% 0;
-          }
-        }
-        
         @keyframes spin {
           0% {
             transform: rotate(0deg);
@@ -402,59 +408,85 @@ export default function UpcomingMatchCard({
           }
         }
         
-        @keyframes draftingPulse {
+
+        
+        @keyframes draftProgressPulse {
           0%, 100% {
-            background-color: #f97316 !important;
-            box-shadow: 0 0 12px rgba(249, 115, 22, 0.8) !important;
+            box-shadow: 0 0 12px rgba(217, 119, 6, 0.5), 0 0 24px rgba(217, 119, 6, 0.2);
             transform: scale(1);
           }
-          25% {
-            background-color: #ea580c !important;
-            box-shadow: 0 0 16px rgba(234, 88, 12, 0.9) !important;
-            transform: scale(1.02);
+          50% {
+            box-shadow: 0 0 20px rgba(217, 119, 6, 0.7), 0 0 40px rgba(217, 119, 6, 0.3);
+            transform: scale(1.05);
+          }
+        }
+        
+        @keyframes backgroundShift {
+          0% {
+            background-position: 0% 50%;
           }
           50% {
-            background-color: #dc2626 !important;
-            box-shadow: 0 0 20px rgba(220, 38, 38, 1) !important;
-            transform: scale(1.04);
+            background-position: 100% 50%;
           }
-          75% {
-            background-color: #ea580c !important;
-            box-shadow: 0 0 16px rgba(234, 88, 12, 0.9) !important;
-            transform: scale(1.02);
+          100% {
+            background-position: 0% 50%;
           }
         }
         
-        .drafting-badge {
-          animation: draftingPulse 1.5s infinite ease-in-out !important;
-          will-change: background-color, box-shadow, transform !important;
+        .draft-progress-badge-enhanced {
+          animation: 
+            draftProgressPulse 2s infinite ease-in-out,
+            backgroundShift 3s infinite ease-in-out;
+          will-change: transform, box-shadow, background-position;
         }
         
-        .drafting-icon {
-          animation: spin 1.5s linear infinite !important;
+        .animate-spin {
+          animation: spin 2s linear infinite;
         }
         
-        @keyframes draftModeGlow {
-          0%, 100% {
-            background-color: #fbbf24;
-            box-shadow: 0 0 5px rgba(251, 191, 36, 0.4);
-          }
-          50% {
-            background-color: #f59e0b;
-            box-shadow: 0 0 10px rgba(245, 158, 11, 0.6);
-          }
+        /* 부드러운 전환 효과 */
+        .transition-all {
+          transition: all 0.2s ease;
         }
         
-        .draft-mode-badge {
-          animation: draftModeGlow 3s infinite ease-in-out !important;
+        .duration-200 {
+          transition-duration: 200ms;
         }
         
         /* 모바일 최적화 */
         @media (max-width: 640px) {
-          .drafting-badge {
-            font-size: 9px !important;
-            padding: 2px 4px !important;
-            gap: 2px !important;
+          .draft-progress-badge-enhanced {
+            font-size: 10px !important;
+            padding: 4px 10px !important;
+            gap: 4px !important;
+          }
+          
+          .draft-progress-badge-enhanced svg {
+            width: 8px !important;
+            height: 8px !important;
+          }
+        }
+        
+        /* 다크모드 대응 */
+        @media (prefers-color-scheme: dark) {
+          .draft-progress-badge-enhanced {
+            box-shadow: 0 0 15px rgba(245, 158, 11, 0.4), 0 0 30px rgba(245, 158, 11, 0.2) !important;
+          }
+        }
+        
+        /* 접근성 - 애니메이션 감소 선호 사용자 */
+        @media (prefers-reduced-motion: reduce) {
+          .draft-progress-badge-enhanced {
+            animation: none !important;
+          }
+          
+          .draft-progress-badge-enhanced::before,
+          .draft-progress-badge-enhanced::after {
+            animation: none !important;
+          }
+          
+          .animate-spin {
+            animation: none !important;
           }
         }
       `}</style>
@@ -464,23 +496,20 @@ export default function UpcomingMatchCard({
 
 // 주장 대결 표시 컴포넌트
 function CaptainVsDisplay({ captains, players, matches = [] }) {
-  // 실제 드래프트 주장 승점 데이터에서 통계 계산
+  // 개선된 주장 통계 데이터 계산
   const captainStats = useMemo(() => {
-    const captainWinsRows = computeCaptainWinsRows(players, matches)
+    const captainStatsRows = computeCaptainStatsRows(players, matches)
     const statsMap = new Map()
     
-    captainWinsRows.forEach(row => {
-      const last5 = row.last5 || []
-      const wins = last5.filter(result => result === 'W').length
-      const totalGames = last5.length
-      const winRate = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0
-      
+    captainStatsRows.forEach(row => {
       statsMap.set(row.id, {
-        totalWins: row.wins || 0,
-        last5: last5,
-        recentWins: wins,
-        recentGames: totalGames,
-        winRate: winRate
+        wins: row.wins || 0,
+        draws: row.draws || 0,
+        losses: row.losses || 0,
+        totalGames: row.totalGames || 0,
+        points: row.points || 0,
+        winRate: row.winRate || 0,
+        last5: row.last5 || []
       })
     })
     
@@ -489,11 +518,13 @@ function CaptainVsDisplay({ captains, players, matches = [] }) {
 
   const getCaptainStats = (captainId) => {
     return captainStats.get(captainId) || {
-      totalWins: 0,
-      last5: [],
-      recentWins: 0,
-      recentGames: 0,
-      winRate: 0
+      wins: 0,
+      draws: 0,
+      losses: 0,
+      totalGames: 0,
+      points: 0,
+      winRate: 0,
+      last5: []
     }
   }
 
@@ -501,106 +532,121 @@ function CaptainVsDisplay({ captains, players, matches = [] }) {
   const captain2Stats = getCaptainStats(captains[1].id)
 
   return (
-    <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
-      {/* VS 대결 구도 */}
-      <div style={{display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '16px'}}>
-        <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px'}}>
-          <InitialAvatar 
-            id={captains[0].id} 
-            name={captains[0].name} 
-            size={28}
-          />
-          <span style={{fontSize: '12px', fontWeight: '700', color: '#1f2937'}}>{captains[0].name}</span>
-        </div>
-        <div 
-          className="vs-badge"
-          style={{
-            fontSize: '18px', 
-            fontWeight: '900', 
-            color: '#dc2626',
-            textShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            padding: '8px 12px',
-            backgroundColor: '#fef2f2',
-            borderRadius: '8px',
-            border: '2px solid #fecaca',
-            animation: 'pulse 2s infinite'
-          }}
-        >
-          VS
-        </div>
-        <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px'}}>
-          <InitialAvatar 
-            id={captains[1].id} 
-            name={captains[1].name} 
-            size={28}
-          />
-          <span style={{fontSize: '12px', fontWeight: '700', color: '#1f2937'}}>{captains[1].name}</span>
-        </div>
-      </div>
-      
+    <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
       {/* 주장 전적 비교 */}
-      <div style={{display: 'flex', justifyContent: 'space-between', gap: '8px', padding: '8px', backgroundColor: '#f9fafb', borderRadius: '6px'}}>
+      <div style={{display: 'flex', gap: '8px', padding: '10px', backgroundColor: '#f9fafb', borderRadius: '8px'}}>
+        {/* 주장 1 */}
         <div style={{flex: 1, textAlign: 'center'}}>
-          <div style={{fontSize: '10px', color: '#6b7280', marginBottom: '2px'}}>Recent Form</div>
-          <div style={{display: 'flex', justifyContent: 'center', gap: '1px', marginBottom: '2px'}}>
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', marginBottom: '6px'}}>
+            <InitialAvatar 
+              id={captains[0].id} 
+              name={captains[0].name} 
+              size={32}
+            />
+            <span style={{fontSize: '13px', fontWeight: '700', color: '#1f2937'}}>{captains[0].name}</span>
+          </div>
+          
+          {/* 전적 */}
+          <div style={{fontSize: '10px', color: '#6b7280', marginBottom: '4px'}}>
+            {captain1Stats.totalGames > 0 ? `${captain1Stats.wins}승 ${captain1Stats.draws}무 ${captain1Stats.losses}패` : '전적 없음'}
+          </div>
+          
+          {/* Recent Form */}
+          <div style={{fontSize: '9px', color: '#6b7280', marginBottom: '3px'}}>Recent Form</div>
+          <div style={{display: 'flex', justifyContent: 'center', gap: '2px'}}>
             {Array.from({ length: 5 }, (_, i) => {
-              const result = captain1Stats.last5[i]
+              const result = captain1Stats.last5[captain1Stats.last5.length - 5 + i]
               return (
                 <span 
                   key={i}
                   style={{
-                    width: '12px',
-                    height: '12px',
-                    borderRadius: '2px',
-                    backgroundColor: result === 'W' ? '#10b981' : result === 'L' ? '#ef4444' : '#e5e7eb',
+                    width: '14px',
+                    height: '14px',
+                    borderRadius: '3px',
+                    backgroundColor: result === 'W' ? '#10b981' : result === 'D' ? '#f59e0b' : result === 'L' ? '#ef4444' : '#e5e7eb',
                     color: result ? 'white' : '#9ca3af',
                     fontSize: '8px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontWeight: '600'
+                    fontWeight: '700'
                   }}
                 >
                   {result || '-'}
                 </span>
               )
             })}
-          </div>
-          <div style={{fontSize: '9px', color: '#374151', fontWeight: '600'}}>
-            Total: {captain1Stats.totalWins}승
           </div>
         </div>
         
-        <div style={{width: '1px', backgroundColor: '#e5e7eb'}}></div>
+        {/* VS 중앙 */}
+        <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: '60px'}}>
+          <div 
+            className="vs-badge"
+            style={{
+              fontSize: '16px', 
+              fontWeight: '900', 
+              color: '#dc2626',
+              textShadow: '0 2px 4px rgba(0,0,0,0.1)',
+              padding: '6px 10px',
+              backgroundColor: '#fef2f2',
+              borderRadius: '6px',
+              border: '2px solid #fecaca',
+              animation: 'pulse 2s infinite'
+            }}
+          >
+            VS
+          </div>
+          
+          {/* 승률 비교 (작은 텍스트) */}
+          {captain1Stats.totalGames > 0 && captain2Stats.totalGames > 0 && (
+            <div style={{fontSize: '9px', color: '#6b7280', marginTop: '4px', textAlign: 'center'}}>
+              {captain1Stats.winRate}% vs {captain2Stats.winRate}%
+            </div>
+          )}
+        </div>
         
+        {/* 주장 2 */}
         <div style={{flex: 1, textAlign: 'center'}}>
-          <div style={{fontSize: '10px', color: '#6b7280', marginBottom: '2px'}}>Recent Form</div>
-          <div style={{display: 'flex', justifyContent: 'center', gap: '1px', marginBottom: '2px'}}>
+          <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', marginBottom: '6px'}}>
+            <InitialAvatar 
+              id={captains[1].id} 
+              name={captains[1].name} 
+              size={32}
+            />
+            <span style={{fontSize: '13px', fontWeight: '700', color: '#1f2937'}}>{captains[1].name}</span>
+          </div>
+          
+          {/* 전적 */}
+          <div style={{fontSize: '10px', color: '#6b7280', marginBottom: '4px'}}>
+            {captain2Stats.totalGames > 0 ? `${captain2Stats.wins}승 ${captain2Stats.draws}무 ${captain2Stats.losses}패` : '전적 없음'}
+          </div>
+          
+          {/* Recent Form */}
+          <div style={{fontSize: '9px', color: '#6b7280', marginBottom: '3px'}}>Recent Form</div>
+          <div style={{display: 'flex', justifyContent: 'center', gap: '2px'}}>
             {Array.from({ length: 5 }, (_, i) => {
-              const result = captain2Stats.last5[i]
+              const result = captain2Stats.last5[captain2Stats.last5.length - 5 + i]
               return (
                 <span 
                   key={i}
                   style={{
-                    width: '12px',
-                    height: '12px',
-                    borderRadius: '2px',
-                    backgroundColor: result === 'W' ? '#10b981' : result === 'L' ? '#ef4444' : '#e5e7eb',
+                    width: '14px',
+                    height: '14px',
+                    borderRadius: '3px',
+                    backgroundColor: result === 'W' ? '#10b981' : result === 'D' ? '#f59e0b' : result === 'L' ? '#ef4444' : '#e5e7eb',
                     color: result ? 'white' : '#9ca3af',
                     fontSize: '8px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    fontWeight: '600'
+                    fontWeight: '700'
                   }}
                 >
                   {result || '-'}
                 </span>
               )
             })}
-          </div>
-          <div style={{fontSize: '9px', color: '#374151', fontWeight: '600'}}>
-            Total: {captain2Stats.totalWins}승
           </div>
         </div>
       </div>

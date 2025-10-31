@@ -805,8 +805,8 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
       {/* Status indicator based on match time and stats */}
       {matchStatus === 'live' && (
         <div className="absolute -top-3 -right-2 z-10 pointer-events-none">
-          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white bg-gradient-to-r from-red-500 to-red-600 border border-red-400 shadow-sm animate-pulse">
-            <span className="inline-block h-2 w-2 rounded-full bg-white animate-ping"></span>
+          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white live-badge-natural">
+            <span className="inline-block h-2 w-2 rounded-full bg-white live-dot"></span>
             <span>LIVE</span>
           </span>
         </div>
@@ -821,9 +821,9 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
       )}
       {matchStatus === 'updating' && (
         <div className="absolute -top-3 -right-2 z-10 pointer-events-none">
-          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-amber-700 bg-amber-50 border border-amber-300 shadow-sm">
-            <span className="inline-block h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
-            <span className="animate-pulse">UPDATING SCORES</span>
+          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white updating-badge-enhanced">
+            <span className="inline-block h-2 w-2 rounded-full bg-white updating-dot"></span>
+            <span>UPDATING SCORES</span>
           </span>
         </div>
       )}
@@ -1343,23 +1343,146 @@ export default function SavedMatchesList({
     return null
   }, [ordered])
   return (
-    <ul className="grid gap-3">
-      {ordered.map(m=>(
-        <MatchCard
-          key={m.id}
-          m={m}
-          players={players}
-          isAdmin={isAdmin}
-          enableLoadToPlanner={enableLoadToPlanner}
-          onLoadToPlanner={onLoadToPlanner}
-          onDeleteMatch={onDeleteMatch}
-          onUpdateMatch={onUpdateMatch}
-          showTeamOVRForAdmin={showTeamOVRForAdmin}
-          hideOVR={hideOVR}
-          latestDraftId={latestDraftId}
-        />
-      ))}
-      {ordered.length===0&&<li className="text-sm text-stone-500">표시할 매치가 없습니다.</li>}
-    </ul>
+    <>
+      <ul className="grid gap-3">
+        {ordered.map(m=>(
+          <MatchCard
+            key={m.id}
+            m={m}
+            players={players}
+            isAdmin={isAdmin}
+            enableLoadToPlanner={enableLoadToPlanner}
+            onLoadToPlanner={onLoadToPlanner}
+            onDeleteMatch={onDeleteMatch}
+            onUpdateMatch={onUpdateMatch}
+            showTeamOVRForAdmin={showTeamOVRForAdmin}
+            hideOVR={hideOVR}
+            latestDraftId={latestDraftId}
+          />
+        ))}
+        {ordered.length===0&&<li className="text-sm text-stone-500">표시할 매치가 없습니다.</li>}
+      </ul>
+      
+      {/* CSS 스타일 */}
+      <style>{`
+        @keyframes livePulse {
+          0%, 100% {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+            transform: scale(1);
+          }
+          50% {
+            background: linear-gradient(135deg, #f87171 0%, #ef4444 100%);
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.8);
+            transform: scale(1.02);
+          }
+        }
+        
+        @keyframes liveDotBreathe {
+          0%, 100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+          50% {
+            opacity: 0.7;
+            transform: scale(1.2);
+          }
+        }
+        
+        .live-badge-natural {
+          background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+          border: 1px solid #f87171;
+          box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+          animation: livePulse 3s infinite ease-in-out;
+          will-change: transform, box-shadow, background;
+        }
+        
+        .live-dot {
+          animation: liveDotBreathe 2s infinite ease-in-out;
+          will-change: opacity, transform;
+        }
+        
+        @keyframes updatingPulse {
+          0%, 100% {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            box-shadow: 0 0 12px rgba(245, 158, 11, 0.6), 0 0 24px rgba(245, 158, 11, 0.2);
+            transform: scale(1);
+          }
+          50% {
+            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+            box-shadow: 0 0 20px rgba(245, 158, 11, 0.8), 0 0 40px rgba(245, 158, 11, 0.3);
+            transform: scale(1.05);
+          }
+        }
+        
+        @keyframes updatingBackgroundShift {
+          0% {
+            background-position: 0% 50%;
+          }
+          50% {
+            background-position: 100% 50%;
+          }
+          100% {
+            background-position: 0% 50%;
+          }
+        }
+        
+        @keyframes updatingDotPulse {
+          0%, 100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+          25% {
+            opacity: 0.7;
+            transform: scale(1.3);
+          }
+          50% {
+            opacity: 0.5;
+            transform: scale(1.1);
+          }
+          75% {
+            opacity: 0.8;
+            transform: scale(1.2);
+          }
+        }
+        
+        .updating-badge-enhanced {
+          background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+          background-size: 200% 100%;
+          border: 1px solid #fbbf24;
+          box-shadow: 0 0 12px rgba(245, 158, 11, 0.6), 0 0 24px rgba(245, 158, 11, 0.2);
+          animation: 
+            updatingPulse 2.5s infinite ease-in-out,
+            updatingBackgroundShift 3s infinite ease-in-out;
+          will-change: transform, box-shadow, background, background-position;
+        }
+        
+        .updating-dot {
+          animation: updatingDotPulse 1.8s infinite ease-in-out;
+          will-change: opacity, transform;
+        }
+        
+        /* 접근성 - 애니메이션 감소 선호 사용자 */
+        @media (prefers-reduced-motion: reduce) {
+          .live-badge-natural {
+            animation: none !important;
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+          }
+          
+          .live-dot {
+            animation: none !important;
+          }
+          
+          .updating-badge-enhanced {
+            animation: none !important;
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+          }
+          
+          .updating-dot {
+            animation: none !important;
+          }
+        }
+      `}</style>
+    </>
   )
 }

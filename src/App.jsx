@@ -3,6 +3,7 @@ import React,{useEffect,useMemo,useState,useCallback}from"react"
 import{Home,Users,CalendarDays,ListChecks,ShieldCheck,Lock,Eye,EyeOff,AlertCircle,CheckCircle2,X}from"lucide-react"
 import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB}from"./services/storage.service"
 import{mkPlayer}from"./lib/players";import{notify}from"./components/Toast"
+import{filterExpiredMatches}from"./lib/upcomingMatch"
 import ToastHub from"./components/Toast";import Card from"./components/Card"
 import Dashboard from"./pages/Dashboard";import PlayersPage from"./pages/PlayersPage"
 import MatchPlanner from"./pages/MatchPlanner";import StatsInput from"./pages/StatsInput"
@@ -21,11 +22,21 @@ export default function App(){
     try{
       const playersFromDB=await listPlayers(),shared=await loadDB()
       if(!mounted)return
+      
+      // 만료된 예정 매치들을 필터링
+      const activeUpcomingMatches = filterExpiredMatches(shared.upcomingMatches||[])
+      
+      // 만료된 매치가 있었다면 DB에서도 제거
+      if(activeUpcomingMatches.length !== (shared.upcomingMatches||[]).length) {
+        const updatedShared = {...shared, upcomingMatches: activeUpcomingMatches}
+        await saveDB(updatedShared).catch(console.error)
+      }
+      
       setDb({
         players:playersFromDB,
         matches:shared.matches||[],
         visits:typeof shared.visits==="number"?shared.visits:0,
-        upcomingMatches:shared.upcomingMatches||[]
+        upcomingMatches:activeUpcomingMatches
       })
 
       const host=window?.location?.hostname||""
@@ -40,7 +51,11 @@ export default function App(){
     finally{if(mounted)setLoading(false)}
   })()
     const offP=subscribePlayers(list=>setDb(prev=>({...prev,players:list})))
-    const offDB=subscribeDB(next=>setDb(prev=>({...prev,matches:next.matches||prev.matches||[],visits:typeof next.visits==="number"?next.visits:(prev.visits||0),upcomingMatches:next.upcomingMatches||prev.upcomingMatches||[]})))
+    const offDB=subscribeDB(next=>{
+      // 실시간으로 들어오는 데이터도 필터링
+      const activeUpcomingMatches = filterExpiredMatches(next.upcomingMatches||[])
+      setDb(prev=>({...prev,matches:next.matches||prev.matches||[],visits:typeof next.visits==="number"?next.visits:(prev.visits||0),upcomingMatches:activeUpcomingMatches}))
+    })
     return()=>{mounted=false;offP?.();offDB?.()}
   },[])
 

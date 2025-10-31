@@ -383,15 +383,20 @@ export function winnerIndexFromQuarterScores(qs) {
 /* --------------------- Draft Wins Computation --------------------- */
 
 /**
- * Compute draft wins leaderboard rows
+ * Compute draft player stats with wins/draws/losses
  */
-export function computeDraftWinsRows(players = [], matches = []) {
+export function computeDraftPlayerStatsRows(players = [], matches = []) {
   const idToPlayer = new Map(players.map(p => [toStr(p.id), p]))
-  const rows = new Map()
+  const stats = new Map()
   const last5Map = new Map()
-  const sorted = [...(matches || [])].filter(isDraftMatch).sort((a, b) => extractMatchTS(a) - extractMatchTS(b))
   
-  for (const m of sorted) {
+  // 드래프트 매치만 필터링하고, 유효한 게임 데이터가 있는 매치만 포함
+  const validMatches = [...(matches || [])]
+    .filter(isDraftMatch)
+    .filter(hasValidGameData)
+    .sort((a, b) => extractMatchTS(a) - extractMatchTS(b))
+  
+  for (const m of validMatches) {
     const qs = coerceQuarterScores(m)
     const winnerIdx = winnerIndexFromQuarterScores(qs)
     const teams = extractSnapshotTeams(m)
@@ -399,63 +404,114 @@ export function computeDraftWinsRows(players = [], matches = []) {
     
     const isDraw = winnerIdx < 0
     for (let ti = 0; ti < teams.length; ti++) {
-      const res = isDraw ? 'D' : (ti === winnerIdx ? 'W' : 'L')
+      const result = isDraw ? 'D' : (ti === winnerIdx ? 'W' : 'L')
+      
       for (const pid of teams[ti]) {
+        // last5 기록 업데이트
         const list = last5Map.get(pid) || []
-        list.push(res)
+        list.push(result)
         last5Map.set(pid, list)
         
-        if (res === 'W') {
-          const p = idToPlayer.get(pid)
-          const cur = rows.get(pid) || { 
-            id: pid, 
-            name: p?.name || pid, 
-            wins: 0, 
-            isGuest: p ? !isMember(p.membership) : false 
-          }
-          cur.wins += 1
-          rows.set(pid, cur)
-        } else {
-          if (!rows.has(pid)) {
-            const p = idToPlayer.get(pid)
-            if (p) {
-              rows.set(pid, { 
-                id: pid, 
-                name: p.name || pid, 
-                wins: 0, 
-                isGuest: !isMember(p.membership) 
-              })
-            }
-          }
+        // 통계 업데이트
+        const p = idToPlayer.get(pid)
+        const current = stats.get(pid) || { 
+          id: pid, 
+          name: p?.name || pid, 
+          wins: 0,
+          draws: 0,
+          losses: 0,
+          totalGames: 0,
+          isGuest: p ? !isMember(p.membership) : false 
         }
+        
+        current.totalGames += 1
+        if (result === 'W') current.wins += 1
+        else if (result === 'D') current.draws += 1
+        else if (result === 'L') current.losses += 1
+        
+        stats.set(pid, current)
       }
     }
   }
   
-  const out = Array.from(rows.values()).sort((a, b) => (b.wins - a.wins) || a.name.localeCompare(b.name))
+  const out = Array.from(stats.values()).sort((a, b) => {
+    // 승률로 먼저 정렬 (승점 3점, 무승부 1점 시스템)
+    const pointsA = a.wins * 3 + a.draws
+    const pointsB = b.wins * 3 + b.draws
+    if (pointsA !== pointsB) return pointsB - pointsA
+    
+    // 승률이 같으면 승수로 정렬
+    if (a.wins !== b.wins) return b.wins - a.wins
+    
+    // 그래도 같으면 이름으로 정렬
+    return a.name.localeCompare(b.name)
+  })
   
   let lastRank = 0
   let lastKey = null
   return out.map((r, i) => {
-    const key = r.wins
+    const points = r.wins * 3 + r.draws
+    const key = `${points}-${r.wins}`
     const rank = (i === 0) ? 1 : (key === lastKey ? lastRank : i + 1)
     lastRank = rank
     lastKey = key
     const last5 = (last5Map.get(r.id) || []).slice(-5)
-    return { ...r, rank, last5 }
+    
+    // 승률 계산
+    const winRate = r.totalGames > 0 ? Math.round((r.wins / r.totalGames) * 100) : 0
+    
+    return { 
+      ...r, 
+      rank, 
+      last5, 
+      points,
+      winRate
+    }
   })
 }
 
 /**
- * Compute captain wins leaderboard rows
+ * Compute draft wins leaderboard rows (기존 호환성 유지)
  */
-export function computeCaptainWinsRows(players = [], matches = []) {
-  const idToPlayer = new Map(players.map(p => [toStr(p.id), p]))
-  const rows = new Map()
-  const last5Map = new Map()
-  const sorted = [...(matches || [])].filter(isDraftMatch).sort((a, b) => extractMatchTS(a) - extractMatchTS(b))
+export function computeDraftWinsRows(players = [], matches = []) {
+  const statsRows = computeDraftPlayerStatsRows(players, matches)
+  return statsRows.map(row => ({
+    id: row.id,
+    name: row.name,
+    wins: row.wins,
+    isGuest: row.isGuest,
+    rank: row.rank,
+    last5: row.last5
+  }))
+}
+
+/**
+ * Check if match has valid game data (at least 2 quarters)
+ */
+export function hasValidGameData(m) {
+  const qs = coerceQuarterScores(m)
+  if (!Array.isArray(qs) || qs.length < 2) return false
   
-  for (const m of sorted) {
+  // 최소 2쿼터 이상의 점수가 있는지 확인
+  const maxQuarters = Math.max(...qs.map(team => Array.isArray(team) ? team.length : 0))
+  return maxQuarters >= 2
+}
+
+/**
+ * Compute captain stats with wins/draws/losses
+ */
+export function computeCaptainStatsRows(players = [], matches = []) {
+  const idToPlayer = new Map(players.map(p => [toStr(p.id), p]))
+  const stats = new Map()
+  const last5Map = new Map()
+  
+  // 드래프트 매치만 필터링하고, 유효한 게임 데이터가 있는 매치만 포함
+  const validMatches = [...(matches || [])]
+    .filter(isDraftMatch)
+    .filter(hasValidGameData)
+    .sort((a, b) => extractMatchTS(a) - extractMatchTS(b))
+  
+  for (const m of validMatches) {
     const qs = coerceQuarterScores(m)
     const winnerIdx = winnerIndexFromQuarterScores(qs)
     const isDraw = winnerIdx < 0
@@ -465,48 +521,82 @@ export function computeCaptainWinsRows(players = [], matches = []) {
     for (let ti = 0; ti < caps.length; ti++) {
       const pid = toStr(caps[ti])
       if (!pid) continue
-      const res = isDraw ? 'D' : (ti === winnerIdx ? 'W' : 'L')
       
+      const result = isDraw ? 'D' : (ti === winnerIdx ? 'W' : 'L')
+      
+      // last5 기록 업데이트
       const list = last5Map.get(pid) || []
-      list.push(res)
+      list.push(result)
       last5Map.set(pid, list)
       
-      if (res === 'W') {
-        const p = idToPlayer.get(pid)
-        const cur = rows.get(pid) || { 
-          id: pid, 
-          name: p?.name || pid, 
-          wins: 0, 
-          isGuest: p ? !isMember(p.membership) : false 
-        }
-        cur.wins += 1
-        rows.set(pid, cur)
-      } else {
-        if (!rows.has(pid)) {
-          const p = idToPlayer.get(pid)
-          if (p) { 
-            rows.set(pid, { 
-              id: pid, 
-              name: p.name || pid, 
-              wins: 0, 
-              isGuest: !isMember(p.membership) 
-            }) 
-          }
-        }
+      // 통계 업데이트
+      const p = idToPlayer.get(pid)
+      const current = stats.get(pid) || { 
+        id: pid, 
+        name: p?.name || pid, 
+        wins: 0,
+        draws: 0,
+        losses: 0,
+        totalGames: 0,
+        isGuest: p ? !isMember(p.membership) : false 
       }
+      
+      current.totalGames += 1
+      if (result === 'W') current.wins += 1
+      else if (result === 'D') current.draws += 1
+      else if (result === 'L') current.losses += 1
+      
+      stats.set(pid, current)
     }
   }
   
-  const out = Array.from(rows.values()).sort((a, b) => (b.wins - a.wins) || a.name.localeCompare(b.name))
+  const out = Array.from(stats.values()).sort((a, b) => {
+    // 승률로 먼저 정렬 (승점 3점, 무승부 1점 시스템)
+    const pointsA = a.wins * 3 + a.draws
+    const pointsB = b.wins * 3 + b.draws
+    if (pointsA !== pointsB) return pointsB - pointsA
+    
+    // 승률이 같으면 승수로 정렬
+    if (a.wins !== b.wins) return b.wins - a.wins
+    
+    // 그래도 같으면 이름으로 정렬
+    return a.name.localeCompare(b.name)
+  })
   
   let lastRank = 0
   let lastKey = null
   return out.map((r, i) => {
-    const key = r.wins
+    const points = r.wins * 3 + r.draws
+    const key = `${points}-${r.wins}`
     const rank = (i === 0) ? 1 : (key === lastKey ? lastRank : i + 1)
     lastRank = rank
     lastKey = key
     const last5 = (last5Map.get(r.id) || []).slice(-5)
-    return { ...r, rank, last5 }
+    
+    // 승률 계산
+    const winRate = r.totalGames > 0 ? Math.round((r.wins / r.totalGames) * 100) : 0
+    
+    return { 
+      ...r, 
+      rank, 
+      last5, 
+      points,
+      winRate
+    }
   })
+}
+
+/**
+ * Compute captain wins leaderboard rows (기존 호환성 유지)
+ */
+export function computeCaptainWinsRows(players = [], matches = []) {
+  const statsRows = computeCaptainStatsRows(players, matches)
+  return statsRows.map(row => ({
+    id: row.id,
+    name: row.name,
+    wins: row.wins,
+    isGuest: row.isGuest,
+    rank: row.rank,
+    last5: row.last5
+  }))
 }
