@@ -1158,74 +1158,75 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
 
         return (
 
-          <div className="mt-3 space-y-3">
-
-            {/* Quarter scores: global grid */}
+          <div className="mt-3">
+            {/* Redesigned Quarter Scores Input */}
             <div className="rounded border p-3 bg-white">
-              <div className="flex items-center justify-between">
-                <div className="text-sm font-medium">쿼터 점수 (전체 팀)</div>
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium">쿼터 점수 입력</div>
+                <div className="flex items-center gap-1">
                   <button
-                    className="rounded border px-2 py-1 text-sm"
+                    className="rounded-full border border-blue-300 bg-blue-50 w-7 h-7 flex items-center justify-center text-blue-700 hover:bg-blue-100 text-base"
+                    title="쿼터 추가"
                     onClick={()=>{
                       const next = qs.map(arr => [...arr, 0])
                       setQuarterScores(next)
                     }}
-                  >Add Quarter</button>
+                  >＋</button>
                   <button
-                    className="rounded border px-2 py-1 text-sm disabled:opacity-50"
+                    className="rounded-full border border-gray-300 bg-white w-7 h-7 flex items-center justify-center text-gray-700 hover:bg-gray-100 text-base disabled:opacity-50"
+                    title="마지막 쿼터 삭제"
                     disabled={maxQ===0}
                     onClick={()=>{
                       const newLen = Math.max(0, maxQ - 1)
                       const next = qs.map(arr => arr.slice(0, newLen))
                       setQuarterScores(next)
                     }}
-                  >Remove Last</button>
+                  >－</button>
                 </div>
               </div>
-              <div className="mt-2 overflow-x-auto">
-                <table className="w-full text-sm table-auto border-collapse">
-                  <thead>
-                    <tr className="text-xs text-stone-600">
-                      <th className="text-left px-2 py-1">팀</th>
-                      {Array.from({length: Math.max(1, maxQ)}).map((_,qi)=>(
-                        <th key={qi} className="px-2 py-1 text-center">Q{qi+1}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {draftTeams.map((_, ti) => (
-                      <tr key={`qrow-${ti}`}> 
-                        <td className="px-2 py-1">팀 {ti+1}</td>
-                        {Array.from({length: Math.max(1, maxQ)}).map((_,qi)=>{
-                          const val = qs[ti][qi] ?? 0
-                          return (
-                            <td key={`qcell-${ti}-${qi}`} className="px-1 py-1 text-center">
-                              <input
-                                type="number"
-                                min="0"
-                                max="99"
-                                inputMode="numeric"
-                                className="w-12 sm:w-16 rounded border border-gray-300 bg-white text-stone-900 px-1 py-1 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                value={val}
-                                onChange={e=>{
-                                  const next = qs.map(a=>a.slice())
-                                  let n = Number(e.target.value||0)
-                                  if (n < 0) n = 0
-                                  if (n > 99) n = 99
-                                  // ensure length
-                                  while(next[ti].length < qi+1) next[ti].push(0)
-                                  next[ti][qi] = n
-                                  setQuarterScores(next)
-                                }}
-                              />
-                            </td>
-                          )
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="flex flex-col gap-2">
+                {/* Header Row */}
+                <div className="flex items-center gap-2 pl-14">
+                  {Array.from({length: Math.max(1, maxQ)}).map((_,qi)=>(
+                    <div key={qi} className="w-14 text-center text-xs text-stone-600">Q{qi+1}</div>
+                  ))}
+                </div>
+                {/* Team Rows */}
+                {draftTeams.map((_, ti) => (
+                  <div key={`qrow-${ti}`} className="flex items-center gap-2">
+                    <div className="w-12 text-xs text-stone-700 font-semibold text-right pr-2">팀 {ti+1}</div>
+                    {Array.from({length: Math.max(1, maxQ)}).map((_,qi)=>{
+                      const val = qs[ti][qi] ?? 0
+                      return (
+                        <div key={`qcell-${ti}-${qi}`} className="flex items-center gap-1 w-14 justify-center">
+                          <button
+                            className="rounded-full border border-gray-300 bg-white w-6 h-6 flex items-center justify-center text-gray-700 hover:bg-gray-100 p-0 text-base disabled:opacity-40"
+                            title="점수 내리기"
+                            disabled={val <= 0}
+                            onClick={() => {
+                              const next = qs.map(a=>a.slice())
+                              next[ti][qi] = Math.max(0, val - 1)
+                              setQuarterScores(next)
+                            }}
+                            aria-label="점수 -1"
+                          >-</button>
+                          <span className="inline-block w-5 text-center select-none text-sm">{val}</span>
+                          <button
+                            className="rounded-full border border-blue-300 bg-blue-50 w-6 h-6 flex items-center justify-center text-blue-700 hover:bg-blue-100 p-0 text-base disabled:opacity-40"
+                            title="점수 올리기"
+                            disabled={val >= 99}
+                            onClick={() => {
+                              const next = qs.map(a=>a.slice())
+                              next[ti][qi] = Math.min(99, val + 1)
+                              setQuarterScores(next)
+                            }}
+                            aria-label="점수 +1"
+                          >+</button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
               </div>
             </div>
 
