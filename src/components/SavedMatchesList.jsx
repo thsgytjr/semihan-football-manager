@@ -685,8 +685,8 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
   // ✅ 이 매치의 선수별 G/A 매핑 계산
   const gaByPlayer = useMemo(()=>extractStatsByPlayerForOneMatch(m), [m])
   
-  // ✅ G/A 표시 토글: 2팀이면 기본 켜짐, 3팀 이상이면 기본 꺼짐
-  const [showGA, setShowGA] = useState(draftTeams.length <= 2)
+  // ✅ G/A 표시 토글: 기본 꺼짐
+  const [showGA, setShowGA] = useState(false)
 
   // ✅ 초안 변경은 반드시 setSnap 경유 → dirty 플래그 유지
   const setSnap=(next)=>{ setDraftSnap(next); setDirty(true) }
