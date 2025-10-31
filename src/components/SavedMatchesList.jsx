@@ -801,7 +801,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
   }, [m?.dateISO])
 
   return (
-    <li className="relative rounded border border-gray-200 bg-white p-3">
+  <li className="relative rounded-2xl border border-gray-100 bg-gradient-to-br from-white via-stone-50 to-stone-100 p-5 shadow-lg">
       {/* Status indicator based on match time and stats */}
       {matchStatus === 'live' && (
         <div className="absolute -top-3 -right-2 z-10 pointer-events-none">
@@ -829,13 +829,14 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
       )}
       {isDraftMode && (
         <div className="absolute -top-3 -left-2 z-10 pointer-events-none">
-          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-amber-800 bg-amber-100 border border-amber-300 shadow-sm">
+          <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold text-amber-900 bg-gradient-to-r from-amber-100 via-yellow-50 to-amber-200 shadow-md">
             <img 
               src={draftIcon} 
               alt="Draft" 
-              className="w-3 h-3"
+              className="w-4 h-4 mr-1 align-middle"
+              style={{ filter: 'drop-shadow(0 1px 1px rgba(251,191,36,0.15))' }}
             />
-            <span>Draft Match</span>
+            <span className="align-middle">Draft Match</span>
           </span>
         </div>
       )}
@@ -1344,21 +1345,25 @@ export default function SavedMatchesList({
   }, [ordered])
   return (
     <>
-      <ul className="grid gap-3">
-        {ordered.map(m=>(
-          <MatchCard
-            key={m.id}
-            m={m}
-            players={players}
-            isAdmin={isAdmin}
-            enableLoadToPlanner={enableLoadToPlanner}
-            onLoadToPlanner={onLoadToPlanner}
-            onDeleteMatch={onDeleteMatch}
-            onUpdateMatch={onUpdateMatch}
-            showTeamOVRForAdmin={showTeamOVRForAdmin}
-            hideOVR={hideOVR}
-            latestDraftId={latestDraftId}
-          />
+      <ul className="grid gap-6">
+        {ordered.map((m, idx) => (
+          <React.Fragment key={m.id}>
+            <MatchCard
+              m={m}
+              players={players}
+              isAdmin={isAdmin}
+              enableLoadToPlanner={enableLoadToPlanner}
+              onLoadToPlanner={onLoadToPlanner}
+              onDeleteMatch={onDeleteMatch}
+              onUpdateMatch={onUpdateMatch}
+              showTeamOVRForAdmin={showTeamOVRForAdmin}
+              hideOVR={hideOVR}
+              latestDraftId={latestDraftId}
+            />
+            {idx < ordered.length - 1 && (
+              <li aria-hidden="true" className="mx-2 my-0 border-t border-dashed border-gray-200" />
+            )}
+          </React.Fragment>
         ))}
         {ordered.length===0&&<li className="text-sm text-stone-500">표시할 매치가 없습니다.</li>}
       </ul>
