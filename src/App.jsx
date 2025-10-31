@@ -213,7 +213,7 @@ export default function App(){
   )
 
   return(
-  <div className="min-h-screen bg-stone-100 text-stone-800 antialiased leading-relaxed">
+  <div className="min-h-screen bg-stone-100 text-stone-800 antialiased leading-relaxed w-full max-w-full overflow-x-auto">
     <ToastHub/>
     <header className="sticky top-0 z-[200] border-b border-stone-300 bg-white/90 backdrop-blur-md backdrop-saturate-150 will-change-transform">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 min-h-[60px] gap-2 sm:gap-3">
