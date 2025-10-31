@@ -11,6 +11,8 @@ export default function UpcomingMatchesWidget({
   onUpdateUpcomingMatch
 }) {
   const [isMinimized, setIsMinimized] = useState(true)
+  const [hasBounced, setHasBounced] = useState(false)
+  const [notificationCleared, setNotificationCleared] = useState(false)
   // Removed opening animation state
   
   // 실시간으로 만료된 매치들을 필터링
@@ -61,7 +63,7 @@ export default function UpcomingMatchesWidget({
           ? {}
           : { left: '50%', transform: 'translateX(-50%)' })
       }}
-      onClick={isMinimized ? () => setIsMinimized(false) : undefined}
+  onClick={isMinimized ? () => { setIsMinimized(false); setHasBounced(true); setNotificationCleared(true); } : undefined}
       onMouseEnter={(e) => {
         if (isMinimized) {
           e.currentTarget.style.transform = 'scale(1.05)'
@@ -77,8 +79,9 @@ export default function UpcomingMatchesWidget({
     >
       {/* Opening animation style removed */}
       {isMinimized ? (
-        // 최소화된 동그란 아이콘 상태
+        // 최소화된 동그란 아이콘 상태 (bouncy until clicked once)
         <div 
+          className={!hasBounced ? "sfm-bouncy-icon" : undefined}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -95,7 +98,7 @@ export default function UpcomingMatchesWidget({
             <line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" strokeWidth="2"/>
             <circle cx="12" cy="16" r="2" fill="currentColor"/>
           </svg>
-          {activeMatches.length > 0 && (
+          {!notificationCleared && activeMatches.length > 0 && (
             <div 
               style={{
                 position: 'absolute',
@@ -119,6 +122,23 @@ export default function UpcomingMatchesWidget({
               {activeMatches.length > 9 ? '9+' : activeMatches.length}
             </div>
           )}
+          <style>{`
+            @keyframes sfm-bounce {
+              0%, 100% { transform: scale(1); }
+              10% { transform: scale(1.08, 0.92); }
+              20% { transform: scale(0.96, 1.04); }
+              30% { transform: scale(1.04, 0.98); }
+              40% { transform: scale(0.98, 1.02); }
+              50% { transform: scale(1.02, 0.98); }
+              60% { transform: scale(0.98, 1.01); }
+              70% { transform: scale(1.01, 0.99); }
+              80% { transform: scale(0.99, 1.01); }
+              90% { transform: scale(1.01, 0.99); }
+            }
+            .sfm-bouncy-icon {
+              animation: sfm-bounce 1.2s infinite cubic-bezier(.68,-0.55,.27,1.55);
+            }
+          `}</style>
         </div>
       ) : (
         // 펼쳐진 상태의 헤더
