@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import UpcomingMatchCard from './UpcomingMatchCard'
 import { updateMatchStatus, convertToRegularMatch, filterExpiredMatches } from '../lib/upcomingMatch'
 
@@ -10,7 +10,8 @@ export default function UpcomingMatchesWidget({
   onDeleteUpcomingMatch,
   onUpdateUpcomingMatch
 }) {
-  const [isMinimized, setIsMinimized] = useState(false)
+  const [isMinimized, setIsMinimized] = useState(true)
+  // Removed opening animation state
   
   // 실시간으로 만료된 매치들을 필터링
   const activeMatches = filterExpiredMatches(upcomingMatches)
@@ -33,8 +34,11 @@ export default function UpcomingMatchesWidget({
     return null
   }
 
+  // Handle open animation
+  // Removed opening animation effect
+
   return (
-    <div 
+    <div
       style={{
         position: 'fixed',
         top: '12px',
@@ -51,9 +55,11 @@ export default function UpcomingMatchesWidget({
           : '0 10px 25px rgba(0, 0, 0, 0.15)',
         border: isMinimized ? 'none' : '1px solid #e5e7eb',
         overflow: isMinimized ? 'visible' : 'hidden',
-        transition: 'all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+        transition: isMinimized ? 'all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)' : 'none',
         cursor: isMinimized ? 'pointer' : 'default',
-        transform: isMinimized ? 'scale(1)' : 'translateX(-50%) scale(1)'
+        ...(isMinimized
+          ? {}
+          : { left: '50%', transform: 'translateX(-50%)' })
       }}
       onClick={isMinimized ? () => setIsMinimized(false) : undefined}
       onMouseEnter={(e) => {
@@ -69,6 +75,7 @@ export default function UpcomingMatchesWidget({
         }
       }}
     >
+      {/* Opening animation style removed */}
       {isMinimized ? (
         // 최소화된 동그란 아이콘 상태
         <div 
@@ -195,9 +202,7 @@ export default function UpcomingMatchesWidget({
           style={{
             maxHeight: '384px',
             overflowY: 'auto',
-            padding: '12px',
-            opacity: 1,
-            transition: 'opacity 0.3s ease'
+            padding: '12px'
           }}
         >
           <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
