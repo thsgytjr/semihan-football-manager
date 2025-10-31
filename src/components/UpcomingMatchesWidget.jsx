@@ -38,7 +38,8 @@ export default function UpcomingMatchesWidget({
       style={{
         position: 'fixed',
         top: '12px',
-        right: '12px',
+        right: isMinimized ? '12px' : 'auto',
+        left: isMinimized ? 'auto' : '50%',
         zIndex: 50,
         width: isMinimized ? '48px' : 'min(300px, calc(100vw - 24px))',
         height: isMinimized ? '48px' : 'auto',
@@ -52,7 +53,7 @@ export default function UpcomingMatchesWidget({
         overflow: isMinimized ? 'visible' : 'hidden',
         transition: 'all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
         cursor: isMinimized ? 'pointer' : 'default',
-        transform: isMinimized ? 'scale(1)' : 'scale(1)'
+        transform: isMinimized ? 'scale(1)' : 'translateX(-50%) scale(1)'
       }}
       onClick={isMinimized ? () => setIsMinimized(false) : undefined}
       onMouseEnter={(e) => {
@@ -135,7 +136,19 @@ export default function UpcomingMatchesWidget({
               margin: 0
             }}
           >
-            <span>📅</span>
+            <span style={{
+              display: 'inline-flex',
+              opacity: isMinimized ? 0 : 1,
+              transition: 'opacity 0.5s cubic-bezier(0.4,0,0.2,1)'
+            }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{color: '#111', display: 'block'}}>
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" stroke="currentColor" strokeWidth="2" fill="none"/>
+                <line x1="16" y1="2" x2="16" y2="6" stroke="currentColor" strokeWidth="2"/>
+                <line x1="8" y1="2" x2="8" y2="6" stroke="currentColor" strokeWidth="2"/>
+                <line x1="3" y1="10" x2="21" y2="10" stroke="currentColor" strokeWidth="2"/>
+                <circle cx="12" cy="16" r="2" fill="currentColor"/>
+              </svg>
+            </span>
             <span>예정된 매치</span>
           </h3>
           <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
@@ -183,9 +196,8 @@ export default function UpcomingMatchesWidget({
             maxHeight: '384px',
             overflowY: 'auto',
             padding: '12px',
-            opacity: isMinimized ? 0 : 1,
-            transform: isMinimized ? 'translateY(-10px)' : 'translateY(0)',
-            transition: 'all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.1s'
+            opacity: 1,
+            transition: 'opacity 0.3s ease'
           }}
         >
           <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
