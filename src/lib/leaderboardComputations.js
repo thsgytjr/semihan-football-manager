@@ -600,3 +600,86 @@ export function computeCaptainWinsRows(players = [], matches = []) {
     last5: row.last5
   }))
 }
+
+/**
+ * Compute draft attack points leaderboard rows (골/어시)
+ */
+export function computeDraftAttackRows(players = [], matches = []) {
+  const idToPlayer = new Map(players.map(p => [toStr(p.id), p]))
+  const stats = new Map()
+  
+  // 드래프트 매치만 필터링하고, 유효한 게임 데이터가 있는 매치만 포함
+  const validMatches = [...(matches || [])]
+    .filter(isDraftMatch)
+    .filter(hasValidGameData)
+  
+  for (const m of validMatches) {
+    const attendedIds = new Set(extractAttendeeIds(m))
+    const statsMap = extractStatsByPlayer(m)
+    
+    // Track appearances
+    for (const pid of attendedIds) {
+      const p = idToPlayer.get(pid)
+      if (!p) continue
+      const row = stats.get(pid) || {
+        id: pid, 
+        name: p.name, 
+        membership: p.membership || '',
+        gp: 0, 
+        g: 0, 
+        a: 0,
+        isGuest: !isMember(p.membership)
+      }
+      row.gp += 1
+      stats.set(pid, row)
+    }
+    
+    // Track goals and assists
+    for (const [pid, rec] of Object.entries(statsMap)) {
+      const p = idToPlayer.get(pid)
+      if (!p) continue
+      const row = stats.get(pid) || {
+        id: pid, 
+        name: p.name, 
+        membership: p.membership || '',
+        gp: 0, 
+        g: 0, 
+        a: 0,
+        isGuest: !isMember(p.membership)
+      }
+      row.g += Number(rec?.goals || 0)
+      row.a += Number(rec?.assists || 0)
+      stats.set(pid, row)
+    }
+  }
+  
+  const out = Array.from(stats.values())
+    .filter(r => r.gp > 0) // 경기에 참여한 선수만
+    .map(r => ({ 
+      ...r, 
+      pts: r.g + r.a, // 공격 포인트 = 골 + 어시
+      gpg: r.gp > 0 ? (r.g / r.gp).toFixed(2) : '0.00',
+      apa: r.gp > 0 ? ((r.g + r.a) / r.gp).toFixed(2) : '0.00'
+    }))
+    .sort((a, b) => {
+      // 공격 포인트로 먼저 정렬
+      if (a.pts !== b.pts) return b.pts - a.pts
+      // 골 수로 정렬
+      if (a.g !== b.g) return b.g - a.g
+      // 경기당 공격 포인트로 정렬
+      if (parseFloat(a.apa) !== parseFloat(b.apa)) return parseFloat(b.apa) - parseFloat(a.apa)
+      // 이름으로 정렬
+      return a.name.localeCompare(b.name)
+    })
+  
+  let lastRank = 0
+  let lastKey = null
+  return out.map((r, i) => {
+    const key = `${r.pts}-${r.g}-${parseFloat(r.apa)}`
+    const rank = (i === 0) ? 1 : (key === lastKey ? lastRank : i + 1)
+    lastRank = rank
+    lastKey = key
+    
+    return { ...r, rank }
+  })
+}

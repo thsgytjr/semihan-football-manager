@@ -14,7 +14,7 @@ export default function FormDots({ form = [] }) {
   const textFor = (v) => v === 'W' || v === 'L' || v === 'D' ? v : ''
   
   return (
-    <div className="flex items-center justify-end gap-1">
+    <div className="flex items-center justify-center gap-1">
       {display.map((v, i) => (
         <span
           key={i}

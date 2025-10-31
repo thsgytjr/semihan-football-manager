@@ -16,13 +16,14 @@ import {
   addRanks,
   computeDuoRows,
   computeDraftPlayerStatsRows,
-  computeCaptainStatsRows
+  computeCaptainStatsRows,
+  computeDraftAttackRows
 } from '../lib/leaderboardComputations'
 
 /* --------------------------------------------------------
    MOBILE-FIRST LEADERBOARD (Compact Segmented Tabs)
    - Tabs collapse into scrollable chips on small screens
-   - G/A/출전 헤더 클릭 시 해당 탭으로 전환
+   - G/A/GP 헤더 클릭 시 해당 탭으로 전환
    - Most Appearances(gp) 탭 추가
    - 드롭다운(날짜) + 전체보기/접기 왼쪽 정렬
    - OVR 요소는 히스토리에서 숨김
@@ -75,11 +76,12 @@ export default function Dashboard({
   // Draft 전용: 선수/주장 승리 집계
   const draftWinRows = useMemo(() => computeDraftPlayerStatsRows(players, filteredMatches), [players, filteredMatches])
   const captainWinRows = useMemo(() => computeCaptainStatsRows(players, filteredMatches), [players, filteredMatches])
+  const draftAttackRows = useMemo(() => computeDraftAttackRows(players, filteredMatches), [players, filteredMatches])
 
-  // 탭 구조 개편: 1차(종합|draft), 2차(종합: pts/g/a/gp | draft: playerWins/captainWins)
+  // 탭 구조 개편: 1차(종합|draft), 2차(종합: pts/g/a/gp | draft: playerWins/captainWins/attack)
   const [primaryTab, setPrimaryTab] = useState('pts') // 'pts' | 'draft'
   const [apTab, setApTab] = useState('pts')           // 'pts' | 'g' | 'a' | 'gp'
-  const [draftTab, setDraftTab] = useState('playerWins') // 'playerWins' | 'captainWins'
+  const [draftTab, setDraftTab] = useState('playerWins') // 'playerWins' | 'captainWins' | 'attack'
   const rankedRows = useMemo(() => addRanks(baseRows, apTab), [baseRows, apTab])
   const duoRows = useMemo(() => computeDuoRows(players, filteredMatches), [players, filteredMatches])
 
@@ -127,6 +129,13 @@ export default function Dashboard({
           draftTab === 'captainWins' ? (
             <CaptainWinsTable
               rows={captainWinRows}
+              showAll={showAll}
+              onToggle={() => setShowAll(s => !s)}
+              controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+            />
+          ) : draftTab === 'attack' ? (
+            <DraftAttackTable
+              rows={draftAttackRows}
               showAll={showAll}
               onToggle={() => setShowAll(s => !s)}
               controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
@@ -274,17 +283,17 @@ export default function Dashboard({
 
 function CaptainWinsTable({ rows, showAll, onToggle, controls }) {
   const columns = [
-    { label: '순위', px: 1.5 },
+    { label: '순위', px: 1.5, align: 'center' },
     { label: '주장', px: 2 },
-    { label: '승점', px: 1.5 },
-    { label: 'Last 5', px: 2, align: 'right' }
+    { label: '승점', px: 1.5, align: 'center' },
+    { label: 'Last 5', px: 2, align: 'center' }
   ]
 
   const renderRow = (r, tone) => (
     <>
       <RankCell rank={r.rank} tone={tone} />
       <PlayerNameCell id={r.id} name={r.name} isGuest={r.isGuest} tone={tone} />
-      <StatCell value={r.points} tone={tone} />
+      <StatCell value={r.points} tone={tone} align="center" />
       <FormDotsCell form={r.last5} tone={tone} />
     </>
   )
@@ -305,17 +314,17 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls }) {
 /* ---------------- Draft 승리 테이블 ---------------- */
 function DraftWinsTable({ rows, showAll, onToggle, controls }) {
   const columns = [
-    { label: '순위', px: 1.5 },
+    { label: '순위', px: 1.5, align: 'center' },
     { label: '선수', px: 2 },
-    { label: '승점', px: 1.5 },
-    { label: 'Last 5', px: 2, align: 'right' }
+    { label: '승점', px: 1.5, align: 'center' },
+    { label: 'Last 5', px: 2, align: 'center' }
   ]
 
   const renderRow = (r, tone) => (
     <>
       <RankCell rank={r.rank} tone={tone} />
       <PlayerNameCell id={r.id} name={r.name} isGuest={r.isGuest} tone={tone} />
-      <StatCell value={r.points} tone={tone} />
+      <StatCell value={r.points} tone={tone} align="center" />
       <FormDotsCell form={r.last5} tone={tone} />
     </>
   )
@@ -327,6 +336,40 @@ function DraftWinsTable({ rows, showAll, onToggle, controls }) {
       onToggle={onToggle}
       controls={controls}
       title="Draft 선수 승점"
+      columns={columns}
+      renderRow={renderRow}
+    />
+  )
+}
+
+function DraftAttackTable({ rows, showAll, onToggle, controls }) {
+  const columns = [
+    { label: '순위', px: 1.5, align: 'center' },
+    { label: '선수', px: 2 },
+    { label: 'GP', px: 1, align: 'center' },
+    { label: 'G', px: 1, align: 'center' },
+    { label: 'A', px: 1, align: 'center' },
+    { label: 'Pts', px: 1, align: 'center' },
+  ]
+
+  const renderRow = (r, tone) => (
+    <>
+      <RankCell rank={r.rank} tone={tone} />
+      <PlayerNameCell id={r.id} name={r.name} isGuest={r.isGuest} tone={tone} />
+      <StatCell value={r.gp} tone={tone} align="center" />
+      <StatCell value={r.g} tone={tone} align="center" />
+      <StatCell value={r.a} tone={tone} align="center" />
+      <StatCell value={r.pts} tone={tone} align="center" />
+    </>
+  )
+
+  return (
+    <LeaderboardTable
+      rows={rows}
+      showAll={showAll}
+      onToggle={onToggle}
+      controls={controls}
+      title="Draft 골/어시"
       columns={columns}
       renderRow={renderRow}
     />
@@ -375,6 +418,7 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
   const DraftOptions = [
     { id: 'playerWins', label: '선수승점' },
     { id: 'captainWins', label: '주장승점' },
+    { id: 'attack', label: '골/어시' },
   ]
 
   return (
@@ -506,32 +550,32 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
               </div>
             </th>
           </tr>
-          <tr className="text-left text-[13px] text-stone-600">
-            <th className="border-b px-1.5 py-1.5">순위</th>
-            <th className="border-b px-2 py-1.5">선수</th>
+          <tr className="text-[13px] text-stone-600">
+            <th className="border-b px-1.5 py-1.5 text-center">순위</th>
+            <th className="border-b px-2 py-1.5 text-left">선수</th>
 
-            {/* 출전 헤더 클릭 -> Most Appearances(gp) 탭으로 */}
-            <th className={`border-b px-2 py-1.5 ${headHi('gp')}`} scope="col">
+            {/* GP 헤더 클릭 -> Most Appearances(gp) 탭으로 */}
+            <th className={`border-b px-2 py-1.5 text-center ${headHi('gp')}`} scope="col">
               <button type="button" onClick={() => onRequestTab && onRequestTab('gp')} className={headerBtnCls} title="Most Appearances 보기">
-                출전
+                GP
               </button>
             </th>
 
             {/* G 헤더 클릭 -> Top Scorer(g) 탭으로 */}
-            <th className={`border-b px-2 py-1.5 ${headHi('g')}`} scope="col">
+            <th className={`border-b px-2 py-1.5 text-center ${headHi('g')}`} scope="col">
               <button type="button" onClick={() => onRequestTab && onRequestTab('g')} className={headerBtnCls} title="Top Scorer 보기">
                 G
               </button>
             </th>
 
             {/* A 헤더 클릭 -> Most Assists(a) 탭으로 */}
-            <th className={`border-b px-2 py-1.5 ${headHi('a')}`} scope="col">
+            <th className={`border-b px-2 py-1.5 text-center ${headHi('a')}`} scope="col">
               <button type="button" onClick={() => onRequestTab && onRequestTab('a')} className={headerBtnCls} title="Most Assists 보기">
                 A
               </button>
             </th>
 
-            <th className="border-b px-2 py-1.5" scope="col">
+            <th className="border-b px-2 py-1.5 text-center" scope="col">
               <button type="button" onClick={() => onRequestTab && onRequestTab('pts')} className={headerBtnCls} title="종합(공격포인트) 보기">
                 PTS
               </button>
@@ -580,10 +624,10 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
                   </div>
                 </td>
 
-                <td className={`border-b px-2 py-1.5 tabular-nums ${tone.cellBg} ${colHi('gp')}`}>{r.gp}</td>
-                <td className={`border-b px-2 py-1.5 tabular-nums ${tone.cellBg} ${colHi('g')}`}>{r.g}</td>
-                <td className={`border-b px-2 py-1.5 tabular-nums ${tone.cellBg} ${colHi('a')}`}>{r.a}</td>
-                <td className={`border-b px-2 py-1.5 font-semibold tabular-nums ${tone.cellBg}`}>{r.pts}</td>
+                <td className={`border-b px-2 py-1.5 text-center tabular-nums ${tone.cellBg} ${colHi('gp')}`}>{r.gp}</td>
+                <td className={`border-b px-2 py-1.5 text-center tabular-nums ${tone.cellBg} ${colHi('g')}`}>{r.g}</td>
+                <td className={`border-b px-2 py-1.5 text-center tabular-nums ${tone.cellBg} ${colHi('a')}`}>{r.a}</td>
+                <td className={`border-b px-2 py-1.5 text-center font-semibold tabular-nums ${tone.cellBg}`}>{r.pts}</td>
               </tr>
             )
           })}
@@ -603,9 +647,9 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
 /* ---------------------- 듀오 테이블 --------------------- */
 function DuoTable({ rows, showAll, onToggle, controls }) {
   const columns = [
-    { label: '순위', px: 1.5 },
+    { label: '순위', px: 1.5, align: 'center' },
     { label: '듀오 (Assist → Goal)', px: 2 },
-    { label: '점수', px: 2 }
+    { label: '점수', px: 2, align: 'center' }
   ]
 
   const renderRow = (r, tone) => (
@@ -620,7 +664,7 @@ function DuoTable({ rows, showAll, onToggle, controls }) {
           <span className="font-medium">{r.gName}</span>
         </div>
       </td>
-      <StatCell value={r.count} tone={tone} />
+      <StatCell value={r.count} tone={tone} align="center" />
     </>
   )
 

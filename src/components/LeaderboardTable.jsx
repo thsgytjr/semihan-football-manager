@@ -46,7 +46,10 @@ export default function LeaderboardTable({
             {columns.map((col, idx) => (
               <th 
                 key={idx}
-                className={`border-b px-${col.px || 2} py-1.5 ${col.align === 'right' ? 'text-right' : ''} ${col.className || ''}`}
+                className={`border-b px-${col.px || 2} py-1.5 ${
+                  col.align === 'center' ? 'text-center' : 
+                  col.align === 'right' ? 'text-right' : 'text-left'
+                } ${col.className || ''}`}
                 onClick={col.onClick}
               >
                 {col.label}
@@ -107,9 +110,12 @@ export function PlayerNameCell({ id, name, isGuest, tone }) {
 /**
  * Standard numeric stat cell
  */
-export function StatCell({ value, tone, bold = true }) {
+export function StatCell({ value, tone, bold = true, align = 'left' }) {
   return (
-    <td className={`border-b px-2 py-1.5 ${bold ? 'font-semibold' : ''} tabular-nums ${tone.cellBg}`}>
+    <td className={`border-b px-2 py-1.5 ${bold ? 'font-semibold' : ''} tabular-nums ${
+      align === 'center' ? 'text-center' : 
+      align === 'right' ? 'text-right' : 'text-left'
+    } ${tone.cellBg}`}>
       {value}
     </td>
   )
@@ -121,7 +127,9 @@ export function StatCell({ value, tone, bold = true }) {
 export function FormDotsCell({ form, tone }) {
   return (
     <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
-      <FormDots form={form || []} />
+      <div className="flex justify-center">
+        <FormDots form={form || []} />
+      </div>
     </td>
   )
 }
