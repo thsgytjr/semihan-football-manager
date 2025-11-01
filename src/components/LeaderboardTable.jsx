@@ -82,12 +82,23 @@ export default function LeaderboardTable({
 /**
  * Standard rank cell with medal and number
  */
-export function RankCell({ rank, tone }) {
+export function RankCell({ rank, tone, delta }) {
   return (
     <td className={`border-b align-middle px-1.5 py-1.5 ${tone.cellBg}`}>
-      <div className="flex items-center gap-2">
-        <Medal rank={rank} />
-        <span className="tabular-nums">{rank}</span>
+      <div className="grid items-center" style={{ gridTemplateColumns: '16px 1fr 22px', columnGap: 4 }}>
+        <div className="flex items-center justify-center">
+          <Medal rank={rank} />
+        </div>
+        <div className="text-center tabular-nums">{rank}</div>
+        <div className="text-right">
+          {delta && delta.diff !== 0 ? (
+            <span className={`inline-block min-w-[20px] text-[11px] font-medium ${delta.dir === 'up' ? 'text-emerald-700' : 'text-rose-700'}`}>
+              {delta.dir === 'up' ? '▲' : '▼'} {Math.abs(delta.diff)}
+            </span>
+          ) : (
+            <span className="inline-block min-w-[20px] text-[11px] text-transparent">0</span>
+          )}
+        </div>
       </div>
     </td>
   )

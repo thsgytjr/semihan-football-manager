@@ -87,6 +87,71 @@ export default function Dashboard({
 
   const [showAll, setShowAll] = useState(false)
 
+  // Seed a useful initial baseline for rank-change arrows on first visit (no buttons needed):
+  // If viewing 전체(모든 매치) and no local baseline exists yet, we compare against the
+  // standings BEFORE the most recent match-day (latest date key). This makes arrows
+  // visible immediately in production without prior local storage state.
+  const previousBaselineByMetric = useMemo(() => {
+    try {
+      // Collect date keys present in all matches
+      const keys = Array.from(new Set((matches || []).map(m => extractDateKey(m)).filter(Boolean)))
+      if (keys.length <= 1) return {}
+      const sorted = [...keys].sort() // ascending
+      const latest = sorted[sorted.length - 1]
+      const prevMatches = (matches || []).filter(m => extractDateKey(m) !== latest)
+      if (prevMatches.length === 0) return {}
+
+      const prevRows = computeAttackRows(players, prevMatches)
+      const toMap = (metric) => {
+        const ranked = addRanks(prevRows, metric)
+        const mp = {}
+        ranked.forEach(r => { mp[String(r.id || r.name)] = r.rank })
+        return mp
+      }
+
+      return {
+        pts: toMap('pts'),
+        g: toMap('g'),
+        a: toMap('a'),
+        gp: toMap('gp')
+      }
+    } catch {
+      return {}
+    }
+  }, [players, matches])
+
+  // Previous baselines for other tables (draft and duo), seeded from matches excluding the latest date key
+  const previousBaselinesMisc = useMemo(() => {
+    try {
+      const keys = Array.from(new Set((matches || []).map(m => extractDateKey(m)).filter(Boolean)))
+      if (keys.length <= 1) return {}
+      const sorted = [...keys].sort()
+      const latest = sorted[sorted.length - 1]
+      const prevMatches = (matches || []).filter(m => extractDateKey(m) !== latest)
+      if (prevMatches.length === 0) return {}
+
+      const draftPlayerPrev = computeDraftPlayerStatsRows(players, prevMatches)
+      const draftCaptainPrev = computeCaptainStatsRows(players, prevMatches)
+      const draftAttackPrev = computeDraftAttackRows(players, prevMatches)
+      const duoPrev = computeDuoRows(players, prevMatches)
+
+      const toMap = (rows) => {
+        const mp = {}
+        rows.forEach(r => { mp[String(r.id || r.name)] = r.rank })
+        return mp
+      }
+
+      return {
+        draftPlayer: toMap(draftPlayerPrev),
+        draftCaptain: toMap(draftCaptainPrev),
+        draftAttack: toMap(draftAttackPrev),
+        duo: toMap(duoPrev)
+      }
+    } catch {
+      return {}
+    }
+  }, [players, matches])
+
   const colHi = (col) => {
     if (apTab === 'g' && col === 'g') return 'bg-indigo-50/80 font-semibold'
     if (apTab === 'a' && col === 'a') return 'bg-indigo-50/80 font-semibold'
@@ -132,6 +197,8 @@ export default function Dashboard({
               showAll={showAll}
               onToggle={() => setShowAll(s => !s)}
               controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+              apDateKey={apDateKey}
+              initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.draftCaptain || null) : null}
             />
           ) : draftTab === 'attack' ? (
             <DraftAttackTable
@@ -139,6 +206,8 @@ export default function Dashboard({
               showAll={showAll}
               onToggle={() => setShowAll(s => !s)}
               controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+              apDateKey={apDateKey}
+              initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.draftAttack || null) : null}
             />
           ) : (
             <DraftWinsTable
@@ -146,6 +215,8 @@ export default function Dashboard({
               showAll={showAll}
               onToggle={() => setShowAll(s => !s)}
               controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+              apDateKey={apDateKey}
+              initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.draftPlayer || null) : null}
             />
           )
         ) : (
@@ -155,6 +226,8 @@ export default function Dashboard({
               showAll={showAll}
               onToggle={() => setShowAll(s => !s)}
               controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+              apDateKey={apDateKey}
+              initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.duo || null) : null}
             />
           ) : (
             <AttackPointsTable
@@ -167,6 +240,7 @@ export default function Dashboard({
               onRequestTab={(id)=>{ setApTab(id); setPrimaryTab('pts'); setShowAll(false) }}
               controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
               apDateKey={apDateKey}
+              initialBaselineRanks={apDateKey === 'all' ? (previousBaselineByMetric[apTab] || null) : null}
             />
           )
         )}
@@ -281,7 +355,37 @@ export default function Dashboard({
   )
 }
 
-function CaptainWinsTable({ rows, showAll, onToggle, controls }) {
+function CaptainWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null }) {
+  const [baselineRanks, setBaselineRanks] = useState({})
+  const baselineKey = 'draft_captain_points_v1'
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(baselineKey)
+      if (saved) {
+        setBaselineRanks(JSON.parse(saved) || {})
+      } else if (apDateKey === 'all' && initialBaselineRanks && Object.keys(initialBaselineRanks).length > 0) {
+        localStorage.setItem(baselineKey, JSON.stringify(initialBaselineRanks))
+        setBaselineRanks(initialBaselineRanks)
+      } else {
+        setBaselineRanks({})
+      }
+    } catch { setBaselineRanks({}) }
+  }, [apDateKey, initialBaselineRanks])
+
+  const deltaFor = (id, currentRank) => {
+    if (apDateKey !== 'all') return null
+    if (!baselineRanks || Object.keys(baselineRanks).length === 0) return null
+    let prevRank = baselineRanks[String(id)]
+    if (prevRank == null) {
+      const maxPrev = Math.max(...Object.values(baselineRanks))
+      if (Number.isFinite(maxPrev)) prevRank = maxPrev + 1
+    }
+    if (prevRank == null) return null
+    const diff = prevRank - currentRank
+    if (diff === 0) return { diff: 0, dir: 'same' }
+    return { diff, dir: diff > 0 ? 'up' : 'down' }
+  }
   const columns = [
     { label: '순위', px: 1.5, align: 'center' },
     { label: '주장', px: 2 },
@@ -291,7 +395,7 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls }) {
 
   const renderRow = (r, tone) => (
     <>
-      <RankCell rank={r.rank} tone={tone} />
+      <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
       <PlayerNameCell id={r.id} name={r.name} isGuest={r.isGuest} tone={tone} />
       <StatCell value={r.points} tone={tone} align="center" />
       <FormDotsCell form={r.last5} tone={tone} />
@@ -312,7 +416,37 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls }) {
 }
 
 /* ---------------- Draft 승리 테이블 ---------------- */
-function DraftWinsTable({ rows, showAll, onToggle, controls }) {
+function DraftWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null }) {
+  const [baselineRanks, setBaselineRanks] = useState({})
+  const baselineKey = 'draft_player_points_v1'
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(baselineKey)
+      if (saved) {
+        setBaselineRanks(JSON.parse(saved) || {})
+      } else if (apDateKey === 'all' && initialBaselineRanks && Object.keys(initialBaselineRanks).length > 0) {
+        localStorage.setItem(baselineKey, JSON.stringify(initialBaselineRanks))
+        setBaselineRanks(initialBaselineRanks)
+      } else {
+        setBaselineRanks({})
+      }
+    } catch { setBaselineRanks({}) }
+  }, [apDateKey, initialBaselineRanks])
+
+  const deltaFor = (id, currentRank) => {
+    if (apDateKey !== 'all') return null
+    if (!baselineRanks || Object.keys(baselineRanks).length === 0) return null
+    let prevRank = baselineRanks[String(id)]
+    if (prevRank == null) {
+      const maxPrev = Math.max(...Object.values(baselineRanks))
+      if (Number.isFinite(maxPrev)) prevRank = maxPrev + 1
+    }
+    if (prevRank == null) return null
+    const diff = prevRank - currentRank
+    if (diff === 0) return { diff: 0, dir: 'same' }
+    return { diff, dir: diff > 0 ? 'up' : 'down' }
+  }
   const columns = [
     { label: '순위', px: 1.5, align: 'center' },
     { label: '선수', px: 2 },
@@ -322,7 +456,7 @@ function DraftWinsTable({ rows, showAll, onToggle, controls }) {
 
   const renderRow = (r, tone) => (
     <>
-      <RankCell rank={r.rank} tone={tone} />
+      <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
       <PlayerNameCell id={r.id} name={r.name} isGuest={r.isGuest} tone={tone} />
       <StatCell value={r.points} tone={tone} align="center" />
       <FormDotsCell form={r.last5} tone={tone} />
@@ -342,7 +476,37 @@ function DraftWinsTable({ rows, showAll, onToggle, controls }) {
   )
 }
 
-function DraftAttackTable({ rows, showAll, onToggle, controls }) {
+function DraftAttackTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null }) {
+  const [baselineRanks, setBaselineRanks] = useState({})
+  const baselineKey = 'draft_attack_pts_v1'
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(baselineKey)
+      if (saved) {
+        setBaselineRanks(JSON.parse(saved) || {})
+      } else if (apDateKey === 'all' && initialBaselineRanks && Object.keys(initialBaselineRanks).length > 0) {
+        localStorage.setItem(baselineKey, JSON.stringify(initialBaselineRanks))
+        setBaselineRanks(initialBaselineRanks)
+      } else {
+        setBaselineRanks({})
+      }
+    } catch { setBaselineRanks({}) }
+  }, [apDateKey, initialBaselineRanks])
+
+  const deltaFor = (id, currentRank) => {
+    if (apDateKey !== 'all') return null
+    if (!baselineRanks || Object.keys(baselineRanks).length === 0) return null
+    let prevRank = baselineRanks[String(id)]
+    if (prevRank == null) {
+      const maxPrev = Math.max(...Object.values(baselineRanks))
+      if (Number.isFinite(maxPrev)) prevRank = maxPrev + 1
+    }
+    if (prevRank == null) return null
+    const diff = prevRank - currentRank
+    if (diff === 0) return { diff: 0, dir: 'same' }
+    return { diff, dir: diff > 0 ? 'up' : 'down' }
+  }
   const columns = [
     { label: '순위', px: 1.5, align: 'center' },
     { label: '선수', px: 2 },
@@ -354,7 +518,7 @@ function DraftAttackTable({ rows, showAll, onToggle, controls }) {
 
   const renderRow = (r, tone) => (
     <>
-      <RankCell rank={r.rank} tone={tone} />
+      <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
       <PlayerNameCell id={r.id} name={r.name} isGuest={r.isGuest} tone={tone} />
       <StatCell value={r.gp} tone={tone} align="center" />
       <StatCell value={r.g} tone={tone} align="center" />
@@ -482,7 +646,7 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
 }
 
 /* --------------- 공격포인트 테이블 --------------- */
-function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', headHi, colHi, onRequestTab, apDateKey }) {
+function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', headHi, colHi, onRequestTab, apDateKey, initialBaselineRanks = null }) {
   const data = showAll ? rows : rows.slice(0, 5)
 
   // Baseline ranks for "모든 매치" only. We keep the first seen snapshot
@@ -490,17 +654,24 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
   const [baselineRanks, setBaselineRanks] = useState({})
   const baselineKey = `ap_baselineRanks_${rankBy}_v1`
 
-  // Load baseline on mount or when rankBy changes
+  // Load baseline on mount or when rankBy/initial seed changes
   useEffect(() => {
     try {
       const saved = localStorage.getItem(baselineKey)
-      if (saved) setBaselineRanks(JSON.parse(saved) || {})
-      else setBaselineRanks({})
+      if (saved) {
+        setBaselineRanks(JSON.parse(saved) || {})
+      } else if (apDateKey === 'all' && initialBaselineRanks && Object.keys(initialBaselineRanks).length > 0) {
+        // Seed from previous match-day snapshot to make arrows visible immediately
+        localStorage.setItem(baselineKey, JSON.stringify(initialBaselineRanks))
+        setBaselineRanks(initialBaselineRanks)
+      } else {
+        setBaselineRanks({})
+      }
     } catch {
       setBaselineRanks({})
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rankBy])
+  }, [rankBy, initialBaselineRanks, apDateKey])
 
   // Initialize baseline IF missing and viewing 전체(모든 매치)
   useEffect(() => {
@@ -645,7 +816,37 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
 }
 
 /* ---------------------- 듀오 테이블 --------------------- */
-function DuoTable({ rows, showAll, onToggle, controls }) {
+function DuoTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null }) {
+  const [baselineRanks, setBaselineRanks] = useState({})
+  const baselineKey = 'duo_count_v1'
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(baselineKey)
+      if (saved) {
+        setBaselineRanks(JSON.parse(saved) || {})
+      } else if (apDateKey === 'all' && initialBaselineRanks && Object.keys(initialBaselineRanks).length > 0) {
+        localStorage.setItem(baselineKey, JSON.stringify(initialBaselineRanks))
+        setBaselineRanks(initialBaselineRanks)
+      } else {
+        setBaselineRanks({})
+      }
+    } catch { setBaselineRanks({}) }
+  }, [apDateKey, initialBaselineRanks])
+
+  const deltaFor = (id, currentRank) => {
+    if (apDateKey !== 'all') return null
+    if (!baselineRanks || Object.keys(baselineRanks).length === 0) return null
+    let prevRank = baselineRanks[String(id)]
+    if (prevRank == null) {
+      const maxPrev = Math.max(...Object.values(baselineRanks))
+      if (Number.isFinite(maxPrev)) prevRank = maxPrev + 1
+    }
+    if (prevRank == null) return null
+    const diff = prevRank - currentRank
+    if (diff === 0) return { diff: 0, dir: 'same' }
+    return { diff, dir: diff > 0 ? 'up' : 'down' }
+  }
   const columns = [
     { label: '순위', px: 1.5, align: 'center' },
     { label: '듀오 (Assist → Goal)', px: 2 },
@@ -654,7 +855,7 @@ function DuoTable({ rows, showAll, onToggle, controls }) {
 
   const renderRow = (r, tone) => (
     <>
-      <RankCell rank={r.rank} tone={tone} />
+      <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
       <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
         <div className="flex items-center gap-2">
           <InitialAvatar id={r.assistId} name={r.aName} size={20} badges={r.aIsGuest ? ['G'] : []} />
