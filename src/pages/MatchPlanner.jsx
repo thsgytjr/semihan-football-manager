@@ -28,23 +28,21 @@ function calcFees({ total, memberCount, guestCount }) {
   const count = memberCount + guestCount;
   if (total <= 0 || count === 0) return { total, memberFee: 0, guestFee: 0 };
 
-  // 1) 최소 단가로 시작: floor((T - 2g) / (m + g))
-  let baseEach = Math.floor((total - 2 * guestCount) / count);
-  if (!Number.isFinite(baseEach) || baseEach < 0) baseEach = 0;
-
-  // 2) 게스트는 항상 멤버 +$2
-  let memberFee = baseEach;
-  let guestFee  = baseEach + 2;
-
-  // 3) 모자라면 $1씩만 올려 최소 초과로 맞춤 (정확히 나누어떨어지면 딱 맞음)
-  let sum = memberCount * memberFee + guestCount * guestFee;
-  while (sum < total) {
-    memberFee += 1;
-    guestFee  = memberFee + 2;
-    sum = memberCount * memberFee + guestCount * guestFee;
-  }
-
-  return { total, memberFee, guestFee };
+  // 1) 게스트는 항상 멤버 +$2
+  // 2) 0.5 단위로 정확히 맞추기
+  // memberFee + 2 = guestFee
+  // total = memberFee * memberCount + guestFee * guestCount
+  //      = memberFee * memberCount + (memberFee + 2) * guestCount
+  //      = memberFee * (memberCount + guestCount) + 2 * guestCount
+  //      = memberFee * count + 2 * guestCount
+  // => memberFee = (total - 2 * guestCount) / count
+  let memberFee = (total - 2 * guestCount) / count;
+  // 0.5 단위로 반올림
+  memberFee = Math.round(memberFee * 2) / 2;
+  let guestFee = memberFee + 2;
+  // 실제 합계가 total과 다를 수 있으니, total도 재계산해서 반환
+  const sum = memberFee * memberCount + guestFee * guestCount;
+  return { total, memberFee, guestFee, sum };
 }
 
 const nextSaturday0630Local=()=>{const n=new Date(),d=new Date(n),dow=n.getDay();let add=(6-dow+7)%7;if(add===0){const t=new Date(n);t.setHours(6,30,0,0);if(n>t)add=7}d.setDate(n.getDate()+add);d.setHours(6,30,0,0);const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0'),H=String(d.getHours()).padStart(2,'0'),M=String(d.getMinutes()).padStart(2,'0');return`${y}-${m}-${dd}T${H}:${M}`}
@@ -84,7 +82,7 @@ export default function MatchPlanner({
 
   // ✅ 프리셋 총액: Indoor=220 / Coppell=330
   const baseCost=useMemo(()=>feeMode==='custom'
-    ? Math.max(0,Number(customBaseCost)||0)
+    ? Math.max(0, parseFloat(customBaseCost)||0)
     : (locationPreset==='indoor-soccer-zone'?220:locationPreset==='coppell-west'?330:0),
   [feeMode,customBaseCost,locationPreset])
 
@@ -105,7 +103,7 @@ export default function MatchPlanner({
     const list = Array.isArray(attendees) ? attendees : []
     const m = list.filter(p => isMember(p.membership)).length
     const g = Math.max(0, list.length - m)
-    return calcFees({ total: Math.max(0, Number(baseCostValue) || 0), memberCount: m, guestCount: g })
+  return calcFees({ total: Math.max(0, parseFloat(baseCostValue) || 0), memberCount: m, guestCount: g })
   }
 
   // ✅ 지도 링크 계산 (프리셋 + Other URL)
@@ -262,7 +260,7 @@ export default function MatchPlanner({
             <div className="flex flex-wrap items-center gap-3 text-sm">
               <label className="inline-flex items-center gap-2"><input type="radio" name="feeMode" value="preset" checked={feeMode==='preset'} onChange={()=>setFeeMode('preset')}/>자동(장소별 고정)</label>
               <label className="inline-flex items-center gap-2"><input type="radio" name="feeMode" value="custom" checked={feeMode==='custom'} onChange={()=>setFeeMode('custom')}/>커스텀</label>
-              {feeMode==='custom'&&(<input type="number" min="0" placeholder="총 구장비(예: 220 또는 340)" value={customBaseCost} onChange={e=>setCustomBaseCost(e.target.value)} className="w-40 rounded border border-gray-300 bg-white px-3 py-1.5"/>)}
+              {feeMode==='custom'&&(<input type="number" min="0" step="0.5" placeholder="총 구장비(예: 220, 220.5, 340)" value={customBaseCost} onChange={e=>setCustomBaseCost(e.target.value)} className="w-40 rounded border border-gray-300 bg-white px-3 py-1.5"/>)}
             </div>
 
             {/* 비용 안내 */}
