@@ -240,33 +240,65 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean)
     const out = []
     for (const line of lines) {
-      // Enforce strict format: require explicit 'goal' or 'assist' between brackets
       if (!isStrictLine(line)) return []
       const bracketMatches = Array.from(line.matchAll(/\[([^\]]+)\]/g)).map(m => m[1])
       const dateStr = bracketMatches[0]
       const namesField = bracketMatches[bracketMatches.length - 1]
-      // extract the literal word between the first and last bracket group
       const betweenMatch = line.replace(/\[([^\]]+)\]/g, '¤').split('¤')[1] || ''
       const hasBoth = /goal\s*:\s*assist/i.test(betweenMatch)
       let type = null
-      if (!hasBoth && /\bgoal\b/i.test(betweenMatch)) type = 'goals'
-      else if (!hasBoth && /\bassist\b/i.test(betweenMatch)) type = 'assists'
       const dt = parseLooseDate(dateStr)
       if (!dt) return []
       if (hasBoth) {
-        // support: [date]goal:assist[scorer assister]
-        const parts = String(namesField || '').trim().split(/\s+/).filter(Boolean)
-        if (parts.length < 2) return []
-        const scorer = parts[0]
-        const assister = parts[parts.length - 1]
-        out.push({ date: dt, type: 'goals', name: scorer })
-        out.push({ date: dt, type: 'assists', name: assister })
+        // Smart split: try to match two player names from the roster
+        const nameList = rosterNamesForBulkMatch()
+        const raw = String(namesField || '').trim()
+        const tokens = raw.split(/\s+/).filter(Boolean)
+        let found = null, foundSplits = []
+        // Try all possible splits
+        for (let i = 1; i < tokens.length; ++i) {
+          const left = tokens.slice(0, i).join(' ')
+          const right = tokens.slice(i).join(' ')
+          if (nameList.has(left) && nameList.has(right)) {
+            foundSplits.push([left, right])
+          }
+        }
+        if (foundSplits.length === 1) {
+          found = foundSplits[0]
+        } else if (foundSplits.length > 1) {
+          // ambiguous, handled in applyBulkToDraft
+          found = { ambiguous: true, splits: foundSplits }
+        }
+        if (found && !found.ambiguous) {
+          out.push({ date: dt, type: 'goals', name: found[0] })
+          out.push({ date: dt, type: 'assists', name: found[1] })
+        } else if (found && found.ambiguous) {
+          out.push({ date: dt, type: 'ambiguous', splits: found.splits, raw })
+        } else {
+          // fallback: old logic (first/last)
+          const parts = tokens
+          if (parts.length < 2) return []
+          out.push({ date: dt, type: 'ambiguous', splits: [], raw })
+        }
       } else {
+        if (!type) {
+          if (/\bgoal\b/i.test(betweenMatch)) type = 'goals'
+          else if (/\bassist\b/i.test(betweenMatch)) type = 'assists'
+        }
         if (!type || !namesField) return []
         out.push({ date: dt, type, name: String(namesField).trim() })
       }
     }
     return out
+  // Helper: get all player names in lowercased set for matching
+  function rosterNamesForBulkMatch() {
+    // Use the current roster (from the memoized roster)
+    if (Array.isArray(roster) && roster.length > 0) {
+      return new Set(roster.map(p => String((p.name || '').trim())))
+    }
+    // fallback: empty set
+    return new Set()
+  }
   }
 
   // Apply bulk text to draft. Do NOT auto-save. Require all lines to belong to same week and a saved match must exist for that week.
@@ -280,8 +312,16 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       setBulkMsg('모든 줄이 [date]goal[name] 또는 [date]assist[name] 형식이어야 합니다. 오류 예시: ' + (bad.slice(0,3).join('; ')))
       return
     }
+
     const parsed = parseBulkLines(bulkText)
     if (parsed.length === 0) { setBulkMsg('파싱된 항목이 없습니다. 형식을 확인해 주세요.'); return }
+
+    // Check for ambiguous splits
+    const ambiguous = parsed.filter(p => p.type === 'ambiguous')
+    if (ambiguous.length > 0) {
+      setBulkMsg('이름 구분이 모호한 줄이 있습니다: ' + ambiguous.map(a => `[${a.raw}]`).join(', ') + ' · 선수명 조합이 2가지 이상이거나, 둘 다 없는 경우입니다. 각 이름을 명확히 입력해 주세요.');
+      return
+    }
 
     // group by week key
     const weekKeys = Array.from(new Set(parsed.map(p => weekKeyOfDate(p.date))))
