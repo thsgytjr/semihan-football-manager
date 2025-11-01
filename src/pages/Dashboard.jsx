@@ -193,6 +193,7 @@ export default function Dashboard({
         {primaryTab === 'draft' ? (
           draftTab === 'captainWins' ? (
             <CaptainWinsTable
+              key={`captain-${apDateKey}`}
               rows={captainWinRows}
               showAll={showAll}
               onToggle={() => setShowAll(s => !s)}
@@ -202,6 +203,7 @@ export default function Dashboard({
             />
           ) : draftTab === 'attack' ? (
             <DraftAttackTable
+              key={`draftAttack-${apDateKey}`}
               rows={draftAttackRows}
               showAll={showAll}
               onToggle={() => setShowAll(s => !s)}
@@ -211,6 +213,7 @@ export default function Dashboard({
             />
           ) : (
             <DraftWinsTable
+              key={`draftWins-${apDateKey}`}
               rows={draftWinRows}
               showAll={showAll}
               onToggle={() => setShowAll(s => !s)}
@@ -222,6 +225,7 @@ export default function Dashboard({
         ) : (
           apTab === 'duo' ? (
             <DuoTable
+              key={`duo-${apDateKey}`}
               rows={duoRows}
               showAll={showAll}
               onToggle={() => setShowAll(s => !s)}
@@ -231,6 +235,7 @@ export default function Dashboard({
             />
           ) : (
             <AttackPointsTable
+              key={`ap-${apDateKey}-${apTab}`}
               rows={rankedRows}
               showAll={showAll}
               onToggle={() => setShowAll(s => !s)}
@@ -356,22 +361,18 @@ export default function Dashboard({
 }
 
 function CaptainWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null }) {
-  const [baselineRanks, setBaselineRanks] = useState({})
   const baselineKey = 'draft_captain_points_v1'
-
-  useEffect(() => {
+  const [baselineRanks] = useState(() => {
     try {
       const saved = localStorage.getItem(baselineKey)
-      if (saved) {
-        setBaselineRanks(JSON.parse(saved) || {})
-      } else if (apDateKey === 'all' && initialBaselineRanks && Object.keys(initialBaselineRanks).length > 0) {
+      if (saved) return JSON.parse(saved) || {}
+      if (apDateKey === 'all' && initialBaselineRanks && Object.keys(initialBaselineRanks).length > 0) {
         localStorage.setItem(baselineKey, JSON.stringify(initialBaselineRanks))
-        setBaselineRanks(initialBaselineRanks)
-      } else {
-        setBaselineRanks({})
+        return initialBaselineRanks
       }
-    } catch { setBaselineRanks({}) }
-  }, [apDateKey, initialBaselineRanks])
+      return {}
+    } catch { return {} }
+  })
 
   const deltaFor = (id, currentRank) => {
     if (apDateKey !== 'all') return null
@@ -417,22 +418,18 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls, apDateKey, initia
 
 /* ---------------- Draft 승리 테이블 ---------------- */
 function DraftWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null }) {
-  const [baselineRanks, setBaselineRanks] = useState({})
   const baselineKey = 'draft_player_points_v1'
-
-  useEffect(() => {
+  const [baselineRanks] = useState(() => {
     try {
       const saved = localStorage.getItem(baselineKey)
-      if (saved) {
-        setBaselineRanks(JSON.parse(saved) || {})
-      } else if (apDateKey === 'all' && initialBaselineRanks && Object.keys(initialBaselineRanks).length > 0) {
+      if (saved) return JSON.parse(saved) || {}
+      if (apDateKey === 'all' && initialBaselineRanks && Object.keys(initialBaselineRanks).length > 0) {
         localStorage.setItem(baselineKey, JSON.stringify(initialBaselineRanks))
-        setBaselineRanks(initialBaselineRanks)
-      } else {
-        setBaselineRanks({})
+        return initialBaselineRanks
       }
-    } catch { setBaselineRanks({}) }
-  }, [apDateKey, initialBaselineRanks])
+      return {}
+    } catch { return {} }
+  })
 
   const deltaFor = (id, currentRank) => {
     if (apDateKey !== 'all') return null
@@ -477,22 +474,18 @@ function DraftWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialB
 }
 
 function DraftAttackTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null }) {
-  const [baselineRanks, setBaselineRanks] = useState({})
   const baselineKey = 'draft_attack_pts_v1'
-
-  useEffect(() => {
+  const [baselineRanks] = useState(() => {
     try {
       const saved = localStorage.getItem(baselineKey)
-      if (saved) {
-        setBaselineRanks(JSON.parse(saved) || {})
-      } else if (apDateKey === 'all' && initialBaselineRanks && Object.keys(initialBaselineRanks).length > 0) {
+      if (saved) return JSON.parse(saved) || {}
+      if (apDateKey === 'all' && initialBaselineRanks && Object.keys(initialBaselineRanks).length > 0) {
         localStorage.setItem(baselineKey, JSON.stringify(initialBaselineRanks))
-        setBaselineRanks(initialBaselineRanks)
-      } else {
-        setBaselineRanks({})
+        return initialBaselineRanks
       }
-    } catch { setBaselineRanks({}) }
-  }, [apDateKey, initialBaselineRanks])
+      return {}
+    } catch { return {} }
+  })
 
   const deltaFor = (id, currentRank) => {
     if (apDateKey !== 'all') return null
@@ -651,27 +644,20 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
 
   // Baseline ranks for "모든 매치" only. We keep the first seen snapshot
   // and compare against it when ranks change after new matches are recorded.
-  const [baselineRanks, setBaselineRanks] = useState({})
-  const baselineKey = `ap_baselineRanks_${rankBy}_v1`
-
-  // Load baseline on mount or when rankBy/initial seed changes
-  useEffect(() => {
+  const [baselineRanks] = useState(() => {
     try {
-      const saved = localStorage.getItem(baselineKey)
-      if (saved) {
-        setBaselineRanks(JSON.parse(saved) || {})
-      } else if (apDateKey === 'all' && initialBaselineRanks && Object.keys(initialBaselineRanks).length > 0) {
-        // Seed from previous match-day snapshot to make arrows visible immediately
-        localStorage.setItem(baselineKey, JSON.stringify(initialBaselineRanks))
-        setBaselineRanks(initialBaselineRanks)
-      } else {
-        setBaselineRanks({})
+      const saved = localStorage.getItem(`ap_baselineRanks_${rankBy}_v1`)
+      if (saved) return JSON.parse(saved) || {}
+      if (apDateKey === 'all' && initialBaselineRanks && Object.keys(initialBaselineRanks).length > 0) {
+        localStorage.setItem(`ap_baselineRanks_${rankBy}_v1`, JSON.stringify(initialBaselineRanks))
+        return initialBaselineRanks
       }
+      return {}
     } catch {
-      setBaselineRanks({})
+      return {}
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rankBy, initialBaselineRanks, apDateKey])
+  })
+  const baselineKey = `ap_baselineRanks_${rankBy}_v1`
 
   // Initialize baseline IF missing and viewing 전체(모든 매치)
   useEffect(() => {
@@ -817,22 +803,18 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
 
 /* ---------------------- 듀오 테이블 --------------------- */
 function DuoTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null }) {
-  const [baselineRanks, setBaselineRanks] = useState({})
   const baselineKey = 'duo_count_v1'
-
-  useEffect(() => {
+  const [baselineRanks] = useState(() => {
     try {
       const saved = localStorage.getItem(baselineKey)
-      if (saved) {
-        setBaselineRanks(JSON.parse(saved) || {})
-      } else if (apDateKey === 'all' && initialBaselineRanks && Object.keys(initialBaselineRanks).length > 0) {
+      if (saved) return JSON.parse(saved) || {}
+      if (apDateKey === 'all' && initialBaselineRanks && Object.keys(initialBaselineRanks).length > 0) {
         localStorage.setItem(baselineKey, JSON.stringify(initialBaselineRanks))
-        setBaselineRanks(initialBaselineRanks)
-      } else {
-        setBaselineRanks({})
+        return initialBaselineRanks
       }
-    } catch { setBaselineRanks({}) }
-  }, [apDateKey, initialBaselineRanks])
+      return {}
+    } catch { return {} }
+  })
 
   const deltaFor = (id, currentRank) => {
     if (apDateKey !== 'all') return null
