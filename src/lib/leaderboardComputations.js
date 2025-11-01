@@ -86,8 +86,12 @@ export function addRanks(rows, rankBy) {
   let lastKey = null
   
   return sorted.map((r, i) => {
-    // For 동점자(동순위), rank는 pts만 비교, 오더는 sort 순서 유지
-    const keyVal = r.pts
+    // For 동점자(동순위), rank는 해당 항목만 비교, 오더는 sort 순서 유지
+    let keyVal
+    if (rankBy === 'g') keyVal = r.g
+    else if (rankBy === 'a') keyVal = r.a
+    else if (rankBy === 'gp') keyVal = r.gp
+    else keyVal = r.pts
     const rank = (i === 0) ? 1 : (keyVal === lastKey ? lastRank : i + 1)
     lastRank = rank
     lastKey = keyVal
