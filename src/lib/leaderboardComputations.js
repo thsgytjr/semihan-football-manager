@@ -65,15 +65,16 @@ export function computeAttackRows(players = [], matches = []) {
  */
 export function sortComparator(rankBy) {
   if (rankBy === 'g') {
-    return (a, b) => (b.g - a.g) || (b.a - a.a) || a.name.localeCompare(b.name)
+    return (a, b) => (b.g - a.g) || (b.pts - a.pts) || (b.a - a.a) || (b.gp - a.gp) || a.name.localeCompare(b.name)
   }
   if (rankBy === 'a') {
-    return (a, b) => (b.a - a.a) || (b.g - a.g) || a.name.localeCompare(b.name)
+    return (a, b) => (b.a - a.a) || (b.pts - a.pts) || (b.g - a.g) || (b.gp - a.gp) || a.name.localeCompare(b.name)
   }
   if (rankBy === 'gp') {
-    return (a, b) => (b.gp - a.gp) || (b.g - a.g) || (b.a - a.a) || a.name.localeCompare(b.name)
+    return (a, b) => (b.gp - a.gp) || (b.pts - a.pts) || (b.g - a.g) || (b.a - a.a) || a.name.localeCompare(b.name)
   }
-  return (a, b) => (b.pts - a.pts) || (b.g - a.g) || a.name.localeCompare(b.name)
+  // Default: pts > g > a > gp > name
+  return (a, b) => (b.pts - a.pts) || (b.g - a.g) || (b.a - a.a) || (b.gp - a.gp) || a.name.localeCompare(b.name)
 }
 
 /**
@@ -85,11 +86,8 @@ export function addRanks(rows, rankBy) {
   let lastKey = null
   
   return sorted.map((r, i) => {
-    const keyVal =
-      rankBy === 'g' ? r.g :
-      rankBy === 'a' ? r.a :
-      rankBy === 'gp' ? r.gp :
-      r.pts
+    // For 동점자(동순위), rank는 pts만 비교, 오더는 sort 순서 유지
+    const keyVal = r.pts
     const rank = (i === 0) ? 1 : (keyVal === lastKey ? lastRank : i + 1)
     lastRank = rank
     lastKey = keyVal
@@ -464,7 +462,8 @@ export function computeDraftPlayerStatsRows(players = [], matches = []) {
   let lastKey = null
   return out.map((r, i) => {
     const points = r.wins * 3 + r.draws
-    const key = `${points}-${r.totalGames}-${lastWinTSMap.get(r.id) || 0}`
+    // 동점자(동순위)는 승점만 비교하여 rank를 부여, 오더는 sort 순서 유지
+    const key = `${points}`
     const rank = (i === 0) ? 1 : (key === lastKey ? lastRank : i + 1)
     lastRank = rank
     lastKey = key
@@ -594,7 +593,8 @@ export function computeCaptainStatsRows(players = [], matches = []) {
   let lastKey = null
   return out.map((r, i) => {
     const points = r.wins * 3 + r.draws
-    const key = `${points}-${r.totalGames}-${lastWinTSMap.get(r.id) || 0}`
+    // 동점자(동순위)는 승점만 비교하여 rank를 부여, 오더는 sort 순서 유지
+    const key = `${points}`
     const rank = (i === 0) ? 1 : (key === lastKey ? lastRank : i + 1)
     lastRank = rank
     lastKey = key
