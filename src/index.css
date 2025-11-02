@@ -53,6 +53,16 @@ header {
   background: transparent;
 }
 
+/* scrollbar-hide 유틸리티 클래스 */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
 /* 모바일 viewport 높이 대응 */
 .min-h-screen {
   min-height: 100vh;
