@@ -1,13 +1,14 @@
 // src/App.jsx
 import React,{useEffect,useMemo,useState,useCallback}from"react"
-import{Home,Users,CalendarDays,ListChecks,ShieldCheck,Lock,Eye,EyeOff,AlertCircle,CheckCircle2,X}from"lucide-react"
+import{Home,Users,CalendarDays,ListChecks,ShieldCheck,Lock,Eye,EyeOff,AlertCircle,CheckCircle2,X,Settings}from"lucide-react"
 import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB}from"./services/storage.service"
 import{mkPlayer}from"./lib/players";import{notify}from"./components/Toast"
 import{filterExpiredMatches}from"./lib/upcomingMatch"
 import ToastHub from"./components/Toast";import Card from"./components/Card"
 import Dashboard from"./pages/Dashboard";import PlayersPage from"./pages/PlayersPage"
 import MatchPlanner from"./pages/MatchPlanner";import StatsInput from"./pages/StatsInput"
-import FormationBoard from"./pages/FormationBoard";import logoUrl from"./assets/semihan-football-manager-logo.png"
+import FormationBoard from"./pages/FormationBoard";import logoUrl from"./assets/GoalifyLogo.png"
+import{getAppSettings,updateAppTitle}from"./lib/appSettings"
 const ADMIN_PASS=import.meta.env.VITE_ADMIN_PASSWORD||"letmein"
 
 const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden role="img" className="shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5"/><rect x="2" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/><rect x="18.5" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>)
@@ -17,6 +18,13 @@ export default function App(){
   const[isAdmin,setIsAdmin]=useState(()=>localStorage.getItem("isAdmin")==="1"),[loginOpen,setLoginOpen]=useState(false)
   const[loading,setLoading]=useState(true)
   const[pageLoading,setPageLoading]=useState(false)
+  const[appTitle,setAppTitle]=useState(()=>getAppSettings().appTitle)
+  const[settingsOpen,setSettingsOpen]=useState(false)
+
+  // 브라우저 탭 타이틀 업데이트
+  useEffect(()=>{
+    document.title = appTitle
+  },[appTitle])
 
   useEffect(()=>{let mounted=true;(async()=>{
     try{
@@ -218,8 +226,8 @@ export default function App(){
     <header className="sticky top-0 z-[200] border-b border-stone-300 bg-white/90 backdrop-blur-md backdrop-saturate-150 will-change-transform">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 min-h-[60px] gap-2 sm:gap-3">
         <div className="flex items-center gap-2 flex-shrink-0 relative z-10">
-          <img src={logoUrl} alt="Semihan Football Manager Logo" className="h-6 w-6 sm:h-7 sm:w-7 object-contain flex-shrink-0" width={28} height={28} decoding="async"/>
-          <h1 className="text-sm sm:text-base font-semibold tracking-tight whitespace-nowrap">Semihan-FM</h1>
+          <img src={logoUrl} alt="Goalify Logo" className="h-6 w-6 sm:h-7 sm:w-7 object-contain flex-shrink-0" width={28} height={28} decoding="async"/>
+          <h1 className="text-sm sm:text-base font-semibold tracking-tight whitespace-nowrap">{appTitle}</h1>
         </div>
         <nav className="flex gap-1 sm:gap-2 items-center min-w-0">
           <div className="flex gap-1 sm:gap-2 items-center overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 relative z-0" style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>
@@ -236,15 +244,26 @@ export default function App(){
           </div>
           <div className="ml-2 sm:ml-3 pl-2 sm:pl-3 border-l border-stone-300 flex-shrink-0 relative z-10">
             {isAdmin?(
-              <button
-                onClick={adminLogout}
-                aria-label="Admin 로그아웃"
-                title="Admin 로그아웃"
-                className="inline-flex items-center rounded-lg bg-stone-900 p-2.5 sm:p-3 text-sm font-semibold text-white shadow-sm hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-400 min-h-[42px] min-w-[42px] sm:min-h-[44px] sm:min-w-[44px] touch-manipulation transition-all duration-200 active:scale-95"
-                style={{touchAction: 'manipulation'}}
-              >
-                <X size={16}/>
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={()=>setSettingsOpen(true)}
+                  aria-label="설정"
+                  title="설정"
+                  className="inline-flex items-center rounded-lg bg-stone-100 p-2.5 sm:p-3 text-sm font-semibold text-stone-700 shadow-sm hover:bg-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-400 min-h-[42px] min-w-[42px] sm:min-h-[44px] sm:min-w-[44px] touch-manipulation transition-all duration-200 active:scale-95"
+                  style={{touchAction: 'manipulation'}}
+                >
+                  <Settings size={16}/>
+                </button>
+                <button
+                  onClick={adminLogout}
+                  aria-label="Admin 로그아웃"
+                  title="Admin 로그아웃"
+                  className="inline-flex items-center rounded-lg bg-stone-900 p-2.5 sm:p-3 text-sm font-semibold text-white shadow-sm hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-400 min-h-[42px] min-w-[42px] sm:min-h-[44px] sm:min-w-[44px] touch-manipulation transition-all duration-200 active:scale-95"
+                  style={{touchAction: 'manipulation'}}
+                >
+                  <X size={16}/>
+                </button>
+              </div>
             ):(
               <button
                 onClick={()=>setLoginOpen(true)}
@@ -321,7 +340,8 @@ export default function App(){
       <div className="mt-4 text-center text-[11px] text-stone-400">Semihan Football Manager · v{import.meta.env.VITE_APP_VERSION} build({import.meta.env.VITE_APP_COMMIT})</div>
     </footer>
 
-    <AdminLoginDialog isOpen={loginOpen} onClose={()=>setLoginOpen(false)} onSuccess={onAdminSuccess} adminPass={ADMIN_PASS}/>
+    <AdminLoginDialog isOpen={loginOpen} onClose={()=>setLoginOpen(false)} onSuccess={onAdminSuccess} adminPass={ADMIN_PASS} appTitle={appTitle} onTitleChange={setAppTitle}/>
+    <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle}/>
   </div>)}
 const TabButton = React.memo(function TabButton({icon,label,active,onClick,loading}){return(<button onClick={onClick} disabled={loading} title={label} aria-label={label} className={`flex items-center justify-center rounded-md p-2.5 sm:p-3 text-sm transition-all duration-200 min-h-[42px] min-w-[42px] sm:min-h-[44px] sm:min-w-[44px] touch-manipulation ${active?"bg-emerald-500 text-white shadow-sm":"text-stone-700 hover:bg-stone-200 active:bg-stone-300 active:scale-95"} ${loading?"opacity-75 cursor-wait":""}`} style={{touchAction: 'manipulation'}} aria-pressed={active}>{loading && active ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg> : <span className="w-4 h-4 flex-shrink-0">{icon}</span>}</button>)})
 
@@ -433,10 +453,26 @@ const PageSkeleton = React.memo(function PageSkeleton({ tab }) {
 })
 
 /* ── Admin Login Dialog (기존 코드 유지) ─────────────────── */
-function AdminLoginDialog({isOpen,onClose,onSuccess,adminPass}){const[pw,setPw]=useState(""),[show,setShow]=useState(false),[err,setErr]=useState(""),[caps,setCaps]=useState(false),[loading,setLoading]=useState(false)
-  useEffect(()=>{if(isOpen){setPw("");setErr("");setCaps(false);setLoading(false);setTimeout(()=>document.getElementById("adminPw")?.focus(),50)}},[isOpen])
+function AdminLoginDialog({isOpen,onClose,onSuccess,adminPass,appTitle,onTitleChange}){const[pw,setPw]=useState(""),[show,setShow]=useState(false),[err,setErr]=useState(""),[caps,setCaps]=useState(false),[loading,setLoading]=useState(false)
+  const[newTitle,setNewTitle]=useState(appTitle)
+  const[titleEditMode,setTitleEditMode]=useState(false)
+  
+  useEffect(()=>{if(isOpen){setPw("");setErr("");setCaps(false);setLoading(false);setNewTitle(appTitle);setTitleEditMode(false);setTimeout(()=>document.getElementById("adminPw")?.focus(),50)}},[isOpen,appTitle])
   const onKey=e=>{setCaps(!!e.getModifierState?.("CapsLock"));if(e.key==="Enter")submit()}
   const submit=()=>{if(loading)return;setLoading(true);setErr("");setTimeout(()=>{if(pw&&pw===adminPass)onSuccess?.();else{setErr("비밀번호가 올바르지 않습니다.");setLoading(false)}},250)}
+  
+  const handleTitleUpdate=()=>{
+    if(newTitle.trim()){
+      if(updateAppTitle(newTitle.trim())){
+        onTitleChange(newTitle.trim())
+        setTitleEditMode(false)
+        notify("앱 타이틀이 변경되었습니다.","success")
+      }else{
+        notify("타이틀 변경에 실패했습니다.","error")
+      }
+    }
+  }
+  
   if(!isOpen)return null;return(<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
     <div className="relative w-full max-w-sm rounded-2xl border border-stone-200 bg-white shadow-xl">
       <button className="absolute right-3 top-3 rounded-md p-1 text-stone-500 hover:bg-stone-100" onClick={onClose} aria-label="닫기"><X size={18}/></button>
@@ -451,6 +487,117 @@ function AdminLoginDialog({isOpen,onClose,onSuccess,adminPass}){const[pw,setPw]=
         {caps&&(<div className="flex items-center gap-2 rounded-md bg-amber-50 px-2.5 py-1 text-[11px] text-amber-800"><AlertCircle size={12}/>Caps Lock이 켜져 있어요</div>)}
         {err&&(<div className="flex items-center gap-2 rounded-md bg-rose-50 px-2.5 py-1 text-[11px] text-rose-700"><X size={12}/>{err}</div>)}
         <button onClick={submit} disabled={loading} className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-stone-900 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-stone-800 disabled:opacity-50">{loading?<span className="inline-flex items-center gap-2"><svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity=".25"/><path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="4" fill="none"/></svg> 확인 중…</span>:<><CheckCircle2 size={14}/> 로그인</>}</button>
+        
+        <div className="border-t border-stone-200 pt-3 mt-4">
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-xs font-medium text-stone-600">앱 타이틀</label>
+            {!titleEditMode && (
+              <button onClick={()=>setTitleEditMode(true)} className="text-xs text-emerald-600 hover:text-emerald-700 font-medium">수정</button>
+            )}
+          </div>
+          {titleEditMode ? (
+            <div className="space-y-2">
+              <input type="text" value={newTitle} onChange={e=>setNewTitle(e.target.value)} placeholder="앱 타이틀 입력" className="w-full px-3 py-2 text-sm rounded-lg border border-stone-300 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"/>
+              <div className="flex gap-2">
+                <button onClick={handleTitleUpdate} className="flex-1 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg">저장</button>
+                <button onClick={()=>{setNewTitle(appTitle);setTitleEditMode(false)}} className="flex-1 px-3 py-1.5 text-xs font-semibold text-stone-700 bg-stone-200 hover:bg-stone-300 rounded-lg">취소</button>
+              </div>
+            </div>
+          ) : (
+            <div className="px-3 py-2 text-sm rounded-lg border border-stone-200 bg-stone-50 text-stone-700">{appTitle}</div>
+          )}
+        </div>
       </div>
     </div>
   </div>)}
+
+/* ── Settings Dialog ─────────────────── */
+function SettingsDialog({isOpen,onClose,appTitle,onTitleChange}){
+  const[newTitle,setNewTitle]=useState(appTitle)
+  const[titleEditMode,setTitleEditMode]=useState(false)
+  
+  useEffect(()=>{
+    if(isOpen){
+      setNewTitle(appTitle)
+      setTitleEditMode(false)
+    }
+  },[isOpen,appTitle])
+  
+  const handleTitleUpdate=()=>{
+    if(newTitle.trim()){
+      if(updateAppTitle(newTitle.trim())){
+        onTitleChange(newTitle.trim())
+        setTitleEditMode(false)
+        notify("앱 타이틀이 변경되었습니다.","success")
+      }else{
+        notify("타이틀 변경에 실패했습니다.","error")
+      }
+    }
+  }
+  
+  if(!isOpen)return null;
+  
+  return(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
+      <div className="relative w-full max-w-sm rounded-2xl border border-stone-200 bg-white shadow-xl">
+        <button className="absolute right-3 top-3 rounded-md p-1 text-stone-500 hover:bg-stone-100" onClick={onClose} aria-label="닫기">
+          <X size={18}/>
+        </button>
+        <div className="flex items-center gap-3 border-b border-stone-200 px-5 py-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+            <Settings size={20}/>
+          </div>
+          <div>
+            <h3 className="text-base font-semibold">앱 설정</h3>
+            <p className="text-xs text-stone-500">앱 타이틀을 변경할 수 있습니다.</p>
+          </div>
+        </div>
+        <div className="space-y-4 px-5 py-4">
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-stone-700">앱 타이틀</label>
+              {!titleEditMode && (
+                <button onClick={()=>setTitleEditMode(true)} className="text-xs text-emerald-600 hover:text-emerald-700 font-medium">
+                  수정
+                </button>
+              )}
+            </div>
+            {titleEditMode ? (
+              <div className="space-y-2">
+                <input 
+                  type="text" 
+                  value={newTitle} 
+                  onChange={e=>setNewTitle(e.target.value)} 
+                  placeholder="앱 타이틀 입력" 
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-stone-300 outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <button 
+                    onClick={handleTitleUpdate} 
+                    className="flex-1 px-3 py-2 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+                  >
+                    저장
+                  </button>
+                  <button 
+                    onClick={()=>{setNewTitle(appTitle);setTitleEditMode(false)}} 
+                    className="flex-1 px-3 py-2 text-sm font-semibold text-stone-700 bg-stone-200 hover:bg-stone-300 rounded-lg transition-colors"
+                  >
+                    취소
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="px-3 py-2.5 text-sm rounded-lg border border-stone-200 bg-stone-50 text-stone-700 font-medium">
+                {appTitle}
+              </div>
+            )}
+          </div>
+          <div className="text-xs text-stone-500 bg-stone-50 rounded-lg p-3 border border-stone-200">
+            💡 변경된 타이틀은 헤더와 브라우저 탭에 즉시 반영됩니다.
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
