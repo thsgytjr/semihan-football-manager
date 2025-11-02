@@ -10,7 +10,7 @@ import Dashboard from"./pages/Dashboard";import PlayersPage from"./pages/Players
 import MatchPlanner from"./pages/MatchPlanner";import StatsInput from"./pages/StatsInput"
 import FormationBoard from"./pages/FormationBoard";import DraftPage from"./pages/DraftPage"
 import logoUrl from"./assets/GoalifyLogo.png"
-import{getAppSettings,loadAppSettingsFromServer,updateAppTitle}from"./lib/appSettings"
+import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEnabled}from"./lib/appSettings"
 const ADMIN_PASS=import.meta.env.VITE_ADMIN_PASSWORD||"letmein"
 
 const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden role="img" className="shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5"/><rect x="2" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/><rect x="18.5" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>)
@@ -23,15 +23,16 @@ export default function App(){
   const[appTitle,setAppTitle]=useState(()=>getAppSettings().appTitle)
   const[settingsOpen,setSettingsOpen]=useState(false)
   const[tutorialOpen,setTutorialOpen]=useState(false)
+  const[tutorialEnabled,setTutorialEnabled]=useState(()=>getAppSettings().tutorialEnabled)
   const{shouldShowTutorial,setShouldShowTutorial}=useAutoTutorial(isAdmin)
 
-  // 첫 방문자 자동 튜토리얼
+  // 첫 방문자 자동 튜토리얼 (튜토리얼이 활성화된 경우에만)
   useEffect(()=>{
-    if(shouldShowTutorial){
+    if(tutorialEnabled && shouldShowTutorial){
       setTutorialOpen(true)
       setShouldShowTutorial(false)
     }
-  },[shouldShowTutorial,setShouldShowTutorial])
+  },[tutorialEnabled,shouldShowTutorial,setShouldShowTutorial])
 
   // 브라우저 탭 타이틀 업데이트
   useEffect(()=>{
@@ -45,6 +46,9 @@ export default function App(){
         const settings = await loadAppSettingsFromServer()
         if(settings.appTitle && settings.appTitle !== appTitle){
           setAppTitle(settings.appTitle)
+        }
+        if(settings.tutorialEnabled !== undefined && settings.tutorialEnabled !== tutorialEnabled){
+          setTutorialEnabled(settings.tutorialEnabled)
         }
       }catch(e){
         console.error('Failed to load app settings from server:', e)
@@ -166,6 +170,16 @@ export default function App(){
   function adminLogout(){localStorage.removeItem("isAdmin");setIsAdmin(false);notify("Admin 모드 해제")}
   function onAdminSuccess(){localStorage.setItem("isAdmin","1");setIsAdmin(true);setLoginOpen(false);notify("Admin 모드 활성화")}
 
+  async function handleTutorialToggle(enabled){
+    setTutorialEnabled(enabled)
+    const success = await updateTutorialEnabled(enabled)
+    if(success){
+      notify(enabled?"튜토리얼이 활성화되었습니다.":"튜토리얼이 비활성화되었습니다.","success")
+    }else{
+      notify("설정 저장에 실패했습니다.","error")
+    }
+  }
+
   /* ──────────────────────────────────────────────────────────
    * FormationBoard용 fetchMatchTeams 빌더 (생략 없음)
    * ────────────────────────────────────────────────────────── */
@@ -250,7 +264,6 @@ export default function App(){
   return(
   <div className="min-h-screen bg-stone-100 text-stone-800 antialiased leading-relaxed w-full max-w-full overflow-x-auto">
     <ToastHub/>
-    <AppTutorial isOpen={tutorialOpen} onClose={()=>setTutorialOpen(false)} isAdmin={isAdmin} />
     <header className="sticky top-0 z-[200] border-b border-stone-300 bg-white/90 backdrop-blur-md backdrop-saturate-150 will-change-transform">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 min-h-[60px] gap-2 sm:gap-3">
         {/* 앱 로고와 타이틀 - 표시만 (관리자만 설정 버튼으로 수정 가능) */}
@@ -273,15 +286,17 @@ export default function App(){
           </div>
           <div className="ml-2 sm:ml-3 pl-2 sm:pl-3 border-l border-stone-300 flex-shrink-0 relative z-10">
             <div className="flex gap-2">
-              <button
-                onClick={()=>setTutorialOpen(true)}
-                aria-label="가이드"
-                title="앱 사용 가이드"
-                className="inline-flex items-center rounded-lg bg-blue-500 p-2.5 sm:p-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[42px] min-w-[42px] sm:min-h-[44px] sm:min-w-[44px] touch-manipulation transition-all duration-200 active:scale-95"
-                style={{touchAction: 'manipulation'}}
-              >
-                <BookOpen size={16}/>
-              </button>
+              {tutorialEnabled && (
+                <button
+                  onClick={()=>setTutorialOpen(true)}
+                  aria-label="가이드"
+                  title="앱 사용 가이드"
+                  className="inline-flex items-center rounded-lg bg-blue-500 p-2.5 sm:p-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[42px] min-w-[42px] sm:min-h-[44px] sm:min-w-[44px] touch-manipulation transition-all duration-200 active:scale-95"
+                  style={{touchAction: 'manipulation'}}
+                >
+                  <BookOpen size={16}/>
+                </button>
+              )}
               {isAdmin?(
                 <>
                   <button
@@ -382,9 +397,11 @@ export default function App(){
     </footer>
 
     <AdminLoginDialog isOpen={loginOpen} onClose={()=>setLoginOpen(false)} onSuccess={onAdminSuccess} adminPass={ADMIN_PASS}/>
-    <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle}/>
+    <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle} tutorialEnabled={tutorialEnabled} onTutorialToggle={handleTutorialToggle}/>
+    {tutorialEnabled && <AppTutorial isOpen={tutorialOpen} onClose={()=>setTutorialOpen(false)} isAdmin={isAdmin}/>}
   </div>)}
-const TabButton = React.memo(function TabButton({icon,label,active,onClick,loading}){return(<button onClick={onClick} disabled={loading} title={label} aria-label={label} className={`flex items-center justify-center rounded-md p-2.5 sm:p-3 text-sm transition-all duration-200 min-h-[42px] min-w-[42px] sm:min-h-[44px] sm:min-w-[44px] touch-manipulation ${active?"bg-emerald-500 text-white shadow-sm":"text-stone-700 hover:bg-stone-200 active:bg-stone-300 active:scale-95"} ${loading?"opacity-75 cursor-wait":""}`} style={{touchAction: 'manipulation'}} aria-pressed={active}>{loading && active ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg> : <span className="w-4 h-4 flex-shrink-0">{icon}</span>}</button>)})
+const TabButton = React.memo(function TabButton({icon,label,active,onClick,loading}){return(<button onClick={onClick} disabled={loading} title={label} aria-label={label} className={`flex items-center gap-1.5 rounded-md px-2.5 py-2.5 sm:px-3 sm:py-3 text-sm transition-all duration-200 min-h-[42px] sm:min-h-[44px] touch-manipulation whitespace-nowrap ${active?"bg-emerald-500 text-white shadow-md":"text-stone-700 hover:bg-stone-200 active:bg-stone-300 active:scale-95"} ${loading?"opacity-75 cursor-wait":""}`} style={{touchAction: 'manipulation'}} aria-pressed={active}>{loading && active ? <svg className="w-4 h-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg> : <span className="w-4 h-4 flex-shrink-0">{icon}</span>}{active && <span className="text-xs font-semibold hidden sm:inline">{label}</span>}</button>)})
+
 
 // 페이지별 로딩 스켈레톤 컴포넌트
 const PageSkeleton = React.memo(function PageSkeleton({ tab }) {
@@ -519,7 +536,7 @@ function AdminLoginDialog({isOpen,onClose,onSuccess,adminPass}){const[pw,setPw]=
   </div>)}
 
 /* ── Settings Dialog ─────────────────── */
-function SettingsDialog({isOpen,onClose,appTitle,onTitleChange}){
+function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,onTutorialToggle}){
   const[newTitle,setNewTitle]=useState(appTitle)
   const[titleEditMode,setTitleEditMode]=useState(false)
   
@@ -556,7 +573,7 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange}){
           </div>
           <div>
             <h3 className="text-base font-semibold">앱 설정</h3>
-            <p className="text-xs text-stone-500">앱 타이틀을 변경할 수 있습니다.</p>
+            <p className="text-xs text-stone-500">앱 타이틀 및 튜토리얼 설정을 관리합니다.</p>
           </div>
         </div>
         <div className="space-y-4 px-5 py-4">
@@ -600,6 +617,38 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange}){
               </div>
             )}
           </div>
+
+          {/* 튜토리얼 활성화 토글 */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <label className="block text-sm font-medium text-stone-700">튜토리얼 기능</label>
+                <p className="text-xs text-stone-500 mt-0.5">앱 가이드 및 자동 튜토리얼 활성화</p>
+              </div>
+              <button
+                onClick={() => onTutorialToggle(!tutorialEnabled)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+                  tutorialEnabled ? 'bg-emerald-600' : 'bg-stone-300'
+                }`}
+                role="switch"
+                aria-checked={tutorialEnabled}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    tutorialEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+            <div className="text-xs text-stone-500 bg-stone-50 rounded-lg p-3 border border-stone-200">
+              {tutorialEnabled ? (
+                <>✅ 튜토리얼 버튼이 표시되며, 첫 방문자에게 자동으로 가이드가 표시됩니다.</>
+              ) : (
+                <>🔒 튜토리얼 버튼과 자동 가이드가 비활성화됩니다.</>
+              )}
+            </div>
+          </div>
+
           <div className="text-xs text-stone-500 bg-stone-50 rounded-lg p-3 border border-stone-200">
             💡 변경된 타이틀은 헤더와 브라우저 탭에 즉시 반영됩니다.
           </div>

@@ -8,7 +8,8 @@ const SUPABASE_SETTINGS_KEY = 'app_settings'
 
 const DEFAULT_SETTINGS = {
   appTitle: 'Semihan-FM',
-  appName: 'Semihan Football Manager'
+  appName: 'Semihan Football Manager',
+  tutorialEnabled: true
 }
 
 // Supabase에서 앱 설정 로드
@@ -98,4 +99,13 @@ export async function updateAppTitle(newTitle) {
     return true
   }
   return false
+}
+
+// 튜토리얼 활성화 상태 업데이트 (서버 + 로컬)
+export async function updateTutorialEnabled(enabled) {
+  const settings = getAppSettings()
+  settings.tutorialEnabled = enabled
+  
+  const success = await saveAppSettingsToServer(settings)
+  return success
 }
