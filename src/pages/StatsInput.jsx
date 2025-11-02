@@ -430,8 +430,13 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     }
     const needle = q.trim().toLowerCase()
     if (needle) pool = pool.filter(p => (p.name||'').toLowerCase().includes(needle))
+    
+    // Filter out players already in the panel
+    const panelSet = new Set(panelIds.map(toStr))
+    pool = pool.filter(p => !panelSet.has(toStr(p.id)))
+    
     return pool.sort((a,b)=>a.name.localeCompare(b.name))
-  }, [players, editingMatch, teams, teamIdx, q])
+  }, [players, editingMatch, teams, teamIdx, q, panelIds])
 
   const save = () => {
     if (!editingMatch) return
@@ -562,12 +567,304 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
   )
 }
 
+function GoalAssistLinkingPanel({ players, draft, setDraft }) {
+  // Extract all goals and assists from draft
+  const [selectedGoal, setSelectedGoal] = useState(null)
+  const [selectedAssist, setSelectedAssist] = useState(null)
+
+  const allGoals = useMemo(() => {
+    const goals = []
+    for (const [pid, rec] of Object.entries(draft)) {
+      const player = players.find(p => toStr(p.id) === toStr(pid))
+      if (!player) continue
+      const events = Array.isArray(rec.events) ? rec.events : []
+      events.forEach((evt, idx) => {
+        if (evt.type === 'goal') {
+          goals.push({
+            playerId: pid,
+            playerName: player.name,
+            eventIdx: idx,
+            date: evt.date,
+            assistedBy: evt.assistedBy || null,
+            uniqueKey: `${pid}-${idx}`
+          })
+        }
+      })
+    }
+    return goals.sort((a, b) => new Date(b.date) - new Date(a.date))
+  }, [draft, players])
+
+  const allAssists = useMemo(() => {
+    const assists = []
+    for (const [pid, rec] of Object.entries(draft)) {
+      const player = players.find(p => toStr(p.id) === toStr(pid))
+      if (!player) continue
+      const events = Array.isArray(rec.events) ? rec.events : []
+      events.forEach((evt, idx) => {
+        if (evt.type === 'assist') {
+          assists.push({
+            playerId: pid,
+            playerName: player.name,
+            eventIdx: idx,
+            date: evt.date,
+            linkedToGoal: evt.linkedToGoal || null,
+            uniqueKey: `${pid}-${idx}`
+          })
+        }
+      })
+    }
+    return assists.sort((a, b) => new Date(b.date) - new Date(a.date))
+  }, [draft, players])
+
+  const linkGoalToAssist = () => {
+    if (!selectedGoal || !selectedAssist) return
+
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev)) // deep copy
+      
+      // Update goal with assistedBy
+      const goalRec = next[selectedGoal.playerId]
+      if (goalRec && goalRec.events && goalRec.events[selectedGoal.eventIdx]) {
+        goalRec.events[selectedGoal.eventIdx].assistedBy = selectedAssist.playerId
+        goalRec.events[selectedGoal.eventIdx].assistedByIdx = selectedAssist.eventIdx
+      }
+      
+      // Update assist with linkedToGoal
+      const assistRec = next[selectedAssist.playerId]
+      if (assistRec && assistRec.events && assistRec.events[selectedAssist.eventIdx]) {
+        assistRec.events[selectedAssist.eventIdx].linkedToGoal = selectedGoal.playerId
+        assistRec.events[selectedAssist.eventIdx].linkedToGoalIdx = selectedGoal.eventIdx
+      }
+      
+      return next
+    })
+    
+    setSelectedGoal(null)
+    setSelectedAssist(null)
+  }
+
+  const unlinkGoal = (goal) => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      
+      const goalRec = next[goal.playerId]
+      if (goalRec && goalRec.events && goalRec.events[goal.eventIdx]) {
+        const assistPlayerId = goalRec.events[goal.eventIdx].assistedBy
+        const assistIdx = goalRec.events[goal.eventIdx].assistedByIdx
+        
+        // Remove link from goal
+        delete goalRec.events[goal.eventIdx].assistedBy
+        delete goalRec.events[goal.eventIdx].assistedByIdx
+        
+        // Remove link from assist if it exists
+        if (assistPlayerId !== undefined && assistIdx !== undefined) {
+          const assistRec = next[assistPlayerId]
+          if (assistRec && assistRec.events && assistRec.events[assistIdx]) {
+            delete assistRec.events[assistIdx].linkedToGoal
+            delete assistRec.events[assistIdx].linkedToGoalIdx
+          }
+        }
+      }
+      
+      return next
+    })
+  }
+
+  return (
+    <div className="border-b bg-blue-50 px-3 py-3">
+      <div className="mb-2 text-sm font-semibold text-blue-900">골-어시스트 수동 연결</div>
+      <div className="grid gap-3 md:grid-cols-2">
+        {/* Goals List */}
+        <div>
+          <div className="mb-2 text-xs font-semibold text-gray-700">골 목록</div>
+          <div className="max-h-60 overflow-auto rounded border border-gray-300 bg-white">
+            {allGoals.length === 0 ? (
+              <div className="p-3 text-center text-xs text-gray-500">골이 없습니다</div>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {allGoals.map(goal => {
+                  const isSelected = selectedGoal?.uniqueKey === goal.uniqueKey
+                  const assistedByPlayer = goal.assistedBy ? players.find(p => toStr(p.id) === toStr(goal.assistedBy)) : null
+                  
+                  return (
+                    <li
+                      key={goal.uniqueKey}
+                      onClick={() => setSelectedGoal(isSelected ? null : goal)}
+                      className={`cursor-pointer px-2 py-2 text-xs hover:bg-blue-50 ${isSelected ? 'bg-blue-100 border-l-2 border-blue-500' : ''}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="font-medium">{goal.playerName}</div>
+                          <div className="text-gray-500">{new Date(goal.date).toLocaleString('ko-KR')}</div>
+                          {assistedByPlayer && (
+                            <div className="mt-1 flex items-center gap-1 text-emerald-700">
+                              <span>🔗 어시: {assistedByPlayer.name}</span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  unlinkGoal(goal)
+                                }}
+                                className="ml-1 text-red-600 hover:text-red-800"
+                                title="연결 해제"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+
+        {/* Assists List */}
+        <div>
+          <div className="mb-2 text-xs font-semibold text-gray-700">어시스트 목록</div>
+          <div className="max-h-60 overflow-auto rounded border border-gray-300 bg-white">
+            {allAssists.length === 0 ? (
+              <div className="p-3 text-center text-xs text-gray-500">어시스트가 없습니다</div>
+            ) : (
+              <ul className="divide-y divide-gray-100">
+                {allAssists.map(assist => {
+                  const isSelected = selectedAssist?.uniqueKey === assist.uniqueKey
+                  const linkedToPlayer = assist.linkedToGoal ? players.find(p => toStr(p.id) === toStr(assist.linkedToGoal)) : null
+                  
+                  return (
+                    <li
+                      key={assist.uniqueKey}
+                      onClick={() => setSelectedAssist(isSelected ? null : assist)}
+                      className={`cursor-pointer px-2 py-2 text-xs hover:bg-blue-50 ${isSelected ? 'bg-blue-100 border-l-2 border-blue-500' : ''}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="font-medium">{assist.playerName}</div>
+                          <div className="text-gray-500">{new Date(assist.date).toLocaleString('ko-KR')}</div>
+                          {linkedToPlayer && (
+                            <div className="mt-1 text-emerald-700">
+                              🔗 골: {linkedToPlayer.name}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Link Button */}
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          onClick={linkGoalToAssist}
+          disabled={!selectedGoal || !selectedAssist}
+          className={`rounded px-4 py-2 text-sm font-medium text-white ${
+            selectedGoal && selectedAssist
+              ? 'bg-blue-600 hover:bg-blue-700'
+              : 'bg-gray-300 cursor-not-allowed'
+          }`}
+        >
+          선택한 골과 어시스트 연결
+        </button>
+        {(selectedGoal || selectedAssist) && (
+          <button
+            onClick={() => {
+              setSelectedGoal(null)
+              setSelectedAssist(null)
+            }}
+            className="rounded border px-3 py-2 text-sm"
+          >
+            선택 취소
+          </button>
+        )}
+        {selectedGoal && (
+          <span className="text-xs text-gray-600">골: {selectedGoal.playerName}</span>
+        )}
+        {selectedAssist && (
+          <span className="text-xs text-gray-600">어시: {selectedAssist.playerName}</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, onSave }){
+  const [showLinkingPanel, setShowLinkingPanel] = useState(false)
+  const [addingGoalFor, setAddingGoalFor] = useState(null)
+  const [addingAssistFor, setAddingAssistFor] = useState(null)
+
+  const addGoalWithAssist = (scorerId, assisterId) => {
+    const now = new Date().toISOString()
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      
+      // Add goal event
+      const scorerRec = next[toStr(scorerId)] || { goals: 0, assists: 0, events: [] }
+      const goalEvent = { type: 'goal', date: now }
+      if (assisterId) {
+        goalEvent.assistedBy = toStr(assisterId)
+      }
+      scorerRec.events.push(goalEvent)
+      scorerRec.goals = (scorerRec.goals || 0) + 1
+      next[toStr(scorerId)] = scorerRec
+      
+      // Add assist event if assister is selected
+      if (assisterId) {
+        const assisterRec = next[toStr(assisterId)] || { goals: 0, assists: 0, events: [] }
+        const assistEvent = { type: 'assist', date: now, linkedToGoal: toStr(scorerId) }
+        assisterRec.events.push(assistEvent)
+        assisterRec.assists = (assisterRec.assists || 0) + 1
+        next[toStr(assisterId)] = assisterRec
+      }
+      
+      return next
+    })
+    setAddingGoalFor(null)
+  }
+
+  const addAssistForGoal = (assisterId, scorerId) => {
+    const now = new Date().toISOString()
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      
+      // Add assist event
+      const assisterRec = next[toStr(assisterId)] || { goals: 0, assists: 0, events: [] }
+      const assistEvent = { type: 'assist', date: now }
+      if (scorerId) {
+        assistEvent.linkedToGoal = toStr(scorerId)
+      }
+      assisterRec.events.push(assistEvent)
+      assisterRec.assists = (assisterRec.assists || 0) + 1
+      next[toStr(assisterId)] = assisterRec
+      
+      // Add goal event if scorer is selected
+      if (scorerId) {
+        const scorerRec = next[toStr(scorerId)] || { goals: 0, assists: 0, events: [] }
+        const goalEvent = { type: 'goal', date: now, assistedBy: toStr(assisterId) }
+        scorerRec.events.push(goalEvent)
+        scorerRec.goals = (scorerRec.goals || 0) + 1
+        next[toStr(scorerId)] = scorerRec
+      }
+      
+      return next
+    })
+    setAddingAssistFor(null)
+  }
+
   return (
     <div className="rounded border border-gray-200 bg-white">
       <div className="flex items-center justify-between border-b px-3 py-2 text-xs">
         <div className="font-semibold">편집 패널 · {panelIds.length}명</div>
         <div className="flex items-center gap-2">
+          <button onClick={()=>setShowLinkingPanel(!showLinkingPanel)} className="rounded border border-blue-500 bg-blue-50 px-2 py-1 text-blue-700">
+            {showLinkingPanel ? '기존 연결 패널 닫기' : '기존 골-어시 연결'}
+          </button>
           <button onClick={()=>{
             // Reset goals/assists for players currently in the panel, then clear the panel.
             setDraft(prev=>{
@@ -582,6 +879,86 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
           <button onClick={onSave} className="rounded bg-emerald-600 px-3 py-1 text-white">저장</button>
         </div>
       </div>
+      
+      {showLinkingPanel && (
+        <GoalAssistLinkingPanel players={players} draft={draft} setDraft={setDraft} />
+      )}
+
+      {/* Goal/Assist Adding Modal */}
+      {addingGoalFor && (
+        <div className="border-b bg-green-50 px-3 py-3">
+          <div className="mb-2 text-sm font-semibold">
+            {players.find(p => toStr(p.id) === toStr(addingGoalFor))?.name}의 골 추가
+          </div>
+          <div className="mb-2 text-xs text-gray-600">어시스트한 선수를 선택하세요 (선택사항):</div>
+          <div className="flex flex-wrap gap-2">
+            {panelIds.filter(pid => toStr(pid) !== toStr(addingGoalFor)).map(pid => {
+              const p = players.find(pp => toStr(pp.id) === toStr(pid))
+              const rec = draft[toStr(pid)] || { goals: 0, assists: 0, events: [] }
+              if (!p) return null
+              return (
+                <button
+                  key={pid}
+                  onClick={() => addGoalWithAssist(addingGoalFor, pid)}
+                  className="rounded border border-green-600 bg-white px-3 py-1 text-xs hover:bg-green-100"
+                >
+                  {p.name} <span className="ml-1 text-gray-500">(A: {rec.assists})</span>
+                </button>
+              )
+            })}
+            <button
+              onClick={() => addGoalWithAssist(addingGoalFor, null)}
+              className="rounded bg-green-600 px-3 py-1 text-xs text-white hover:bg-green-700"
+            >
+              어시스트 없이 추가
+            </button>
+            <button
+              onClick={() => setAddingGoalFor(null)}
+              className="rounded border px-3 py-1 text-xs"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
+      {addingAssistFor && (
+        <div className="border-b bg-blue-50 px-3 py-3">
+          <div className="mb-2 text-sm font-semibold">
+            {players.find(p => toStr(p.id) === toStr(addingAssistFor))?.name}의 어시스트 추가
+          </div>
+          <div className="mb-2 text-xs text-gray-600">골을 넣은 선수를 선택하세요 (선택사항):</div>
+          <div className="flex flex-wrap gap-2">
+            {panelIds.filter(pid => toStr(pid) !== toStr(addingAssistFor)).map(pid => {
+              const p = players.find(pp => toStr(pp.id) === toStr(pid))
+              const rec = draft[toStr(pid)] || { goals: 0, assists: 0, events: [] }
+              if (!p) return null
+              return (
+                <button
+                  key={pid}
+                  onClick={() => addAssistForGoal(addingAssistFor, pid)}
+                  className="rounded border border-blue-600 bg-white px-3 py-1 text-xs hover:bg-blue-100"
+                >
+                  {p.name} <span className="ml-1 text-gray-500">(G: {rec.goals})</span>
+                </button>
+              )
+            })}
+            <button
+              onClick={() => addAssistForGoal(addingAssistFor, null)}
+              className="rounded bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700"
+            >
+              골 없이 추가
+            </button>
+            <button
+              onClick={() => setAddingAssistFor(null)}
+              className="rounded border px-3 py-1 text-xs"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
       <ul className="divide-y divide-gray-100">
         {panelIds.map(pid => {
           const p = players.find(pp => toStr(pp.id)===toStr(pid))
@@ -596,17 +973,17 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
                 </div>
               </div>
 
-              <MiniCounter
+              <LinkedCounter
                 label="G"
                 value={rec.goals}
+                onAdd={() => setAddingGoalFor(p.id)}
                 onDec={()=>setVal(p.id,'goals',Math.max(0,(rec.goals||0)-1))}
-                onInc={()=>setVal(p.id,'goals',(rec.goals||0)+1)}
               />
-              <MiniCounter
+              <LinkedCounter
                 label="A"
                 value={rec.assists}
+                onAdd={() => setAddingAssistFor(p.id)}
                 onDec={()=>setVal(p.id,'assists',Math.max(0,(rec.assists||0)-1))}
-                onInc={()=>setVal(p.id,'assists',(rec.assists||0)+1)}
               />
 
               <button onClick={()=>{
@@ -643,13 +1020,13 @@ function Pill({ children, active, onClick }){
   )
 }
 
-function MiniCounter({ label, value, onDec, onInc }){
+function LinkedCounter({ label, value, onAdd, onDec }){
   return (
     <div className="flex items-center gap-1">
       <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-stone-800 text-[10px] font-bold text-white">{label}</span>
-      <button onClick={onDec} aria-label={`${label} 감소`}>-</button>
+      <button onClick={onDec} aria-label={`${label} 감소`} className="text-gray-600 hover:text-red-600">-</button>
       <span style={{ width: 24, textAlign: 'center' }} className="tabular-nums">{value}</span>
-      <button onClick={onInc} aria-label={`${label} 증가`}>+</button>
+      <button onClick={onAdd} aria-label={`${label} 추가`} className="text-gray-600 hover:text-green-600">+</button>
     </div>
   )
 }
