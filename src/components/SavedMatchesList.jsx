@@ -1159,21 +1159,23 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
         return (
 
           <div className="mt-3">
-            {/* Redesigned Quarter Scores Input */}
-            <div className="rounded border p-3 bg-white">
-              <div className="flex items-center justify-between mb-2">
-                <div className="text-sm font-medium">쿼터 점수 입력</div>
-                <div className="flex items-center gap-1">
+            {/* Redesigned Quarter Scores Input - Mobile Optimized */}
+            <div className="rounded-lg border-2 border-blue-100 p-2 sm:p-4 bg-gradient-to-br from-blue-50 to-white shadow-sm">
+              <div className="flex items-center justify-between mb-2 sm:mb-3">
+                <div className="flex items-center gap-1 sm:gap-2">
+                  <div className="text-sm sm:text-base font-semibold text-gray-800">쿼터 점수</div>
+                </div>
+                <div className="flex items-center gap-1 sm:gap-2">
                   <button
-                    className="rounded-full border border-blue-300 bg-blue-50 w-7 h-7 flex items-center justify-center text-blue-700 hover:bg-blue-100 text-base"
+                    className="rounded-lg border-2 border-blue-400 bg-blue-500 hover:bg-blue-600 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-white shadow-sm transition-all active:scale-95 font-semibold text-base sm:text-lg"
                     title="쿼터 추가"
                     onClick={()=>{
                       const next = qs.map(arr => [...arr, 0])
                       setQuarterScores(next)
                     }}
-                  >＋</button>
+                  >+</button>
                   <button
-                    className="rounded-full border border-gray-300 bg-white w-7 h-7 flex items-center justify-center text-gray-700 hover:bg-gray-100 text-base disabled:opacity-50"
+                    className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-gray-700 shadow-sm transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 font-semibold text-base sm:text-lg"
                     title="마지막 쿼터 삭제"
                     disabled={maxQ===0}
                     onClick={()=>{
@@ -1181,65 +1183,96 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                       const next = qs.map(arr => arr.slice(0, newLen))
                       setQuarterScores(next)
                     }}
-                  >－</button>
+                  >−</button>
                 </div>
               </div>
-              <div className="flex flex-col gap-2">
+              
+              <div className="flex flex-col gap-1.5 sm:gap-3">
                 {/* Header Row */}
-                <div className="flex items-center gap-2 pl-14">
+                <div className="flex items-center gap-1 sm:gap-2 pl-10 sm:pl-16">
                   {Array.from({length: Math.max(1, maxQ)}).map((_,qi)=>(
-                    <div key={qi} className="w-14 text-center text-xs text-stone-600">Q{qi+1}</div>
+                    <div key={qi} className="w-14 sm:w-20 text-center">
+                      <div className="inline-flex items-center justify-center px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-blue-100 rounded-full">
+                        <span className="text-[10px] sm:text-xs font-bold text-blue-700">Q{qi+1}</span>
+                      </div>
+                    </div>
                   ))}
                 </div>
+                
                 {/* Team Rows */}
-                {draftTeams.map((_, ti) => (
-                  <div key={`qrow-${ti}`} className="flex items-center gap-2">
-                    <div className="w-12 text-xs text-stone-700 font-semibold text-right pr-2">팀 {ti+1}</div>
-                    {Array.from({length: Math.max(1, maxQ)}).map((_,qi)=>{
-                      const val = qs[ti][qi] ?? 0
-                      return (
-                        <div key={`qcell-${ti}-${qi}`} className="flex items-center gap-1 w-14 justify-center">
-                          <button
-                            className="rounded-full border border-gray-300 bg-white w-6 h-6 flex items-center justify-center text-gray-700 hover:bg-gray-100 p-0 text-base disabled:opacity-40"
-                            title="점수 내리기"
-                            disabled={val <= 0}
-                            onClick={() => {
-                              const next = qs.map(a=>a.slice())
-                              next[ti][qi] = Math.max(0, val - 1)
-                              setQuarterScores(next)
-                            }}
-                            aria-label="점수 -1"
-                          >-</button>
-                          <span className="inline-block w-5 text-center select-none text-sm">{val}</span>
-                          <button
-                            className="rounded-full border border-blue-300 bg-blue-50 w-6 h-6 flex items-center justify-center text-blue-700 hover:bg-blue-100 p-0 text-base disabled:opacity-40"
-                            title="점수 올리기"
-                            disabled={val >= 99}
-                            onClick={() => {
-                              const next = qs.map(a=>a.slice())
-                              next[ti][qi] = Math.min(99, val + 1)
-                              setQuarterScores(next)
-                            }}
-                            aria-label="점수 +1"
-                          >+</button>
+                {draftTeams.map((_, ti) => {
+                  return (
+                    <div key={`qrow-${ti}`} className="flex items-center gap-1 sm:gap-2 bg-white rounded-lg p-1 sm:p-2 shadow-sm border border-gray-200">
+                      <div className="w-8 sm:w-12 flex items-center justify-center">
+                        <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">
+                          <span className="text-white font-bold text-xs sm:text-sm">{ti+1}</span>
                         </div>
-                      )
-                    })}
-                  </div>
-                ))}
+                      </div>
+                      
+                      {Array.from({length: Math.max(1, maxQ)}).map((_,qi)=>{
+                        const val = qs[ti][qi] ?? 0
+                        return (
+                          <div key={`qcell-${ti}-${qi}`} className="w-14 sm:w-20">
+                            <div className="flex items-center gap-0.5 sm:gap-1 justify-center bg-gray-50 rounded-lg p-1 sm:p-1.5 border border-gray-200">
+                              <button
+                                className="rounded-md bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-gray-600 hover:text-red-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 disabled:hover:text-gray-600 font-bold shadow-sm text-xs sm:text-base"
+                                title="점수 내리기"
+                                disabled={val <= 0}
+                                onClick={() => {
+                                  const next = qs.map(a=>a.slice())
+                                  next[ti][qi] = Math.max(0, val - 1)
+                                  setQuarterScores(next)
+                                }}
+                                aria-label="점수 -1"
+                              >−</button>
+                              
+                              <div className="w-6 sm:w-8 flex items-center justify-center">
+                                <span className="inline-block text-center select-none font-bold text-sm sm:text-base text-gray-800">{val}</span>
+                              </div>
+                              
+                              <button
+                                className="rounded-md bg-blue-500 hover:bg-blue-600 border border-blue-600 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-blue-500 font-bold shadow-sm text-xs sm:text-base"
+                                title="점수 올리기"
+                                disabled={val >= 99}
+                                onClick={() => {
+                                  const next = qs.map(a=>a.slice())
+                                  next[ti][qi] = Math.min(99, val + 1)
+                                  setQuarterScores(next)
+                                }}
+                                aria-label="점수 +1"
+                              >+</button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+              </div>
+              
+              {/* Quick Actions - Hidden on mobile, shown on larger screens */}
+              <div className="mt-2 sm:mt-4 pt-2 sm:pt-3 border-t border-gray-200 flex items-center justify-end">
+                <button 
+                  className="px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+                  title="모든 쿼터 점수 초기화"
+                  onClick={()=>{
+                    if(confirm('모든 쿼터 점수를 0으로 초기화하시겠습니까?')) {
+                      setQuarterScores(initialSnap.map(()=>[]))
+                    }
+                  }}
+                >
+                  초기화
+                </button>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-2 mt-2">
-              <button className="rounded border px-3 py-1.5 text-xs sm:text-sm" title="쿼터 점수만 모두 비웁니다." onClick={()=>{
-                setQuarterScores(initialSnap.map(()=>[]))
-              }}>Clear All Quarters</button>
-              <button className="rounded border px-3 py-1.5 text-xs sm:text-sm" title="주장/쿼터 점수 입력값을 모두 비웁니다." onClick={()=>{
+            <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 mt-2 sm:mt-3">
+              <button className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-2.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium transition-colors" title="주장/쿼터 점수 입력값을 모두 비웁니다." onClick={()=>{
                 // reset editors to a clearly empty state
                 setCaptainIds(initialSnap.map(()=>null))
                 setQuarterScores(initialSnap.map(()=>[]))
-              }}>Reset Draft Data (Clear)</button>
-              <button className="rounded bg-blue-600 text-white px-3 py-1.5 text-xs sm:text-sm" onClick={()=>{
+              }}>전체 초기화</button>
+              <button className="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-3 py-1.5 sm:px-5 sm:py-2 text-xs sm:text-sm font-semibold shadow-md transition-all hover:shadow-lg" onClick={()=>{
                 // save snapshot + draft info + draft mode
                 const patch = { 
                   snapshot: draftSnap, 
@@ -1254,7 +1287,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                   patch.draft = null
                 }
                 onUpdateMatch?.(m.id, patch); setDirty(false)
-              }}>저장 (Draft)</button>
+              }}>저장하기</button>
             </div>
           </div>
         )
