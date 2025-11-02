@@ -13,6 +13,7 @@ import{assignToFormation,recommendFormation,countPositions}from'../lib/formation
 import{seededShuffle}from'../utils/random'
 import SavedMatchesList from'../components/SavedMatchesList'
 import { createUpcomingMatch, filterExpiredMatches } from '../lib/upcomingMatch'
+import { calculateAIPower } from '../lib/aiPower'
 
 /* ───────── 게스트 판별/뱃지 유틸 ───────── */
 const S=(v)=>v==null?'':String(v)
@@ -23,23 +24,23 @@ const GuestBadge=()=>(
 /* ─────────────────────────────────────── */
 
 /* ───────── 공통 요금 유틸 ───────── */
-function calcFees({ total, memberCount, guestCount }) {
+function calcFees({ total, memberCount, guestCount, guestSurcharge = 2 }) {
   total = Math.max(0, Number(total) || 0);
+  const surcharge = Math.max(0, Number(guestSurcharge) || 0);
   const count = memberCount + guestCount;
   if (total <= 0 || count === 0) return { total, memberFee: 0, guestFee: 0 };
 
-  // 1) 게스트는 항상 멤버 +$2
-  // 2) 0.5 단위로 정확히 맞추기
-  // memberFee + 2 = guestFee
+  // 게스트는 멤버 + surcharge
+  // memberFee + surcharge = guestFee
   // total = memberFee * memberCount + guestFee * guestCount
-  //      = memberFee * memberCount + (memberFee + 2) * guestCount
-  //      = memberFee * (memberCount + guestCount) + 2 * guestCount
-  //      = memberFee * count + 2 * guestCount
-  // => memberFee = (total - 2 * guestCount) / count
-  let memberFee = (total - 2 * guestCount) / count;
+  //      = memberFee * memberCount + (memberFee + surcharge) * guestCount
+  //      = memberFee * (memberCount + guestCount) + surcharge * guestCount
+  //      = memberFee * count + surcharge * guestCount
+  // => memberFee = (total - surcharge * guestCount) / count
+  let memberFee = (total - surcharge * guestCount) / count;
   // 0.5 단위로 반올림
   memberFee = Math.round(memberFee * 2) / 2;
-  let guestFee = memberFee + 2;
+  let guestFee = memberFee + surcharge;
   // 실제 합계가 total과 다를 수 있으니, total도 재계산해서 반환
   const sum = memberFee * memberCount + guestFee * guestCount;
   return { total, memberFee, guestFee, sum };
@@ -68,51 +69,87 @@ export default function MatchPlanner({
   onDeleteUpcomingMatch,
   onUpdateUpcomingMatch
 }){
-  const[dateISO,setDateISO]=useState(()=>nextSaturday0630Local()),[attendeeIds,setAttendeeIds]=useState([]),[criterion,setCriterion]=useState('overall'),[teamCount,setTeamCount]=useState(2),[hideOVR,setHideOVR]=useState(false),[shuffleSeed,setShuffleSeed]=useState(0)
-  const[locationPreset,setLocationPreset]=useState('coppell-west'),[locationName,setLocationName]=useState('Coppell Middle School - West'),[locationAddress,setLocationAddress]=useState('2701 Ranch Trail, Coppell, TX 75019')
-  const[feeMode,setFeeMode]=useState('preset'),[customBaseCost,setCustomBaseCost]=useState(0)
+  const[dateISO,setDateISO]=useState(()=>nextSaturday0630Local()),[attendeeIds,setAttendeeIds]=useState([]),[criterion,setCriterion]=useState('overall'),[hideOVR,setHideOVR]=useState(false),[shuffleSeed,setShuffleSeed]=useState(0)
+  const[locationPreset,setLocationPreset]=useState(''),[locationName,setLocationName]=useState(''),[locationAddress,setLocationAddress]=useState('')
+  const[customBaseCost,setCustomBaseCost]=useState(0),[guestSurcharge,setGuestSurcharge]=useState(2),[teamCount,setTeamCount]=useState(2)
   const[manualTeams,setManualTeams]=useState(null),[activePlayerId,setActivePlayerId]=useState(null),[activeFromTeam,setActiveFromTeam]=useState(null)
   const[formations,setFormations]=useState([]),[placedByTeam,setPlacedByTeam]=useState([]),latestTeamsRef=useRef([])
   const[editorOpen,setEditorOpen]=useState(false),[editingTeamIdx,setEditingTeamIdx]=useState(0),[editingMatchId,setEditingMatchId]=useState(null),[editorPlayers,setEditorPlayers]=useState([])
   const[posAware,setPosAware]=useState(true),[dropHint,setDropHint]=useState({team:null,index:null})
   const[isDraftMode,setIsDraftMode]=useState(false)
-  const count=attendeeIds.length,autoSuggestion=decideMode(count),mode=autoSuggestion.mode,teams=Math.max(2,Math.min(10,Number(teamCount)||2)),attendees=useMemo(()=>players.filter(p=>attendeeIds.includes(p.id)),[players,attendeeIds])
+  const[captainIds,setCaptainIds]=useState([]) // 각 팀의 주장 ID 배열 [team0CaptainId, team1CaptainId, ...]
+  const[previousTeams,setPreviousTeams]=useState(null) // Revert를 위한 이전 팀 상태 저장
+  const[showAIPower,setShowAIPower]=useState(false) // AI 파워 점수 표시 여부
+  const[isAILoading,setIsAILoading]=useState(false) // AI 배정 로딩 상태
+  const[linkedUpcomingMatchId,setLinkedUpcomingMatchId]=useState(null) // 현재 편집 중인 예정 매치 ID
+  
+  // Extract unique locations from saved matches (by name only, no duplicates)
+  const locationOptions = useMemo(() => {
+    const locMap = new Map()
+    matches.forEach(m => {
+      if (m.location?.name && !locMap.has(m.location.name)) {
+        locMap.set(m.location.name, {
+          name: m.location.name,
+          address: m.location.address || '',
+          cost: m.fees?.total || 0
+        })
+      }
+    })
+    return Array.from(locMap.values())
+  }, [matches])
+  
+  const count=attendeeIds.length,autoSuggestion=decideMode(count),mode=autoSuggestion.mode
+  const attendees=useMemo(()=>players.filter(p=>attendeeIds.includes(p.id)),[players,attendeeIds])
+  
+  // Determine team count from teamCount state, adjusting teams when it changes
+  const teams = teamCount
+  
   const autoSplit=useMemo(()=>posAware?splitKTeamsPosAware(attendees,teams,shuffleSeed):splitKTeams(attendees,teams,criterion),[attendees,teams,criterion,posAware,shuffleSeed])
   const skipAutoResetRef=useRef(false);useEffect(()=>{if(skipAutoResetRef.current){skipAutoResetRef.current=false;return}setManualTeams(null);setShuffleSeed(0)},[attendees,teams,criterion,posAware])
+  
+  // 팀 수 변경 시 기존 팀을 재배치
+  useEffect(() => {
+    if (manualTeams && manualTeams.length !== teams) {
+      const allPlayers = manualTeams.flat()
+      const newTeams = Array.from({length: teams}, () => [])
+      allPlayers.forEach((player, idx) => {
+        newTeams[idx % teams].push(player)
+      })
+      setManualTeams(newTeams)
+      latestTeamsRef.current = newTeams
+    }
+    // 팀 수 변경 시 주장 정보 초기화
+    setCaptainIds([])
+  }, [teams]) // eslint-disable-line
 
-  // ✅ 프리셋 총액: Indoor=220 / Coppell=330
-  const baseCost=useMemo(()=>feeMode==='custom'
-    ? Math.max(0, parseFloat(customBaseCost)||0)
-    : (locationPreset==='indoor-soccer-zone'?220:locationPreset==='coppell-west'?330:0),
-  [feeMode,customBaseCost,locationPreset])
-
-  // ✅ 라이브 프리뷰 요금 (calcFees 사용)
-  const liveFees=useMemo(()=>{
-    const m=attendees.filter(p=>isMember(p.membership)).length
-    const g=Math.max(0,attendees.length-m)
-    return calcFees({ total: baseCost, memberCount: m, guestCount: g })
-  },[attendees,baseCost])
+  // Base cost from custom input or location history
+  const baseCost=useMemo(()=>Math.max(0, parseFloat(customBaseCost)||0),[customBaseCost])
 
   const previewTeams=useMemo(()=>{let base=manualTeams??autoSplit.teams;if(!manualTeams&&shuffleSeed)base=base.map(list=>seededShuffle(list,shuffleSeed+list.length));return base},[manualTeams,autoSplit.teams,shuffleSeed]);useEffect(()=>{latestTeamsRef.current=previewTeams},[previewTeams])
+
+  // ✅ 라이브 프리뷰 요금 (팀에 배정된 선수 기준으로 계산)
+  const liveFees=useMemo(()=>{
+    const assignedPlayers = previewTeams.flat().map(p => p.id)
+    const assigned = players.filter(p => assignedPlayers.includes(p.id))
+    const m = assigned.filter(p=>isMember(p.membership)).length
+    const g = Math.max(0, assigned.length - m)
+    return calcFees({ total: baseCost, memberCount: m, guestCount: g, guestSurcharge })
+  },[previewTeams, players, baseCost, guestSurcharge])
   useEffect(()=>{setFormations(prev=>[...previewTeams].map((list,i)=>prev[i]||recommendFormation({count:list.length,mode,positions:countPositions(list)})));setPlacedByTeam(prev=>{const prevArr=Array.isArray(prev)?prev:[];return previewTeams.map((list,i)=>{const existed=Array.isArray(prevArr[i])?prevArr[i]:[],byId=new Map(existed.map(p=>[String(p.id),p]));const base=assignToFormation({players:list,formation:(formations[i]||recommendFormation({count:list.length,mode,positions:countPositions(list)}))});return base.map(d=>byId.get(String(d.id))||d)})})},[previewTeams,mode]) // eslint-disable-line
-  
-  const toggle=id=>setAttendeeIds(prev=>prev.includes(id)?prev.filter(x=>x!==id):[...prev,id])
 
   // ✅ 저장 시 요금 계산 (calcFees 사용)
-  const computeFeesAtSave = ({ baseCostValue, attendees }) => {
+  const computeFeesAtSave = ({ baseCostValue, attendees, guestSurcharge }) => {
     const list = Array.isArray(attendees) ? attendees : []
     const m = list.filter(p => isMember(p.membership)).length
     const g = Math.max(0, list.length - m)
-  return calcFees({ total: Math.max(0, parseFloat(baseCostValue) || 0), memberCount: m, guestCount: g })
+  return calcFees({ total: Math.max(0, parseFloat(baseCostValue) || 0), memberCount: m, guestCount: g, guestSurcharge: guestSurcharge || 2 })
   }
 
   // ✅ 지도 링크 계산 (프리셋 + Other URL)
   const mapLink = useMemo(()=>{
-    if (locationPreset==='indoor-soccer-zone') return 'https://maps.app.goo.gl/cud8m52vVwZJEinN8?g_st=ic'
-    if (locationPreset==='coppell-west') return 'https://maps.app.goo.gl/vBLE84hRB3ez1BJy5?g_st=ic'
-    if (locationPreset==='other' && /^https?:\/\//i.test(String(locationAddress||''))) return locationAddress
+    if (/^https?:\/\//i.test(String(locationAddress||''))) return locationAddress
     return null
-  },[locationPreset,locationAddress])
+  },[locationAddress])
 
   function save(){
     if(!isAdmin){notify('Admin만 가능합니다.');return}
@@ -120,17 +157,17 @@ export default function MatchPlanner({
     const snapshot=baseTeams.map(team=>team.map(p=>p.id))
     const ids=snapshot.flat()
     const objs=players.filter(p=>ids.includes(p.id))
-    const fees=computeFeesAtSave({baseCostValue:baseCost,attendees:objs})
+    const fees=computeFeesAtSave({baseCostValue:baseCost,attendees:objs,guestSurcharge})
     
     // 드래프트 모드일 때 추가 필드들
     const draftFields = isDraftMode ? {
       selectionMode: 'draft',
       draftMode: true,
       draft: true,
+      captainIds: captainIds.slice(), // 현재 선택된 주장 ID들 저장
       // 주장이 선택되어 있다면 추가
       ...(baseTeams.length === 2 && {
-        captains: [], // 나중에 주장 선택 기능에서 설정
-        captainIds: []
+        captains: [] // 나중에 주장 선택 기능에서 설정
       })
     } : {
       selectionMode: 'manual'
@@ -154,14 +191,19 @@ export default function MatchPlanner({
     if(!isAdmin){notify('Admin만 가능합니다.');return}
     if(!onSaveUpcomingMatch){notify('예정 매치 저장 기능이 없습니다.');return}
     
-    const participantIds = attendeeIds.length > 0 ? attendeeIds : []
-    if (participantIds.length === 0) {
+    // 실제로 팀에 배정된 선수들의 ID 목록 가져오기
+    const assignedPlayerIds = previewTeams.flat().map(p => p.id)
+    
+    if (assignedPlayerIds.length === 0) {
       notify('참가자를 먼저 선택해주세요.');return
     }
 
+    // 팀 구성 스냅샷 저장 (선수 ID 배열)
+    const teamsSnapshot = previewTeams.map(team => team.map(p => p.id))
+
     const upcomingMatch = createUpcomingMatch({
       dateISO,
-      participantIds,
+      participantIds: assignedPlayerIds,
       location: {
         preset: locationPreset,
         name: locationName,
@@ -169,27 +211,194 @@ export default function MatchPlanner({
       },
       totalCost: baseCost,
       isDraftMode,
-      mode: decideMode(participantIds.length).mode
+      mode: decideMode(assignedPlayerIds.length).mode,
+      teamCount: teams, // 팀 수 저장
+      snapshot: teamsSnapshot, // 팀 구성 저장
+      formations: formations, // 포메이션 저장
+      captainIds: captainIds, // 주장 정보 저장
+      criterion: posAware ? 'pos-aware' : criterion // 배정 기준 저장
     })
 
-    console.log('Saving upcoming match:', upcomingMatch)
     onSaveUpcomingMatch(upcomingMatch)
+    setLinkedUpcomingMatchId(upcomingMatch.id) // 저장 후 자동 연결
     notify(`${isDraftMode ? '드래프트 ' : ''}예정 매치로 저장되었습니다 ✅`)
   }
 
-  const allSelected=attendeeIds.length===players.length&&players.length>0
-  const toggleSelectAll=()=>allSelected?setAttendeeIds([]):setAttendeeIds(players.map(p=>p.id))
+  // 주장 또는 팀 구성 변경 시 연결된 예정 매치 자동 업데이트
+  useEffect(() => {
+    if (!linkedUpcomingMatchId || !onUpdateUpcomingMatch) return
+    
+    const linkedMatch = upcomingMatches.find(m => m.id === linkedUpcomingMatchId)
+    if (!linkedMatch) return
+
+    // 팀 구성 스냅샷
+    const teamsSnapshot = previewTeams.map(team => team.map(p => p.id))
+    const assignedPlayerIds = previewTeams.flat().map(p => p.id)
+
+    // 변경사항 자동 업데이트
+    const updates = {
+      snapshot: teamsSnapshot,
+      participantIds: assignedPlayerIds,
+      captainIds: captainIds,
+      formations: formations,
+      teamCount: teams
+    }
+
+    onUpdateUpcomingMatch(linkedUpcomingMatchId, updates)
+  }, [captainIds, previewTeams, formations]) // 주장, 팀 구성, 포메이션 변경 시 자동 업데이트
+
+  const showOVR=isAdmin&&!hideOVR
+
+  // Drag and drop handlers
   const sensors=useSensors(useSensor(PointerSensor,{activationConstraint:{distance:4}}),useSensor(TouchSensor,{activationConstraint:{delay:120,tolerance:6}}))
-  const findTeamIndexByItemId=itemId=>previewTeams.findIndex(list=>list.some(p=>String(p.id)===String(itemId))),findIndexInTeam=(teamIdx,id)=>(previewTeams[teamIdx]||[]).findIndex(p=>String(p.id)===String(id))
+  const findTeamIndexByItemId=itemId=>previewTeams.findIndex(list=>list.some(p=>String(p.id)===String(itemId)))
   const onDragStartHandler=e=>{setActivePlayerId(e.active.id);setActiveFromTeam(findTeamIndexByItemId(e.active.id));document.body.classList.add('cursor-grabbing')}
   const onDragCancel=()=>{setActivePlayerId(null);setActiveFromTeam(null);setDropHint({team:null,index:null});document.body.classList.remove('cursor-grabbing')}
   function onDragOverHandler(e){const{over}=e;if(!over){setDropHint({team:null,index:null});return}const overId=String(over.id);let teamIndex,index;if(overId.startsWith('team-')){teamIndex=Number(overId.split('-')[1]);index=(previewTeams[teamIndex]||[]).length}else{teamIndex=findTeamIndexByItemId(overId);const list=previewTeams[teamIndex]||[],overIdx=list.findIndex(p=>String(p.id)===overId);index=Math.max(0,overIdx)}setDropHint({team:teamIndex,index})}
-  function onDragEndHandler(e){const{active,over}=e;setActivePlayerId(null);document.body.classList.remove('cursor-grabbing');setDropHint({team:null,index:null});if(!over)return;const from=activeFromTeam,overId=String(over.id),to=overId.startsWith('team-')?Number(overId.split('-')[1]):findTeamIndexByItemId(overId);if(from==null||to==null||from<0||to<0)return;const base=manualTeams??previewTeams,next=base.map(l=>l.slice()),fromIdx=next[from].findIndex(p=>String(p.id)===String(active.id));if(fromIdx<0)return;const moving=next[from][fromIdx];next[from].splice(fromIdx,1);const hintIdx=dropHint.team===to&&dropHint.index!=null?dropHint.index:null,overIdx=hintIdx!=null?hintIdx:next[to].findIndex(p=>String(p.id)===overId);next[to].splice(overId.startsWith('team-')?next[to].length:(overIdx>=0?overIdx:next[to].length),0,moving);setManualTeams(next);latestTeamsRef.current=next;setActiveFromTeam(null);setPlacedByTeam(prev=>{const arr=Array.isArray(prev)?[...prev]:[];const apply=(idx,list)=>{const existed=Array.isArray(arr[idx])?arr[idx]:[],byId=new Map(existed.map(p=>[String(p.id),p]));const basePlaced=assignToFormation({players:list,formation:formations[idx]||'4-3-3'});arr[idx]=basePlaced.map(d=>byId.get(String(d.id))||d)};apply(to,next[to]);apply(from,next[from]);return arr})}
+  function onDragEndHandler(e){const{active,over}=e;setActivePlayerId(null);document.body.classList.remove('cursor-grabbing');setDropHint({team:null,index:null});if(!over)return;const from=activeFromTeam,overId=String(over.id),to=overId.startsWith('team-')?Number(overId.split('-')[1]):findTeamIndexByItemId(overId);if(from==null||to==null||from<0||to<0)return;const base=manualTeams??previewTeams,next=base.map(l=>l.slice()),fromIdx=next[from].findIndex(p=>String(p.id)===String(active.id));if(fromIdx<0)return;const moving=next[from][fromIdx];next[from].splice(fromIdx,1);const hintIdx=dropHint.team===to&&dropHint.index!=null?dropHint.index:null,overIdx=hintIdx!=null?hintIdx:next[to].findIndex(p=>String(p.id)===overId);next[to].splice(overId.startsWith('team-')?next[to].length:(overIdx>=0?overIdx:next[to].length),0,moving);setManualTeams(next);latestTeamsRef.current=next;setActiveFromTeam(null);setShowAIPower(false);setPlacedByTeam(prev=>{const arr=Array.isArray(prev)?[...prev]:[];const apply=(idx,list)=>{const existed=Array.isArray(arr[idx])?arr[idx]:[],byId=new Map(existed.map(p=>[String(p.id),p]));const basePlaced=assignToFormation({players:list,formation:formations[idx]||'4-3-3'});arr[idx]=basePlaced.map(d=>byId.get(String(d.id))||d)};apply(to,next[to]);apply(from,next[from]);return arr})}
   const openEditorSaved=(match,i)=>{const h=hydrateMatch(match,players);setFormations(Array.isArray(match.formations)?match.formations.slice():[]);setPlacedByTeam(Array.isArray(match.board)?match.board.map(a=>Array.isArray(a)?a.slice():[]):[]);setEditorPlayers(h.teams||[]);setEditingMatchId(match.id);setEditingTeamIdx(i);setEditorOpen(true)}
   const closeEditor=()=>setEditorOpen(false),setTeamFormation=(i,f)=>{setFormations(prev=>{const c=[...prev];c[i]=f;return c});setPlacedByTeam(prev=>{const c=Array.isArray(prev)?[...prev]:[];c[i]=assignToFormation({players:editorPlayers[i]||[],formation:f});return c})},autoPlaceTeam=i=>setPlacedByTeam(prev=>{const c=Array.isArray(prev)?[...prev]:[];const f=formations[i]||'4-3-3';c[i]=assignToFormation({players:editorPlayers[i]||[],formation:f});return c})
-  const showOVR=isAdmin&&!hideOVR
+  
+  // 선수 제거 핸들러
+  const handleRemovePlayer = (playerId, teamIndex) => {
+    const base = manualTeams ?? previewTeams
+    const next = base.map((team, idx) => 
+      idx === teamIndex ? team.filter(p => String(p.id) !== String(playerId)) : team
+    )
+    setManualTeams(next)
+    latestTeamsRef.current = next
+    setShowAIPower(false) // 수동 조작 시 AI 파워 숨김
+  }
+  
+  // 주장 선택 핸들러
+  const handleSetCaptain = (playerId, teamIndex) => {
+    setCaptainIds(prev => {
+      const newCaptains = [...prev]
+      newCaptains[teamIndex] = playerId
+      return newCaptains
+    })
+    const playerName = players.find(p => p.id === playerId)?.name || '선수'
+    notify(`팀 ${teamIndex + 1}의 주장: ${playerName}`)
+  }
+  
+  // AI 자동 배정 (포지션 밸런스 + 평균 + 인원수 균등)
+  const handleAIDistribute = () => {
+    // 현재 상태 저장 (Revert용)
+    const current = manualTeams ?? previewTeams
+    setPreviousTeams(current.map(team => [...team]))
+    
+    // 팀에 배정된 모든 선수 수집
+    const assignedPlayers = current.flat()
+    
+    if (assignedPlayers.length === 0) {
+      notify('배정할 선수가 없습니다.')
+      return
+    }
+    
+    // AI 로딩 시작
+    setIsAILoading(true)
+    setShowAIPower(false)
+    
+    // 로딩 애니메이션 효과 (1초 후 결과 표시)
+    setTimeout(() => {
+      // 개선된 AI 배정: 모든 데이터를 활용한 종합 평가
+      const newTeams = smartDistributeAdvanced(assignedPlayers, teams)
+      
+      setManualTeams(newTeams)
+      latestTeamsRef.current = newTeams
+      setCaptainIds([]) // 주장 정보 초기화
+      setIsAILoading(false)
+      
+      // 배정 완료 후 AI 파워 점수 표시 (페이드인 효과)
+      setTimeout(() => {
+        setShowAIPower(true)
+        notify('AI가 모든 데이터를 분석하여 최적의 팀을 구성했습니다 ✨')
+      }, 100)
+    }, 1000)
+  }
+  
+  // 똑똑한 팀 배정 알고리즘 (고급 버전)
+  const smartDistributeAdvanced = (players, teamCount) => {
+    // 1. 각 선수의 종합 파워 계산
+    const playersWithPower = players.map(p => ({
+      ...p,
+      power: calculateAIPower(p, matches),
+      position: positionGroupOf(p)
+    }))
+    
+    // 2. 포지션별로 그룹화
+    const byPosition = {
+      GK: playersWithPower.filter(p => p.position === 'GK'),
+      DF: playersWithPower.filter(p => p.position === 'DF'),
+      MF: playersWithPower.filter(p => p.position === 'MF'),
+      FW: playersWithPower.filter(p => p.position === 'FW'),
+      OTHER: playersWithPower.filter(p => p.position === 'OTHER')
+    }
+    
+    // 3. 각 포지션을 파워 내림차순으로 정렬
+    Object.keys(byPosition).forEach(pos => {
+      byPosition[pos].sort((a, b) => b.power - a.power)
+    })
+    
+    // 4. 팀 초기화
+    const teams = Array.from({ length: teamCount }, () => [])
+    const teamStats = Array.from({ length: teamCount }, () => ({
+      totalPower: 0,
+      count: 0,
+      positions: { GK: 0, DF: 0, MF: 0, FW: 0, OTHER: 0 }
+    }))
+    
+    // 5. 포지션별로 배정 (GK -> DF -> MF -> FW -> OTHER)
+    const positionOrder = ['GK', 'DF', 'MF', 'FW', 'OTHER']
+    
+    positionOrder.forEach(pos => {
+      const playerList = byPosition[pos]
+      
+      playerList.forEach(player => {
+        // 가장 적합한 팀 찾기
+        const bestTeamIdx = teamStats
+          .map((stat, idx) => ({
+            idx,
+            count: stat.count,
+            posCount: stat.positions[pos],
+            avgPower: stat.count > 0 ? stat.totalPower / stat.count : 0
+          }))
+          .sort((a, b) => {
+            // 1순위: 인원수가 적은 팀
+            if (a.count !== b.count) return a.count - b.count
+            // 2순위: 해당 포지션이 적은 팀
+            if (a.posCount !== b.posCount) return a.posCount - b.posCount
+            // 3순위: 평균 파워가 낮은 팀
+            return a.avgPower - b.avgPower
+          })[0].idx
+        
+        // 선수 배정
+        teams[bestTeamIdx].push(player)
+        teamStats[bestTeamIdx].totalPower += player.power
+        teamStats[bestTeamIdx].count++
+        teamStats[bestTeamIdx].positions[pos]++
+      })
+    })
+    
+    return teams
+  }
+  
+  // 이전 상태로 되돌리기
+  const handleRevert = () => {
+    if (!previousTeams) {
+      notify('되돌릴 이전 상태가 없습니다.')
+      return
+    }
+    
+    setManualTeams(previousTeams.map(team => [...team]))
+    latestTeamsRef.current = previousTeams
+    setPreviousTeams(null)
+    setShowAIPower(false) // Revert 시 AI 파워 숨김
+    
+    notify('이전 상태로 되돌렸습니다 ↩️')
+  }
 
-  function loadSavedIntoPlanner(match){if(!match)return;skipAutoResetRef.current=true;const h=hydrateMatch(match,players),ts=h.teams||[];if(ts.length===0){notify('불러올 팀 구성이 없습니다.');return}const ids=ts.flat().map(p=>p.id);setAttendeeIds(ids);setTeamCount(ts.length);if(match.criterion)setCriterion(match.criterion);if(match.location){setLocationPreset(match.location.preset||'other');setLocationName(match.location.name||'');setLocationAddress(match.location.address||'')}if(match.dateISO)setDateISO(match.dateISO.slice(0,16));setShuffleSeed(0);setManualTeams(ts);latestTeamsRef.current=ts;const baseFormations=Array.isArray(match.formations)&&match.formations.length===ts.length?match.formations.slice():ts.map(list=>recommendFormation({count:list.length,mode:match.mode||'11v11',positions:countPositions(list)}));setFormations(baseFormations);const baseBoard=Array.isArray(match.board)&&match.board.length===ts.length?match.board.map(a=>Array.isArray(a)?a.slice():[]):ts.map((list,i)=>assignToFormation({players:list,formation:baseFormations[i]||'4-3-3'}));setPlacedByTeam(baseBoard);notify('저장된 매치를 팀배정에 불러왔습니다 ✅')}
+  function loadSavedIntoPlanner(match){if(!match)return;skipAutoResetRef.current=true;const h=hydrateMatch(match,players),ts=h.teams||[];if(ts.length===0){notify('불러올 팀 구성이 없습니다.');return}const ids=ts.flat().map(p=>p.id);setTeamCount(ts.length);if(match.criterion)setCriterion(match.criterion);if(match.location){setLocationName(match.location.name||'');setLocationAddress(match.location.address||'')}if(match.dateISO)setDateISO(match.dateISO.slice(0,16));if(match.fees?.total)setCustomBaseCost(match.fees.total);setShuffleSeed(0);setManualTeams(ts);latestTeamsRef.current=ts;setShowAIPower(false);const baseFormations=Array.isArray(match.formations)&&match.formations.length===ts.length?match.formations.slice():ts.map(list=>recommendFormation({count:list.length,mode:match.mode||'11v11',positions:countPositions(list)}));setFormations(baseFormations);const baseBoard=Array.isArray(match.board)&&match.board.length===ts.length?match.board.map(a=>Array.isArray(a)?a.slice():[]):ts.map((list,i)=>assignToFormation({players:list,formation:baseFormations[i]||'4-3-3'}));setPlacedByTeam(baseBoard);if(match.selectionMode==='draft'){setIsDraftMode(true);if(Array.isArray(match.captainIds)){setCaptainIds(match.captainIds)}}else{setIsDraftMode(false);setCaptainIds([])};notify('저장된 매치를 팀배정에 불러왔습니다 ✅')}
 
   function loadUpcomingMatchIntoPlanner(upcomingMatch) {
     if (!upcomingMatch) return
@@ -203,10 +412,8 @@ export default function MatchPlanner({
     }
 
     // Load basic match data
-    setAttendeeIds(participantIds)
     if (upcomingMatch.dateISO) setDateISO(upcomingMatch.dateISO.slice(0, 16))
     if (upcomingMatch.location) {
-      setLocationPreset(upcomingMatch.location.preset || 'other')
       setLocationName(upcomingMatch.location.name || '')
       setLocationAddress(upcomingMatch.location.address || '')
     }
@@ -218,7 +425,6 @@ export default function MatchPlanner({
     
     // 총 구장비 설정
     if (upcomingMatch.totalCost) {
-      setFeeMode('custom')
       setCustomBaseCost(upcomingMatch.totalCost)
     }
     
@@ -227,15 +433,17 @@ export default function MatchPlanner({
     const attendeesInOrder = participantIds.map(id => playersByIds.get(id)).filter(Boolean)
     if (attendeesInOrder.length > 0) {
       // 간단한 순차 배정으로 원래 순서 유지
-      const teamCount = Math.max(2, Math.min(10, 2)) // 일단 2팀으로 시작
-      const simpleTeams = Array.from({length: teamCount}, () => [])
+      const teamCountVal = Math.max(2, Math.min(10, 2)) // 일단 2팀으로 시작
+      const simpleTeams = Array.from({length: teamCountVal}, () => [])
       attendeesInOrder.forEach((player, index) => {
-        simpleTeams[index % teamCount].push(player)
+        simpleTeams[index % teamCountVal].push(player)
       })
       setManualTeams(simpleTeams)
       latestTeamsRef.current = simpleTeams
+      setShowAIPower(false)
     } else {
       setManualTeams(null)
+      setShowAIPower(false)
     }
     
     setShuffleSeed(0)
@@ -250,33 +458,89 @@ export default function MatchPlanner({
         <Row label="날짜/시간"><input type="datetime-local" value={dateISO} onChange={e=>setDateISO(e.target.value)} className="w-full rounded border border-gray-300 bg-white px-3 py-2"/></Row>
         <Row label="장소">
           <div className="grid gap-2">
-            <select className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm" value={locationPreset} onChange={e=>{const v=e.target.value;setLocationPreset(v);if(v==='coppell-west'){setLocationName('Coppell Middle School - West');setLocationAddress('2701 Ranch Trail, Coppell, TX 75019')}else if(v==='indoor-soccer-zone'){setLocationName('Indoor Soccer Zone');setLocationAddress('2323 Crown Rd, Dallas, TX 75229')}else{setLocationName('');setLocationAddress('')}}}>
-              <option value="coppell-west">Coppell Middle School - West</option>
-              <option value="indoor-soccer-zone">Indoor Soccer Zone</option>
-              <option value="other">Other (Freeform)</option>
+            <select 
+              className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm" 
+              value={locationName} 
+              onChange={e=>{
+                const selected = locationOptions.find(loc => loc.name === e.target.value)
+                if (selected) {
+                  setLocationName(selected.name)
+                  setLocationAddress(selected.address || '')
+                  setCustomBaseCost(selected.cost || 0)
+                } else if (e.target.value === 'other') {
+                  setLocationName('')
+                  setLocationAddress('')
+                  setCustomBaseCost(0)
+                }
+              }}
+            >
+              <option value="">장소 선택...</option>
+              {locationOptions.map((loc, idx) => (
+                <option key={idx} value={loc.name}>{loc.name}</option>
+              ))}
+              <option value="other">+ 새 장소 추가</option>
             </select>
 
-            {/* 요금 모드 */}
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-              <label className="inline-flex items-center gap-2"><input type="radio" name="feeMode" value="preset" checked={feeMode==='preset'} onChange={()=>setFeeMode('preset')}/>자동(장소별 고정)</label>
-              <label className="inline-flex items-center gap-2"><input type="radio" name="feeMode" value="custom" checked={feeMode==='custom'} onChange={()=>setFeeMode('custom')}/>커스텀</label>
-              {feeMode==='custom'&&(<input type="number" min="0" step="0.5" placeholder="총 구장비(예: 220, 220.5, 340)" value={customBaseCost} onChange={e=>setCustomBaseCost(e.target.value)} className="w-40 rounded border border-gray-300 bg-white px-3 py-1.5"/>)}
+            {/* Custom location input */}
+            {(!locationName || !locationOptions.find(loc => loc.name === locationName)) && (
+              <div className="grid gap-2 sm:grid-cols-2">
+                <input 
+                  className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" 
+                  placeholder="장소 이름" 
+                  value={locationName} 
+                  onChange={e=>setLocationName(e.target.value)}
+                />
+                <input 
+                  className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" 
+                  placeholder="주소 (URL 또는 일반주소)" 
+                  value={locationAddress} 
+                  onChange={e=>setLocationAddress(e.target.value)}
+                />
+              </div>
+            )}
+            
+            {/* Cost input */}
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-gray-600">총 구장비:</label>
+                <input 
+                  type="number" 
+                  min="0" 
+                  step="0.5" 
+                  placeholder="총 구장비 (예: 220, 330)" 
+                  value={customBaseCost} 
+                  onChange={e=>setCustomBaseCost(e.target.value)} 
+                  className="rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-xs text-gray-600">게스트 추가 할증:</label>
+                <input 
+                  type="number" 
+                  min="0" 
+                  step="0.5" 
+                  placeholder="게스트 추가 금액 (예: 2, 3)" 
+                  value={guestSurcharge} 
+                  onChange={e=>setGuestSurcharge(e.target.value)} 
+                  className="rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+                />
+              </div>
             </div>
 
             {/* 비용 안내 */}
             <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              <div><b>예상 구장비</b>: ${baseCost} {feeMode==='preset'?<span className="ml-2 opacity-70">(장소별 고정 금액)</span>:<span className="ml-2 opacity-70">(사용자 지정 금액)</span>}</div>
+              <div><b>예상 구장비</b>: ${baseCost}</div>
+              <div className="mt-1">
+                배정된 선수: {previewTeams.flat().length}명 
+                {previewTeams.flat().length > 0 && (
+                  <span className="ml-2">
+                    (정회원: ${liveFees.memberFee}/인 · 게스트: ${liveFees.guestFee}/인 +${guestSurcharge})
+                  </span>
+                )}
+              </div>
             </div>
 
-            {/* Freeform 입력 */}
-            {locationPreset==='other'&&(
-              <div className="grid gap-2 sm:grid-cols-2">
-                <input className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="장소 이름" value={locationName} onChange={e=>setLocationName(e.target.value)}/>
-                <input className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" placeholder="주소 (URL 또는 일반주소)" value={locationAddress} onChange={e=>setLocationAddress(e.target.value)}/>
-              </div>
-            )}
-
-            {/* 지도 링크 프리뷰 (프리셋 또는 Other-URL) */}
+            {/* 지도 링크 프리뷰 */}
             {mapLink && (
               <div className="text-xs">
                 <a href={mapLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline">
@@ -290,33 +554,170 @@ export default function MatchPlanner({
         <Row label="팀 수">
           <div className="flex items-center gap-3">
             <select className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" value={teams} onChange={e=>setTeamCount(Number(e.target.value))}>{Array.from({length:9},(_,i)=>i+2).map(n=><option key={n} value={n}>{n}팀</option>)}</select>
-            <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={posAware} onChange={()=>setPosAware(v=>!v)}/>포지션 고려 매칭</label>
             <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={isDraftMode} onChange={()=>setIsDraftMode(v=>!v)}/>드래프트 모드</label>
+            {isAdmin&&(<button type="button" aria-pressed={hideOVR} onClick={()=>setHideOVR(v=>!v)} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ${hideOVR?'border-emerald-500 text-emerald-700 bg-emerald-50':'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'}`}><span className={`inline-block h-2.5 w-2.5 rounded-full ${hideOVR?'bg-emerald-500':'bg-gray-300'}`}></span>Overall 숨기기</button>)}
           </div>
         </Row>
 
-        <Row label={<span className="flex items-center gap-2">참석 ({attendeeIds.length}명){attendees.filter(p=>isUnknownPlayer(p)).length>0&&<span className="text-xs text-amber-600 font-medium">({attendees.filter(p=>isUnknownPlayer(p)).length}명 Unknown - 팀파워 계산 제외)</span>}<button type="button" onClick={toggleSelectAll} className="ml-2 rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-100">{allSelected?'모두 해제':'모두 선택'}</button></span>}>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
-            {players.map(p=>{
-              const mem=String(p.membership||'').trim().toLowerCase()
-              const member=(mem==='member'||mem.includes('정회원'))
-              const unknown=isUnknownPlayer(p)
-              const pos=positionGroupOf(p)
-              const isGK=pos==='GK'
-              return(
-                <label key={p.id} className={`flex items-center gap-2 rounded border px-3 py-2 ${attendeeIds.includes(p.id)?'border-emerald-400 bg-emerald-50':'border-gray-200 bg-white hover:bg-gray-50'} ${unknown&&!isGK?'opacity-60':''}`}>
-                  <input type="checkbox" checked={attendeeIds.includes(p.id)} onChange={()=>toggle(p.id)}/>
-                  <InitialAvatar id={p.id} name={p.name} size={24} badges={!member?['G']:[]} />
-                  <span className="text-sm flex-1 whitespace-normal break-words">
-                    {p.name}{unknown&&!isGK&&<em className="ml-1 text-xs text-amber-600">(Unknown)</em>}
-                  </span>
-                  {isAdmin&&!hideOVR&&!isGK&&<span className="text-xs text-gray-500 shrink-0">OVR {unknown?'?':p.ovr??overall(p)}</span>}
-                  {isAdmin&&!hideOVR&&isGK&&<span className="text-xs shrink-0 inline-flex items-center rounded-full px-2 py-[2px] bg-amber-100 text-amber-800">GK</span>}
-                </label>
-              )
-            })}
+        {/* 빠른 선수 추가 - 상단 고정 */}
+        <QuickAttendanceEditor players={players} snapshot={previewTeams.map(team=>team.map(p=>p.id))} onDraftChange={(newSnap)=>{const byId=new Map(players.map(p=>[String(p.id),p]));const newTeams=newSnap.map(ids=>ids.map(id=>byId.get(String(id))).filter(Boolean));setManualTeams(newTeams);latestTeamsRef.current=newTeams;setShowAIPower(false)}}/>
+
+        {/* 팀 배정 테이블 with 드래그 앤 드롭 */}
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+          <div className="mb-2 flex items-center justify-between flex-wrap gap-2">
+            {/* 왼쪽: 팀 배정 헤더 + 액션 버튼 */}
+            <div className="flex items-center gap-2">
+              <div className="text-sm font-medium text-gray-700">팀 배정</div>
+              <button 
+                onClick={handleAIDistribute}
+                className="rounded bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1.5 text-xs font-semibold hover:from-purple-600 hover:to-pink-600 shadow-sm"
+                title="AI가 포지션과 평균을 고려해 자동 배정"
+              >
+                ✨ AI 배정
+              </button>
+              {previousTeams && (
+                <button 
+                  onClick={handleRevert}
+                  className="rounded border border-gray-400 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                  title="이전 상태로 되돌리기"
+                >
+                  Revert
+                </button>
+              )}
+              <button 
+                onClick={()=>{
+                  if(window.confirm('모든 팀 배정을 초기화하시겠습니까?')) {
+                    setPreviousTeams(manualTeams ?? previewTeams)
+                    setManualTeams(Array.from({length: teams}, () => []))
+                    setCaptainIds([])
+                    setShowAIPower(false)
+                    notify('팀 배정이 초기화되었습니다')
+                  }
+                }} 
+                className="rounded border border-red-300 bg-white px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                title="모든 선수를 팀에서 제거"
+              >
+                초기화
+              </button>
+            </div>
+            
+            {/* 오른쪽: 정렬 버튼 */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-600 font-medium">정렬:</span>
+              <button 
+                onClick={()=>{
+                  setPreviousTeams(manualTeams??previewTeams);
+                  const base=manualTeams??previewTeams;
+                  setManualTeams(base.map(list=>list.slice().sort((a,b)=>a.name.localeCompare(b.name))))
+                }} 
+                className="rounded border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50"
+              >
+                이름순
+              </button>
+              <button 
+                onClick={()=>{
+                  setPreviousTeams(manualTeams??previewTeams);
+                  const base=manualTeams??previewTeams;
+                  // GK → DF → MF → FW → OTHER 순서로 정렬
+                  setManualTeams(base.map(list=>list.slice().sort((a,b)=>{
+                    const posA = positionGroupOf(a)
+                    const posB = positionGroupOf(b)
+                    const indexA = POS_ORDER.indexOf(posA)
+                    const indexB = POS_ORDER.indexOf(posB)
+                    return indexA - indexB
+                  })))
+                }} 
+                className="rounded border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50"
+              >
+                포지션순
+              </button>
+              {isAdmin&&(
+                <button 
+                  onClick={()=>{
+                    setPreviousTeams(manualTeams??previewTeams);
+                    const base=manualTeams??previewTeams;
+                    setManualTeams(base.map(list=>list.slice().sort((a,b)=>{
+                      const A=a.ovr??overall(a),B=b.ovr??overall(b);
+                      return B-A
+                    })))
+                  }} 
+                  className="rounded border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50"
+                >
+                  Overall순
+                </button>
+              )}
+              {showAIPower&&isAdmin&&(
+                <button 
+                  onClick={()=>{
+                    setPreviousTeams(manualTeams??previewTeams);
+                    const base=manualTeams??previewTeams;
+                    
+                    // 각 팀의 선수를 AI 파워순으로 정렬
+                    const newTeams = base.map((list)=>{
+                      // AI 파워 계산
+                      const playersWithPower = list.map(player => ({
+                        player: {...player}, // 새 객체 생성으로 참조 변경
+                        power: calculateAIPower(player, matches)
+                      }));
+                      
+                      // AI 파워 내림차순 정렬
+                      playersWithPower.sort((a, b) => b.power - a.power);
+                      
+                      // 정렬된 선수만 반환
+                      return playersWithPower.map(item => item.player);
+                    });
+                    
+                    // 상태 업데이트
+                    setManualTeams(newTeams);
+                    latestTeamsRef.current = newTeams;
+                  }} 
+                  className="rounded border border-purple-300 bg-gradient-to-r from-purple-50 to-purple-100 px-2 py-1 text-xs text-purple-700 hover:from-purple-100 hover:to-purple-200 font-medium"
+                >
+                  ✨ AI파워순
+                </button>
+              )}
+            </div>
           </div>
-        </Row>
+          
+          <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={onDragStartHandler} onDragCancel={onDragCancel} onDragOver={onDragOverHandler} onDragEnd={onDragEndHandler}>
+            <div className="relative">
+              {/* AI 로딩 오버레이 */}
+              {isAILoading && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/95 backdrop-blur-sm rounded-lg">
+                  <div className="text-center">
+                    <div className="mb-4 animate-spin text-6xl">✨</div>
+                    <div className="text-lg font-semibold text-purple-600 mb-2">AI가 팀을 구성 중...</div>
+                    <div className="text-sm text-stone-600">모든 데이터를 분석하고 있습니다</div>
+                  </div>
+                </div>
+              )}
+              
+              <div className="grid gap-3" style={{gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))'}}>
+                {previewTeams.map((list,i)=>(
+                  <div key={i} className="space-y-2">
+                    <TeamColumn 
+                      teamIndex={i} 
+                      labelKit={kitForTeam(i)} 
+                      players={list} 
+                      showOVR={isAdmin&&!hideOVR} 
+                      isAdmin={isAdmin} 
+                      dropHint={dropHint}
+                      isDraftMode={isDraftMode}
+                      captainId={captainIds[i]}
+                      onRemovePlayer={handleRemovePlayer}
+                      onSetCaptain={handleSetCaptain}
+                      matches={matches}
+                      showAIPower={showAIPower}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+            <DragOverlay>
+              {activePlayerId?(<DragGhost player={players.find(p=>String(p.id)===String(activePlayerId))} showOVR={isAdmin&&!hideOVR}/>):null}
+            </DragOverlay>
+          </DndContext>
+        </div>
 
         <div className="flex flex-wrap gap-2">
           {isAdmin&&(
@@ -330,42 +731,12 @@ export default function MatchPlanner({
     </Card>
 
     <div className="grid gap-4">
-      <Card title="팀 배정 미리보기 (드래그 & 드랍 커스텀 가능)" right={<div className="hidden sm:flex items-center gap-2 text-xs text-gray-500">기준: {posAware?'포지션 분산':criterion} · <span className="font-medium">GK 평균 제외</span></div>}>
-        <Toolbar isAdmin={isAdmin} hideOVR={hideOVR} setHideOVR={setHideOVR}
-          reshuffleTeams={()=>{const seed=(Date.now()^Math.floor(Math.random()*0xffffffff))>>>0;setShuffleSeed(seed);if(posAware)setManualTeams(null);else setManualTeams(prev=>(prev??autoSplit.teams).map(list=>seededShuffle(list,seed+list.length)))}}
-          sortTeamsByOVR={(order='desc')=>{const base=manualTeams??previewTeams;setManualTeams(base.map(list=>list.slice().sort((a,b)=>{const A=a.ovr??overall(a),B=b.ovr??overall(b);return order==='asc'?A-B:B-A})))}}
-          sortTeamsByPosition={(dir='asc')=>{const base=manualTeams??previewTeams,mul=dir==='asc'?1:-1;setManualTeams(base.map(list=>list.slice().sort((a,b)=>{const ia=posIndex(a),ib=posIndex(b);if(ia!==ib)return(ia-ib)*mul;const A=a.ovr??overall(a),B=b.ovr??overall(b);return(B-A)})))}}
-          resetManual={()=>{setManualTeams(null);setShuffleSeed(0)}} manualTeams={manualTeams}/>
-        
-        {/* 표기 안내 */}
-        <div className="mb-2 flex items-center justify-end text-[11px] text-gray-500">
-          표기: <span className="ml-1 inline-flex items-center gap-1"><GuestBadge/> 게스트</span>
-        </div>
-
-        <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={onDragStartHandler} onDragCancel={onDragCancel} onDragOver={onDragOverHandler} onDragEnd={onDragEndHandler}>
-          <div className="grid gap-4" style={{gridTemplateColumns:'repeat(auto-fit, minmax(260px, 1fr))'}}>
-            {previewTeams.map((list,i)=>(
-              <div key={i} className="space-y-2">
-                <TeamColumn teamIndex={i} labelKit={kitForTeam(i)} players={list} showOVR={isAdmin&&!hideOVR} isAdmin={isAdmin} dropHint={dropHint}/>
-              </div>
-            ))}
-          </div>
-          <DragOverlay>
-            {activePlayerId?(<DragGhost player={players.find(p=>String(p.id)===String(activePlayerId))} showOVR={isAdmin&&!hideOVR}/>):null}
-          </DragOverlay>
-        </DndContext>
-      </Card>
-
-      {/* Upcoming Matches Section */}
       {(() => {
-        console.log('Original upcomingMatches:', upcomingMatches)
         const activeMatches = filterExpiredMatches(upcomingMatches)
-        console.log('Active matches after filtering:', activeMatches)
         
         // 만료된 매치가 있다면 자동으로 DB에서 제거
         if (activeMatches.length !== upcomingMatches.length && upcomingMatches.length > 0) {
           const expiredCount = upcomingMatches.length - activeMatches.length
-          console.log('Found expired matches:', expiredCount)
           setTimeout(() => {
             // 비동기로 만료된 매치들을 DB에서 제거
             activeMatches.forEach((match, index) => {
@@ -501,17 +872,9 @@ export default function MatchPlanner({
 }
 
 function Row({label,children}){return(<div className="grid items-start gap-2 sm:grid-cols-[120px_minmax(0,1fr)]"><label className="mt-1 text-sm text-gray-600">{label}</label><div>{children}</div></div>)}
-function Toolbar({isAdmin,hideOVR,setHideOVR,reshuffleTeams,sortTeamsByOVR,sortTeamsByPosition,resetManual,manualTeams}){const[ovrOrder,setOvrOrder]=useState('desc'),[posOrder,setPosOrder]=useState('asc');return(
-  <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div className="flex flex-wrap items-center gap-2">
-    <button onClick={reshuffleTeams} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">랜덤 섞기</button>
-    {isAdmin&&(<button onClick={()=>{const next=ovrOrder==='desc'?'asc':'desc';sortTeamsByOVR(next);setOvrOrder(next)}} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">팀 OVR 정렬 ({ovrOrder==='desc'?'↓':'↑'})</button>)}
-    <button onClick={()=>{const next=posOrder==='asc'?'desc':'asc';sortTeamsByPosition(next);setPosOrder(next)}} className="rounded border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-sm text-emerald-800 hover:bg-emerald-100">포지션 정렬 ({posOrder==='asc'?'GK→FW':'FW→GK'})</button>
-    {isAdmin&&(<button type="button" aria-pressed={hideOVR} onClick={()=>setHideOVR(v=>!v)} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ${hideOVR?'border-emerald-500 text-emerald-700 bg-emerald-50':'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'}`}><span className={`inline-block h-2.5 w-2.5 rounded-full ${hideOVR?'bg-emerald-500':'bg-gray-300'}`}></span>OVR 숨기기</button>)}
-    <button onClick={resetManual} disabled={!manualTeams} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50 disabled:opacity-50">수동 편집 초기화</button>
-  </div></div>)}
 
 /* 컬럼/플레이어 렌더 */
-function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint}){const id=`team-${teamIndex}`,{setNodeRef,isOver}=useDroppable({id}),non=players.filter(p=>(p.position||p.pos)!=='GK'&&!isUnknownPlayer(p)),sum=non.reduce((a,p)=>a+(p.ovr??overall(p)),0),avg=non.length?Math.round(sum/non.length):0,showIndicator=dropHint?.team===teamIndex,indicator=(<li className="my-1 h-2 rounded bg-emerald-500/70 animate-pulse shadow-[0_0_0_2px_rgba(16,185,129,.35)]"/>);const rendered=[];for(let i=0;i<players.length;i++){if(showIndicator&&dropHint.index===i)rendered.push(<React.Fragment key={`hint-${i}`}>{indicator}</React.Fragment>);rendered.push(<PlayerRow key={players[i].id} player={players[i]} showOVR={showOVR}/>)}if(showIndicator&&dropHint.index===players.length)rendered.push(<React.Fragment key="hint-end">{indicator}</React.Fragment>)
+function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraftMode,captainId,onRemovePlayer,onSetCaptain,matches,showAIPower}){const id=`team-${teamIndex}`,{setNodeRef,isOver}=useDroppable({id}),non=players.filter(p=>(p.position||p.pos)!=='GK'&&!isUnknownPlayer(p)),sum=non.reduce((a,p)=>a+(p.ovr??overall(p)),0),avg=non.length?Math.round(sum/non.length):0,showIndicator=dropHint?.team===teamIndex,indicator=(<li className="my-1 h-2 rounded bg-emerald-500/70 animate-pulse shadow-[0_0_0_2px_rgba(16,185,129,.35)]"/>);const rendered=[];for(let i=0;i<players.length;i++){if(showIndicator&&dropHint.index===i)rendered.push(<React.Fragment key={`hint-${i}`}>{indicator}</React.Fragment>);rendered.push(<PlayerRow key={players[i].id} player={players[i]} showOVR={showOVR} isAdmin={isAdmin} teamIndex={teamIndex} isDraftMode={isDraftMode} isCaptain={captainId===players[i].id} onRemove={onRemovePlayer} onSetCaptain={onSetCaptain} matches={matches} showAIPower={showAIPower}/>)}if(showIndicator&&dropHint.index===players.length)rendered.push(<React.Fragment key="hint-end">{indicator}</React.Fragment>)
   return(<div ref={setNodeRef} className={`rounded-lg border bg-white transition ${isOver?'border-emerald-500 ring-2 ring-emerald-200':'border-gray-200'}`}>
     <div className={`mb-1 flex items-center justify-between px-3 py-2 text-xs ${labelKit.headerClass}`}>
       <div className="font-semibold">팀 {teamIndex+1}</div>
@@ -541,15 +904,35 @@ function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint}){const
   </div>)}
 
 /* PlayerRow */
-function PlayerRow({player,showOVR}){
+function PlayerRow({player,showOVR,isAdmin,teamIndex,isDraftMode,isCaptain,onRemove,onSetCaptain,matches,showAIPower}){
   const{attributes,listeners,setNodeRef,transform,transition,isDragging}=useSortable({id:String(player.id)})
   const style={transform:CSS.Transform.toString(transform),transition,opacity:isDragging?0.7:1,boxShadow:isDragging?'0 6px 18px rgba(0,0,0,.12)':undefined,borderRadius:8,background:isDragging?'rgba(16,185,129,0.06)':undefined}
   const pos=positionGroupOf(player),isGK=pos==='GK',unknown=isUnknownPlayer(player),ovrVal=unknown?'?':player.ovr??overall(player)
   const member=isMember(player.membership)
+  
+  // OVR 색상 함수
+  const getOVRColor = (ovr) => {
+    if (ovr >= 80) return 'from-emerald-500 to-emerald-600'
+    if (ovr >= 70) return 'from-blue-500 to-blue-600'
+    if (ovr >= 60) return 'from-amber-500 to-amber-600'
+    return 'from-stone-500 to-stone-600'
+  }
+  
+  // AI 파워 칩 색상 함수
+  const aiPowerChipClass = (power) => {
+    if (power >= 1300) return 'from-purple-500 to-purple-700'
+    if (power >= 1100) return 'from-emerald-500 to-emerald-700'
+    if (power >= 900) return 'from-blue-500 to-blue-700'
+    if (power >= 700) return 'from-amber-500 to-amber-700'
+    return 'from-stone-400 to-stone-600'
+  }
+  
+  const aiPower = showAIPower ? calculateAIPower(player, matches) : null
+  
   return(
     <li ref={setNodeRef} style={style} className="flex items-start gap-2 border-t border-gray-100 pt-1 first:border-0 first:pt-0 touch-manipulation cursor-grab active:cursor-grabbing" {...attributes}{...listeners}>
       <span className="flex items-center gap-2 min-w-0 flex-1">
-  <InitialAvatar id={player.id} name={player.name} size={24} badges={!member?['G']:[]} />
+        <InitialAvatar id={player.id} name={player.name} size={24} badges={!member?['G']:isCaptain?['C']:[]} />
         <span className="whitespace-normal break-words">{player.name}</span>
         <span
           className={`ml-1 inline-flex items-center rounded-full px-2 py-[2px] text-[11px] ${
@@ -562,12 +945,48 @@ function PlayerRow({player,showOVR}){
         >
           {pos}
         </span>
-  {/* guest badge is shown on avatar */}
       </span>
 
-      {!isGK && showOVR && <span className={`ovr-chip shrink-0 rounded-full text-[11px] px-2 py-[2px] ${unknown?'bg-stone-300 text-stone-700':'bg-stone-900 text-white'}`} data-ovr>
-        {unknown ? '?' : `OVR ${ovrVal}`}
+      {!isGK && showOVR && <span className={`ovr-chip shrink-0 rounded-lg bg-gradient-to-br ${unknown?'from-stone-400 to-stone-500':getOVRColor(ovrVal)} text-white text-[11px] px-2 py-[2px] font-semibold shadow-sm`} data-ovr>
+        {unknown ? '?' : ovrVal}
       </span>}
+      
+      {/* AI 파워 점수 표시 (페이드인 애니메이션) */}
+      {showAIPower && aiPower !== null && (
+        <span 
+          className={`shrink-0 rounded-lg bg-gradient-to-br ${aiPowerChipClass(aiPower)} text-white text-[11px] px-2 py-[2px] font-semibold shadow-sm animate-fadeIn`} 
+          title="AI 파워 점수"
+          style={{
+            animation: 'fadeIn 0.5s ease-in-out'
+          }}
+        >
+          ✨ {aiPower}
+        </span>
+      )}
+      
+      {/* Admin 버튼들 */}
+      {isAdmin && (
+        <span className="flex items-center gap-1 shrink-0">
+          {isDraftMode && (
+            <button
+              className="rounded-full border border-amber-200 bg-white w-5 h-5 flex items-center justify-center text-amber-700 hover:bg-amber-50 p-0"
+              title="이 선수를 주장으로 지정"
+              onClick={(e)=>{e.stopPropagation();onSetCaptain&&onSetCaptain(player.id,teamIndex)}}
+              aria-label="주장 지정"
+            >
+              <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="10 2 12.59 7.36 18.51 7.97 14 12.14 15.18 18.02 10 15.1 4.82 18.02 6 12.14 1.49 7.97 7.41 7.36 10 2"/></svg>
+            </button>
+          )}
+          <button
+            className="rounded-full border border-gray-300 bg-white w-5 h-5 flex items-center justify-center text-gray-700 hover:bg-gray-100 p-0"
+            title="이 팀에서 제외"
+            onClick={(e)=>{e.stopPropagation();onRemove&&onRemove(player.id,teamIndex)}}
+            aria-label="팀에서 제외"
+          >
+            <svg width="10" height="10" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="5" y1="5" x2="15" y2="15"/><line x1="15" y1="5" x2="5" y2="15"/></svg>
+          </button>
+        </span>
+      )}
     </li>
   )
 }
@@ -597,6 +1016,104 @@ function DragGhost({player,showOVR}){if(!player)return null;const pos=positionGr
   </div>
 )}
 function FullscreenModal({children,onClose}){return(<div className="fixed inset-0 z-50 bg-black/50 p-4 overflow-auto"><div className="mx-auto max-w-5xl rounded-lg bg-white p-4">{children}<div className="mt-3 text-right"><button onClick={onClose} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm">닫기</button></div></div></div>)}
+
+/* 빠른 출석 편집 */
+function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
+  const [teamIdx,setTeamIdx]=useState(0)
+  const [q,setQ]=useState("")
+  const [showAll,setShowAll]=useState(false)
+  
+  const notInMatch = useMemo(()=>{
+    const inside=new Set(snapshot.flat().map(String))
+    return players.filter(p=>!inside.has(String(p.id)))
+  }, [players, snapshot])
+  
+  const filtered=useMemo(()=>{
+    const t=q.trim().toLowerCase()
+    const base=t?notInMatch.filter(p=>(p.name||"").toLowerCase().includes(t)):notInMatch
+    return base.slice().sort((a,b)=>(a.name||"").localeCompare(b.name||""))
+  },[notInMatch,q])
+  
+  const displayList = useMemo(() => {
+    return showAll ? filtered : filtered.slice(0, 20)
+  }, [filtered, showAll])
+  
+  // 클릭 시 바로 팀에 추가
+  const addPlayerToTeam = (pid) => {
+    const next = snapshot.map((arr,i)=>i===teamIdx?[...arr, pid]:arr)
+    onDraftChange(next)
+  }
+  
+  // Enter 키로 1명일 때 바로 추가
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && filtered.length === 1) {
+      e.preventDefault()
+      addPlayerToTeam(filtered[0].id)
+      setQ('') // 검색어 초기화
+    }
+  }
+  
+  return (
+    <div className="mt-3 rounded border border-gray-200 bg-white p-3">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <label className="text-xs text-gray-600 font-medium">빠른 선수 추가</label>
+        <select className="rounded border border-gray-300 bg-white px-2 py-1 text-xs" value={teamIdx} onChange={e=>setTeamIdx(Number(e.target.value))}>
+          {snapshot.map((_,i)=><option key={i} value={i}>팀 {i+1}</option>)}
+        </select>
+        <input 
+          className="flex-1 min-w-[180px] rounded border border-gray-300 bg-white px-2 py-1.5 text-sm" 
+          placeholder="이름 검색..."
+          value={q}
+          onChange={e=>setQ(e.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+      </div>
+      
+      {notInMatch.length === 0 ? (
+        <div className="text-xs text-gray-400 py-2">모든 선수가 팀에 배정되었습니다</div>
+      ) : (
+        <>
+          <div className={`${showAll ? 'max-h-[400px]' : 'max-h-[200px]'} overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50`}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+              {displayList.map(p => {
+                const member = isMember(p.membership)
+                return (
+                  <button 
+                    key={p.id} 
+                    onClick={() => addPlayerToTeam(p.id)}
+                    className="flex items-center gap-2 text-xs p-2 rounded hover:bg-white hover:shadow-sm cursor-pointer transition border border-transparent hover:border-emerald-200"
+                  >
+                    <InitialAvatar id={p.id} name={p.name} size={28} badges={!member?['G']:[]} />
+                    <span className="truncate text-left flex-1">{p.name}</span>
+                    <span className="text-emerald-600 text-lg leading-none">+</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <div className="mt-2 text-center">
+            {filtered.length > 20 && !showAll && (
+              <button 
+                onClick={() => setShowAll(true)}
+                className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+              >
+                + {filtered.length - 20}명 더보기
+              </button>
+            )}
+            {showAll && filtered.length > 20 && (
+              <button 
+                onClick={() => setShowAll(false)}
+                className="text-xs text-gray-600 hover:text-gray-700 font-medium"
+              >
+                접기
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
 
 <style>{`
   @keyframes shimmer {

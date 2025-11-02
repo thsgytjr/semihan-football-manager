@@ -18,7 +18,11 @@ export function createUpcomingMatch(input = {}) {
     createdAt = new Date().toISOString(),
     isDraftMode = false,
     captainIds = [],
-    totalCost = 0
+    totalCost = 0,
+    teamCount = 2,
+    snapshot = [],
+    formations = [],
+    criterion = 'overall'
   } = input
 
   // 참가자 ID는 participantIds 우선, 없으면 attendeeIds 사용
@@ -41,12 +45,16 @@ export function createUpcomingMatch(input = {}) {
     isDraftMode,
     totalCost: Number(totalCost) || 0,
     captainIds: [...captainIds],
+    teamCount: Number(teamCount) || 2,
+    criterion: criterion || 'overall',
     // 드래프트 관련 필드
     draftStartedAt: null,
     draftCompletedAt: null,
     isDraftComplete: false,
     teams: [], // 팀이 구성되면 여기에 저장
-    snapshot: [] // 최종 팀 구성 스냅샷
+    snapshot: snapshot || [], // 팀 구성 스냅샷 (선수 ID 배열)
+    formations: formations || [], // 포메이션 정보
+    board: [] // 포메이션 보드 배치 정보
   }
 }
 
@@ -211,8 +219,10 @@ export function isMatchExpired(dateISO) {
     const matchTime = new Date(dateISO)
     const now = new Date()
     
-    // 매치 시간 + 6시간 후에 만료 (매치 후 정리 시간 포함)
-    const expirationTime = new Date(matchTime.getTime() + 6 * 60 * 60 * 1000)
+    // 매치 시작 시간 + 12시간 후에 만료 (매치 진행 시간 + 여유 시간)
+    // 예: 오전 6시 30분 매치 → 저녁 6시 30분까지 유지
+    const expirationTime = new Date(matchTime.getTime() + 12 * 60 * 60 * 1000)
+    
     return now > expirationTime
   } catch (error) {
     console.error('Error checking match expiration:', error)

@@ -6,6 +6,7 @@ import { STAT_KEYS } from "../lib/constants"
 import InitialAvatar from "../components/InitialAvatar"
 import RadarHexagon from "../components/RadarHexagon"
 import { ensureStatsObject, clampStat } from "../lib/stats"
+import { calculateAIPower, aiPowerChipClass } from "../lib/aiPower"
 
 const S = (v) => (v == null ? "" : String(v))
 const posOf = (p) => (S(p.position || p.pos).toUpperCase() || "")
@@ -399,6 +400,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
 // ===== 메인 페이지 =====
 export default function PlayersPage({
   players = [],
+  matches = [],
   selectedId,
   onSelect = () => {},
   onCreate = () => {},
@@ -411,7 +413,7 @@ export default function PlayersPage({
   const [membershipFilter, setMembershipFilter] = useState('all') // 'all' | 'member' | 'guest'
 
   // ▼ 정렬 상태: 키 & 방향
-  const [sortKey, setSortKey] = useState("name") // 'ovr' | 'pos' | 'name'
+  const [sortKey, setSortKey] = useState("name") // 'ovr' | 'pos' | 'name' | 'ai'
   const [sortDir, setSortDir] = useState("asc")  // 'asc' | 'desc'
   const POS_ORDER = ["GK","DF","MF","FW","OTHER",""] // 포지션 오름차순 기준
 
@@ -455,11 +457,22 @@ export default function PlayersPage({
     return S(a.name).localeCompare(S(b.name))
   }
 
+  const cmpByAIAsc = (a,b)=>{
+    const aa = calculateAIPower(a, matches)
+    const ab = calculateAIPower(b, matches)
+    if (aa !== ab) return aa - ab
+    // 동점이면 OVR→포지션→이름
+    const ovrCmp = cmpByOvrAsc(a,b)
+    if (ovrCmp !== 0) return ovrCmp
+    return S(a.name).localeCompare(S(b.name))
+  }
+
   const sorted = useMemo(() => {
     const arr = [...players]
     let cmp = cmpByNameAsc
     if (sortKey === "ovr") cmp = cmpByOvrAsc
     else if (sortKey === "pos") cmp = cmpByPosAsc
+    else if (sortKey === "ai") cmp = cmpByAIAsc
     arr.sort(applyDir(cmp))
     return arr
   }, [players, sortKey, sortDir])
@@ -586,6 +599,13 @@ export default function PlayersPage({
               OVR {arrowFor('ovr')}
             </button>
             <button
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='ai' ? 'border-purple-500 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
+              onClick={()=>onSortClick('ai')}
+              title="AI 파워 정렬 (토글: 오름/내림)"
+            >
+              ✨ AI {arrowFor('ai')}
+            </button>
+            <button
               className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='pos' ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
               onClick={()=>onSortClick('pos')}
               title="포지션 정렬 (토글: 오름/내림)"
@@ -680,6 +700,15 @@ export default function PlayersPage({
                 </div>
               )}
 
+              {/* AI 파워 점수 */}
+              <div className={`mb-3 rounded-lg p-3 text-center bg-gradient-to-br ${aiPowerChipClass(calculateAIPower(p, matches)).replace('text-white', '').replace('shadow-sm', '').split(' ').filter(c => c.startsWith('from-') || c.startsWith('to-')).join(' ')} text-white shadow-md`}>
+                <div className="text-xs mb-1 text-white/80">✨ AI Power Score</div>
+                <div className="text-2xl font-bold text-white">
+                  {calculateAIPower(p, matches)}
+                </div>
+                <div className="text-[10px] text-white/70 mt-1">Auto-calculation</div>
+              </div>
+
               {/* 액션 버튼 */}
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -736,14 +765,24 @@ export default function PlayersPage({
 
                 <div className="flex items-center gap-3">
                   {!isGK && (
-                    <span className={`inline-flex items-center rounded px-3 py-1 text-sm font-bold ${ovr === 50 ? 'bg-stone-300 text-stone-700' : ovrChipClass(ovr)}`}>
-                      {ovr === 50 ? '?' : ovr}
-                    </span>
+                    <>
+                      <span className={`inline-flex items-center rounded px-3 py-1 text-sm font-bold ${ovr === 50 ? 'bg-stone-300 text-stone-700' : ovrChipClass(ovr)}`}>
+                        {ovr === 50 ? '?' : ovr}
+                      </span>
+                      <span className={`inline-flex items-center rounded-lg px-3 py-1 text-xs font-bold shadow-sm ${aiPowerChipClass(calculateAIPower(p, matches))}`} title="AI 파워 점수">
+                        ✨ {calculateAIPower(p, matches)}
+                      </span>
+                    </>
                   )}
                   {isGK && (
-                    <span className="inline-flex items-center rounded px-3 py-1 text-sm font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                      GK
-                    </span>
+                    <>
+                      <span className="inline-flex items-center rounded px-3 py-1 text-sm font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                        GK
+                      </span>
+                      <span className={`inline-flex items-center rounded-lg px-3 py-1 text-xs font-bold shadow-sm ${aiPowerChipClass(calculateAIPower(p, matches))}`} title="AI 파워 점수">
+                        ✨ {calculateAIPower(p, matches)}
+                      </span>
+                    </>
                   )}
                   <button
                     className="text-xs px-3 py-1.5 rounded-md border border-stone-300 hover:bg-stone-50 font-medium transition-colors"

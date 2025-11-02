@@ -832,7 +832,7 @@ function DuoTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselin
   const columns = [
     { label: '순위', px: 1.5, align: 'center' },
     { label: '듀오 (Assist → Goal)', px: 2 },
-    { label: '점수', px: 2, align: 'center' }
+    { label: '회수', px: 1.5, align: 'center' }
   ]
 
   const renderRow = (r, tone) => (

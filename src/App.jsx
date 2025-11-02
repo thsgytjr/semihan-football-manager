@@ -290,6 +290,7 @@ export default function App(){
               {tab==="players"&&isAdmin&&(
                 <PlayersPage
                   players={players}
+                  matches={matches}
                   selectedId={selectedPlayerId}
                   onSelect={setSelectedPlayerId}
                   onCreate={handleCreatePlayerFromModal}  // ✅ 여기로 연결
