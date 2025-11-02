@@ -324,26 +324,49 @@ export default function UpcomingMatchCard({
       
       {/* 주장 선택/대결 표시 */}
       <div style={{marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #f3f4f6'}}>
-        {upcomingMatch.captains && upcomingMatch.captains.length === 2 ? (
-          // 주장이 선택된 경우 - VS 대결 구도 표시
-          <CaptainVsDisplay 
-            captains={upcomingMatch.captains}
-            players={players}
-            matches={matches}
-          />
-        ) : isAdmin ? (
-          // 주장 선택 드롭다운 (Admin만)
-          <CaptainSelector 
-            attendees={attendees}
-            currentCaptains={upcomingMatch.captains || []}
-            onUpdateCaptains={(captains) => onUpdateCaptains?.(upcomingMatch, captains)}
-          />
-        ) : (
-          // 주장 미선택 상태 표시
-          <div style={{textAlign: 'center', padding: '12px', backgroundColor: '#f9fafb', borderRadius: '6px'}}>
-            <span style={{fontSize: '12px', color: '#6b7280'}}>주장 선택 대기중</span>
-          </div>
-        )}
+        {(() => {
+          // captainIds 또는 captains 둘 중 하나라도 있으면 주장이 선택된 것으로 간주
+          const captainIds = upcomingMatch.captainIds || []
+          const captains = upcomingMatch.captains || []
+          
+          // captainIds가 있으면 players에서 찾아서 captain 객체 생성
+          let captainObjects = captains
+          if (captainIds.length >= 2 && captains.length === 0) {
+            captainObjects = captainIds
+              .slice(0, 2)
+              .map(id => players.find(p => p.id === id))
+              .filter(Boolean)
+          }
+          
+          // 주장이 2명 이상 선택된 경우
+          if (captainObjects.length >= 2) {
+            return (
+              <CaptainVsDisplay 
+                captains={captainObjects}
+                players={players}
+                matches={matches}
+              />
+            )
+          }
+          
+          // Admin이면 주장 선택 UI 표시
+          if (isAdmin) {
+            return (
+              <CaptainSelector 
+                attendees={attendees}
+                currentCaptains={captainObjects}
+                onUpdateCaptains={(newCaptains) => onUpdateCaptains?.(upcomingMatch, newCaptains)}
+              />
+            )
+          }
+          
+          // 일반 사용자이고 주장이 선택되지 않은 경우
+          return (
+            <div style={{textAlign: 'center', padding: '12px', backgroundColor: '#f9fafb', borderRadius: '6px'}}>
+              <span style={{fontSize: '12px', color: '#6b7280'}}>주장 선택 대기중</span>
+            </div>
+          )
+        })()}
       </div>
 
       {/* 참가자 */}

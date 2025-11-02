@@ -69,7 +69,7 @@ export default function MatchPlanner({
   onDeleteUpcomingMatch,
   onUpdateUpcomingMatch
 }){
-  const[dateISO,setDateISO]=useState(()=>nextSaturday0630Local()),[attendeeIds,setAttendeeIds]=useState([]),[criterion,setCriterion]=useState('overall'),[hideOVR,setHideOVR]=useState(false),[shuffleSeed,setShuffleSeed]=useState(0)
+  const[dateISO,setDateISO]=useState(()=>nextSaturday0630Local()),[attendeeIds,setAttendeeIds]=useState([]),[criterion,setCriterion]=useState('overall'),[shuffleSeed,setShuffleSeed]=useState(0)
   const[locationPreset,setLocationPreset]=useState(''),[locationName,setLocationName]=useState(''),[locationAddress,setLocationAddress]=useState('')
   const[customBaseCost,setCustomBaseCost]=useState(0),[guestSurcharge,setGuestSurcharge]=useState(2),[teamCount,setTeamCount]=useState(2)
   const[manualTeams,setManualTeams]=useState(null),[activePlayerId,setActivePlayerId]=useState(null),[activeFromTeam,setActiveFromTeam]=useState(null)
@@ -82,6 +82,8 @@ export default function MatchPlanner({
   const[showAIPower,setShowAIPower]=useState(false) // AI 파워 점수 표시 여부
   const[isAILoading,setIsAILoading]=useState(false) // AI 배정 로딩 상태
   const[linkedUpcomingMatchId,setLinkedUpcomingMatchId]=useState(null) // 현재 편집 중인 예정 매치 ID
+  const[activeSortMode,setActiveSortMode]=useState(null) // 현재 활성화된 정렬 모드: 'name' | 'position' | 'ovr' | 'aipower' | null
+  const[aiDistributedTeams,setAiDistributedTeams]=useState(null) // AI 배정 이전 상태 (Revert용)
   
   // Extract unique locations from saved matches (by name only, no duplicates)
   const locationOptions = useMemo(() => {
@@ -247,15 +249,13 @@ export default function MatchPlanner({
     onUpdateUpcomingMatch(linkedUpcomingMatchId, updates)
   }, [captainIds, previewTeams, formations]) // 주장, 팀 구성, 포메이션 변경 시 자동 업데이트
 
-  const showOVR=isAdmin&&!hideOVR
-
   // Drag and drop handlers
   const sensors=useSensors(useSensor(PointerSensor,{activationConstraint:{distance:4}}),useSensor(TouchSensor,{activationConstraint:{delay:120,tolerance:6}}))
   const findTeamIndexByItemId=itemId=>previewTeams.findIndex(list=>list.some(p=>String(p.id)===String(itemId)))
   const onDragStartHandler=e=>{setActivePlayerId(e.active.id);setActiveFromTeam(findTeamIndexByItemId(e.active.id));document.body.classList.add('cursor-grabbing')}
   const onDragCancel=()=>{setActivePlayerId(null);setActiveFromTeam(null);setDropHint({team:null,index:null});document.body.classList.remove('cursor-grabbing')}
   function onDragOverHandler(e){const{over}=e;if(!over){setDropHint({team:null,index:null});return}const overId=String(over.id);let teamIndex,index;if(overId.startsWith('team-')){teamIndex=Number(overId.split('-')[1]);index=(previewTeams[teamIndex]||[]).length}else{teamIndex=findTeamIndexByItemId(overId);const list=previewTeams[teamIndex]||[],overIdx=list.findIndex(p=>String(p.id)===overId);index=Math.max(0,overIdx)}setDropHint({team:teamIndex,index})}
-  function onDragEndHandler(e){const{active,over}=e;setActivePlayerId(null);document.body.classList.remove('cursor-grabbing');setDropHint({team:null,index:null});if(!over)return;const from=activeFromTeam,overId=String(over.id),to=overId.startsWith('team-')?Number(overId.split('-')[1]):findTeamIndexByItemId(overId);if(from==null||to==null||from<0||to<0)return;const base=manualTeams??previewTeams,next=base.map(l=>l.slice()),fromIdx=next[from].findIndex(p=>String(p.id)===String(active.id));if(fromIdx<0)return;const moving=next[from][fromIdx];next[from].splice(fromIdx,1);const hintIdx=dropHint.team===to&&dropHint.index!=null?dropHint.index:null,overIdx=hintIdx!=null?hintIdx:next[to].findIndex(p=>String(p.id)===overId);next[to].splice(overId.startsWith('team-')?next[to].length:(overIdx>=0?overIdx:next[to].length),0,moving);setManualTeams(next);latestTeamsRef.current=next;setActiveFromTeam(null);setShowAIPower(false);setPlacedByTeam(prev=>{const arr=Array.isArray(prev)?[...prev]:[];const apply=(idx,list)=>{const existed=Array.isArray(arr[idx])?arr[idx]:[],byId=new Map(existed.map(p=>[String(p.id),p]));const basePlaced=assignToFormation({players:list,formation:formations[idx]||'4-3-3'});arr[idx]=basePlaced.map(d=>byId.get(String(d.id))||d)};apply(to,next[to]);apply(from,next[from]);return arr})}
+  function onDragEndHandler(e){const{active,over}=e;setActivePlayerId(null);document.body.classList.remove('cursor-grabbing');setDropHint({team:null,index:null});if(!over)return;const from=activeFromTeam,overId=String(over.id),to=overId.startsWith('team-')?Number(overId.split('-')[1]):findTeamIndexByItemId(overId);if(from==null||to==null||from<0||to<0)return;const base=manualTeams??previewTeams,next=base.map(l=>l.slice()),fromIdx=next[from].findIndex(p=>String(p.id)===String(active.id));if(fromIdx<0)return;const moving=next[from][fromIdx];next[from].splice(fromIdx,1);const hintIdx=dropHint.team===to&&dropHint.index!=null?dropHint.index:null,overIdx=hintIdx!=null?hintIdx:next[to].findIndex(p=>String(p.id)===overId);next[to].splice(overId.startsWith('team-')?next[to].length:(overIdx>=0?overIdx:next[to].length),0,moving);setManualTeams(next);latestTeamsRef.current=next;setActiveFromTeam(null);setShowAIPower(false);setActiveSortMode(null);setPlacedByTeam(prev=>{const arr=Array.isArray(prev)?[...prev]:[];const apply=(idx,list)=>{const existed=Array.isArray(arr[idx])?arr[idx]:[],byId=new Map(existed.map(p=>[String(p.id),p]));const basePlaced=assignToFormation({players:list,formation:formations[idx]||'4-3-3'});arr[idx]=basePlaced.map(d=>byId.get(String(d.id))||d)};apply(to,next[to]);apply(from,next[from]);return arr})}
   const openEditorSaved=(match,i)=>{const h=hydrateMatch(match,players);setFormations(Array.isArray(match.formations)?match.formations.slice():[]);setPlacedByTeam(Array.isArray(match.board)?match.board.map(a=>Array.isArray(a)?a.slice():[]):[]);setEditorPlayers(h.teams||[]);setEditingMatchId(match.id);setEditingTeamIdx(i);setEditorOpen(true)}
   const closeEditor=()=>setEditorOpen(false),setTeamFormation=(i,f)=>{setFormations(prev=>{const c=[...prev];c[i]=f;return c});setPlacedByTeam(prev=>{const c=Array.isArray(prev)?[...prev]:[];c[i]=assignToFormation({players:editorPlayers[i]||[],formation:f});return c})},autoPlaceTeam=i=>setPlacedByTeam(prev=>{const c=Array.isArray(prev)?[...prev]:[];const f=formations[i]||'4-3-3';c[i]=assignToFormation({players:editorPlayers[i]||[],formation:f});return c})
   
@@ -268,6 +268,7 @@ export default function MatchPlanner({
     setManualTeams(next)
     latestTeamsRef.current = next
     setShowAIPower(false) // 수동 조작 시 AI 파워 숨김
+    setActiveSortMode(null) // 수동 조작 시 정렬 모드 해제
   }
   
   // 주장 선택 핸들러
@@ -285,7 +286,7 @@ export default function MatchPlanner({
   const handleAIDistribute = () => {
     // 현재 상태 저장 (Revert용)
     const current = manualTeams ?? previewTeams
-    setPreviousTeams(current.map(team => [...team]))
+    setAiDistributedTeams(current.map(team => [...team]))
     
     // 팀에 배정된 모든 선수 수집
     const assignedPlayers = current.flat()
@@ -298,11 +299,16 @@ export default function MatchPlanner({
     // AI 로딩 시작
     setIsAILoading(true)
     setShowAIPower(false)
+    setActiveSortMode(null) // AI 배정 시 정렬 모드 해제
     
     // 로딩 애니메이션 효과 (1초 후 결과 표시)
     setTimeout(() => {
-      // 개선된 AI 배정: 모든 데이터를 활용한 종합 평가
-      const newTeams = smartDistributeAdvanced(assignedPlayers, teams)
+      // 개선된 AI 배정: 고정 시드로 항상 같은 결과 (선수 구성이 같으면)
+      // 선수 ID들을 정렬하여 고정 시드 생성
+      const playerIdsSorted = assignedPlayers.map(p => p.id).sort().join(',')
+      const fixedSeed = playerIdsSorted.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
+      
+      const newTeams = smartDistributeAdvanced(assignedPlayers, teams, fixedSeed)
       
       setManualTeams(newTeams)
       latestTeamsRef.current = newTeams
@@ -318,7 +324,7 @@ export default function MatchPlanner({
   }
   
   // 똑똑한 팀 배정 알고리즘 (고급 버전)
-  const smartDistributeAdvanced = (players, teamCount) => {
+  const smartDistributeAdvanced = (players, teamCount, seed = 0) => {
     // 1. 각 선수의 종합 파워 계산
     const playersWithPower = players.map(p => ({
       ...p,
@@ -326,21 +332,16 @@ export default function MatchPlanner({
       position: positionGroupOf(p)
     }))
     
-    // 2. 포지션별로 그룹화
+    // 2. 포지션별로 그룹화 후 파워순 정렬 (고정된 순서)
     const byPosition = {
-      GK: playersWithPower.filter(p => p.position === 'GK'),
-      DF: playersWithPower.filter(p => p.position === 'DF'),
-      MF: playersWithPower.filter(p => p.position === 'MF'),
-      FW: playersWithPower.filter(p => p.position === 'FW'),
-      OTHER: playersWithPower.filter(p => p.position === 'OTHER')
+      GK: playersWithPower.filter(p => p.position === 'GK').sort((a, b) => b.power - a.power),
+      DF: playersWithPower.filter(p => p.position === 'DF').sort((a, b) => b.power - a.power),
+      MF: playersWithPower.filter(p => p.position === 'MF').sort((a, b) => b.power - a.power),
+      FW: playersWithPower.filter(p => p.position === 'FW').sort((a, b) => b.power - a.power),
+      OTHER: playersWithPower.filter(p => p.position === 'OTHER').sort((a, b) => b.power - a.power)
     }
     
-    // 3. 각 포지션을 파워 내림차순으로 정렬
-    Object.keys(byPosition).forEach(pos => {
-      byPosition[pos].sort((a, b) => b.power - a.power)
-    })
-    
-    // 4. 팀 초기화
+    // 3. 팀 초기화
     const teams = Array.from({ length: teamCount }, () => [])
     const teamStats = Array.from({ length: teamCount }, () => ({
       totalPower: 0,
@@ -348,7 +349,8 @@ export default function MatchPlanner({
       positions: { GK: 0, DF: 0, MF: 0, FW: 0, OTHER: 0 }
     }))
     
-    // 5. 포지션별로 배정 (GK -> DF -> MF -> FW -> OTHER)
+    // 4. 포지션별로 배정 (GK -> DF -> MF -> FW -> OTHER)
+    // 각 포지션에서 가장 강한 선수부터 약한 팀에 배정 (밸런스 유지)
     const positionOrder = ['GK', 'DF', 'MF', 'FW', 'OTHER']
     
     positionOrder.forEach(pos => {
@@ -383,19 +385,20 @@ export default function MatchPlanner({
     return teams
   }
   
-  // 이전 상태로 되돌리기
+  // 이전 상태로 되돌리기 (AI 배정 전으로만)
   const handleRevert = () => {
-    if (!previousTeams) {
+    if (!aiDistributedTeams) {
       notify('되돌릴 이전 상태가 없습니다.')
       return
     }
     
-    setManualTeams(previousTeams.map(team => [...team]))
-    latestTeamsRef.current = previousTeams
-    setPreviousTeams(null)
+    setManualTeams(aiDistributedTeams.map(team => [...team]))
+    latestTeamsRef.current = aiDistributedTeams
+    setAiDistributedTeams(null)
     setShowAIPower(false) // Revert 시 AI 파워 숨김
+    setActiveSortMode(null) // Revert 시 정렬 모드 해제
     
-    notify('이전 상태로 되돌렸습니다 ↩️')
+    notify('AI 배정 이전 상태로 되돌렸습니다 ↩️')
   }
 
   function loadSavedIntoPlanner(match){if(!match)return;skipAutoResetRef.current=true;const h=hydrateMatch(match,players),ts=h.teams||[];if(ts.length===0){notify('불러올 팀 구성이 없습니다.');return}const ids=ts.flat().map(p=>p.id);setTeamCount(ts.length);if(match.criterion)setCriterion(match.criterion);if(match.location){setLocationName(match.location.name||'');setLocationAddress(match.location.address||'')}if(match.dateISO)setDateISO(match.dateISO.slice(0,16));if(match.fees?.total)setCustomBaseCost(match.fees.total);setShuffleSeed(0);setManualTeams(ts);latestTeamsRef.current=ts;setShowAIPower(false);const baseFormations=Array.isArray(match.formations)&&match.formations.length===ts.length?match.formations.slice():ts.map(list=>recommendFormation({count:list.length,mode:match.mode||'11v11',positions:countPositions(list)}));setFormations(baseFormations);const baseBoard=Array.isArray(match.board)&&match.board.length===ts.length?match.board.map(a=>Array.isArray(a)?a.slice():[]):ts.map((list,i)=>assignToFormation({players:list,formation:baseFormations[i]||'4-3-3'}));setPlacedByTeam(baseBoard);if(match.selectionMode==='draft'){setIsDraftMode(true);if(Array.isArray(match.captainIds)){setCaptainIds(match.captainIds)}}else{setIsDraftMode(false);setCaptainIds([])};notify('저장된 매치를 팀배정에 불러왔습니다 ✅')}
@@ -555,12 +558,11 @@ export default function MatchPlanner({
           <div className="flex items-center gap-3">
             <select className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" value={teams} onChange={e=>setTeamCount(Number(e.target.value))}>{Array.from({length:9},(_,i)=>i+2).map(n=><option key={n} value={n}>{n}팀</option>)}</select>
             <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={isDraftMode} onChange={()=>setIsDraftMode(v=>!v)}/>드래프트 모드</label>
-            {isAdmin&&(<button type="button" aria-pressed={hideOVR} onClick={()=>setHideOVR(v=>!v)} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition ${hideOVR?'border-emerald-500 text-emerald-700 bg-emerald-50':'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'}`}><span className={`inline-block h-2.5 w-2.5 rounded-full ${hideOVR?'bg-emerald-500':'bg-gray-300'}`}></span>Overall 숨기기</button>)}
           </div>
         </Row>
 
         {/* 빠른 선수 추가 - 상단 고정 */}
-        <QuickAttendanceEditor players={players} snapshot={previewTeams.map(team=>team.map(p=>p.id))} onDraftChange={(newSnap)=>{const byId=new Map(players.map(p=>[String(p.id),p]));const newTeams=newSnap.map(ids=>ids.map(id=>byId.get(String(id))).filter(Boolean));setManualTeams(newTeams);latestTeamsRef.current=newTeams;setShowAIPower(false)}}/>
+        <QuickAttendanceEditor players={players} snapshot={previewTeams.map(team=>team.map(p=>p.id))} onDraftChange={(newSnap)=>{const byId=new Map(players.map(p=>[String(p.id),p]));const newTeams=newSnap.map(ids=>ids.map(id=>byId.get(String(id))).filter(Boolean));setManualTeams(newTeams);latestTeamsRef.current=newTeams;setShowAIPower(false);setActiveSortMode(null)}}/>
 
         {/* 팀 배정 테이블 with 드래그 앤 드롭 */}
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
@@ -575,30 +577,33 @@ export default function MatchPlanner({
               >
                 ✨ AI 배정
               </button>
-              {previousTeams && (
+              {aiDistributedTeams && (
                 <button 
                   onClick={handleRevert}
                   className="rounded border border-gray-400 bg-white px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                  title="이전 상태로 되돌리기"
+                  title="AI 배정 이전 상태로 되돌리기"
                 >
                   Revert
                 </button>
               )}
-              <button 
-                onClick={()=>{
-                  if(window.confirm('모든 팀 배정을 초기화하시겠습니까?')) {
-                    setPreviousTeams(manualTeams ?? previewTeams)
-                    setManualTeams(Array.from({length: teams}, () => []))
-                    setCaptainIds([])
-                    setShowAIPower(false)
-                    notify('팀 배정이 초기화되었습니다')
-                  }
-                }} 
-                className="rounded border border-red-300 bg-white px-2 py-1 text-xs text-red-600 hover:bg-red-50"
-                title="모든 선수를 팀에서 제거"
-              >
-                초기화
-              </button>
+              {previewTeams.flat().length > 0 && (
+                <button 
+                  onClick={()=>{
+                    if(window.confirm('모든 팀 배정을 초기화하시겠습니까?')) {
+                      setAiDistributedTeams(manualTeams ?? previewTeams)
+                      setManualTeams(Array.from({length: teams}, () => []))
+                      setCaptainIds([])
+                      setShowAIPower(false)
+                      setActiveSortMode(null)
+                      notify('팀 배정이 초기화되었습니다')
+                    }
+                  }} 
+                  className="rounded border border-red-300 bg-white px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                  title="모든 선수를 팀에서 제거"
+                >
+                  초기화
+                </button>
+              )}
             </div>
             
             {/* 오른쪽: 정렬 버튼 */}
@@ -606,42 +611,72 @@ export default function MatchPlanner({
               <span className="text-xs text-gray-600 font-medium">정렬:</span>
               <button 
                 onClick={()=>{
-                  setPreviousTeams(manualTeams??previewTeams);
-                  const base=manualTeams??previewTeams;
-                  setManualTeams(base.map(list=>list.slice().sort((a,b)=>a.name.localeCompare(b.name))))
+                  if (activeSortMode === 'name') {
+                    // 이미 활성화되어 있으면 해제 (정렬 해제는 없음, 그냥 표시만)
+                    setActiveSortMode(null)
+                  } else {
+                    // 새로 활성화
+                    const base = manualTeams ?? previewTeams
+                    setManualTeams(base.map(list=>list.slice().sort((a,b)=>a.name.localeCompare(b.name))))
+                    setActiveSortMode('name')
+                  }
                 }} 
-                className="rounded border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50"
+                className={`rounded border px-2 py-1 text-xs transition-all ${
+                  activeSortMode === 'name' 
+                    ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' 
+                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                }`}
               >
                 이름순
               </button>
               <button 
                 onClick={()=>{
-                  setPreviousTeams(manualTeams??previewTeams);
-                  const base=manualTeams??previewTeams;
-                  // GK → DF → MF → FW → OTHER 순서로 정렬
-                  setManualTeams(base.map(list=>list.slice().sort((a,b)=>{
-                    const posA = positionGroupOf(a)
-                    const posB = positionGroupOf(b)
-                    const indexA = POS_ORDER.indexOf(posA)
-                    const indexB = POS_ORDER.indexOf(posB)
-                    return indexA - indexB
-                  })))
+                  if (activeSortMode === 'position') {
+                    // 이미 활성화되어 있으면 해제
+                    setActiveSortMode(null)
+                  } else {
+                    // 새로 활성화
+                    const base = manualTeams ?? previewTeams
+                    // GK → DF → MF → FW → OTHER 순서로 정렬
+                    setManualTeams(base.map(list=>list.slice().sort((a,b)=>{
+                      const posA = positionGroupOf(a)
+                      const posB = positionGroupOf(b)
+                      const indexA = POS_ORDER.indexOf(posA)
+                      const indexB = POS_ORDER.indexOf(posB)
+                      return indexA - indexB
+                    })))
+                    setActiveSortMode('position')
+                  }
                 }} 
-                className="rounded border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50"
+                className={`rounded border px-2 py-1 text-xs transition-all ${
+                  activeSortMode === 'position' 
+                    ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' 
+                    : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                }`}
               >
                 포지션순
               </button>
               {isAdmin&&(
                 <button 
                   onClick={()=>{
-                    setPreviousTeams(manualTeams??previewTeams);
-                    const base=manualTeams??previewTeams;
-                    setManualTeams(base.map(list=>list.slice().sort((a,b)=>{
-                      const A=a.ovr??overall(a),B=b.ovr??overall(b);
-                      return B-A
-                    })))
+                    if (activeSortMode === 'ovr') {
+                      // 이미 활성화되어 있으면 해제
+                      setActiveSortMode(null)
+                    } else {
+                      // 새로 활성화
+                      const base = manualTeams ?? previewTeams
+                      setManualTeams(base.map(list=>list.slice().sort((a,b)=>{
+                        const A=a.ovr??overall(a),B=b.ovr??overall(b);
+                        return B-A
+                      })))
+                      setActiveSortMode('ovr')
+                    }
                   }} 
-                  className="rounded border border-gray-300 bg-white px-2 py-1 text-xs hover:bg-gray-50"
+                  className={`rounded border px-2 py-1 text-xs transition-all ${
+                    activeSortMode === 'ovr' 
+                      ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' 
+                      : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
                 >
                   Overall순
                 </button>
@@ -649,29 +684,39 @@ export default function MatchPlanner({
               {showAIPower&&isAdmin&&(
                 <button 
                   onClick={()=>{
-                    setPreviousTeams(manualTeams??previewTeams);
-                    const base=manualTeams??previewTeams;
-                    
-                    // 각 팀의 선수를 AI 파워순으로 정렬
-                    const newTeams = base.map((list)=>{
-                      // AI 파워 계산
-                      const playersWithPower = list.map(player => ({
-                        player: {...player}, // 새 객체 생성으로 참조 변경
-                        power: calculateAIPower(player, matches)
-                      }));
+                    if (activeSortMode === 'aipower') {
+                      // 이미 활성화되어 있으면 해제
+                      setActiveSortMode(null)
+                    } else {
+                      // 새로 활성화
+                      const base = manualTeams ?? previewTeams
                       
-                      // AI 파워 내림차순 정렬
-                      playersWithPower.sort((a, b) => b.power - a.power);
+                      // 각 팀의 선수를 AI 파워순으로 정렬
+                      const newTeams = base.map((list)=>{
+                        // AI 파워 계산
+                        const playersWithPower = list.map(player => ({
+                          player: {...player}, // 새 객체 생성으로 참조 변경
+                          power: calculateAIPower(player, matches)
+                        }));
+                        
+                        // AI 파워 내림차순 정렬
+                        playersWithPower.sort((a, b) => b.power - a.power);
+                        
+                        // 정렬된 선수만 반환
+                        return playersWithPower.map(item => item.player);
+                      });
                       
-                      // 정렬된 선수만 반환
-                      return playersWithPower.map(item => item.player);
-                    });
-                    
-                    // 상태 업데이트
-                    setManualTeams(newTeams);
-                    latestTeamsRef.current = newTeams;
+                      // 상태 업데이트
+                      setManualTeams(newTeams);
+                      latestTeamsRef.current = newTeams;
+                      setActiveSortMode('aipower')
+                    }
                   }} 
-                  className="rounded border border-purple-300 bg-gradient-to-r from-purple-50 to-purple-100 px-2 py-1 text-xs text-purple-700 hover:from-purple-100 hover:to-purple-200 font-medium"
+                  className={`rounded border px-2 py-1 text-xs font-medium transition-all ${
+                    activeSortMode === 'aipower' 
+                      ? 'border-purple-500 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-sm' 
+                      : 'border-purple-300 bg-gradient-to-r from-purple-50 to-purple-100 text-purple-700 hover:from-purple-100 hover:to-purple-200'
+                  }`}
                 >
                   ✨ AI파워순
                 </button>
@@ -699,7 +744,7 @@ export default function MatchPlanner({
                       teamIndex={i} 
                       labelKit={kitForTeam(i)} 
                       players={list} 
-                      showOVR={isAdmin&&!hideOVR} 
+                      showOVR={isAdmin} 
                       isAdmin={isAdmin} 
                       dropHint={dropHint}
                       isDraftMode={isDraftMode}
@@ -714,7 +759,7 @@ export default function MatchPlanner({
               </div>
             </div>
             <DragOverlay>
-              {activePlayerId?(<DragGhost player={players.find(p=>String(p.id)===String(activePlayerId))} showOVR={isAdmin&&!hideOVR}/>):null}
+              {activePlayerId?(<DragGhost player={players.find(p=>String(p.id)===String(activePlayerId))} showOVR={isAdmin}/>):null}
             </DragOverlay>
           </DndContext>
         </div>
@@ -1021,7 +1066,7 @@ function FullscreenModal({children,onClose}){return(<div className="fixed inset-
 function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
   const [teamIdx,setTeamIdx]=useState(0)
   const [q,setQ]=useState("")
-  const [showAll,setShowAll]=useState(false)
+  const [showList,setShowList]=useState(false) // 선수 목록 표시 여부
   
   const notInMatch = useMemo(()=>{
     const inside=new Set(snapshot.flat().map(String))
@@ -1034,9 +1079,8 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
     return base.slice().sort((a,b)=>(a.name||"").localeCompare(b.name||""))
   },[notInMatch,q])
   
-  const displayList = useMemo(() => {
-    return showAll ? filtered : filtered.slice(0, 20)
-  }, [filtered, showAll])
+  // 검색어가 입력되면 자동으로 목록 표시
+  const shouldShowList = showList || q.trim().length > 0
   
   // 클릭 시 바로 팀에 추가
   const addPlayerToTeam = (pid) => {
@@ -1073,42 +1117,45 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
         <div className="text-xs text-gray-400 py-2">모든 선수가 팀에 배정되었습니다</div>
       ) : (
         <>
-          <div className={`${showAll ? 'max-h-[400px]' : 'max-h-[200px]'} overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50`}>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-              {displayList.map(p => {
-                const member = isMember(p.membership)
-                return (
-                  <button 
-                    key={p.id} 
-                    onClick={() => addPlayerToTeam(p.id)}
-                    className="flex items-center gap-2 text-xs p-2 rounded hover:bg-white hover:shadow-sm cursor-pointer transition border border-transparent hover:border-emerald-200"
-                  >
-                    <InitialAvatar id={p.id} name={p.name} size={28} badges={!member?['G']:[]} />
-                    <span className="truncate text-left flex-1">{p.name}</span>
-                    <span className="text-emerald-600 text-lg leading-none">+</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-          <div className="mt-2 text-center">
-            {filtered.length > 20 && !showAll && (
+          {!shouldShowList ? (
+            <div className="text-center py-2">
               <button 
-                onClick={() => setShowAll(true)}
+                onClick={() => setShowList(true)}
                 className="text-xs text-blue-600 hover:text-blue-700 font-medium"
               >
-                + {filtered.length - 20}명 더보기
+                + 전체 선수 더보기 ({notInMatch.length}명)
               </button>
-            )}
-            {showAll && filtered.length > 20 && (
-              <button 
-                onClick={() => setShowAll(false)}
-                className="text-xs text-gray-600 hover:text-gray-700 font-medium"
-              >
-                접기
-              </button>
-            )}
-          </div>
+            </div>
+          ) : (
+            <>
+              <div className="max-h-[400px] overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                  {filtered.map(p => {
+                    const member = isMember(p.membership)
+                    return (
+                      <button 
+                        key={p.id} 
+                        onClick={() => addPlayerToTeam(p.id)}
+                        className="flex items-center gap-2 text-xs p-2 rounded hover:bg-white hover:shadow-sm cursor-pointer transition border border-transparent hover:border-emerald-200"
+                      >
+                        <InitialAvatar id={p.id} name={p.name} size={28} badges={!member?['G']:[]} />
+                        <span className="truncate text-left flex-1">{p.name}</span>
+                        <span className="text-emerald-600 text-lg leading-none">+</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+              <div className="mt-2 text-center">
+                <button 
+                  onClick={() => setShowList(false)}
+                  className="text-xs text-gray-600 hover:text-gray-700 font-medium"
+                >
+                  접기
+                </button>
+              </div>
+            </>
+          )}
         </>
       )}
     </div>

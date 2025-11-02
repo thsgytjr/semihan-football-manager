@@ -53,6 +53,23 @@ const ovrChipClass = (ovr) => {
   return 'bg-stone-800 text-white'
 }
 
+// OVR 파워미터 색상 (진행 바용)
+const ovrMeterColor = (ovr) => {
+  if (ovr >= 80) return 'bg-emerald-400'
+  if (ovr >= 70) return 'bg-blue-400'
+  if (ovr >= 60) return 'bg-amber-400'
+  return 'bg-stone-400'
+}
+
+// AI 파워 파워미터 색상 (진행 바용)
+const aiPowerMeterColor = (power) => {
+  if (power >= 1300) return 'bg-gradient-to-r from-purple-400 to-pink-400'
+  if (power >= 1100) return 'bg-gradient-to-r from-emerald-400 to-emerald-500'
+  if (power >= 900) return 'bg-gradient-to-r from-blue-400 to-blue-500'
+  if (power >= 700) return 'bg-gradient-to-r from-amber-400 to-amber-500'
+  return 'bg-gradient-to-r from-stone-400 to-stone-500'
+}
+
 // ===== 편집 모달 =====
 function EditPlayerModal({ open, player, onClose, onSave }) {
   const [draft, setDraft] = useState(null)
@@ -594,16 +611,16 @@ export default function PlayersPage({
             <button
               className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='ovr' ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
               onClick={()=>onSortClick('ovr')}
-              title="OVR 정렬 (토글: 오름/내림)"
+              title="Overall 정렬 (토글: 오름/내림)"
             >
-              OVR {arrowFor('ovr')}
+              Overall {arrowFor('ovr')}
             </button>
             <button
               className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='ai' ? 'border-purple-500 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
               onClick={()=>onSortClick('ai')}
               title="AI 파워 정렬 (토글: 오름/내림)"
             >
-              ✨ AI {arrowFor('ai')}
+              AI 파워 {arrowFor('ai')}
             </button>
             <button
               className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='pos' ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
@@ -687,8 +704,17 @@ export default function PlayersPage({
                   <div className={`text-3xl font-bold ${ovr === 50 ? 'text-stone-700' : 'text-white'}`}>
                     {ovr === 50 ? '?' : ovr}
                   </div>
-                  {ovr === 50 && (
+                  {ovr === 50 ? (
                     <div className="text-[10px] text-stone-600 mt-1">Unknown</div>
+                  ) : (
+                    <div className="mt-2">
+                      <div className="w-full bg-white/30 rounded-full h-2 overflow-hidden">
+                        <div 
+                          className={`h-full ${ovrMeterColor(ovr)} transition-all duration-300 rounded-full`}
+                          style={{ width: `${ovr}%` }}
+                        ></div>
+                      </div>
+                    </div>
                   )}
                 </div>
               )}
@@ -706,7 +732,15 @@ export default function PlayersPage({
                 <div className="text-2xl font-bold text-white">
                   {calculateAIPower(p, matches)}
                 </div>
-                <div className="text-[10px] text-white/70 mt-1">Auto-calculation</div>
+                <div className="mt-2">
+                  <div className="w-full bg-white/30 rounded-full h-2 overflow-hidden">
+                    <div 
+                      className={`h-full ${aiPowerMeterColor(calculateAIPower(p, matches))} transition-all duration-300 rounded-full`}
+                      style={{ width: `${Math.min((calculateAIPower(p, matches) / 1000) * 100, 100)}%` }}
+                    ></div>
+                  </div>
+                  <div className="text-[10px] text-white/70 mt-1">Max 1000</div>
+                </div>
               </div>
 
               {/* 액션 버튼 */}
