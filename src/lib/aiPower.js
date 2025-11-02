@@ -2,10 +2,10 @@
 import { overall, isUnknownPlayer } from './players'
 
 /**
- * 선수의 AI 파워 점수 계산 (팀 밸런스용 - 순수 실력 지표)
+ * 선수의 AI Overall 계산 (팀 밸런스용 - 순수 실력 지표, 50-100 스케일)
  * @param {Object} player - 선수 객체
  * @param {Array} matches - 매치 기록 배열
- * @returns {number} AI 파워 점수
+ * @returns {number} AI Overall 점수 (50-100)
  */
 export function calculateAIPower(player, matches) {
   // 1. 기본 OVR
@@ -23,6 +23,7 @@ export function calculateAIPower(player, matches) {
     assists: 0,
     wins: 0,
     draws: 0,
+    cleanSheets: 0, // 쿼터별 클린시트 (드래프트전)
     recentGames: [] // 최근 10경기
   }
   
@@ -58,6 +59,36 @@ export function calculateAIPower(player, matches) {
           stats.wins += 1
         } else if (myScore === maxOpponentScore) {
           stats.draws += 1
+        }
+        
+        // 드래프트전 클린시트 계산 (쿼터별 무실점)
+        const isDraft = (match.selectionMode === 'draft') || match.draft || match.draftMode
+        if (isDraft && match.quarterScores) {
+          // quarterScores 구조 확인
+          let quarterScores = match.quarterScores
+          if (match.draft?.quarterScores) {
+            quarterScores = match.draft.quarterScores
+          }
+          
+          if (Array.isArray(quarterScores)) {
+            // 각 쿼터별로 클린시트 체크
+            quarterScores.forEach(quarterData => {
+              let teamScores = quarterData
+              
+              // 중첩 배열 처리
+              if (quarterData.teamScores) {
+                teamScores = quarterData.teamScores
+              }
+              
+              if (Array.isArray(teamScores) && teamScores[playerTeamIdx] !== undefined) {
+                // 모든 상대팀 점수가 0이면 클린시트
+                const opponentQuarterScores = teamScores.filter((_, i) => i !== playerTeamIdx)
+                if (opponentQuarterScores.every(s => s === 0)) {
+                  stats.cleanSheets += 1
+                }
+              }
+            })
+          }
         }
       }
     }
@@ -99,7 +130,21 @@ export function calculateAIPower(player, matches) {
     // === 승률 (팀 기여도) ===
     const winRate = stats.wins / stats.gamesPlayed
     const drawRate = stats.draws / stats.gamesPlayed
-    power += (winRate * 150 + drawRate * 30)
+    
+    // 수비 포지션에서 승리가 많으면 가중치 추가 (팀 기여도 높음)
+    let winBonus = winRate * 150 + drawRate * 30
+    if (/CB|LB|RB|DF|WB|GK/i.test(position)) {
+      // 수비수/골키퍼는 승리가 더 중요 (클린시트 기여)
+      winBonus += winRate * 50  // 추가 보너스
+      
+      // 드래프트전 클린시트 보너스 (쿼터별 무실점)
+      if (stats.cleanSheets > 0) {
+        const cleanSheetRate = stats.cleanSheets / stats.gamesPlayed
+        winBonus += cleanSheetRate * 100  // 클린시트당 추가 보너스
+      }
+    }
+    
+    power += winBonus
     
     // === 최근 폼 (최근 경기에 가중치) ===
     if (stats.recentGames.length >= 3) {
@@ -154,19 +199,51 @@ export function calculateAIPower(player, matches) {
   
   power += originBonus
   
-  return Math.round(power)
+  // 5. AI 파워를 50-100 스케일의 AI Overall로 변환
+  // 파워 범위: 500(최소) ~ 1500(최대) → Overall: 50 ~ 100
+  const minPower = 500
+  const maxPower = 1500
+  const aiOverall = 50 + ((Math.max(minPower, Math.min(maxPower, power)) - minPower) / (maxPower - minPower)) * 50
+  
+  return Math.round(aiOverall)
 }
 
 /**
- * AI 파워 점수에 따른 그라데이션 클래스
- * @param {number} power - AI 파워 점수
+ * AI Overall 점수에 따른 그라데이션 클래스
+ * @param {number} aiOVR - AI Overall 점수 (50-100)
  * @returns {string} Tailwind CSS 클래스
  */
-export function aiPowerChipClass(power) {
-  if (power >= 1500) return 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-sm'
-  if (power >= 1300) return 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-sm'
-  if (power >= 1100) return 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-sm'
-  if (power >= 900) return 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-sm'
-  if (power >= 700) return 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-sm'
+export function aiPowerChipClass(aiOVR) {
+  if (aiOVR >= 95) return 'bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-sm'
+  if (aiOVR >= 90) return 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-sm'
+  if (aiOVR >= 85) return 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-sm'
+  if (aiOVR >= 80) return 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-sm'
+  if (aiOVR >= 70) return 'bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-sm'
   return 'bg-gradient-to-r from-stone-500 to-stone-600 text-white shadow-sm'
+}
+
+/**
+ * 선수의 포지션별 강점 분석
+ * @param {Object} player - 선수 객체
+ * @returns {Object} {attack, defense, midfield} - 각 영역별 점수
+ */
+export function analyzePlayerStrengths(player) {
+  const stats = player.stats || {}
+  
+  // 공격력: Pace, Shooting, Dribbling
+  const attack = Math.round(
+    ((stats.Pace || 50) + (stats.Shooting || 50) + (stats.Dribbling || 50)) / 3
+  )
+  
+  // 수비력: Physical, Stamina (+ Pace for recovery)
+  const defense = Math.round(
+    ((stats.Physical || 50) * 1.5 + (stats.Stamina || 50) + (stats.Pace || 50) * 0.5) / 3
+  )
+  
+  // 미드필드: Passing, Stamina, Dribbling
+  const midfield = Math.round(
+    ((stats.Passing || 50) + (stats.Stamina || 50) + (stats.Dribbling || 50)) / 3
+  )
+  
+  return { attack, defense, midfield }
 }

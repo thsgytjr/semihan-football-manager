@@ -689,9 +689,9 @@ export default function PlayersPage({
             <button
               className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='ai' ? 'border-purple-500 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
               onClick={()=>onSortClick('ai')}
-              title="AI 파워 정렬 (토글: 오름/내림)"
+              title="AI Overall 정렬 (토글: 오름/내림)"
             >
-              AI 파워 {arrowFor('ai')}
+              AI Overall {arrowFor('ai')}
             </button>
             <button
               className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='pos' ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
@@ -795,9 +795,9 @@ export default function PlayersPage({
                 </div>
               )}
 
-              {/* AI 파워 점수 */}
+              {/* AI Overall 점수 */}
               <div className={`mb-3 rounded-lg p-3 text-center bg-gradient-to-br ${aiPowerChipClass(calculateAIPower(p, matches)).replace('text-white', '').replace('shadow-sm', '').split(' ').filter(c => c.startsWith('from-') || c.startsWith('to-')).join(' ')} text-white shadow-md`}>
-                <div className="text-xs mb-1 text-white/80">✨ AI Power Score</div>
+                <div className="text-xs mb-1 text-white/80">✨ AI Overall</div>
                 <div className="text-2xl font-bold text-white">
                   {calculateAIPower(p, matches)}
                 </div>
@@ -805,10 +805,10 @@ export default function PlayersPage({
                   <div className="w-full bg-white/30 rounded-full h-2 overflow-hidden">
                     <div 
                       className={`h-full ${aiPowerMeterColor(calculateAIPower(p, matches))} transition-all duration-300 rounded-full`}
-                      style={{ width: `${Math.min((calculateAIPower(p, matches) / 1500) * 100, 100)}%` }}
+                      style={{ width: `${((calculateAIPower(p, matches) - 50) / 50) * 100}%` }}
                     ></div>
                   </div>
-                  <div className="text-[10px] text-white/70 mt-1">Max 1500</div>
+                  <div className="text-[10px] text-white/70 mt-1">50-100 Scale</div>
                 </div>
               </div>
 
@@ -870,7 +870,7 @@ export default function PlayersPage({
                       <span className={`inline-flex items-center rounded px-3 py-1 text-sm font-bold ${ovr === 50 ? 'bg-stone-300 text-stone-700' : ovrChipClass(ovr)}`}>
                         {ovr === 50 ? '?' : ovr}
                       </span>
-                      <span className={`inline-flex items-center rounded-lg px-3 py-1 text-xs font-bold shadow-sm ${aiPowerChipClass(calculateAIPower(p, matches))}`} title="AI 파워 점수">
+                      <span className={`inline-flex items-center rounded-lg px-3 py-1 text-xs font-bold shadow-sm ${aiPowerChipClass(calculateAIPower(p, matches))}`} title="AI Overall (50-100)">
                         ✨ {calculateAIPower(p, matches)}
                       </span>
                     </>
@@ -880,7 +880,7 @@ export default function PlayersPage({
                       <span className="inline-flex items-center rounded px-3 py-1 text-sm font-bold bg-amber-100 text-amber-800 border border-amber-200">
                         GK
                       </span>
-                      <span className={`inline-flex items-center rounded-lg px-3 py-1 text-xs font-bold shadow-sm ${aiPowerChipClass(calculateAIPower(p, matches))}`} title="AI 파워 점수">
+                      <span className={`inline-flex items-center rounded-lg px-3 py-1 text-xs font-bold shadow-sm ${aiPowerChipClass(calculateAIPower(p, matches))}`} title="AI Overall (50-100)">
                         ✨ {calculateAIPower(p, matches)}
                       </span>
                     </>
