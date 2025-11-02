@@ -513,13 +513,13 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
             </div>
 
             <div className="mb-2">
-              <ul className="max-h-56 overflow-auto rounded border border-gray-200 bg-white">
+              <ul className="max-h-56 overflow-auto rounded-lg border-2 border-gray-200 bg-white shadow-sm">
                 {roster.map(p => (
-                  <li key={toStr(p.id)} className="flex items-center justify-between px-3 py-2 hover:bg-stone-50">
+                  <li key={toStr(p.id)} className="flex items-center justify-between px-2 sm:px-3 py-2 hover:bg-blue-50 transition-colors">
                     <div className="flex items-center gap-2">
                       <InitialAvatar id={p.id} name={p.name} size={20} badges={(() => { const s=toStr(p.membership).toLowerCase(); return (s==='member'||s.includes('정회원'))?[]:['G'] })()} />
-                      <span className="text-sm">{p.name}</span>
-                      <span className="text-xs text-gray-500">{p.position||p.pos||'-'}</span>
+                      <span className="text-xs sm:text-sm font-medium">{p.name}</span>
+                      <span className="text-[10px] sm:text-xs text-gray-500">{p.position||p.pos||'-'}</span>
                     </div>
                     <button
                       onClick={()=>{
@@ -537,14 +537,14 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
                           return (Array.isArray(prev) && prev.includes(sval)) ? prev : [...(Array.isArray(prev)?prev:[]), sval]
                         })
                       }}
-                      className="rounded bg-stone-900 px-2 py-1 text-xs text-white"
+                      className="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs text-white font-semibold shadow-md transition-all hover:shadow-lg"
                     >
                       패널에 추가
                     </button>
                   </li>
                 ))}
                 {roster.length===0 && (
-                  <li className="px-3 py-3 text-sm text-gray-500">일치하는 선수가 없습니다.</li>
+                  <li className="px-2 sm:px-3 py-3 text-xs sm:text-sm text-gray-500 text-center">일치하는 선수가 없습니다.</li>
                 )}
               </ul>
             </div>
@@ -858,25 +858,38 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
   }
 
   return (
-    <div className="rounded border border-gray-200 bg-white">
-      <div className="flex items-center justify-between border-b px-3 py-2 text-xs">
-        <div className="font-semibold">편집 패널 · {panelIds.length}명</div>
-        <div className="flex items-center gap-2">
-          <button onClick={()=>setShowLinkingPanel(!showLinkingPanel)} className="rounded border border-blue-500 bg-blue-50 px-2 py-1 text-blue-700">
-            {showLinkingPanel ? '기존 연결 패널 닫기' : '기존 골-어시 연결'}
+    <div className="rounded-lg border-2 border-blue-100 bg-gradient-to-br from-blue-50 to-white shadow-sm">
+      <div className="flex items-center justify-between px-2 sm:px-3 py-2 text-xs border-b border-blue-100">
+        <div className="text-sm sm:text-base font-semibold text-gray-800">편집 패널 · {panelIds.length}명</div>
+        <div className="flex items-center gap-1 sm:gap-2">
+          <button 
+            onClick={()=>setShowLinkingPanel(!showLinkingPanel)} 
+            className="rounded-lg border-2 border-blue-400 bg-blue-500 hover:bg-blue-600 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs text-white font-medium shadow-sm transition-all"
+          >
+            {showLinkingPanel ? '연결 닫기' : '골-어시 연결'}
           </button>
-          <button onClick={()=>{
-            // Reset goals/assists for players currently in the panel, then clear the panel.
-            setDraft(prev=>{
-              const next = { ...prev }
-              for (const pid of panelIds) {
-                next[toStr(pid)] = { goals: 0, assists: 0, events: [] }
-              }
-              return next
-            })
-            setPanelIds([])
-          }} className="rounded border px-2 py-1">모두 제거</button>
-          <button onClick={onSave} className="rounded bg-emerald-600 px-3 py-1 text-white">저장</button>
+          <button 
+            onClick={()=>{
+              // Reset goals/assists for players currently in the panel, then clear the panel.
+              setDraft(prev=>{
+                const next = { ...prev }
+                for (const pid of panelIds) {
+                  next[toStr(pid)] = { goals: 0, assists: 0, events: [] }
+                }
+                return next
+              })
+              setPanelIds([])
+            }} 
+            className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-medium transition-colors"
+          >
+            전체 제거
+          </button>
+          <button 
+            onClick={onSave} 
+            className="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs text-white font-semibold shadow-md transition-all hover:shadow-lg"
+          >
+            저장하기
+          </button>
         </div>
       </div>
       
@@ -886,12 +899,12 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
 
       {/* Goal/Assist Adding Modal */}
       {addingGoalFor && (
-        <div className="border-b bg-green-50 px-3 py-3">
-          <div className="mb-2 text-sm font-semibold">
+        <div className="border-b border-green-200 bg-gradient-to-br from-green-50 to-white px-2 sm:px-3 py-2 sm:py-3">
+          <div className="mb-2 text-xs sm:text-sm font-semibold text-gray-800">
             {players.find(p => toStr(p.id) === toStr(addingGoalFor))?.name}의 골 추가
           </div>
-          <div className="mb-2 text-xs text-gray-600">어시스트한 선수를 선택하세요 (선택사항):</div>
-          <div className="flex flex-wrap gap-2">
+          <div className="mb-2 text-[10px] sm:text-xs text-gray-600">어시스트한 선수를 선택하세요 (선택사항):</div>
+          <div className="flex flex-wrap gap-1 sm:gap-2">
             {panelIds.filter(pid => toStr(pid) !== toStr(addingGoalFor)).map(pid => {
               const p = players.find(pp => toStr(pp.id) === toStr(pid))
               const rec = draft[toStr(pid)] || { goals: 0, assists: 0, events: [] }
@@ -900,7 +913,7 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
                 <button
                   key={pid}
                   onClick={() => addGoalWithAssist(addingGoalFor, pid)}
-                  className="rounded border border-green-600 bg-white px-3 py-1 text-xs hover:bg-green-100"
+                  className="rounded-lg border-2 border-green-600 bg-white hover:bg-green-50 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-medium transition-colors"
                 >
                   {p.name} <span className="ml-1 text-gray-500">(A: {rec.assists})</span>
                 </button>
@@ -908,13 +921,13 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
             })}
             <button
               onClick={() => addGoalWithAssist(addingGoalFor, null)}
-              className="rounded bg-green-600 px-3 py-1 text-xs text-white hover:bg-green-700"
+              className="rounded-lg bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs text-white font-semibold shadow-md transition-all"
             >
               어시스트 없이 추가
             </button>
             <button
               onClick={() => setAddingGoalFor(null)}
-              className="rounded border px-3 py-1 text-xs"
+              className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-medium transition-colors"
             >
               취소
             </button>
@@ -923,12 +936,12 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
       )}
 
       {addingAssistFor && (
-        <div className="border-b bg-blue-50 px-3 py-3">
-          <div className="mb-2 text-sm font-semibold">
+        <div className="border-b border-blue-200 bg-gradient-to-br from-blue-50 to-white px-2 sm:px-3 py-2 sm:py-3">
+          <div className="mb-2 text-xs sm:text-sm font-semibold text-gray-800">
             {players.find(p => toStr(p.id) === toStr(addingAssistFor))?.name}의 어시스트 추가
           </div>
-          <div className="mb-2 text-xs text-gray-600">골을 넣은 선수를 선택하세요 (선택사항):</div>
-          <div className="flex flex-wrap gap-2">
+          <div className="mb-2 text-[10px] sm:text-xs text-gray-600">골을 넣은 선수를 선택하세요 (선택사항):</div>
+          <div className="flex flex-wrap gap-1 sm:gap-2">
             {panelIds.filter(pid => toStr(pid) !== toStr(addingAssistFor)).map(pid => {
               const p = players.find(pp => toStr(pp.id) === toStr(pid))
               const rec = draft[toStr(pid)] || { goals: 0, assists: 0, events: [] }
@@ -937,7 +950,7 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
                 <button
                   key={pid}
                   onClick={() => addAssistForGoal(addingAssistFor, pid)}
-                  className="rounded border border-blue-600 bg-white px-3 py-1 text-xs hover:bg-blue-100"
+                  className="rounded-lg border-2 border-blue-600 bg-white hover:bg-blue-50 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-medium transition-colors"
                 >
                   {p.name} <span className="ml-1 text-gray-500">(G: {rec.goals})</span>
                 </button>
@@ -945,13 +958,13 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
             })}
             <button
               onClick={() => addAssistForGoal(addingAssistFor, null)}
-              className="rounded bg-blue-600 px-3 py-1 text-xs text-white hover:bg-blue-700"
+              className="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs text-white font-semibold shadow-md transition-all"
             >
               골 없이 추가
             </button>
             <button
               onClick={() => setAddingAssistFor(null)}
-              className="rounded border px-3 py-1 text-xs"
+              className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-medium transition-colors"
             >
               취소
             </button>
@@ -965,11 +978,11 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
           const rec = draft[toStr(pid)] || { goals:0, assists:0, events:[] }
           if (!p) return null
           return (
-            <li key={toStr(pid)} className="flex items-center gap-3 px-3 py-2">
+            <li key={toStr(pid)} className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 bg-white">
               <InitialAvatar id={p.id} name={p.name} size={22} badges={(() => { const s=toStr(p.membership).toLowerCase(); return (s==='member'||s.includes('정회원'))?[]:['G'] })()} />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">
-                  {p.name} <span className="ml-1 text-xs text-gray-500">{p.position||p.pos||'-'}</span>
+                <div className="truncate text-xs sm:text-sm font-medium">
+                  {p.name} <span className="ml-1 text-[10px] sm:text-xs text-gray-500">{p.position||p.pos||'-'}</span>
                 </div>
               </div>
 
@@ -986,7 +999,8 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
                 onDec={()=>setVal(p.id,'assists',Math.max(0,(rec.assists||0)-1))}
               />
 
-              <button onClick={()=>{
+              <button 
+                onClick={()=>{
                   // Reset this player's draft stats to zero when removed from panel
                   setDraft(prev=>{
                     const next = { ...(prev||{}) }
@@ -995,38 +1009,58 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
                   })
                   setPanelIds(prev=>prev.filter(id=>id!==toStr(pid)))
                 }}
-                      className="ml-1 rounded border px-2 py-1 text-xs">
+                className="ml-1 rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-2 py-1 text-[10px] sm:text-xs font-medium transition-colors"
+              >
                 제거
               </button>
             </li>
           )
         })}
         {panelIds.length===0 && (
-          <li className="px-3 py-6 text-center text-sm text-gray-500">
+          <li className="px-2 sm:px-3 py-4 sm:py-6 text-center text-xs sm:text-sm text-gray-500">
             아직 선택된 선수가 없습니다. 위에서 검색 후 "패널에 추가"를 눌러주세요.
           </li>
         )}
       </ul>
     </div>
   )
-}
-
-function Pill({ children, active, onClick }){
+}function Pill({ children, active, onClick }){
   return (
     <button onClick={onClick}
-      className={`rounded-full border px-3 py-1 text-xs ${active? 'border-stone-900 bg-stone-900 text-white':'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}>
+      className={`rounded-lg px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-semibold shadow-sm transition-all ${
+        active
+          ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white border-2 border-blue-700' 
+          : 'bg-white text-gray-700 border-2 border-gray-300 hover:bg-gray-50'
+      }`}>
       {children}
     </button>
   )
 }
 
 function LinkedCounter({ label, value, onAdd, onDec }){
+  const labelColor = label === 'G' ? 'from-emerald-500 to-emerald-600' : 'from-amber-500 to-amber-600'
+  
   return (
-    <div className="flex items-center gap-1">
-      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-stone-800 text-[10px] font-bold text-white">{label}</span>
-      <button onClick={onDec} aria-label={`${label} 감소`} className="text-gray-600 hover:text-red-600">-</button>
-      <span style={{ width: 24, textAlign: 'center' }} className="tabular-nums">{value}</span>
-      <button onClick={onAdd} aria-label={`${label} 추가`} className="text-gray-600 hover:text-green-600">+</button>
+    <div className="flex items-center gap-0.5 sm:gap-1 bg-gray-50 rounded-lg p-1 sm:p-1.5 border border-gray-200">
+      <button 
+        onClick={onDec} 
+        aria-label={`${label} 감소`} 
+        disabled={value <= 0}
+        className="rounded-md bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-gray-600 hover:text-red-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 disabled:hover:text-gray-600 font-bold shadow-sm text-xs sm:text-base"
+      >
+        −
+      </button>
+      <div className="flex items-center gap-0.5 sm:gap-1 px-0.5 sm:px-1">
+        <span className={`inline-flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full bg-gradient-to-br ${labelColor} text-[10px] sm:text-xs font-bold text-white shadow-md`}>{label}</span>
+        <span className="w-5 sm:w-6 text-center tabular-nums font-bold text-xs sm:text-sm text-gray-800">{value}</span>
+      </div>
+      <button 
+        onClick={onAdd} 
+        aria-label={`${label} 추가`} 
+        className="rounded-md bg-blue-500 hover:bg-blue-600 border border-blue-600 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-white transition-all font-bold shadow-sm text-xs sm:text-base"
+      >
+        +
+      </button>
     </div>
   )
 }
