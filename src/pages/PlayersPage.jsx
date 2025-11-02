@@ -1,5 +1,6 @@
 // src/pages/PlayersPage.jsx
 import React, { useMemo, useState, useEffect } from "react"
+import { createPortal } from "react-dom"
 import { notify } from "../components/Toast"
 import { overall, isUnknownPlayer } from "../lib/players"
 import { STAT_KEYS, PLAYER_ORIGINS, getOriginLabel } from "../lib/constants"
@@ -92,15 +93,32 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
   const [draft, setDraft] = useState(null)
 
   useEffect(() => {
-    if (open && player) {
+    if (open && player !== undefined) {
       setDraft({
         ...player,
-        name: S(player.name),
-        position: S(player.position || player.pos).toUpperCase(),
+        id: player?.id || `new-${Date.now()}`,
+        name: player?.name || "",
+        position: player?.position || "",
         membership: isMember(player.membership) ? "정회원" : "게스트",
         origin: player.origin || "none",
         stats: ensureStatsObject(player.stats),
       })
+      
+      // 모달 열릴 때 body 스크롤 완전히 잠금
+      const scrollY = window.scrollY
+      document.body.style.position = 'fixed'
+      document.body.style.top = `-${scrollY}px`
+      document.body.style.width = '100%'
+      document.body.style.overflow = 'hidden'
+      
+      return () => {
+        // 모달 닫힐 때 원래 위치로 복원
+        document.body.style.position = ''
+        document.body.style.top = ''
+        document.body.style.width = ''
+        document.body.style.overflow = ''
+        window.scrollTo(0, scrollY)
+      }
     } else {
       setDraft(null)
     }
@@ -162,14 +180,14 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
     return 'from-stone-500 to-stone-600'
   }
 
-  return (
+  const modalContent = (
     <div
-      className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-4 animate-fadeIn"
+      className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm animate-fadeIn flex items-center justify-center p-0 md:p-4"
       onKeyDown={onKeyDown}
       onClick={onClose}
     >
       <div 
-        className="bg-white w-full md:max-w-5xl rounded-t-3xl md:rounded-2xl shadow-2xl max-h-[95dvh] md:max-h-[90dvh] flex flex-col min-h-0 animate-slideUp"
+        className="bg-white w-full md:max-w-5xl md:rounded-2xl shadow-2xl flex flex-col min-h-0 max-h-[95dvh] md:max-h-[90dvh] animate-slideUp"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}
@@ -464,6 +482,8 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
       `}</style>
     </div>
   )
+
+  return createPortal(modalContent, document.body)
 }
 
 // ===== 메인 페이지 =====
