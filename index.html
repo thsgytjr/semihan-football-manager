@@ -7,6 +7,20 @@
     <title>Semihan-FM</title>
     <!-- Tailwind via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 초기 타이틀 로드 -->
+    <script>
+      try {
+        const settings = localStorage.getItem('app_settings');
+        if (settings) {
+          const parsed = JSON.parse(settings);
+          if (parsed.appTitle) {
+            document.title = parsed.appTitle;
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load initial title:', e);
+      }
+    </script>
   </head>
   <body class="bg-gray-50">
     <div id="root"></div>
