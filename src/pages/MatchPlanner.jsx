@@ -14,6 +14,7 @@ import{seededShuffle}from'../utils/random'
 import SavedMatchesList from'../components/SavedMatchesList'
 import { createUpcomingMatch, filterExpiredMatches } from '../lib/upcomingMatch'
 import { calculateAIPower } from '../lib/aiPower'
+import captainIcon from '../assets/Captain.PNG'
 
 /* ───────── 게스트 판별/뱃지 유틸 ───────── */
 const S=(v)=>v==null?'':String(v)
@@ -1014,12 +1015,12 @@ function PlayerRow({player,showOVR,isAdmin,teamIndex,isDraftMode,isCaptain,onRem
         <span className="flex items-center gap-1 shrink-0">
           {isDraftMode && (
             <button
-              className="rounded-full border border-amber-200 bg-white w-5 h-5 flex items-center justify-center text-amber-700 hover:bg-amber-50 p-0"
+              className="border-0 bg-transparent w-5 h-5 flex items-center justify-center hover:opacity-80 p-0 transition-opacity"
               title="이 선수를 주장으로 지정"
               onClick={(e)=>{e.stopPropagation();onSetCaptain&&onSetCaptain(player.id,teamIndex)}}
               aria-label="주장 지정"
             >
-              <svg width="12" height="12" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="10 2 12.59 7.36 18.51 7.97 14 12.14 15.18 18.02 10 15.1 4.82 18.02 6 12.14 1.49 7.97 7.41 7.36 10 2"/></svg>
+              <img src={captainIcon} alt="주장" className="w-full h-full object-contain" />
             </button>
           )}
           <button

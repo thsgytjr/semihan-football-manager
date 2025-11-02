@@ -5,6 +5,7 @@ import { overall } from "../lib/players"
 import { hydrateMatch } from "../lib/match"
 import { formatMatchLabel } from "../lib/matchLabel"
 import draftIcon from "../assets/draft.png"
+import captainIcon from "../assets/Captain.PNG"
 
 /* ---------------------- 폭죽 효과 컴포넌트 ---------------------- */
 function Confetti() {
@@ -326,9 +327,7 @@ const GuestBadge = ()=>(
   </span>
 )
 const CaptainBadge = () => (
-  <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800" title="주장">
-    C
-  </span>
+  <img src={captainIcon} alt="주장" className="inline-block w-4 h-4 object-cover" title="주장" />
 )
 
 /* ---------------------- G/A 집계 유틸 ---------------------- */
@@ -1002,7 +1001,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
         <div className="flex items-center gap-2">
           {/* G/A 표시 슬라이드 토글 */}
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-600">⚽🎯</span>
+            <span className="text-[10px] text-gray-600 font-medium">골/어시</span>
             <button
               onClick={() => setShowGA(prev => !prev)}
               className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 ${
@@ -1089,18 +1088,18 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                         </div>
                         {/* Stats: Goals / Assists (조건부 표시) */}
                         {showGA && (
-                          <div className="flex items-center gap-1 justify-self-end">
+                          <div className="flex items-center gap-2 justify-self-end">
                             {rec.goals>0 && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-stone-800 text-white px-1.5 py-0.5 text-[10px]" title="Goals">
-                                <span role="img" aria-label="goals">⚽️</span>
-                                <span className="tabular-nums">{rec.goals}</span>
-                              </span>
+                              <div className="relative inline-flex items-center justify-center" title="골">
+                                <span role="img" aria-label="goals" className="text-2xl leading-none">⚽</span>
+                                <span className="absolute right-0 bottom-0 flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full bg-black text-[10px] font-bold text-white shadow-sm">{rec.goals}</span>
+                              </div>
                             )}
                             {rec.assists>0 && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-stone-700 text-white px-1.5 py-0.5 text-[10px]" title="Assists">
-                                <span role="img" aria-label="assists">🎯</span>
-                                <span className="tabular-nums">{rec.assists}</span>
-                              </span>
+                              <div className="relative inline-flex items-center justify-center" title="어시스트">
+                                <span role="img" aria-label="assists" className="text-2xl leading-none">🎯</span>
+                                <span className="absolute right-0 bottom-0 flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full bg-black text-[10px] font-bold text-white shadow-sm">{rec.assists}</span>
+                              </div>
                             )}
                           </div>
                         )}
@@ -1112,7 +1111,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                           <div className="flex items-center gap-2">
                             {isDraftMode && (
                               <button
-                                className="rounded-full border border-amber-200 bg-white w-6 h-6 flex items-center justify-center text-amber-700 hover:bg-amber-50 p-0"
+                                className="border-0 bg-transparent w-6 h-6 flex items-center justify-center hover:opacity-80 p-0 transition-opacity"
                                 title="이 선수를 주장으로 지정"
                                 onClick={()=>{
                                   const next=[...(captainIds||[])]
@@ -1121,7 +1120,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                                 }}
                                 aria-label="주장 지정"
                               >
-                                <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="10 2 12.59 7.36 18.51 7.97 14 12.14 15.18 18.02 10 15.1 4.82 18.02 6 12.14 1.49 7.97 7.41 7.36 10 2"/></svg>
+                                <img src={captainIcon} alt="주장" className="w-full h-full object-contain" />
                               </button>
                             )}
                             <button

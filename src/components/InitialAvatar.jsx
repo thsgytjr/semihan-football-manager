@@ -1,4 +1,5 @@
 import React from "react"
+import captainIcon from "../assets/Captain.PNG"
 
 /**
  * InitialAvatar
@@ -17,6 +18,26 @@ export default function InitialAvatar({ id, name, size = 24, badges = [] }) {
     const isCaptain = String(label).toUpperCase() === 'C'
     const isGuest = String(label).toUpperCase() === 'G'
     
+    // 주장 뱃지: Captain.PNG 이미지 사용
+    if (isCaptain) {
+      const right = idx * (badgeSize - badgeGap)
+      return (
+        <span
+          key={`${label}-${idx}`}
+          title="주장"
+          className="absolute bottom-0 inline-flex items-center justify-center select-none"
+          style={{
+            width: badgeSize,
+            height: badgeSize,
+            right,
+            transform: 'translate(25%, 25%)',
+          }}
+        >
+          <img src={captainIcon} alt="주장" className="w-full h-full object-contain" />
+        </span>
+      )
+    }
+    
     // 게스트 뱃지: RGB(251, 229, 230) 배경, RGB(136, 19, 55) 텍스트
     const badgeStyle = isGuest 
       ? { 
@@ -24,17 +45,13 @@ export default function InitialAvatar({ id, name, size = 24, badges = [] }) {
           borderColor: 'rgb(244, 201, 204)',
           color: 'rgb(136, 19, 55)'
         }
-      : isCaptain
-      ? {} // Tailwind 클래스 사용
       : {}
     
-    const bgCls = isCaptain 
-      ? 'bg-amber-100 border-amber-300 text-amber-900' 
-      : isGuest 
+    const bgCls = isGuest 
       ? 'border' // 스타일로 색상 지정
       : 'bg-white border-stone-300 text-stone-800'
     
-    const title = isCaptain ? '주장' : isGuest ? '게스트' : String(label)
+    const title = isGuest ? '게스트' : String(label)
     // Offset badges from right to left
     const right = idx * (badgeSize - badgeGap)
     return (
