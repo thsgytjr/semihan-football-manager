@@ -16,7 +16,24 @@ export default function InitialAvatar({ id, name, size = 24, badges = [] }) {
   const renderBadge = (label, idx) => {
     const isCaptain = String(label).toUpperCase() === 'C'
     const isGuest = String(label).toUpperCase() === 'G'
-    const bgCls = isCaptain ? 'bg-amber-100 border-amber-300 text-amber-900' : isGuest ? 'bg-rose-100 border-rose-300 text-rose-900' : 'bg-white border-stone-300 text-stone-800'
+    
+    // 게스트 뱃지: RGB(251, 229, 230) 배경, RGB(136, 19, 55) 텍스트
+    const badgeStyle = isGuest 
+      ? { 
+          backgroundColor: 'rgb(251, 229, 230)', 
+          borderColor: 'rgb(244, 201, 204)',
+          color: 'rgb(136, 19, 55)'
+        }
+      : isCaptain
+      ? {} // Tailwind 클래스 사용
+      : {}
+    
+    const bgCls = isCaptain 
+      ? 'bg-amber-100 border-amber-300 text-amber-900' 
+      : isGuest 
+      ? 'border' // 스타일로 색상 지정
+      : 'bg-white border-stone-300 text-stone-800'
+    
     const title = isCaptain ? '주장' : isGuest ? '게스트' : String(label)
     // Offset badges from right to left
     const right = idx * (badgeSize - badgeGap)
@@ -24,7 +41,7 @@ export default function InitialAvatar({ id, name, size = 24, badges = [] }) {
       <span
         key={`${label}-${idx}`}
         title={title}
-        className={`absolute bottom-0 rounded-full border shadow-sm ${bgCls} inline-flex items-center justify-center select-none`}
+        className={`absolute bottom-0 rounded-full shadow-sm ${bgCls} inline-flex items-center justify-center select-none`}
         style={{
           width: badgeSize,
           height: badgeSize,
@@ -32,6 +49,7 @@ export default function InitialAvatar({ id, name, size = 24, badges = [] }) {
           transform: 'translate(25%, 25%)',
           fontSize: badgeFont,
           lineHeight: 1,
+          ...(isGuest ? badgeStyle : {})
         }}
       >
         {String(label).toUpperCase()}

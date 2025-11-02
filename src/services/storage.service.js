@@ -31,6 +31,7 @@ export async function listPlayers() {
     name: row.name,
     position: row.position || null,
     membership: row.membership || null,
+    origin: row.origin || 'none',
     photoUrl: row.photo_url || null,
     stats: row.stats || {},
     created_at: row.created_at,
@@ -39,12 +40,13 @@ export async function listPlayers() {
 }
 
 export async function upsertPlayer(p) {
-  // p: {id, name, position, membership, photoUrl, stats}
+  // p: {id, name, position, membership, origin, photoUrl, stats}
   const row = {
     id: p.id,
     name: p.name ?? '',
     position: p.position ?? null,
     membership: p.membership ?? null,
+    origin: p.origin ?? 'none',
     photo_url: p.photoUrl ?? null,
     stats: p.stats ?? {},
     updated_at: new Date().toISOString(),

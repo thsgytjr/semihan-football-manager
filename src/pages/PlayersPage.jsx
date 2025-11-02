@@ -2,7 +2,7 @@
 import React, { useMemo, useState, useEffect } from "react"
 import { notify } from "../components/Toast"
 import { overall, isUnknownPlayer } from "../lib/players"
-import { STAT_KEYS } from "../lib/constants"
+import { STAT_KEYS, PLAYER_ORIGINS, getOriginLabel } from "../lib/constants"
 import InitialAvatar from "../components/InitialAvatar"
 import RadarHexagon from "../components/RadarHexagon"
 import { ensureStatsObject, clampStat } from "../lib/stats"
@@ -30,6 +30,23 @@ function PosChip({ pos }) {
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-[2px] text-[11px] ${cls}`}>
       {pos}
+    </span>
+  )
+}
+
+function OriginChip({ origin }) {
+  if (!origin || origin === "none") return null
+  const label = getOriginLabel(origin)
+  const cls = origin === "pro"
+    ? "bg-purple-100 text-purple-800 border border-purple-200"
+    : origin === "amateur"
+    ? "bg-blue-100 text-blue-800 border border-blue-200"
+    : origin === "college"
+    ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+    : "bg-stone-100 text-stone-800 border border-stone-200"
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-medium ${cls}`}>
+      {label}
     </span>
   )
 }
@@ -81,6 +98,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
         name: S(player.name),
         position: S(player.position || player.pos).toUpperCase(),
         membership: isMember(player.membership) ? "정회원" : "게스트",
+        origin: player.origin || "none",
         stats: ensureStatsObject(player.stats),
       })
     } else {
@@ -116,6 +134,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
       name: S(draft.name).trim(),
       position: S(draft.position).toUpperCase(),
       membership: draft.membership,
+      origin: draft.origin || "none",
       stats: ensureStatsObject(draft.stats),
     }
     onSave(payload)
@@ -268,13 +287,46 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
                             draft.membership === mem
                               ? mem === '정회원' 
                                 ? 'bg-emerald-500 text-white shadow-lg scale-105'
-                                : 'bg-amber-500 text-white shadow-lg scale-105'
+                                : 'bg-stone-500 text-white shadow-lg scale-105'
                               : 'bg-white border-2 border-stone-200 text-stone-600 hover:border-stone-300'
                           }`}
                         >
                           {mem === '정회원' ? '👤 정회원' : '👋 게스트'}
                         </button>
                       ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-blue-900 mb-2">선수 출신</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {PLAYER_ORIGINS.map(origin => {
+                        const isSelected = draft.origin === origin.value
+                        let selectedClass = 'bg-white border-2 border-stone-200 text-stone-600 hover:border-stone-300'
+                        
+                        if (isSelected) {
+                          if (origin.value === 'pro') {
+                            selectedClass = 'bg-purple-500 text-white shadow-lg scale-105'
+                          } else if (origin.value === 'amateur') {
+                            selectedClass = 'bg-blue-500 text-white shadow-lg scale-105'
+                          } else if (origin.value === 'college') {
+                            selectedClass = 'bg-emerald-500 text-white shadow-lg scale-105'
+                          } else {
+                            selectedClass = 'bg-stone-500 text-white shadow-lg scale-105'
+                          }
+                        }
+                        
+                        return (
+                          <button
+                            key={origin.value}
+                            type="button"
+                            onClick={() => setDraft({ ...draft, origin: origin.value })}
+                            className={`py-3 px-4 rounded-xl text-sm font-bold transition-all ${selectedClass}`}
+                          >
+                            {origin.label}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
                 </div>
@@ -518,6 +570,7 @@ export default function PlayersPage({
         name: "",
         membership: "정회원",
         position: "",
+        origin: "none",
         stats: ensureStatsObject({}),
       },
     })
@@ -597,11 +650,29 @@ export default function PlayersPage({
           </button>
           <button
             onClick={() => setMembershipFilter('guest')}
-            className={`bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-4 border-2 transition-all hover:shadow-md ${membershipFilter === 'guest' ? 'border-amber-500 shadow-md' : 'border-amber-200'}`}
+            className={`rounded-lg p-4 border-2 transition-all hover:shadow-md ${membershipFilter === 'guest' ? 'shadow-md border-rose-200' : 'border-stone-200'}`}
+            style={{
+              background: 'linear-gradient(to bottom right, rgb(254, 242, 242), rgb(254, 226, 226))',
+            }}
           >
-            <div className="text-xs font-medium text-amber-700 mb-1">게스트</div>
-            <div className="text-2xl font-bold text-amber-900">{counts.guests}</div>
+            <div className="text-xs font-medium mb-1" style={{ color: 'rgb(136, 19, 55)' }}>게스트</div>
+            <div className="text-2xl font-bold" style={{ color: 'rgb(136, 19, 55)' }}>{counts.guests}</div>
           </button>
+        </div>
+
+        {/* G 뱃지 설명 */}
+        <div className="mb-4 flex items-center gap-2 text-xs text-stone-600">
+          <span 
+            className="inline-flex items-center justify-center w-4 h-4 rounded-full text-white text-[8px] font-bold border"
+            style={{ 
+              backgroundColor: 'rgb(251, 229, 230)',
+              borderColor: 'rgb(244, 201, 204)',
+              color: 'rgb(136, 19, 55)'
+            }}
+          >
+            G
+          </span>
+          <span>게스트 선수</span>
         </div>
 
         {/* 정렬 & 뷰 모드 토글 */}
@@ -686,9 +757,7 @@ export default function PlayersPage({
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     {pos && <PosChip pos={pos} />}
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${guest ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                      {mem || "미지정"}
-                    </span>
+                    <OriginChip origin={p.origin} />
                   </div>
                 </div>
               </div>
@@ -736,10 +805,10 @@ export default function PlayersPage({
                   <div className="w-full bg-white/30 rounded-full h-2 overflow-hidden">
                     <div 
                       className={`h-full ${aiPowerMeterColor(calculateAIPower(p, matches))} transition-all duration-300 rounded-full`}
-                      style={{ width: `${Math.min((calculateAIPower(p, matches) / 1000) * 100, 100)}%` }}
+                      style={{ width: `${Math.min((calculateAIPower(p, matches) / 1500) * 100, 100)}%` }}
                     ></div>
                   </div>
-                  <div className="text-[10px] text-white/70 mt-1">Max 1000</div>
+                  <div className="text-[10px] text-white/70 mt-1">Max 1500</div>
                 </div>
               </div>
 
@@ -791,9 +860,7 @@ export default function PlayersPage({
                   <div className="font-medium text-stone-800 flex items-center gap-2 flex-wrap">
                     <span className="truncate">{p.name || "이름없음"}</span>
                     {pos && <PosChip pos={pos} />}
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${guest ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'}`}>
-                      {mem || "미지정"}
-                    </span>
+                    <OriginChip origin={p.origin} />
                   </div>
                 </div>
 

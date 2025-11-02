@@ -4,11 +4,11 @@ import { DEFAULT_STATS, STAT_KEYS } from "./constants" // ✅ 공식 키/디폴�
 import { randomAvatarDataUrl } from "../utils/avatar"
 
 // 신규 선수 생성
-export function mkPlayer(name = "", pos = "MF", stats = null, photoUrl = null, membership = 'guest') {
+export function mkPlayer(name = "", pos = "MF", stats = null, photoUrl = null, membership = 'guest', origin = 'none') {
   const s = stats ? { ...DEFAULT_STATS, ...stats } : { ...DEFAULT_STATS }
   const id = uuidv4()
   const avatar = photoUrl ?? randomAvatarDataUrl(name || id, 128)
-  return { id, name, position: pos, stats: s, photoUrl: avatar, membership }
+  return { id, name, position: pos, stats: s, photoUrl: avatar, membership, origin }
 }
 
 // ✅ 공식 STAT_KEYS 기준으로만 OVR 계산 (0–100 스케일 가정)
