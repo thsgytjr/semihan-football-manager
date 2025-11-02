@@ -8,7 +8,7 @@ import ToastHub from"./components/Toast";import Card from"./components/Card"
 import Dashboard from"./pages/Dashboard";import PlayersPage from"./pages/PlayersPage"
 import MatchPlanner from"./pages/MatchPlanner";import StatsInput from"./pages/StatsInput"
 import FormationBoard from"./pages/FormationBoard";import logoUrl from"./assets/GoalifyLogo.png"
-import{getAppSettings,updateAppTitle}from"./lib/appSettings"
+import{getAppSettings,loadAppSettingsFromServer,updateAppTitle}from"./lib/appSettings"
 const ADMIN_PASS=import.meta.env.VITE_ADMIN_PASSWORD||"letmein"
 
 const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden role="img" className="shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5"/><rect x="2" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/><rect x="18.5" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>)
@@ -25,6 +25,20 @@ export default function App(){
   useEffect(()=>{
     document.title = appTitle
   },[appTitle])
+
+  // 서버에서 앱 설정 로드
+  useEffect(()=>{
+    (async()=>{
+      try{
+        const settings = await loadAppSettingsFromServer()
+        if(settings.appTitle && settings.appTitle !== appTitle){
+          setAppTitle(settings.appTitle)
+        }
+      }catch(e){
+        console.error('Failed to load app settings from server:', e)
+      }
+    })()
+  },[])
 
   useEffect(()=>{let mounted=true;(async()=>{
     try{
