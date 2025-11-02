@@ -1,6 +1,6 @@
 // src/App.jsx
 import React,{useEffect,useMemo,useState,useCallback}from"react"
-import{Home,Users,CalendarDays,ListChecks,ShieldCheck,Lock,Eye,EyeOff,AlertCircle,CheckCircle2,X,Settings,BookOpen}from"lucide-react"
+import{Home,Users,CalendarDays,ListChecks,ShieldCheck,Lock,Eye,EyeOff,AlertCircle,CheckCircle2,X,Settings,BookOpen,Shuffle}from"lucide-react"
 import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB}from"./services/storage.service"
 import{mkPlayer}from"./lib/players";import{notify}from"./components/Toast"
 import{filterExpiredMatches}from"./lib/upcomingMatch"
@@ -8,7 +8,8 @@ import ToastHub from"./components/Toast";import Card from"./components/Card"
 import AppTutorial,{TutorialButton,useAutoTutorial}from"./components/AppTutorial"
 import Dashboard from"./pages/Dashboard";import PlayersPage from"./pages/PlayersPage"
 import MatchPlanner from"./pages/MatchPlanner";import StatsInput from"./pages/StatsInput"
-import FormationBoard from"./pages/FormationBoard";import logoUrl from"./assets/GoalifyLogo.png"
+import FormationBoard from"./pages/FormationBoard";import DraftPage from"./pages/DraftPage"
+import logoUrl from"./assets/GoalifyLogo.png"
 import{getAppSettings,loadAppSettingsFromServer,updateAppTitle}from"./lib/appSettings"
 const ADMIN_PASS=import.meta.env.VITE_ADMIN_PASSWORD||"letmein"
 
@@ -124,6 +125,7 @@ export default function App(){
     { key: 'dashboard', icon: <Home size={16}/>, label: '대시보드', show: true },
     { key: 'players', icon: <Users size={16}/>, label: '선수 관리', show: isAdmin },
     { key: 'planner', icon: <CalendarDays size={16}/>, label: '매치 플래너', show: isAdmin },
+    { key: 'draft', icon: <Shuffle size={16}/>, label: '드래프트', show: isAdmin },
     { key: 'formation', icon: <IconPitch size={16}/>, label: '포메이션 보드', show: true },
     { key: 'stats', icon: <ListChecks size={16}/>, label: '기록 입력', show: isAdmin }
   ], [isAdmin]);
@@ -358,6 +360,7 @@ export default function App(){
                 />
               )}
               {tab==="planner"&&isAdmin&&(<MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>)}
+              {tab==="draft"&&isAdmin&&(<DraftPage players={players}/>)}
               {tab==="formation"&&(<FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>)}
               {tab==="stats"&&isAdmin&&(<StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
             </>
