@@ -1,5 +1,5 @@
 import React from 'react'
-import { Clock, Trophy, Users } from 'lucide-react'
+import { Clock, Trophy, Users, Search } from 'lucide-react'
 import InitialAvatar from './InitialAvatar'
 
 export default function DraftBoard({
@@ -8,16 +8,20 @@ export default function DraftBoard({
   team1,
   team2,
   playerPool,
+  totalPlayers,
   currentTurn,
   timeLeft,
   onPickPlayer,
   isCompleted,
   onReset,
   firstPick,
-  pickCount
+  pickCount,
+  searchTerm,
+  onSearchChange,
+  draftSettings
 }) {
   const isFirstTurn = team1.length === 1 && team2.length === 1
-  const maxPicks = isFirstTurn ? 1 : 2
+  const maxPicks = isFirstTurn ? draftSettings.firstPickCount : draftSettings.regularPickCount
 
   return (
     <div className="space-y-6">
@@ -156,12 +160,25 @@ export default function DraftBoard({
       </div>
 
       {/* 선수 풀 */}
-      {!isCompleted && playerPool.length > 0 && (
+      {!isCompleted && totalPlayers > 0 && (
         <div className="border-2 border-gray-200 rounded-xl p-4">
           <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
             <Users className="w-5 h-5" />
-            선수 풀 ({playerPool.length}명)
+            선수 풀 ({totalPlayers}명)
           </h3>
+
+          {/* 검색바 */}
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <input
+              type="text"
+              placeholder="선수 이름 또는 포지션 검색..."
+              value={searchTerm}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            />
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {playerPool.map(player => (
               <button
@@ -182,6 +199,12 @@ export default function DraftBoard({
               </button>
             ))}
           </div>
+
+          {playerPool.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              검색 결과가 없습니다.
+            </div>
+          )}
         </div>
       )}
     </div>

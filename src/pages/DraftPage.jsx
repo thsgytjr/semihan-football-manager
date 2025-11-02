@@ -18,6 +18,13 @@ export default function DraftPage({ players }) {
   const [timeLeft, setTimeLeft] = useState(15)
   const [pickCount, setPickCount] = useState(0) // 현재 턴에서 몇 명 픽했는지
   const [searchTerm, setSearchTerm] = useState('') // 검색어
+  
+  // 드래프트 설정
+  const [draftSettings, setDraftSettings] = useState({
+    timerDuration: 15, // 타이머 시간 (초)
+    firstPickCount: 1, // 첫 턴 선택 수
+    regularPickCount: 2, // 이후 턴 선택 수
+  })
 
   // 초기 로드
   useEffect(() => {
@@ -101,7 +108,7 @@ export default function DraftPage({ players }) {
     setTeam2([captain2])
     
     setDraftState('drafting')
-    setTimeLeft(15)
+    setTimeLeft(draftSettings.timerDuration)
     setPickCount(0)
   }
 
@@ -125,7 +132,7 @@ export default function DraftPage({ players }) {
     
     // 픽 카운트 체크
     const isFirstTurn = (team1.length === 1 && team2.length === 1) // 주장만 있는 상태
-    const maxPicks = isFirstTurn ? 1 : 2
+    const maxPicks = isFirstTurn ? draftSettings.firstPickCount : draftSettings.regularPickCount
     
     if (newPickCount >= maxPicks) {
       // 턴 교체
@@ -133,8 +140,9 @@ export default function DraftPage({ players }) {
         setDraftState('completed')
       } else {
         setCurrentTurn(currentTurn === 'captain1' ? 'captain2' : 'captain1')
-        setTimeLeft(15)
+        setTimeLeft(draftSettings.timerDuration)
         setPickCount(0)
+        setSearchTerm('') // 턴이 넘어갈 때 검색어 초기화
       }
     }
   }
@@ -147,24 +155,51 @@ export default function DraftPage({ players }) {
       setTimeLeft(prev => {
         if (prev <= 1) {
           // 시간 초과 - 자동으로 랜덤 선택
-          if (playerPool.length > 0) {
-            const isFirstTurn = (team1.length === 1 && team2.length === 1)
-            const maxPicks = isFirstTurn ? 1 : 2
-            const picksNeeded = maxPicks - pickCount
-            
-            for (let i = 0; i < picksNeeded && playerPool.length > 0; i++) {
-              const randomPlayer = playerPool[Math.floor(Math.random() * playerPool.length)]
-              pickPlayer(randomPlayer)
+          setPlayerPool(currentPool => {
+            if (currentPool.length > 0) {
+              const isFirstTurn = (team1.length === 1 && team2.length === 1)
+              const maxPicks = isFirstTurn ? draftSettings.firstPickCount : draftSettings.regularPickCount
+              const picksNeeded = maxPicks - pickCount
+              
+              // 필요한 만큼 랜덤 선택
+              const selectedPlayers = []
+              let remainingPool = [...currentPool]
+              
+              for (let i = 0; i < picksNeeded && remainingPool.length > 0; i++) {
+                const randomIndex = Math.floor(Math.random() * remainingPool.length)
+                const randomPlayer = remainingPool[randomIndex]
+                selectedPlayers.push(randomPlayer)
+                remainingPool = remainingPool.filter(p => p.id !== randomPlayer.id)
+              }
+              
+              // 선택된 선수들을 팀에 추가
+              if (currentTurn === 'captain1') {
+                setTeam1(prev => [...prev, ...selectedPlayers])
+              } else {
+                setTeam2(prev => [...prev, ...selectedPlayers])
+              }
+              
+              // 턴 교체
+              if (remainingPool.length === 0) {
+                setDraftState('completed')
+              } else {
+                setCurrentTurn(currentTurn === 'captain1' ? 'captain2' : 'captain1')
+                setPickCount(0)
+                setSearchTerm('')
+              }
+              
+              return remainingPool
             }
-          }
-          return 15
+            return currentPool
+          })
+          return draftSettings.timerDuration
         }
         return prev - 1
       })
     }, 1000)
     
     return () => clearInterval(timer)
-  }, [draftState, playerPool, pickCount, team1.length, team2.length])
+  }, [draftState, currentTurn, pickCount, team1.length, team2.length])
 
   // 리셋
   const resetDraft = () => {
@@ -177,7 +212,7 @@ export default function DraftPage({ players }) {
     setTeam2([])
     setPlayerPool([])
     setParticipatingPlayers([])
-    setTimeLeft(15)
+    setTimeLeft(draftSettings.timerDuration)
     setPickCount(0)
     setSearchTerm('')
   }
@@ -189,7 +224,13 @@ export default function DraftPage({ players }) {
   )
 
   // 검색 필터링 - 주장 선택 시
-  const filteredPoolPlayers = playerPool.filter(player => 
+  const filteredPoolPlayers = participatingPlayers.filter(player => 
+    player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    player.position?.toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  // 검색 필터링 - 드래프트 중 선수 풀
+  const filteredDraftPool = playerPool.filter(player => 
     player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     player.position?.toLowerCase().includes(searchTerm.toLowerCase())
   )
@@ -207,18 +248,112 @@ export default function DraftPage({ players }) {
     <div className="space-y-4">
       <Card title="드래프트 모드">
         {draftState === 'setup' && (
-          <div className="text-center py-8">
-            <h3 className="text-xl font-bold mb-4">드래프트로 팀을 구성하세요</h3>
-            <p className="text-gray-600 mb-6">
-              참여 인원을 선택한 후, 주장 2명을 지정하고 드래프트를 진행합니다.<br/>
-              첫 번째 턴은 1명, 그 이후는 각 턴마다 2명씩 선택할 수 있습니다.
+          <div className="py-8 max-w-2xl mx-auto">
+            <h3 className="text-xl font-bold mb-2 text-center">드래프트로 팀을 구성하세요</h3>
+            <p className="text-gray-600 mb-8 text-center">
+              참여 인원을 선택한 후, 주장 2명을 지정하고 드래프트를 진행합니다.
             </p>
-            <button
-              onClick={startDraft}
-              className="px-6 py-3 bg-emerald-500 text-white rounded-lg font-semibold hover:bg-emerald-600 transition-colors"
-            >
-              참여 인원 선택하기
-            </button>
+
+            {/* 드래프트 설정 */}
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-6 border border-blue-100 mb-6">
+              <h4 className="text-sm font-bold text-blue-900 mb-4 flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                드래프트 설정
+              </h4>
+              
+              <div className="space-y-4">
+                {/* 타이머 시간 */}
+                <div className="bg-white rounded-xl p-4 border border-blue-100">
+                  <label className="block text-sm font-semibold text-blue-900 mb-3">
+                    턴당 제한 시간
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="range"
+                      min="5"
+                      max="60"
+                      step="5"
+                      value={draftSettings.timerDuration}
+                      onChange={(e) => setDraftSettings({...draftSettings, timerDuration: Number(e.target.value)})}
+                      className="flex-1 h-2 rounded-full appearance-none cursor-pointer"
+                      style={{
+                        background: `linear-gradient(to right, rgb(59 130 246) 0%, rgb(59 130 246) ${((draftSettings.timerDuration - 5) / 55) * 100}%, rgb(229 231 235) ${((draftSettings.timerDuration - 5) / 55) * 100}%, rgb(229 231 235) 100%)`
+                      }}
+                    />
+                    <div className="bg-blue-500 text-white px-4 py-2 rounded-lg font-bold min-w-[70px] text-center">
+                      {draftSettings.timerDuration}초
+                    </div>
+                  </div>
+                </div>
+
+                {/* 첫 턴 선택 수 */}
+                <div className="bg-white rounded-xl p-4 border border-blue-100">
+                  <label className="block text-sm font-semibold text-blue-900 mb-3">
+                    첫 번째 턴 선택 인원
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="range"
+                      min="1"
+                      max="5"
+                      value={draftSettings.firstPickCount}
+                      onChange={(e) => setDraftSettings({...draftSettings, firstPickCount: Number(e.target.value)})}
+                      className="flex-1 h-2 rounded-full appearance-none cursor-pointer"
+                      style={{
+                        background: `linear-gradient(to right, rgb(16 185 129) 0%, rgb(16 185 129) ${((draftSettings.firstPickCount - 1) / 4) * 100}%, rgb(229 231 235) ${((draftSettings.firstPickCount - 1) / 4) * 100}%, rgb(229 231 235) 100%)`
+                      }}
+                    />
+                    <div className="bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold min-w-[70px] text-center">
+                      {draftSettings.firstPickCount}명
+                    </div>
+                  </div>
+                </div>
+
+                {/* 이후 턴 선택 수 */}
+                <div className="bg-white rounded-xl p-4 border border-blue-100">
+                  <label className="block text-sm font-semibold text-blue-900 mb-3">
+                    이후 턴 선택 인원
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="range"
+                      min="1"
+                      max="5"
+                      value={draftSettings.regularPickCount}
+                      onChange={(e) => setDraftSettings({...draftSettings, regularPickCount: Number(e.target.value)})}
+                      className="flex-1 h-2 rounded-full appearance-none cursor-pointer"
+                      style={{
+                        background: `linear-gradient(to right, rgb(168 85 247) 0%, rgb(168 85 247) ${((draftSettings.regularPickCount - 1) / 4) * 100}%, rgb(229 231 235) ${((draftSettings.regularPickCount - 1) / 4) * 100}%, rgb(229 231 235) 100%)`
+                      }}
+                    />
+                    <div className="bg-purple-500 text-white px-4 py-2 rounded-lg font-bold min-w-[70px] text-center">
+                      {draftSettings.regularPickCount}명
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 설정 요약 */}
+              <div className="mt-4 p-3 bg-blue-100 rounded-lg">
+                <p className="text-xs text-blue-800">
+                  💡 첫 번째 턴: <strong>{draftSettings.firstPickCount}명</strong> 선택, 
+                  이후 턴: <strong>{draftSettings.regularPickCount}명</strong>씩 선택, 
+                  제한시간: <strong>{draftSettings.timerDuration}초</strong>
+                </p>
+              </div>
+            </div>
+
+            <div className="text-center">
+              <button
+                onClick={startDraft}
+                className="px-8 py-3 bg-emerald-500 text-white rounded-lg font-semibold hover:bg-emerald-600 transition-colors shadow-lg"
+              >
+                참여 인원 선택하기
+              </button>
+            </div>
           </div>
         )}
 
@@ -439,7 +574,8 @@ export default function DraftPage({ players }) {
             captain2={captain2}
             team1={team1}
             team2={team2}
-            playerPool={playerPool}
+            playerPool={filteredDraftPool}
+            totalPlayers={playerPool.length}
             currentTurn={currentTurn}
             timeLeft={timeLeft}
             onPickPlayer={pickPlayer}
@@ -447,9 +583,44 @@ export default function DraftPage({ players }) {
             onReset={resetDraft}
             firstPick={firstPick}
             pickCount={pickCount}
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            draftSettings={draftSettings}
           />
         )}
       </Card>
+
+      <style>{`
+        input[type="range"]::-webkit-slider-thumb {
+          appearance: none;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: white;
+          cursor: pointer;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+          border: 3px solid currentColor;
+          transition: all 0.15s ease;
+        }
+        input[type="range"]::-webkit-slider-thumb:hover {
+          transform: scale(1.2);
+          box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+        }
+        input[type="range"]::-moz-range-thumb {
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: white;
+          cursor: pointer;
+          border: 3px solid currentColor;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+          transition: all 0.15s ease;
+        }
+        input[type="range"]::-moz-range-thumb:hover {
+          transform: scale(1.2);
+          box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+        }
+      `}</style>
     </div>
   )
 }
