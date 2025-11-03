@@ -9,7 +9,14 @@ const SUPABASE_SETTINGS_KEY = 'app_settings'
 const DEFAULT_SETTINGS = {
   appTitle: 'Semihan-FM',
   appName: 'Semihan Football Manager',
-  tutorialEnabled: true
+  tutorialEnabled: true,
+  features: {
+    players: true,      // 선수 관리
+    planner: true,      // 매치 플래너
+    draft: true,        // 드래프트
+    formation: true,    // 포메이션 보드
+    stats: true         // 기록 입력
+  }
 }
 
 // Supabase에서 앱 설정 로드
@@ -105,6 +112,27 @@ export async function updateAppTitle(newTitle) {
 export async function updateTutorialEnabled(enabled) {
   const settings = getAppSettings()
   settings.tutorialEnabled = enabled
+  
+  const success = await saveAppSettingsToServer(settings)
+  return success
+}
+
+// 기능 활성화 상태 업데이트 (서버 + 로컬)
+export async function updateFeatureEnabled(featureName, enabled) {
+  const settings = getAppSettings()
+  if (!settings.features) {
+    settings.features = DEFAULT_SETTINGS.features
+  }
+  settings.features[featureName] = enabled
+  
+  const success = await saveAppSettingsToServer(settings)
+  return success
+}
+
+// 모든 기능 설정 한번에 업데이트
+export async function updateAllFeatures(features) {
+  const settings = getAppSettings()
+  settings.features = { ...DEFAULT_SETTINGS.features, ...features }
   
   const success = await saveAppSettingsToServer(settings)
   return success

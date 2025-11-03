@@ -10,7 +10,7 @@ import Dashboard from"./pages/Dashboard";import PlayersPage from"./pages/Players
 import MatchPlanner from"./pages/MatchPlanner";import StatsInput from"./pages/StatsInput"
 import FormationBoard from"./pages/FormationBoard";import DraftPage from"./pages/DraftPage"
 import logoUrl from"./assets/GoalifyLogo.png"
-import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEnabled}from"./lib/appSettings"
+import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEnabled,updateFeatureEnabled}from"./lib/appSettings"
 const ADMIN_PASS=import.meta.env.VITE_ADMIN_PASSWORD||"letmein"
 
 const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden role="img" className="shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5"/><rect x="2" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/><rect x="18.5" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>)
@@ -24,6 +24,7 @@ export default function App(){
   const[settingsOpen,setSettingsOpen]=useState(false)
   const[tutorialOpen,setTutorialOpen]=useState(false)
   const[tutorialEnabled,setTutorialEnabled]=useState(()=>getAppSettings().tutorialEnabled)
+  const[featuresEnabled,setFeaturesEnabled]=useState(()=>getAppSettings().features||{})
   const{shouldShowTutorial,setShouldShowTutorial}=useAutoTutorial(isAdmin)
 
   // 첫 방문자 자동 튜토리얼 (튜토리얼이 활성화된 경우에만)
@@ -49,6 +50,9 @@ export default function App(){
         }
         if(settings.tutorialEnabled !== undefined && settings.tutorialEnabled !== tutorialEnabled){
           setTutorialEnabled(settings.tutorialEnabled)
+        }
+        if(settings.features){
+          setFeaturesEnabled(settings.features)
         }
       }catch(e){
         console.error('Failed to load app settings from server:', e)
@@ -127,12 +131,12 @@ export default function App(){
   // 메모이제이션된 탭 버튼들
   const tabButtons = useMemo(() => [
     { key: 'dashboard', icon: <Home size={16}/>, label: '대시보드', show: true },
-    { key: 'players', icon: <Users size={16}/>, label: '선수 관리', show: isAdmin },
-    { key: 'planner', icon: <CalendarDays size={16}/>, label: '매치 플래너', show: isAdmin },
-    { key: 'draft', icon: <Shuffle size={16}/>, label: '드래프트', show: isAdmin },
-    { key: 'formation', icon: <IconPitch size={16}/>, label: '포메이션 보드', show: true },
-    { key: 'stats', icon: <ListChecks size={16}/>, label: '기록 입력', show: isAdmin }
-  ], [isAdmin]);
+    { key: 'players', icon: <Users size={16}/>, label: '선수 관리', show: isAdmin && featuresEnabled.players },
+    { key: 'planner', icon: <CalendarDays size={16}/>, label: '매치 플래너', show: isAdmin && featuresEnabled.planner },
+    { key: 'draft', icon: <Shuffle size={16}/>, label: '드래프트', show: isAdmin && featuresEnabled.draft },
+    { key: 'formation', icon: <IconPitch size={16}/>, label: '포메이션 보드', show: featuresEnabled.formation },
+    { key: 'stats', icon: <ListChecks size={16}/>, label: '기록 입력', show: isAdmin && featuresEnabled.stats }
+  ], [isAdmin, featuresEnabled]);
 
   // ⬇️ 기존 기본값 생성 방식은 유지(필요시 다른 곳에서 사용)
   async function handleCreatePlayer(){if(!isAdmin)return notify("Admin만 가능합니다.");const p=mkPlayer("새 선수","MF");setDb(prev=>({...prev,players:[p,...(prev.players||[])]}));setSelectedPlayerId(p.id);notify("새 선수를 추가했습니다.");try{await upsertPlayer(p)}catch(e){console.error(e)}}
@@ -175,6 +179,16 @@ export default function App(){
     const success = await updateTutorialEnabled(enabled)
     if(success){
       notify(enabled?"튜토리얼이 활성화되었습니다.":"튜토리얼이 비활성화되었습니다.","success")
+    }else{
+      notify("설정 저장에 실패했습니다.","error")
+    }
+  }
+
+  async function handleFeatureToggle(featureName, enabled){
+    setFeaturesEnabled(prev => ({...prev, [featureName]: enabled}))
+    const success = await updateFeatureEnabled(featureName, enabled)
+    if(success){
+      notify(`${featureName} 기능이 ${enabled?'활성화':'비활성화'}되었습니다.`,"success")
     }else{
       notify("설정 저장에 실패했습니다.","error")
     }
@@ -361,7 +375,7 @@ export default function App(){
           ) : (
             <>
               {tab==="dashboard"&&(<Dashboard totals={totals} players={players} matches={matches} isAdmin={isAdmin} onUpdateMatch={handleUpdateMatch} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>)}
-              {tab==="players"&&isAdmin&&(
+              {tab==="players"&&isAdmin&&featuresEnabled.players&&(
                 <PlayersPage
                   players={players}
                   matches={matches}
@@ -374,10 +388,10 @@ export default function App(){
                   onReset={handleResetPlayers}
                 />
               )}
-              {tab==="planner"&&isAdmin&&(<MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>)}
-              {tab==="draft"&&isAdmin&&(<DraftPage players={players}/>)}
-              {tab==="formation"&&(<FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>)}
-              {tab==="stats"&&isAdmin&&(<StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
+              {tab==="planner"&&isAdmin&&featuresEnabled.planner&&(<MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>)}
+              {tab==="draft"&&isAdmin&&featuresEnabled.draft&&(<DraftPage players={players}/>)}
+              {tab==="formation"&&featuresEnabled.formation&&(<FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>)}
+              {tab==="stats"&&isAdmin&&featuresEnabled.stats&&(<StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
             </>
           )}
         </div>
@@ -397,7 +411,7 @@ export default function App(){
     </footer>
 
     <AdminLoginDialog isOpen={loginOpen} onClose={()=>setLoginOpen(false)} onSuccess={onAdminSuccess} adminPass={ADMIN_PASS}/>
-    <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle} tutorialEnabled={tutorialEnabled} onTutorialToggle={handleTutorialToggle}/>
+    <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle} tutorialEnabled={tutorialEnabled} onTutorialToggle={handleTutorialToggle} featuresEnabled={featuresEnabled} onFeatureToggle={handleFeatureToggle} isAdmin={isAdmin}/>
     {tutorialEnabled && <AppTutorial isOpen={tutorialOpen} onClose={()=>setTutorialOpen(false)} isAdmin={isAdmin}/>}
   </div>)}
 const TabButton = React.memo(function TabButton({icon,label,active,onClick,loading}){return(<button onClick={onClick} disabled={loading} title={label} aria-label={label} className={`flex items-center gap-1.5 rounded-md px-2.5 py-2.5 sm:px-3 sm:py-3 text-sm transition-all duration-200 min-h-[42px] sm:min-h-[44px] touch-manipulation whitespace-nowrap ${active?"bg-emerald-500 text-white shadow-md":"text-stone-700 hover:bg-stone-200 active:bg-stone-300 active:scale-95"} ${loading?"opacity-75 cursor-wait":""}`} style={{touchAction: 'manipulation'}} aria-pressed={active}>{loading && active ? <svg className="w-4 h-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg> : <span className="w-4 h-4 flex-shrink-0">{icon}</span>}{active && <span className="text-xs font-semibold hidden sm:inline">{label}</span>}</button>)})
@@ -536,7 +550,7 @@ function AdminLoginDialog({isOpen,onClose,onSuccess,adminPass}){const[pw,setPw]=
   </div>)}
 
 /* ── Settings Dialog ─────────────────── */
-function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,onTutorialToggle}){
+function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,onTutorialToggle,featuresEnabled,onFeatureToggle,isAdmin}){
   const[newTitle,setNewTitle]=useState(appTitle)
   const[titleEditMode,setTitleEditMode]=useState(false)
   
@@ -559,11 +573,19 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
     }
   }
   
+  const featureLabels = {
+    players: '선수 관리',
+    planner: '매치 플래너',
+    draft: '드래프트',
+    formation: '포메이션 보드',
+    stats: '기록 입력'
+  }
+  
   if(!isOpen)return null;
   
   return(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
-      <div className="relative w-full max-w-sm rounded-2xl border border-stone-200 bg-white shadow-xl">
+      <div className="relative w-full max-w-md rounded-2xl border border-stone-200 bg-white shadow-xl max-h-[90vh] overflow-y-auto">
         <button className="absolute right-3 top-3 rounded-md p-1 text-stone-500 hover:bg-stone-100" onClick={onClose} aria-label="닫기">
           <X size={18}/>
         </button>
@@ -573,7 +595,7 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
           </div>
           <div>
             <h3 className="text-base font-semibold">앱 설정</h3>
-            <p className="text-xs text-stone-500">앱 타이틀 및 튜토리얼 설정을 관리합니다.</p>
+            <p className="text-xs text-stone-500">앱 타이틀, 튜토리얼 및 기능 설정을 관리합니다.</p>
           </div>
         </div>
         <div className="space-y-4 px-5 py-4">
@@ -640,17 +662,54 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
                 />
               </button>
             </div>
-            <div className="text-xs text-stone-500 bg-stone-50 rounded-lg p-3 border border-stone-200">
-              {tutorialEnabled ? (
-                <>✅ 튜토리얼 버튼이 표시되며, 첫 방문자에게 자동으로 가이드가 표시됩니다.</>
-              ) : (
-                <>🔒 튜토리얼 버튼과 자동 가이드가 비활성화됩니다.</>
-              )}
-            </div>
           </div>
 
+          {/* 기능 활성화 설정 (Admin만) */}
+          {isAdmin && (
+            <div className="border-t border-stone-200 pt-4 mt-2">
+              <div className="mb-3">
+                <h4 className="text-sm font-semibold text-stone-800">기능 활성화 설정</h4>
+                <p className="text-xs text-stone-500 mt-0.5">각 탭의 표시 여부를 제어합니다 (데이터는 유지됩니다)</p>
+              </div>
+              
+              <div className="space-y-3">
+                {Object.entries(featureLabels).map(([key, label]) => (
+                  <div key={key} className="flex items-center justify-between py-2 px-3 rounded-lg bg-stone-50 hover:bg-stone-100 transition-colors">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-stone-700">{label}</span>
+                      {key === 'formation' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">모두</span>
+                      )}
+                      {key !== 'formation' && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">Admin</span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => onFeatureToggle(key, !featuresEnabled[key])}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+                        featuresEnabled[key] ? 'bg-emerald-600' : 'bg-stone-300'
+                      }`}
+                      role="switch"
+                      aria-checked={featuresEnabled[key]}
+                    >
+                      <span
+                        className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                          featuresEnabled[key] ? 'translate-x-5' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="text-xs text-stone-500 bg-blue-50 rounded-lg p-3 border border-blue-200 mt-3">
+                ℹ️ 기능을 비활성화해도 저장된 매치와 선수 데이터는 유지됩니다. 기능을 다시 활성화하면 이전 데이터를 볼 수 있습니다.
+              </div>
+            </div>
+          )}
+
           <div className="text-xs text-stone-500 bg-stone-50 rounded-lg p-3 border border-stone-200">
-            💡 변경된 타이틀은 헤더와 브라우저 탭에 즉시 반영됩니다.
+            💡 모든 설정은 데이터베이스에 저장되어 모든 디바이스에 동기화됩니다.
           </div>
         </div>
       </div>
