@@ -486,7 +486,8 @@ export function computeDraftPlayerStatsRows(players = [], matches = []) {
       last5, 
       points,
       winRate,
-      lastWinTS: lastWinTSMap.get(r.id) || 0
+      lastWinTS: lastWinTSMap.get(r.id) || 0,
+      photoUrl: idToPlayer.get(r.id)?.photoUrl
     }
   })
 }
@@ -617,7 +618,8 @@ export function computeCaptainStatsRows(players = [], matches = []) {
       last5, 
       points,
       winRate,
-      lastWinTS: lastWinTSMap.get(r.id) || 0
+      lastWinTS: lastWinTSMap.get(r.id) || 0,
+      photoUrl: idToPlayer.get(r.id)?.photoUrl
     }
   })
 }
@@ -716,6 +718,10 @@ export function computeDraftAttackRows(players = [], matches = []) {
     lastRank = rank
     lastKey = key
     
-    return { ...r, rank }
+    return { 
+      ...r, 
+      rank,
+      photoUrl: idToPlayer.get(r.id)?.photoUrl
+    }
   })
 }

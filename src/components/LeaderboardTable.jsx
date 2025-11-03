@@ -107,11 +107,11 @@ export function RankCell({ rank, tone, delta }) {
 /**
  * Standard player name cell with avatar
  */
-export function PlayerNameCell({ id, name, isGuest, tone }) {
+export function PlayerNameCell({ id, name, isGuest, tone, photoUrl }) {
   return (
     <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
       <div className="flex items-center gap-2">
-        <InitialAvatar id={id} name={name} size={20} badges={isGuest ? ['G'] : []} />
+        <InitialAvatar id={id} name={name} size={32} badges={isGuest ? ['G'] : []} photoUrl={photoUrl} />
         <span className="font-medium truncate">{name}</span>
       </div>
     </td>

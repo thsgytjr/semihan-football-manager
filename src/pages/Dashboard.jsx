@@ -397,7 +397,7 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls, apDateKey, initia
   const renderRow = (r, tone) => (
     <>
       <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
-      <PlayerNameCell id={r.id} name={r.name} isGuest={r.isGuest} tone={tone} />
+      <PlayerNameCell id={r.id} name={r.name} isGuest={r.isGuest} tone={tone} photoUrl={r.photoUrl} />
       <StatCell value={r.points} tone={tone} align="center" />
       <FormDotsCell form={r.last5} tone={tone} />
     </>
@@ -454,7 +454,7 @@ function DraftWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialB
   const renderRow = (r, tone) => (
     <>
       <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
-      <PlayerNameCell id={r.id} name={r.name} isGuest={r.isGuest} tone={tone} />
+      <PlayerNameCell id={r.id} name={r.name} isGuest={r.isGuest} tone={tone} photoUrl={r.photoUrl} />
       <StatCell value={r.points} tone={tone} align="center" />
       <FormDotsCell form={r.last5} tone={tone} />
     </>
@@ -512,7 +512,7 @@ function DraftAttackTable({ rows, showAll, onToggle, controls, apDateKey, initia
   const renderRow = (r, tone) => (
     <>
       <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
-      <PlayerNameCell id={r.id} name={r.name} isGuest={r.isGuest} tone={tone} />
+      <PlayerNameCell id={r.id} name={r.name} isGuest={r.isGuest} tone={tone} photoUrl={r.photoUrl} />
       <StatCell value={r.gp} tone={tone} align="center" />
       <StatCell value={r.g} tone={tone} align="center" />
       <StatCell value={r.a} tone={tone} align="center" />
