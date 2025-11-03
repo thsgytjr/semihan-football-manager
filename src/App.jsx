@@ -389,6 +389,7 @@ export default function App(){
           </div>
           <div className="ml-2 sm:ml-3 pl-2 sm:pl-3 border-l border-stone-300 flex-shrink-0 relative z-10">
             <div className="flex gap-2">
+              {tutorialEnabled && <TutorialButton onClick={()=>setTutorialOpen(true)}/>}
               {isAdmin?(
                 <>
                   <button

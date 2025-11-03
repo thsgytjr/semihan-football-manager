@@ -261,6 +261,8 @@ export default function VisitorStats({ visits }) {
                   <span className="text-stone-600 truncate">{log.device_type || 'Unknown'}</span>
                   <span className="text-stone-400">·</span>
                   <span className="text-stone-600 truncate">{log.browser || 'Unknown'}</span>
+                  <span className="text-stone-400">·</span>
+                  <span className="text-stone-600 truncate">{log.os || 'Unknown'}</span>
                 </div>
               </div>
             )
