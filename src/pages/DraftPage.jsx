@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Search } from 'lucide-react'
 import Card from '../components/Card'
 import DraftBoard from '../components/DraftBoard'
@@ -18,13 +18,19 @@ export default function DraftPage({ players }) {
   const [timeLeft, setTimeLeft] = useState(15)
   const [pickCount, setPickCount] = useState(0) // 현재 턴에서 몇 명 픽했는지
   const [searchTerm, setSearchTerm] = useState('') // 검색어
+  const [isReadyForNextTurn, setIsReadyForNextTurn] = useState(false) // 다음 턴 준비 상태
+  const isTimeOutProcessing = useRef(false) // 타임아웃 처리 중복 방지
   
   // 드래프트 설정
   const [draftSettings, setDraftSettings] = useState({
     timerDuration: 15, // 타이머 시간 (초)
     firstPickCount: 1, // 첫 턴 선택 수
     regularPickCount: 2, // 이후 턴 선택 수
+    timerEnabled: true, // 타이머 활성화 여부
   })
+  
+  // 드래프트 히스토리 (뒤로가기용)
+  const [draftHistory, setDraftHistory] = useState([])
 
   // 초기 로드
   useEffect(() => {
@@ -114,10 +120,27 @@ export default function DraftPage({ players }) {
 
   // 선수 선택
   const pickPlayer = (player) => {
-    if (draftState !== 'drafting') return
+    if (draftState !== 'drafting' || isReadyForNextTurn) return
     
-    // 현재 턴이 주장1인지 주장2인지 확인
+    // 현재 팀과 최대 선택 수 확인
     const currentTeam = currentTurn === 'captain1' ? team1 : team2
+    const isVeryFirstTurn = (currentTurn === firstPick && team1.length <= 2 && team2.length <= 2)
+    const maxPicks = isVeryFirstTurn ? draftSettings.firstPickCount : draftSettings.regularPickCount
+    
+    // 이미 최대 선택 수에 도달했으면 선택 불가
+    if (pickCount >= maxPicks) {
+      return
+    }
+    
+    // 히스토리에 현재 상태 저장
+    setDraftHistory(prev => [...prev, {
+      team1: [...team1],
+      team2: [...team2],
+      playerPool: [...playerPool],
+      currentTurn,
+      pickCount,
+      timeLeft,
+    }])
     
     if (currentTurn === 'captain1') {
       setTeam1([...team1, player])
@@ -132,85 +155,187 @@ export default function DraftPage({ players }) {
     const newPickCount = pickCount + 1
     setPickCount(newPickCount)
     
-    // 픽 카운트 체크 - 선공 주장의 첫 턴만 1명, 그 이후는 모두 2명
-    const isVeryFirstTurn = (currentTurn === firstPick && currentTeam.length === 1)
-    const maxPicks = isVeryFirstTurn ? draftSettings.firstPickCount : draftSettings.regularPickCount
-    
     if (newPickCount >= maxPicks) {
-      // 턴 교체
+      // 선택 완료 - 풀이 비었으면 완료
       if (newPool.length === 0) {
         setDraftState('completed')
-      } else {
-        setCurrentTurn(currentTurn === 'captain1' ? 'captain2' : 'captain1')
-        setTimeLeft(draftSettings.timerDuration)
-        setPickCount(0)
-        setSearchTerm('') // 턴이 넘어갈 때 검색어 초기화
+      }
+      // 타이머가 없으면 바로 다음 턴 준비
+      if (!draftSettings.timerEnabled) {
+        setIsReadyForNextTurn(true)
+      }
+      // 타이머가 있으면 시간이 끝날 때까지 대기 (isReadyForNextTurn은 타이머가 0이 될 때 설정됨)
+    }
+  }
+  
+  // 선택 완료 버튼 (턴 완료 시 즉시 다음 턴으로)
+  const completeTurn = () => {
+    setIsReadyForNextTurn(true)
+    setTimeLeft(0) // 타이머 즉시 종료
+  }
+  
+  // 다음 턴으로 진행
+  const proceedToNextTurn = () => {
+    setCurrentTurn(currentTurn === 'captain1' ? 'captain2' : 'captain1')
+    setTimeLeft(draftSettings.timerDuration)
+    setPickCount(0)
+    setSearchTerm('')
+    setIsReadyForNextTurn(false)
+    isTimeOutProcessing.current = false // 타임아웃 플래그 리셋
+  }
+  
+  // 선수 제거 (주장 제외)
+  const removePlayer = (player, teamSide) => {
+    if (isReadyForNextTurn) return // 다음 턴 준비 상태에서는 제거 불가
+    
+    // 히스토리에 현재 상태 저장
+    setDraftHistory(prev => [...prev, {
+      team1: [...team1],
+      team2: [...team2],
+      playerPool: [...playerPool],
+      currentTurn,
+      pickCount,
+      timeLeft,
+    }])
+    
+    if (teamSide === 'team1') {
+      // 주장(첫 번째 선수)이 아닌 경우만 제거 가능
+      const playerIndex = team1.findIndex(p => p.id === player.id)
+      if (playerIndex > 0) {
+        setTeam1(team1.filter(p => p.id !== player.id))
+        setPlayerPool([...playerPool, player])
+        setPickCount(Math.max(0, pickCount - 1))
+      }
+    } else {
+      const playerIndex = team2.findIndex(p => p.id === player.id)
+      if (playerIndex > 0) {
+        setTeam2(team2.filter(p => p.id !== player.id))
+        setPlayerPool([...playerPool, player])
+        setPickCount(Math.max(0, pickCount - 1))
       }
     }
+  }
+  
+  // 뒤로가기 (언두)
+  const undoLastPick = () => {
+    if (draftHistory.length === 0) return
+    
+    const lastState = draftHistory[draftHistory.length - 1]
+    setTeam1(lastState.team1)
+    setTeam2(lastState.team2)
+    setPlayerPool(lastState.playerPool)
+    setCurrentTurn(lastState.currentTurn)
+    setPickCount(lastState.pickCount)
+    setTimeLeft(lastState.timeLeft)
+    setDraftHistory(prev => prev.slice(0, -1))
+    setIsReadyForNextTurn(false) // 되돌리면 다음 턴 준비 상태 해제
   }
 
   // 타이머
   useEffect(() => {
-    if (draftState !== 'drafting') return
+    if (draftState !== 'drafting' || !draftSettings.timerEnabled || isReadyForNextTurn) return
     
     const timer = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
-          // 시간 초과 - 자동으로 랜덤 선택
-          // team1, team2의 최신 값을 사용하기 위해 setState의 함수형 업데이트 사용
-          setTeam1(currentTeam1 => {
-            setTeam2(currentTeam2 => {
-              setPlayerPool(currentPool => {
-                if (currentPool.length > 0) {
-                  // 현재 턴의 팀 길이를 확인하여 첫 턴인지 판단
-                  const currentTeam = currentTurn === 'captain1' ? currentTeam1 : currentTeam2
-                  const isVeryFirstTurn = (currentTurn === firstPick && currentTeam.length === 1) // 선공 주장의 첫 턴만
-                  const maxPicks = isVeryFirstTurn ? draftSettings.firstPickCount : draftSettings.regularPickCount
-                  const picksNeeded = maxPicks - pickCount
-                  
-                  // 필요한 만큼 랜덤 선택
-                  const selectedPlayers = []
-                  let remainingPool = [...currentPool]
-                  
-                  for (let i = 0; i < picksNeeded && remainingPool.length > 0; i++) {
-                    const randomIndex = Math.floor(Math.random() * remainingPool.length)
-                    const randomPlayer = remainingPool[randomIndex]
-                    selectedPlayers.push(randomPlayer)
-                    remainingPool = remainingPool.filter(p => p.id !== randomPlayer.id)
-                  }
-                  
-                  // 선택된 선수들을 팀에 추가
-                  if (currentTurn === 'captain1') {
-                    setTeam1([...currentTeam1, ...selectedPlayers])
-                  } else {
-                    setTeam2([...currentTeam2, ...selectedPlayers])
-                  }
-                  
-                  // 턴 교체
-                  if (remainingPool.length === 0) {
-                    setDraftState('completed')
-                  } else {
-                    setCurrentTurn(currentTurn === 'captain1' ? 'captain2' : 'captain1')
-                    setPickCount(0)
-                    setSearchTerm('')
-                  }
-                  
-                  return remainingPool
-                }
-                return currentPool
-              })
-              return currentTeam2
-            })
-            return currentTeam1
-          })
-          return draftSettings.timerDuration
+          // 시간 초과 처리 - setTimeout으로 다음 틱에 실행
+          setTimeout(() => {
+            if (!isTimeOutProcessing.current) {
+              handleTimeOut()
+            }
+          }, 0)
+          return 0
         }
         return prev - 1
       })
     }, 1000)
     
     return () => clearInterval(timer)
-  }, [draftState, currentTurn, pickCount, firstPick, draftSettings])
+  }, [draftState, draftSettings, isReadyForNextTurn])
+  
+  // 타이머 만료 시 처리
+  const handleTimeOut = () => {
+    if (isTimeOutProcessing.current) {
+      console.log('⚠️ Timeout already processing, skipping...')
+      return
+    }
+    
+    isTimeOutProcessing.current = true
+    console.log('🔒 Timeout processing started')
+    
+    // 한 번에 모든 상태 업데이트
+    setPickCount(currentPickCount => {
+      setTeam1(currentTeam1 => {
+        setTeam2(currentTeam2 => {
+          setPlayerPool(currentPool => {
+            // 상태 업데이트 계산
+            const currentTeam = currentTurn === 'captain1' ? currentTeam1 : currentTeam2
+            // 첫 번째 턴 판단: 선공 주장의 턴이고, 양쪽 팀 모두 주장만 있거나 선공 주장이 1명 선택한 상태
+            const isVeryFirstTurn = (currentTurn === firstPick && team1.length <= 2 && team2.length <= 2)
+            const maxPicks = isVeryFirstTurn ? draftSettings.firstPickCount : draftSettings.regularPickCount
+            const picksNeeded = maxPicks - currentPickCount
+            
+            console.log('⏰ Timer timeout - Auto pick:', {
+              currentTurn,
+              firstPick,
+              team1Length: currentTeam1.length,
+              team2Length: currentTeam2.length,
+              currentTeamLength: currentTeam.length,
+              isVeryFirstTurn,
+              maxPicks,
+              currentPickCount,
+              picksNeeded
+            })
+            
+            if (currentPool.length === 0) {
+              setDraftState('completed')
+              setIsReadyForNextTurn(true)
+              return currentPool
+            }
+            
+            if (picksNeeded <= 0) {
+              console.log('✅ No picks needed')
+              setIsReadyForNextTurn(true)
+              return currentPool
+            }
+            
+            // 필요한 만큼 랜덤 선택
+            const selectedPlayers = []
+            let remainingPool = [...currentPool]
+            
+            for (let i = 0; i < picksNeeded && remainingPool.length > 0; i++) {
+              const randomIndex = Math.floor(Math.random() * remainingPool.length)
+              const randomPlayer = remainingPool[randomIndex]
+              selectedPlayers.push(randomPlayer)
+              remainingPool = remainingPool.filter(p => p.id !== randomPlayer.id)
+            }
+            
+            console.log(`🎲 Auto-selected ${selectedPlayers.length} player(s):`, selectedPlayers.map(p => p.name))
+            
+            // 선택된 선수들을 팀에 추가 (배치 업데이트)
+            if (currentTurn === 'captain1') {
+              setTeam1([...currentTeam1, ...selectedPlayers])
+            } else {
+              setTeam2([...currentTeam2, ...selectedPlayers])
+            }
+            
+            // 상태 업데이트
+            setIsReadyForNextTurn(true)
+            
+            if (remainingPool.length === 0) {
+              setDraftState('completed')
+            }
+            
+            console.log('🔓 Timeout processing completed')
+            return remainingPool
+          })
+          return currentTeam2
+        })
+        return currentTeam1
+      })
+      return currentPickCount
+    })
+  }
 
   // 리셋
   const resetDraft = () => {
@@ -226,6 +351,8 @@ export default function DraftPage({ players }) {
     setTimeLeft(draftSettings.timerDuration)
     setPickCount(0)
     setSearchTerm('')
+    setDraftHistory([])
+    setIsReadyForNextTurn(false)
   }
 
   // 검색 필터링 - 참여 인원 선택 시
@@ -276,29 +403,57 @@ export default function DraftPage({ players }) {
               </h4>
               
               <div className="space-y-4">
-                {/* 타이머 시간 */}
+                {/* 타이머 ON/OFF */}
                 <div className="bg-white rounded-xl p-4 border border-blue-100">
-                  <label className="block text-sm font-semibold text-blue-900 mb-3">
-                    턴당 제한 시간
-                  </label>
-                  <div className="flex items-center gap-4">
-                    <input
-                      type="range"
-                      min="5"
-                      max="60"
-                      step="5"
-                      value={draftSettings.timerDuration}
-                      onChange={(e) => setDraftSettings({...draftSettings, timerDuration: Number(e.target.value)})}
-                      className="flex-1 h-2 rounded-full appearance-none cursor-pointer"
-                      style={{
-                        background: `linear-gradient(to right, rgb(59 130 246) 0%, rgb(59 130 246) ${((draftSettings.timerDuration - 5) / 55) * 100}%, rgb(229 231 235) ${((draftSettings.timerDuration - 5) / 55) * 100}%, rgb(229 231 235) 100%)`
-                      }}
-                    />
-                    <div className="bg-blue-500 text-white px-4 py-2 rounded-lg font-bold min-w-[70px] text-center">
-                      {draftSettings.timerDuration}초
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="block text-sm font-semibold text-blue-900 mb-1">
+                        턴당 시간 제한
+                      </label>
+                      <p className="text-xs text-gray-500">
+                        {draftSettings.timerEnabled ? '시간 제한이 활성화됩니다' : '시간 제한 없이 진행됩니다'}
+                      </p>
                     </div>
+                    <button
+                      onClick={() => setDraftSettings({...draftSettings, timerEnabled: !draftSettings.timerEnabled})}
+                      className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
+                        draftSettings.timerEnabled ? 'bg-blue-500' : 'bg-gray-300'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                          draftSettings.timerEnabled ? 'translate-x-7' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
                   </div>
                 </div>
+
+                {/* 타이머 시간 */}
+                {draftSettings.timerEnabled && (
+                  <div className="bg-white rounded-xl p-4 border border-blue-100">
+                    <label className="block text-sm font-semibold text-blue-900 mb-3">
+                      턴당 제한 시간
+                    </label>
+                    <div className="flex items-center gap-4">
+                      <input
+                        type="range"
+                        min="5"
+                        max="60"
+                        step="5"
+                        value={draftSettings.timerDuration}
+                        onChange={(e) => setDraftSettings({...draftSettings, timerDuration: Number(e.target.value)})}
+                        className="flex-1 h-2 rounded-full appearance-none cursor-pointer"
+                        style={{
+                          background: `linear-gradient(to right, rgb(59 130 246) 0%, rgb(59 130 246) ${((draftSettings.timerDuration - 5) / 55) * 100}%, rgb(229 231 235) ${((draftSettings.timerDuration - 5) / 55) * 100}%, rgb(229 231 235) 100%)`
+                        }}
+                      />
+                      <div className="bg-blue-500 text-white px-4 py-2 rounded-lg font-bold min-w-[70px] text-center">
+                        {draftSettings.timerDuration}초
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* 첫 턴 선택 수 */}
                 <div className="bg-white rounded-xl p-4 border border-blue-100">
@@ -370,11 +525,24 @@ export default function DraftPage({ players }) {
 
         {draftState === 'selectParticipants' && (
           <div className="space-y-6 py-6">
-            <div className="text-center mb-6">
-              <h3 className="text-xl font-bold mb-2">드래프트 참여 인원을 선택하세요</h3>
-              <p className="text-sm text-gray-600">
-                선택된 선수: <span className="font-bold text-emerald-600">{participatingPlayers.length}명</span>
-              </p>
+            <div className="flex items-center justify-between mb-6">
+              <button
+                onClick={() => {
+                  setDraftState('setup')
+                  setParticipatingPlayers([])
+                  setSearchTerm('')
+                }}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
+              >
+                ← 뒤로가기
+              </button>
+              <div className="text-center flex-1">
+                <h3 className="text-xl font-bold mb-1">드래프트 참여 인원을 선택하세요</h3>
+                <p className="text-sm text-gray-600">
+                  선택된 선수: <span className="font-bold text-emerald-600">{participatingPlayers.length}명</span>
+                </p>
+              </div>
+              <div className="w-[100px]"></div> {/* 균형을 위한 빈 공간 */}
             </div>
 
             {/* 검색바 */}
@@ -450,7 +618,21 @@ export default function DraftPage({ players }) {
 
         {draftState === 'selectCaptains' && (
           <div className="space-y-6 py-6">
-            <h3 className="text-xl font-bold text-center mb-6">주장 2명을 선택하세요</h3>
+            <div className="flex items-center justify-between mb-6">
+              <button
+                onClick={() => {
+                  setDraftState('selectParticipants')
+                  setCaptain1(null)
+                  setCaptain2(null)
+                  setSearchTerm('')
+                }}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
+              >
+                ← 뒤로가기
+              </button>
+              <h3 className="text-xl font-bold flex-1 text-center">주장 2명을 선택하세요</h3>
+              <div className="w-[100px]"></div> {/* 균형을 위한 빈 공간 */}
+            </div>
             
             {/* 선택된 주장 표시 */}
             <div className="grid md:grid-cols-2 gap-4 mb-6">
@@ -597,6 +779,12 @@ export default function DraftPage({ players }) {
             searchTerm={searchTerm}
             onSearchChange={setSearchTerm}
             draftSettings={draftSettings}
+            onUndo={undoLastPick}
+            canUndo={draftHistory.length > 0}
+            onRemovePlayer={removePlayer}
+            isReadyForNextTurn={isReadyForNextTurn}
+            onProceedToNextTurn={proceedToNextTurn}
+            onCompleteTurn={completeTurn}
           />
         )}
       </Card>

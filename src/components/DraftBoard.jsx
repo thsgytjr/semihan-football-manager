@@ -1,5 +1,5 @@
 import React from 'react'
-import { Clock, Trophy, Users, Search } from 'lucide-react'
+import { Clock, Trophy, Users, Search, Undo2, X, ArrowRight, Check } from 'lucide-react'
 import InitialAvatar from './InitialAvatar'
 
 export default function DraftBoard({
@@ -18,10 +18,25 @@ export default function DraftBoard({
   pickCount,
   searchTerm,
   onSearchChange,
-  draftSettings
+  draftSettings,
+  onUndo,
+  canUndo,
+  onRemovePlayer,
+  isReadyForNextTurn,
+  onProceedToNextTurn,
+  onCompleteTurn
 }) {
-  const isFirstTurn = team1.length === 1 && team2.length === 1
-  const maxPicks = isFirstTurn ? draftSettings.firstPickCount : draftSettings.regularPickCount
+  // 첫 번째 턴 판단: 선공 주장의 턴이고, 양쪽 팀 모두 주장만 있거나 선공 주장이 1명 선택한 상태
+  const isVeryFirstTurn = (currentTurn === firstPick && team1.length <= 2 && team2.length <= 2)
+  const maxPicks = isVeryFirstTurn ? draftSettings.firstPickCount : draftSettings.regularPickCount
+  
+  // 선택 완료 여부 (모든 선수를 선택했는지)
+  const isPickComplete = pickCount >= maxPicks
+  
+  // 현재 턴에서 추가된 선수의 시작 인덱스 계산
+  // 턴 시작 시 팀 크기 = 현재 팀 크기 - 현재 턴에서 선택한 수
+  const team1StartSize = team1.length - (currentTurn === 'captain1' ? pickCount : 0)
+  const team2StartSize = team2.length - (currentTurn === 'captain2' ? pickCount : 0)
 
   return (
     <div className="space-y-6">
@@ -37,19 +52,57 @@ export default function DraftBoard({
                   {currentTurn === 'captain1' ? captain1?.name : captain2?.name} 주장
                 </p>
                 <p className="text-xs text-gray-500">
-                  {pickCount}/{maxPicks} 선택 완료 {isFirstTurn && '(첫 턴: 1명만)'}
+                  {pickCount}/{maxPicks} 선택 완료 {isVeryFirstTurn && '(첫 턴: 1명만)'}
                 </p>
               </div>
             </div>
             
-            <div className="text-center">
-              <div className="flex items-center gap-2 justify-center mb-1">
-                <Clock className="w-5 h-5 text-gray-600" />
-                <span className="text-sm text-gray-600">남은 시간</span>
-              </div>
-              <div className={`text-4xl font-bold ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-gray-900'}`}>
-                {timeLeft}초
-              </div>
+            <div className="flex items-center gap-3">
+              {/* 되돌리기 버튼 */}
+              <button
+                onClick={onUndo}
+                disabled={!canUndo}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                title="마지막 선택 취소"
+              >
+                <Undo2 className="w-4 h-4" />
+                <span className="hidden sm:inline">되돌리기</span>
+              </button>
+              
+              {/* 완료 버튼 - 선택 완료 시 표시 */}
+              {isPickComplete && !isReadyForNextTurn && (
+                <button
+                  onClick={onCompleteTurn}
+                  className="flex items-center gap-2 px-6 py-2 bg-blue-500 text-white rounded-lg font-bold hover:bg-blue-600 transition-colors shadow-lg"
+                >
+                  <Check className="w-5 h-5" />
+                  <span>선택 완료</span>
+                </button>
+              )}
+              
+              {/* 다음 진행 버튼 - 선택 완료 시 항상 표시 (타이머 상관없이) */}
+              {isReadyForNextTurn && (
+                <button
+                  onClick={onProceedToNextTurn}
+                  className="flex items-center gap-2 px-6 py-2 bg-emerald-500 text-white rounded-lg font-bold hover:bg-emerald-600 transition-all shadow-lg hover:shadow-xl"
+                >
+                  <span>다음 턴</span>
+                  <ArrowRight className="w-5 h-5" />
+                </button>
+              )}
+
+              {/* 타이머 - 타이머가 켜져있을 때 항상 표시 */}
+              {draftSettings.timerEnabled && (
+                <div className="text-center">
+                  <div className="flex items-center gap-2 justify-center mb-1">
+                    <Clock className="w-5 h-5 text-gray-600" />
+                    <span className="text-sm text-gray-600">남은 시간</span>
+                  </div>
+                  <div className={`text-4xl font-bold ${timeLeft <= 5 ? 'text-red-500 animate-pulse' : 'text-gray-900'}`}>
+                    {timeLeft}초
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -90,7 +143,7 @@ export default function DraftBoard({
             {team1.map((player, idx) => (
               <div
                 key={player.id}
-                className={`p-3 rounded-lg flex items-center gap-3 ${idx === 0 ? 'bg-emerald-100 border-2 border-emerald-300' : 'bg-white border border-gray-200'}`}
+                className={`p-3 rounded-lg flex items-center gap-3 relative ${idx === 0 ? 'bg-emerald-100 border-2 border-emerald-300' : 'bg-white border border-gray-200'}`}
               >
                 <InitialAvatar 
                   id={player.id} 
@@ -102,8 +155,23 @@ export default function DraftBoard({
                   <p className="font-semibold truncate">{player.name}</p>
                   <p className="text-xs text-gray-500">{player.position}</p>
                 </div>
-                {idx === 0 && (
+                {idx === 0 ? (
                   <span className="text-xs bg-emerald-500 text-white px-2 py-1 rounded flex-shrink-0">주장</span>
+                ) : (
+                  // X 버튼: 자기 차례 + 드래프트 진행중 + 시간 남음 + 현재 턴에서 추가된 선수만
+                  currentTurn === 'captain1' && 
+                  !isCompleted && 
+                  !isReadyForNextTurn && 
+                  (draftSettings.timerEnabled ? timeLeft > 0 : true) &&
+                  idx >= team1StartSize && (
+                    <button
+                      onClick={() => onRemovePlayer(player, 'team1')}
+                      className="p-1 hover:bg-red-100 rounded-full transition-colors"
+                      title="선수 제거"
+                    >
+                      <X className="w-4 h-4 text-red-500" />
+                    </button>
+                  )
                 )}
               </div>
             ))}
@@ -133,7 +201,7 @@ export default function DraftBoard({
             {team2.map((player, idx) => (
               <div
                 key={player.id}
-                className={`p-3 rounded-lg flex items-center gap-3 ${idx === 0 ? 'bg-blue-100 border-2 border-blue-300' : 'bg-white border border-gray-200'}`}
+                className={`p-3 rounded-lg flex items-center gap-3 relative ${idx === 0 ? 'bg-blue-100 border-2 border-blue-300' : 'bg-white border border-gray-200'}`}
               >
                 <InitialAvatar 
                   id={player.id} 
@@ -145,8 +213,23 @@ export default function DraftBoard({
                   <p className="font-semibold truncate">{player.name}</p>
                   <p className="text-xs text-gray-500">{player.position}</p>
                 </div>
-                {idx === 0 && (
+                {idx === 0 ? (
                   <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded flex-shrink-0">주장</span>
+                ) : (
+                  // X 버튼: 자기 차례 + 드래프트 진행중 + 시간 남음 + 현재 턴에서 추가된 선수만
+                  currentTurn === 'captain2' && 
+                  !isCompleted && 
+                  !isReadyForNextTurn && 
+                  (draftSettings.timerEnabled ? timeLeft > 0 : true) &&
+                  idx >= team2StartSize && (
+                    <button
+                      onClick={() => onRemovePlayer(player, 'team2')}
+                      className="p-1 hover:bg-red-100 rounded-full transition-colors"
+                      title="선수 제거"
+                    >
+                      <X className="w-4 h-4 text-red-500" />
+                    </button>
+                  )
                 )}
               </div>
             ))}
@@ -184,7 +267,12 @@ export default function DraftBoard({
               <button
                 key={player.id}
                 onClick={() => onPickPlayer(player)}
-                className="p-1.5 border border-gray-200 rounded-md hover:border-emerald-500 hover:bg-emerald-50 transition-all flex flex-col items-center gap-1"
+                disabled={isPickComplete}
+                className={`p-1.5 border rounded-md transition-all flex flex-col items-center gap-1 ${
+                  isPickComplete 
+                    ? 'border-gray-200 bg-gray-100 opacity-50 cursor-not-allowed' 
+                    : 'border-gray-200 hover:border-emerald-500 hover:bg-emerald-50'
+                }`}
               >
                 <InitialAvatar 
                   id={player.id} 
