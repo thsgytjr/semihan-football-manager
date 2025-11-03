@@ -117,6 +117,8 @@ export default function DraftPage({ players }) {
     if (draftState !== 'drafting') return
     
     // 현재 턴이 주장1인지 주장2인지 확인
+    const currentTeam = currentTurn === 'captain1' ? team1 : team2
+    
     if (currentTurn === 'captain1') {
       setTeam1([...team1, player])
     } else {
@@ -130,9 +132,9 @@ export default function DraftPage({ players }) {
     const newPickCount = pickCount + 1
     setPickCount(newPickCount)
     
-    // 픽 카운트 체크
-    const isFirstTurn = (team1.length === 1 && team2.length === 1) // 주장만 있는 상태
-    const maxPicks = isFirstTurn ? draftSettings.firstPickCount : draftSettings.regularPickCount
+    // 픽 카운트 체크 - 선공 주장의 첫 턴만 1명, 그 이후는 모두 2명
+    const isVeryFirstTurn = (currentTurn === firstPick && currentTeam.length === 1)
+    const maxPicks = isVeryFirstTurn ? draftSettings.firstPickCount : draftSettings.regularPickCount
     
     if (newPickCount >= maxPicks) {
       // 턴 교체
@@ -155,42 +157,51 @@ export default function DraftPage({ players }) {
       setTimeLeft(prev => {
         if (prev <= 1) {
           // 시간 초과 - 자동으로 랜덤 선택
-          setPlayerPool(currentPool => {
-            if (currentPool.length > 0) {
-              const isFirstTurn = (team1.length === 1 && team2.length === 1)
-              const maxPicks = isFirstTurn ? draftSettings.firstPickCount : draftSettings.regularPickCount
-              const picksNeeded = maxPicks - pickCount
-              
-              // 필요한 만큼 랜덤 선택
-              const selectedPlayers = []
-              let remainingPool = [...currentPool]
-              
-              for (let i = 0; i < picksNeeded && remainingPool.length > 0; i++) {
-                const randomIndex = Math.floor(Math.random() * remainingPool.length)
-                const randomPlayer = remainingPool[randomIndex]
-                selectedPlayers.push(randomPlayer)
-                remainingPool = remainingPool.filter(p => p.id !== randomPlayer.id)
-              }
-              
-              // 선택된 선수들을 팀에 추가
-              if (currentTurn === 'captain1') {
-                setTeam1(prev => [...prev, ...selectedPlayers])
-              } else {
-                setTeam2(prev => [...prev, ...selectedPlayers])
-              }
-              
-              // 턴 교체
-              if (remainingPool.length === 0) {
-                setDraftState('completed')
-              } else {
-                setCurrentTurn(currentTurn === 'captain1' ? 'captain2' : 'captain1')
-                setPickCount(0)
-                setSearchTerm('')
-              }
-              
-              return remainingPool
-            }
-            return currentPool
+          // team1, team2의 최신 값을 사용하기 위해 setState의 함수형 업데이트 사용
+          setTeam1(currentTeam1 => {
+            setTeam2(currentTeam2 => {
+              setPlayerPool(currentPool => {
+                if (currentPool.length > 0) {
+                  // 현재 턴의 팀 길이를 확인하여 첫 턴인지 판단
+                  const currentTeam = currentTurn === 'captain1' ? currentTeam1 : currentTeam2
+                  const isVeryFirstTurn = (currentTurn === firstPick && currentTeam.length === 1) // 선공 주장의 첫 턴만
+                  const maxPicks = isVeryFirstTurn ? draftSettings.firstPickCount : draftSettings.regularPickCount
+                  const picksNeeded = maxPicks - pickCount
+                  
+                  // 필요한 만큼 랜덤 선택
+                  const selectedPlayers = []
+                  let remainingPool = [...currentPool]
+                  
+                  for (let i = 0; i < picksNeeded && remainingPool.length > 0; i++) {
+                    const randomIndex = Math.floor(Math.random() * remainingPool.length)
+                    const randomPlayer = remainingPool[randomIndex]
+                    selectedPlayers.push(randomPlayer)
+                    remainingPool = remainingPool.filter(p => p.id !== randomPlayer.id)
+                  }
+                  
+                  // 선택된 선수들을 팀에 추가
+                  if (currentTurn === 'captain1') {
+                    setTeam1([...currentTeam1, ...selectedPlayers])
+                  } else {
+                    setTeam2([...currentTeam2, ...selectedPlayers])
+                  }
+                  
+                  // 턴 교체
+                  if (remainingPool.length === 0) {
+                    setDraftState('completed')
+                  } else {
+                    setCurrentTurn(currentTurn === 'captain1' ? 'captain2' : 'captain1')
+                    setPickCount(0)
+                    setSearchTerm('')
+                  }
+                  
+                  return remainingPool
+                }
+                return currentPool
+              })
+              return currentTeam2
+            })
+            return currentTeam1
           })
           return draftSettings.timerDuration
         }
@@ -199,7 +210,7 @@ export default function DraftPage({ players }) {
     }, 1000)
     
     return () => clearInterval(timer)
-  }, [draftState, currentTurn, pickCount, team1.length, team2.length])
+  }, [draftState, currentTurn, pickCount, firstPick, draftSettings])
 
   // 리셋
   const resetDraft = () => {
@@ -386,7 +397,7 @@ export default function DraftPage({ players }) {
                   {filteredAllPlayers.length}명 {searchTerm && `(전체 ${allPlayers.length}명)`}
                 </span>
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto">
+              <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-1.5 max-h-[500px] overflow-y-auto">
                 {filteredAllPlayers.map(player => {
                   const isSelected = participatingPlayers.some(p => p.id === player.id)
                   
@@ -394,25 +405,25 @@ export default function DraftPage({ players }) {
                     <button
                       key={player.id}
                       onClick={() => toggleParticipant(player)}
-                      className={`p-3 border-2 rounded-lg text-left transition-all flex items-center gap-3 ${
+                      className={`p-1.5 border rounded-md transition-all flex flex-col items-center gap-1 relative ${
                         isSelected 
                           ? 'border-emerald-500 bg-emerald-50' 
-                          : 'border-gray-200 hover:border-gray-400 hover:bg-gray-50'
+                          : 'border-gray-200 hover:border-emerald-500 hover:bg-emerald-50'
                       }`}
                     >
+                      {isSelected && (
+                        <div className="absolute top-0.5 right-0.5 text-[8px] bg-emerald-500 text-white px-1 py-0.5 rounded font-semibold">참여</div>
+                      )}
                       <InitialAvatar 
                         id={player.id} 
                         name={player.name} 
-                        size={40} 
+                        size={28} 
                         badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
                       />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm truncate">{player.name}</p>
-                        <p className="text-xs text-gray-500">{player.position}</p>
+                      <div className="w-full text-center">
+                        <p className="font-semibold text-[10px] truncate leading-tight">{player.name}</p>
+                        <p className="text-[9px] text-gray-500 truncate">{player.position}</p>
                       </div>
-                      {isSelected && (
-                        <span className="text-xs bg-emerald-500 text-white px-2 py-1 rounded font-semibold flex-shrink-0">참여</span>
-                      )}
                     </button>
                   )
                 })}
@@ -510,7 +521,7 @@ export default function DraftPage({ players }) {
                   {filteredPoolPlayers.length}명 {searchTerm && `(전체 ${participatingPlayers.length}명)`}
                 </span>
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto">
+              <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-1.5 max-h-[500px] overflow-y-auto">
                 {filteredPoolPlayers.map(player => {
                   const isCaptain1 = captain1?.id === player.id
                   const isCaptain2 = captain2?.id === player.id
@@ -520,30 +531,30 @@ export default function DraftPage({ players }) {
                     <button
                       key={player.id}
                       onClick={() => toggleCaptain(player)}
-                      className={`p-3 border-2 rounded-lg text-left transition-all flex items-center gap-3 ${
+                      className={`p-1.5 border rounded-md transition-all flex flex-col items-center gap-1 relative ${
                         isCaptain1 
                           ? 'border-emerald-500 bg-emerald-50' 
                           : isCaptain2
                           ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-400 hover:bg-gray-50'
+                          : 'border-gray-200 hover:border-emerald-500 hover:bg-emerald-50'
                       }`}
                     >
+                      {isCaptain1 && (
+                        <div className="absolute top-0.5 right-0.5 text-[8px] bg-emerald-500 text-white px-1 py-0.5 rounded font-semibold">주장1</div>
+                      )}
+                      {isCaptain2 && (
+                        <div className="absolute top-0.5 right-0.5 text-[8px] bg-blue-500 text-white px-1 py-0.5 rounded font-semibold">주장2</div>
+                      )}
                       <InitialAvatar 
                         id={player.id} 
                         name={player.name} 
-                        size={40} 
+                        size={28} 
                         badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
                       />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-sm truncate">{player.name}</p>
-                        <p className="text-xs text-gray-500">{player.position}</p>
+                      <div className="w-full text-center">
+                        <p className="font-semibold text-[10px] truncate leading-tight">{player.name}</p>
+                        <p className="text-[9px] text-gray-500 truncate">{player.position}</p>
                       </div>
-                      {isCaptain1 && (
-                        <span className="text-xs bg-emerald-500 text-white px-2 py-1 rounded font-semibold flex-shrink-0">주장 1</span>
-                      )}
-                      {isCaptain2 && (
-                        <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded font-semibold flex-shrink-0">주장 2</span>
-                      )}
                     </button>
                   )
                 })}

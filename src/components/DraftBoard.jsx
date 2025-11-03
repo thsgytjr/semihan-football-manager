@@ -179,22 +179,22 @@ export default function DraftBoard({
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-1.5">
             {playerPool.map(player => (
               <button
                 key={player.id}
                 onClick={() => onPickPlayer(player)}
-                className="p-3 border-2 border-gray-200 rounded-lg hover:border-emerald-500 hover:bg-emerald-50 transition-all text-left flex items-center gap-3"
+                className="p-1.5 border border-gray-200 rounded-md hover:border-emerald-500 hover:bg-emerald-50 transition-all flex flex-col items-center gap-1"
               >
                 <InitialAvatar 
                   id={player.id} 
                   name={player.name} 
-                  size={40} 
+                  size={28} 
                   badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
                 />
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-sm truncate">{player.name}</p>
-                  <p className="text-xs text-gray-500">{player.position}</p>
+                <div className="w-full text-center">
+                  <p className="font-semibold text-[10px] truncate leading-tight">{player.name}</p>
+                  <p className="text-[9px] text-gray-500 truncate">{player.position}</p>
                 </div>
               </button>
             ))}
