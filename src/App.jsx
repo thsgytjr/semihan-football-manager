@@ -5,6 +5,7 @@ import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subs
 import{mkPlayer}from"./lib/players";import{notify}from"./components/Toast"
 import{filterExpiredMatches}from"./lib/upcomingMatch"
 import{getOrCreateVisitorId,getVisitorIP,parseUserAgent,shouldTrackVisit}from"./lib/visitorTracking"
+import{signInAdmin,signOut,getSession,onAuthStateChange}from"./lib/auth"
 import ToastHub from"./components/Toast";import Card from"./components/Card"
 import AppTutorial,{TutorialButton,useAutoTutorial}from"./components/AppTutorial"
 import VisitorStats from"./components/VisitorStats"
@@ -14,13 +15,12 @@ import FormationBoard from"./pages/FormationBoard";import DraftPage from"./pages
 import AnalyticsPage from"./pages/AnalyticsPage"
 import logoUrl from"./assets/GoalifyLogo.png"
 import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEnabled,updateFeatureEnabled}from"./lib/appSettings"
-const ADMIN_PASS=import.meta.env.VITE_ADMIN_PASSWORD||"letmein"
 
 const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden role="img" className="shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5"/><rect x="2" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/><rect x="18.5" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>)
 
 export default function App(){
   const[tab,setTab]=useState("dashboard"),[db,setDb]=useState({players:[],matches:[],visits:0,upcomingMatches:[]}),[selectedPlayerId,setSelectedPlayerId]=useState(null)
-  const[isAdmin,setIsAdmin]=useState(()=>localStorage.getItem("isAdmin")==="1"),[loginOpen,setLoginOpen]=useState(false)
+  const[isAdmin,setIsAdmin]=useState(false),[loginOpen,setLoginOpen]=useState(false)
   const[loading,setLoading]=useState(true)
   const[pageLoading,setPageLoading]=useState(false)
   const[appTitle,setAppTitle]=useState(()=>getAppSettings().appTitle)
@@ -29,6 +29,37 @@ export default function App(){
   const[tutorialEnabled,setTutorialEnabled]=useState(()=>getAppSettings().tutorialEnabled)
   const[featuresEnabled,setFeaturesEnabled]=useState(()=>getAppSettings().features||{})
   const{shouldShowTutorial,setShouldShowTutorial}=useAutoTutorial(isAdmin)
+
+  // Supabase Auth: 앱 시작 시 세션 확인
+  useEffect(()=>{
+    getSession().then(session=>{
+      if(session?.user){
+        console.log('✅ [App] Existing session found:', session.user.email)
+        setIsAdmin(true)
+        // 하위 호환성을 위해 localStorage도 설정 (optional)
+        localStorage.setItem("isAdmin","1")
+      }else{
+        console.log('ℹ️ [App] No existing session')
+        setIsAdmin(false)
+        localStorage.removeItem("isAdmin")
+      }
+    })
+
+    // 인증 상태 변경 리스너
+    const unsubscribe = onAuthStateChange(session=>{
+      if(session?.user){
+        console.log('✅ [App] Auth state changed: signed in')
+        setIsAdmin(true)
+        localStorage.setItem("isAdmin","1")
+      }else{
+        console.log('ℹ️ [App] Auth state changed: signed out')
+        setIsAdmin(false)
+        localStorage.removeItem("isAdmin")
+      }
+    })
+
+    return unsubscribe
+  },[])
 
   // 첫 방문자 자동 튜토리얼 (튜토리얼이 활성화된 경우에만)
   useEffect(()=>{
@@ -203,8 +234,34 @@ export default function App(){
   function handleDeleteUpcomingMatch(id){if(!isAdmin)return notify("Admin만 가능합니다.");const next=(db.upcomingMatches||[]).filter(m=>m.id!==id);setDb(prev=>({...prev,upcomingMatches:next}));saveDB({players:[],matches,visits,upcomingMatches:next});notify("예정된 매치를 삭제했습니다.")}
   function handleUpdateUpcomingMatch(id,patch){const next=(db.upcomingMatches||[]).map(m=>m.id===id?{...m,...patch}:m);setDb(prev=>({...prev,upcomingMatches:next}));saveDB({players:[],matches,visits,upcomingMatches:next});notify("예정된 매치가 업데이트되었습니다.")}
 
-  function adminLogout(){localStorage.removeItem("isAdmin");setIsAdmin(false);notify("Admin 모드 해제")}
-  function onAdminSuccess(){localStorage.setItem("isAdmin","1");setIsAdmin(true);setLoginOpen(false);notify("Admin 모드 활성화")}
+  // Supabase Auth: 로그아웃
+  async function adminLogout(){
+    await signOut()
+    setIsAdmin(false)
+    localStorage.removeItem("isAdmin")
+    notify("Admin 모드 해제")
+  }
+  
+  // Supabase Auth: 로그인 성공 핸들러
+  async function onAdminSuccess(email, password){
+    const {user, error} = await signInAdmin(email, password)
+    
+    if(error){
+      console.error('[App] Login failed:', error.message)
+      return false // 실패 반환
+    }
+    
+    if(user){
+      console.log('✅ [App] Login success:', user.email)
+      setIsAdmin(true)
+      setLoginOpen(false)
+      localStorage.setItem("isAdmin","1")
+      notify("Admin 모드 활성화")
+      return true // 성공 반환
+    }
+    
+    return false
+  }
 
   async function handleTutorialToggle(enabled){
     setTutorialEnabled(enabled)
@@ -431,7 +488,7 @@ export default function App(){
       <div className="mt-4 text-center text-[11px] text-stone-400">Semihan Football Manager · v{import.meta.env.VITE_APP_VERSION} build({import.meta.env.VITE_APP_COMMIT})</div>
     </footer>
 
-    <AdminLoginDialog isOpen={loginOpen} onClose={()=>setLoginOpen(false)} onSuccess={onAdminSuccess} adminPass={ADMIN_PASS}/>
+    <AdminLoginDialog isOpen={loginOpen} onClose={()=>setLoginOpen(false)} onSuccess={onAdminSuccess}/>
     <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle} tutorialEnabled={tutorialEnabled} onTutorialToggle={handleTutorialToggle} featuresEnabled={featuresEnabled} onFeatureToggle={handleFeatureToggle} isAdmin={isAdmin} visits={visits}/>
     {tutorialEnabled && <AppTutorial isOpen={tutorialOpen} onClose={()=>setTutorialOpen(false)} isAdmin={isAdmin}/>}
   </div>)}
@@ -545,30 +602,164 @@ const PageSkeleton = React.memo(function PageSkeleton({ tab }) {
   );
 })
 
-/* ── Admin Login Dialog (기존 코드 유지) ─────────────────── */
-function AdminLoginDialog({isOpen,onClose,onSuccess,adminPass}){const[pw,setPw]=useState(""),[show,setShow]=useState(false),[err,setErr]=useState(""),[caps,setCaps]=useState(false),[loading,setLoading]=useState(false)
+/* ── Admin Login Dialog (Supabase Auth) ─────────────────── */
+function AdminLoginDialog({isOpen,onClose,onSuccess}){
+  const[email,setEmail]=useState("")
+  const[pw,setPw]=useState("")
+  const[show,setShow]=useState(false)
+  const[err,setErr]=useState("")
+  const[caps,setCaps]=useState(false)
+  const[loading,setLoading]=useState(false)
   
-  useEffect(()=>{if(isOpen){setPw("");setErr("");setCaps(false);setLoading(false);setTimeout(()=>document.getElementById("adminPw")?.focus(),50)}},[isOpen])
-  const onKey=e=>{setCaps(!!e.getModifierState?.("CapsLock"));if(e.key==="Enter")submit()}
-  const submit=()=>{if(loading)return;setLoading(true);setErr("");setTimeout(()=>{if(pw&&pw===adminPass)onSuccess?.();else{setErr("비밀번호가 올바르지 않습니다.");setLoading(false)}},250)}
+  useEffect(()=>{
+    if(isOpen){
+      setEmail("")
+      setPw("")
+      setErr("")
+      setCaps(false)
+      setLoading(false)
+      setTimeout(()=>document.getElementById("adminEmail")?.focus(),50)
+    }
+  },[isOpen])
   
-  if(!isOpen)return null;return(<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
-    <div className="relative w-full max-w-sm rounded-2xl border border-stone-200 bg-white shadow-xl">
-      <button className="absolute right-3 top-3 rounded-md p-1 text-stone-500 hover:bg-stone-100" onClick={onClose} aria-label="닫기"><X size={18}/></button>
-      <div className="flex items-center gap-3 border-b border-stone-200 px-5 py-4"><div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700"><ShieldCheck size={20}/></div><div><h3 className="text/base font-semibold">Admin 로그인</h3><p className="text-xs text-stone-500">관리자 전용 기능을 사용하려면 인증하세요.</p></div></div>
-      <div className="space-y-3 px-5 py-4">
-        <label className="block text-xs font-medium text-stone-600">비밀번호</label>
-        <div className={`flex items-center rounded-lg border px-3 ${err?"border-rose-300 bg-rose-50":"border-stone-300 bg-white"}`}>
-          <Lock size={16} className="mr-2 shrink-0 text-stone-500"/>
-          <input id="adminPw" type={show?"text":"password"} value={pw} onChange={e=>setPw(e.target.value)} onKeyUp={onKey} onKeyDown={onKey} placeholder="Admin Password" className="w-full py-2 text-sm outline-none placeholder:text-stone-400 bg-transparent text-stone-900" style={{color: '#1c1917'}} autoCapitalize="off" autoCorrect="off" autoComplete="current-password"/>
-          <button type="button" className="ml-2 rounded p-1 text-stone-500 hover:bg-stone-100" onClick={()=>setShow(v=>!v)} aria-label={show?"비밀번호 숨기기":"비밀번호 보기"}>{show?<EyeOff size={16}/>:<Eye size={16}/>}</button>
+  const onKey=e=>{
+    setCaps(!!e.getModifierState?.("CapsLock"))
+    if(e.key==="Enter")submit()
+  }
+  
+  const submit=async()=>{
+    if(loading)return
+    if(!email.trim()){
+      setErr("이메일을 입력하세요.")
+      return
+    }
+    if(!pw){
+      setErr("비밀번호를 입력하세요.")
+      return
+    }
+    
+    setLoading(true)
+    setErr("")
+    
+    try{
+      const success = await onSuccess(email.trim(), pw)
+      if(!success){
+        setErr("이메일 또는 비밀번호가 올바르지 않습니다.")
+        setLoading(false)
+      }
+      // 성공 시 onSuccess에서 처리
+    }catch(e){
+      console.error('[Login] Error:', e)
+      setErr("로그인 중 오류가 발생했습니다.")
+      setLoading(false)
+    }
+  }
+  
+  if(!isOpen)return null
+  
+  return(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
+      <div className="relative w-full max-w-sm rounded-2xl border border-stone-200 bg-white shadow-xl">
+        <button className="absolute right-3 top-3 rounded-md p-1 text-stone-500 hover:bg-stone-100" onClick={onClose} aria-label="닫기">
+          <X size={18}/>
+        </button>
+        <div className="flex items-center gap-3 border-b border-stone-200 px-5 py-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+            <ShieldCheck size={20}/>
+          </div>
+          <div>
+            <h3 className="text-base font-semibold">Admin 로그인</h3>
+            <p className="text-xs text-stone-500">관리자 전용 기능을 사용하려면 인증하세요.</p>
+          </div>
         </div>
-        {caps&&(<div className="flex items-center gap-2 rounded-md bg-amber-50 px-2.5 py-1 text-[11px] text-amber-800"><AlertCircle size={12}/>Caps Lock이 켜져 있어요</div>)}
-        {err&&(<div className="flex items-center gap-2 rounded-md bg-rose-50 px-2.5 py-1 text-[11px] text-rose-700"><X size={12}/>{err}</div>)}
-        <button onClick={submit} disabled={loading} className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-stone-900 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-stone-800 disabled:opacity-50">{loading?<span className="inline-flex items-center gap-2"><svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity=".25"/><path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="4" fill="none"/></svg> 확인 중…</span>:<><CheckCircle2 size={14}/> 로그인</>}</button>
+        <div className="space-y-3 px-5 py-4">
+          {/* 이메일 입력 */}
+          <div>
+            <label htmlFor="adminEmail" className="block text-xs font-medium text-stone-600 mb-1.5">이메일</label>
+            <div className={`flex items-center rounded-lg border px-3 ${err?"border-rose-300 bg-rose-50":"border-stone-300 bg-white"}`}>
+              <svg className="w-4 h-4 mr-2 shrink-0 text-stone-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
+              </svg>
+              <input 
+                id="adminEmail" 
+                type="email" 
+                value={email} 
+                onChange={e=>setEmail(e.target.value)} 
+                onKeyUp={onKey}
+                onKeyDown={onKey}
+                placeholder="admin@example.com" 
+                className="w-full py-2 text-sm outline-none placeholder:text-stone-400 bg-transparent text-stone-900" 
+                style={{color: '#1c1917'}}
+                autoCapitalize="off" 
+                autoCorrect="off" 
+                autoComplete="email"
+              />
+            </div>
+          </div>
+          
+          {/* 비밀번호 입력 */}
+          <div>
+            <label htmlFor="adminPw" className="block text-xs font-medium text-stone-600 mb-1.5">비밀번호</label>
+            <div className={`flex items-center rounded-lg border px-3 ${err?"border-rose-300 bg-rose-50":"border-stone-300 bg-white"}`}>
+              <Lock size={16} className="mr-2 shrink-0 text-stone-500"/>
+              <input 
+                id="adminPw" 
+                type={show?"text":"password"} 
+                value={pw} 
+                onChange={e=>setPw(e.target.value)} 
+                onKeyUp={onKey} 
+                onKeyDown={onKey} 
+                placeholder="비밀번호" 
+                className="w-full py-2 text-sm outline-none placeholder:text-stone-400 bg-transparent text-stone-900" 
+                style={{color: '#1c1917'}} 
+                autoCapitalize="off" 
+                autoCorrect="off" 
+                autoComplete="current-password"
+              />
+              <button 
+                type="button" 
+                className="ml-2 rounded p-1 text-stone-500 hover:bg-stone-100" 
+                onClick={()=>setShow(v=>!v)} 
+                aria-label={show?"비밀번호 숨기기":"비밀번호 보기"}
+              >
+                {show?<EyeOff size={16}/>:<Eye size={16}/>}
+              </button>
+            </div>
+          </div>
+          
+          {caps&&(
+            <div className="flex items-center gap-2 rounded-md bg-amber-50 px-2.5 py-1 text-[11px] text-amber-800">
+              <AlertCircle size={12}/>Caps Lock이 켜져 있어요
+            </div>
+          )}
+          {err&&(
+            <div className="flex items-center gap-2 rounded-md bg-rose-50 px-2.5 py-1 text-[11px] text-rose-700">
+              <X size={12}/>{err}
+            </div>
+          )}
+          <button 
+            onClick={submit} 
+            disabled={loading} 
+            className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-stone-900 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-stone-800 disabled:opacity-50"
+          >
+            {loading?(
+              <span className="inline-flex items-center gap-2">
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" opacity=".25"/>
+                  <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                </svg> 확인 중…
+              </span>
+            ):(
+              <>
+                <CheckCircle2 size={14}/> 로그인
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
-  </div>)}
+  )
+}
 
 /* ── Settings Dialog ─────────────────── */
 function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,onTutorialToggle,featuresEnabled,onFeatureToggle,isAdmin,visits}){
