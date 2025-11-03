@@ -2,6 +2,7 @@
 // Supabase 클라이언트 + 선수 CRUD + 앱 전체 JSON(appdb) + 실시간 구독
 
 import { createClient } from '@supabase/supabase-js'
+import { TEAM_CONFIG } from '../lib/teamConfig'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnon = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -13,8 +14,10 @@ if (!supabaseUrl || !supabaseAnon) {
 export const supabase = createClient(supabaseUrl, supabaseAnon)
 
 // 방(룸) 개념 — 같은 ROOM_ID를 쓰는 모든 사용자가 같은 데이터 공유
-let ROOM_ID = 'semihan-lite-room-1'
+// 팀별로 자동으로 다른 room ID 사용 (semihan-lite-room-1, dksc-lite-room-1 등)
+let ROOM_ID = `${TEAM_CONFIG.shortName}-lite-room-1`
 export function setRoomId(id) { ROOM_ID = id || ROOM_ID }
+console.log(`📦 Room ID: ${ROOM_ID}`)
 
 // -----------------------------
 // [A] Players (정규화 테이블)

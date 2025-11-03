@@ -1,8 +1,9 @@
 // src/lib/storage.js  — v4로 올리고 match.location 보존
 import { DEFAULT_STATS } from './constants'
 import { defaultPlayers } from './players'
+import { STORAGE_PREFIX } from './teamConfig'
 
-export const LS_KEY = 'semihan-football-manager:v4'
+export const LS_KEY = `${STORAGE_PREFIX}football-manager:v4`
 
 export function loadDB() {
   try {

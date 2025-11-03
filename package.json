@@ -1,11 +1,15 @@
 {
   "name": "semihan-football-manager",
   "private": true,
-  "version": "4.7.0",
+  "version": "5.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:semihan": "vite --mode semihan",
+    "dev:dksc": "vite --mode dksc",
     "build": "vite build",
+    "build:semihan": "vite build --mode semihan",
+    "build:dksc": "vite build --mode dksc",
     "lint": "eslint .",
     "preview": "vite preview"
   },
