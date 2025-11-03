@@ -155,6 +155,12 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
       origin: draft.origin || "none",
       stats: ensureStatsObject(draft.stats),
     }
+    
+    // 새 선수일 경우 ID 제거 (Supabase가 자동 생성)
+    if (!player?.id || String(player.id).startsWith('new-')) {
+      delete payload.id
+    }
+    
     onSave(payload)
   }
 
