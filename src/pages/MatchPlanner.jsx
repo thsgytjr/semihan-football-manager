@@ -422,6 +422,10 @@ export default function MatchPlanner({
       setLocationAddress(upcomingMatch.location.address || '')
     }
     
+    // 팀 수 설정 (저장된 teamCount 또는 snapshot 길이 사용)
+    const savedTeamCount = upcomingMatch.teamCount || upcomingMatch.snapshot?.length || 2
+    setTeamCount(savedTeamCount)
+    
     // 드래프트 모드 설정
     if (upcomingMatch.isDraftMode) {
       setIsDraftMode(true)
@@ -442,7 +446,7 @@ export default function MatchPlanner({
       )
       
       // 주장 정보가 있으면 각 팀의 첫 번째로 배치
-      if (upcomingMatch.captainIds && upcomingMatch.captainIds.length >= 2) {
+      if (upcomingMatch.captainIds && upcomingMatch.captainIds.length > 0) {
         snapshotTeams.forEach((team, teamIndex) => {
           const captainId = upcomingMatch.captainIds[teamIndex]
           const captainObj = playersByIds.get(captainId)
@@ -465,20 +469,34 @@ export default function MatchPlanner({
       
       notify('드래프트 결과를 불러왔습니다 ✅')
     } else {
-      // 드래프트가 완료되지 않은 경우 기존 로직 사용
+      // 드래프트가 완료되지 않은 경우
       const playersByIds = new Map(players.map(p => [p.id, p]))
       const attendeesInOrder = participantIds.map(id => playersByIds.get(id)).filter(Boolean)
       
       if (attendeesInOrder.length > 0) {
-        // 간단한 순차 배정으로 원래 순서 유지
-        const teamCountVal = Math.max(2, Math.min(10, 2)) // 일단 2팀으로 시작
-        const simpleTeams = Array.from({length: teamCountVal}, () => [])
-        attendeesInOrder.forEach((player, index) => {
-          simpleTeams[index % teamCountVal].push(player)
-        })
-        setManualTeams(simpleTeams)
-        latestTeamsRef.current = simpleTeams
+        // snapshot이 있으면 사용, 없으면 순차 배정
+        if (upcomingMatch.snapshot && upcomingMatch.snapshot.length > 0) {
+          const snapshotTeams = upcomingMatch.snapshot.map(teamIds => 
+            teamIds.map(id => playersByIds.get(id)).filter(Boolean)
+          )
+          setManualTeams(snapshotTeams)
+          latestTeamsRef.current = snapshotTeams
+        } else {
+          // 간단한 순차 배정으로 원래 순서 유지
+          const teamCountVal = savedTeamCount
+          const simpleTeams = Array.from({length: teamCountVal}, () => [])
+          attendeesInOrder.forEach((player, index) => {
+            simpleTeams[index % teamCountVal].push(player)
+          })
+          setManualTeams(simpleTeams)
+          latestTeamsRef.current = simpleTeams
+        }
         setShowAIPower(false)
+        
+        // 드래프트 모드이고 주장 정보가 있으면 불러오기
+        if (upcomingMatch.isDraftMode && upcomingMatch.captainIds && upcomingMatch.captainIds.length > 0) {
+          setCaptainIds(upcomingMatch.captainIds.slice())
+        }
       } else {
         setManualTeams(null)
         setShowAIPower(false)
@@ -1049,12 +1067,26 @@ function PlayerRow({player,showOVR,isAdmin,teamIndex,isDraftMode,isCaptain,onRem
         <span className="flex items-center gap-1 shrink-0">
           {isDraftMode && (
             <button
-              className="border-0 bg-transparent w-5 h-5 flex items-center justify-center hover:opacity-80 p-0 transition-opacity"
-              title="이 선수를 주장으로 지정"
-              onClick={(e)=>{e.stopPropagation();onSetCaptain&&onSetCaptain(player.id,teamIndex)}}
-              aria-label="주장 지정"
+              className={`border-0 w-5 h-5 flex items-center justify-center p-0 transition-all ${
+                isCaptain 
+                  ? 'opacity-100 scale-110 ring-2 ring-yellow-400 ring-offset-1 rounded-full' 
+                  : 'bg-transparent hover:opacity-80 hover:scale-110'
+              }`}
+              title={isCaptain ? "이미 주장으로 지정됨" : "이 선수를 주장으로 지정"}
+              onClick={(e)=>{
+                e.stopPropagation();
+                if (!isCaptain) {
+                  onSetCaptain&&onSetCaptain(player.id,teamIndex)
+                }
+              }}
+              aria-label={isCaptain ? "현재 주장" : "주장 지정"}
+              disabled={isCaptain}
             >
-              <img src={captainIcon} alt="주장" className="w-full h-full object-contain" />
+              <img 
+                src={captainIcon} 
+                alt="주장" 
+                className={`w-full h-full object-contain ${isCaptain ? 'brightness-110' : ''}`} 
+              />
             </button>
           )}
           <button
