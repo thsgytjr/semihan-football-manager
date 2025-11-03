@@ -330,12 +330,18 @@ export default function UpcomingMatchCard({
           const captains = upcomingMatch.captains || []
           
           // captainIds가 있으면 players에서 찾아서 captain 객체 생성
-          let captainObjects = captains
-          if (captainIds.length >= 2 && captains.length === 0) {
+          let captainObjects = []
+          
+          // captainIds 우선 사용
+          if (captainIds.length >= 2) {
             captainObjects = captainIds
               .slice(0, 2)
               .map(id => players.find(p => p.id === id))
               .filter(Boolean)
+          } 
+          // captainIds가 없으면 captains 배열 사용
+          else if (captains.length >= 2) {
+            captainObjects = captains
           }
           
           // 주장이 2명 이상 선택된 경우
@@ -354,8 +360,14 @@ export default function UpcomingMatchCard({
             return (
               <CaptainSelector 
                 attendees={attendees}
-                currentCaptains={captainObjects}
-                onUpdateCaptains={(newCaptains) => onUpdateCaptains?.(upcomingMatch, newCaptains)}
+                currentCaptainIds={captainIds}
+                upcomingMatch={upcomingMatch}
+                players={players}
+                onUpdateCaptains={(newCaptainIds) => {
+                  // captainIds 형태로 저장
+                  const updated = { ...upcomingMatch, captainIds: newCaptainIds }
+                  onUpdateCaptains?.(upcomingMatch, updated)
+                }}
               />
             )
           }
@@ -678,22 +690,40 @@ function CaptainVsDisplay({ captains, players, matches = [] }) {
 }
 
 // 주장 선택 컴포넌트
-function CaptainSelector({ attendees, currentCaptains, onUpdateCaptains }) {
-  const [captain1, setCaptain1] = useState(currentCaptains[0]?.id || '')
-  const [captain2, setCaptain2] = useState(currentCaptains[1]?.id || '')
+function CaptainSelector({ attendees, currentCaptainIds = [], onUpdateCaptains, upcomingMatch, players }) {
+  const [captain1, setCaptain1] = useState(currentCaptainIds[0] || '')
+  const [captain2, setCaptain2] = useState(currentCaptainIds[1] || '')
+
+  // snapshot이 있으면 팀별로 선수 분류
+  const { team1Players, team2Players } = useMemo(() => {
+    if (!upcomingMatch.snapshot || upcomingMatch.snapshot.length < 2) {
+      // snapshot이 없으면 모든 참가자를 반으로 나눔 (임시)
+      return {
+        team1Players: attendees,
+        team2Players: attendees
+      }
+    }
+
+    const playersByIds = new Map(players.map(p => [p.id, p]))
+    
+    const team1Ids = upcomingMatch.snapshot[0] || []
+    const team2Ids = upcomingMatch.snapshot[1] || []
+    
+    return {
+      team1Players: team1Ids.map(id => playersByIds.get(id)).filter(Boolean),
+      team2Players: team2Ids.map(id => playersByIds.get(id)).filter(Boolean)
+    }
+  }, [upcomingMatch.snapshot, players, attendees])
 
   const handleUpdate = () => {
     if (captain1 && captain2 && captain1 !== captain2) {
-      const captains = [
-        attendees.find(p => p.id === captain1),
-        attendees.find(p => p.id === captain2)
-      ].filter(Boolean)
-      
-      if (captains.length === 2) {
-        onUpdateCaptains(captains)
-      }
+      // captainIds 배열로 전달
+      onUpdateCaptains([captain1, captain2])
     }
   }
+
+  // snapshot이 있는 경우 팀별 레이블 표시
+  const hasTeamData = upcomingMatch.snapshot && upcomingMatch.snapshot.length >= 2
 
   return (
     <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
@@ -701,42 +731,59 @@ function CaptainSelector({ attendees, currentCaptains, onUpdateCaptains }) {
         주장 선택
       </div>
       <div style={{display: 'flex', gap: '8px'}}>
-        <select
-          value={captain1}
-          onChange={(e) => setCaptain1(e.target.value)}
-          style={{
-            flex: 1,
-            padding: '4px 6px',
-            fontSize: '11px',
-            borderRadius: '4px',
-            border: '1px solid #d1d5db'
-          }}
-        >
-          <option value="">주장 1 선택</option>
-          {attendees.map(player => (
-            <option key={player.id} value={player.id} disabled={player.id === captain2}>
-              {player.name}
-            </option>
-          ))}
-        </select>
-        <select
-          value={captain2}
-          onChange={(e) => setCaptain2(e.target.value)}
-          style={{
-            flex: 1,
-            padding: '4px 6px',
-            fontSize: '11px',
-            borderRadius: '4px',
-            border: '1px solid #d1d5db'
-          }}
-        >
-          <option value="">주장 2 선택</option>
-          {attendees.map(player => (
-            <option key={player.id} value={player.id} disabled={player.id === captain1}>
-              {player.name}
-            </option>
-          ))}
-        </select>
+        {/* 팀 1 주장 선택 */}
+        <div style={{flex: 1, display: 'flex', flexDirection: 'column', gap: '4px'}}>
+          {hasTeamData && (
+            <div style={{fontSize: '10px', color: '#6b7280', fontWeight: '500'}}>
+              팀 1 주장
+            </div>
+          )}
+          <select
+            value={captain1}
+            onChange={(e) => setCaptain1(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '4px 6px',
+              fontSize: '11px',
+              borderRadius: '4px',
+              border: '1px solid #d1d5db'
+            }}
+          >
+            <option value="">선택...</option>
+            {team1Players.map(player => (
+              <option key={player.id} value={player.id} disabled={player.id === captain2}>
+                {player.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* 팀 2 주장 선택 */}
+        <div style={{flex: 1, display: 'flex', flexDirection: 'column', gap: '4px'}}>
+          {hasTeamData && (
+            <div style={{fontSize: '10px', color: '#6b7280', fontWeight: '500'}}>
+              팀 2 주장
+            </div>
+          )}
+          <select
+            value={captain2}
+            onChange={(e) => setCaptain2(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '4px 6px',
+              fontSize: '11px',
+              borderRadius: '4px',
+              border: '1px solid #d1d5db'
+            }}
+          >
+            <option value="">선택...</option>
+            {team2Players.map(player => (
+              <option key={player.id} value={player.id} disabled={player.id === captain1}>
+                {player.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       {captain1 && captain2 && captain1 !== captain2 && (
         <button
@@ -753,6 +800,11 @@ function CaptainSelector({ attendees, currentCaptains, onUpdateCaptains }) {
         >
           주장 설정
         </button>
+      )}
+      {!hasTeamData && (
+        <div style={{fontSize: '10px', color: '#9ca3af', textAlign: 'center', marginTop: '4px'}}>
+          💡 팀 배정 후 주장을 선택하세요
+        </div>
       )}
     </div>
   )

@@ -276,11 +276,18 @@ export default function MatchPlanner({
   const handleSetCaptain = (playerId, teamIndex) => {
     setCaptainIds(prev => {
       const newCaptains = [...prev]
-      newCaptains[teamIndex] = playerId
+      // 이미 주장이면 해제, 아니면 지정
+      if (newCaptains[teamIndex] === playerId) {
+        newCaptains[teamIndex] = null
+        const playerName = players.find(p => p.id === playerId)?.name || '선수'
+        notify(`팀 ${teamIndex + 1}의 주장 해제: ${playerName}`)
+      } else {
+        newCaptains[teamIndex] = playerId
+        const playerName = players.find(p => p.id === playerId)?.name || '선수'
+        notify(`팀 ${teamIndex + 1}의 주장: ${playerName}`)
+      }
       return newCaptains
     })
-    const playerName = players.find(p => p.id === playerId)?.name || '선수'
-    notify(`팀 ${teamIndex + 1}의 주장: ${playerName}`)
   }
   
   // AI 자동 배정 (포지션 밸런스 + 평균 + 인원수 균등)
@@ -415,6 +422,9 @@ export default function MatchPlanner({
       return
     }
 
+    // 예정된 매치 ID 연결 (자동 업데이트를 위해)
+    setLinkedUpcomingMatchId(upcomingMatch.id)
+
     // Load basic match data
     if (upcomingMatch.dateISO) setDateISO(upcomingMatch.dateISO.slice(0, 16))
     if (upcomingMatch.location) {
@@ -493,8 +503,8 @@ export default function MatchPlanner({
         }
         setShowAIPower(false)
         
-        // 드래프트 모드이고 주장 정보가 있으면 불러오기
-        if (upcomingMatch.isDraftMode && upcomingMatch.captainIds && upcomingMatch.captainIds.length > 0) {
+        // 주장 정보가 있으면 불러오기 (드래프트 모드 여부와 관계없이)
+        if (upcomingMatch.captainIds && upcomingMatch.captainIds.length > 0) {
           setCaptainIds(upcomingMatch.captainIds.slice())
         }
       } else {
@@ -1072,15 +1082,12 @@ function PlayerRow({player,showOVR,isAdmin,teamIndex,isDraftMode,isCaptain,onRem
                   ? 'opacity-100 scale-110 ring-2 ring-yellow-400 ring-offset-1 rounded-full' 
                   : 'bg-transparent hover:opacity-80 hover:scale-110'
               }`}
-              title={isCaptain ? "이미 주장으로 지정됨" : "이 선수를 주장으로 지정"}
+              title={isCaptain ? "주장 해제" : "이 선수를 주장으로 지정"}
               onClick={(e)=>{
                 e.stopPropagation();
-                if (!isCaptain) {
-                  onSetCaptain&&onSetCaptain(player.id,teamIndex)
-                }
+                onSetCaptain&&onSetCaptain(player.id,teamIndex)
               }}
-              aria-label={isCaptain ? "현재 주장" : "주장 지정"}
-              disabled={isCaptain}
+              aria-label={isCaptain ? "주장 해제" : "주장 지정"}
             >
               <img 
                 src={captainIcon} 

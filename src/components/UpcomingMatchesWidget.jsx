@@ -250,8 +250,8 @@ export default function UpcomingMatchesWidget({
                   console.log('Create match from upcoming:', regularMatch)
                   alert('매치 생성 기능은 MatchPlanner에서 "불러오기" 버튼을 사용하세요!')
                 }}
-                onUpdateCaptains={(match, captains) => {
-                  const updatedMatch = { ...match, captains }
+                onUpdateCaptains={(match, updatedMatch) => {
+                  // updatedMatch에 captainIds가 포함되어 있음
                   onUpdateUpcomingMatch?.(match.id, updatedMatch)
                 }}
               />
