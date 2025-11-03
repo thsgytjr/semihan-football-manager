@@ -432,27 +432,61 @@ export default function MatchPlanner({
       setCustomBaseCost(upcomingMatch.totalCost)
     }
     
-    // 원래 순서를 보존하기 위해 수동 팀을 미리 구성하여 자동 밸런싱 방지
-    const playersByIds = new Map(players.map(p => [p.id, p]))
-    const attendeesInOrder = participantIds.map(id => playersByIds.get(id)).filter(Boolean)
-    if (attendeesInOrder.length > 0) {
-      // 간단한 순차 배정으로 원래 순서 유지
-      const teamCountVal = Math.max(2, Math.min(10, 2)) // 일단 2팀으로 시작
-      const simpleTeams = Array.from({length: teamCountVal}, () => [])
-      attendeesInOrder.forEach((player, index) => {
-        simpleTeams[index % teamCountVal].push(player)
-      })
-      setManualTeams(simpleTeams)
-      latestTeamsRef.current = simpleTeams
+    // 드래프트 완료된 경우 snapshot 사용
+    if (upcomingMatch.isDraftComplete && upcomingMatch.snapshot && upcomingMatch.snapshot.length > 0) {
+      const playersByIds = new Map(players.map(p => [p.id, p]))
+      
+      // snapshot에서 팀 구성 불러오기
+      const snapshotTeams = upcomingMatch.snapshot.map(teamIds => 
+        teamIds.map(id => playersByIds.get(id)).filter(Boolean)
+      )
+      
+      // 주장 정보가 있으면 각 팀의 첫 번째로 배치
+      if (upcomingMatch.captainIds && upcomingMatch.captainIds.length >= 2) {
+        snapshotTeams.forEach((team, teamIndex) => {
+          const captainId = upcomingMatch.captainIds[teamIndex]
+          const captainObj = playersByIds.get(captainId)
+          
+          if (captainObj) {
+            // 주장을 팀의 첫 번째로 이동
+            const teamWithoutCaptain = team.filter(p => p.id !== captainId)
+            snapshotTeams[teamIndex] = [captainObj, ...teamWithoutCaptain]
+          }
+        })
+        
+        // 주장 ID 설정
+        setCaptainIds(upcomingMatch.captainIds.slice())
+      }
+      
+      setManualTeams(snapshotTeams)
+      latestTeamsRef.current = snapshotTeams
       setShowAIPower(false)
+      setShuffleSeed(0)
+      
+      notify('드래프트 결과를 불러왔습니다 ✅')
     } else {
-      setManualTeams(null)
-      setShowAIPower(false)
+      // 드래프트가 완료되지 않은 경우 기존 로직 사용
+      const playersByIds = new Map(players.map(p => [p.id, p]))
+      const attendeesInOrder = participantIds.map(id => playersByIds.get(id)).filter(Boolean)
+      
+      if (attendeesInOrder.length > 0) {
+        // 간단한 순차 배정으로 원래 순서 유지
+        const teamCountVal = Math.max(2, Math.min(10, 2)) // 일단 2팀으로 시작
+        const simpleTeams = Array.from({length: teamCountVal}, () => [])
+        attendeesInOrder.forEach((player, index) => {
+          simpleTeams[index % teamCountVal].push(player)
+        })
+        setManualTeams(simpleTeams)
+        latestTeamsRef.current = simpleTeams
+        setShowAIPower(false)
+      } else {
+        setManualTeams(null)
+        setShowAIPower(false)
+      }
+      
+      setShuffleSeed(0)
+      notify('예정 매치를 불러왔습니다 ✅')
     }
-    
-    setShuffleSeed(0)
-    
-    notify('예정 매치를 불러왔습니다 ✅')
   }
 
   return(

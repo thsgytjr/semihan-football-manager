@@ -389,7 +389,7 @@ export default function App(){
                 />
               )}
               {tab==="planner"&&isAdmin&&featuresEnabled.planner&&(<MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>)}
-              {tab==="draft"&&isAdmin&&featuresEnabled.draft&&(<DraftPage players={players}/>)}
+              {tab==="draft"&&isAdmin&&featuresEnabled.draft&&(<DraftPage players={players} upcomingMatches={db.upcomingMatches} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>)}
               {tab==="formation"&&featuresEnabled.formation&&(<FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>)}
               {tab==="stats"&&isAdmin&&featuresEnabled.stats&&(<StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
             </>
