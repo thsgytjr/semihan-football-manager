@@ -5,7 +5,7 @@ import DraftBoard from '../components/DraftBoard'
 import InitialAvatar from '../components/InitialAvatar'
 
 export default function DraftPage({ players }) {
-  const [draftState, setDraftState] = useState('setup') // setup, selectParticipants, selectCaptains, drafting, completed
+  const [draftState, setDraftState] = useState('setup') // setup, selectParticipants, selectCaptains, ready, drafting, completed
   const [captain1, setCaptain1] = useState(null)
   const [captain2, setCaptain2] = useState(null)
   const [firstPick, setFirstPick] = useState(null) // 'captain1' or 'captain2'
@@ -95,7 +95,7 @@ export default function DraftPage({ players }) {
     setCaptain1(player)
   }
 
-  // 주장 선택 완료 및 드래프트 시작
+  // 주장 선택 완료 및 준비 화면으로 이동
   const confirmCaptains = () => {
     if (!captain1 || !captain2) {
       alert('두 주장을 모두 선택해주세요.')
@@ -113,6 +113,12 @@ export default function DraftPage({ players }) {
     setTeam1([captain1])
     setTeam2([captain2])
     
+    // 준비 화면으로 이동
+    setDraftState('ready')
+  }
+
+  // 드래프트 실제 시작
+  const startDrafting = () => {
     setDraftState('drafting')
     setTimeLeft(draftSettings.timerDuration)
     setPickCount(0)
@@ -757,6 +763,100 @@ export default function DraftPage({ players }) {
               >
                 드래프트 시작
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* 드래프트 준비 화면 */}
+        {draftState === 'ready' && (
+          <div className="space-y-6">
+            <div className="text-center">
+              <button
+                onClick={() => {
+                  setDraftState('selectCaptains')
+                  setFirstPick(null)
+                  setCurrentTurn(null)
+                  setTeam1([])
+                  setTeam2([])
+                  setPlayerPool([...participatingPlayers])
+                }}
+                className="text-sm text-gray-600 hover:text-gray-800 mb-4 inline-flex items-center gap-1"
+              >
+                ← 뒤로가기
+              </button>
+              <h3 className="text-2xl font-bold mb-2">드래프트 준비 완료!</h3>
+              <p className="text-gray-600 mb-6">
+                모든 준비가 완료되었습니다. 시작 버튼을 눌러 드래프트를 시작하세요.
+              </p>
+            </div>
+
+            {/* 팀 미리보기 */}
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* Team 1 */}
+              <div className={`border-2 rounded-xl p-6 ${firstPick === 'captain1' ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                    1
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-xl">{captain1?.name}</p>
+                    <p className="text-sm text-gray-600">{captain1?.position}</p>
+                    {firstPick === 'captain1' && (
+                      <p className="text-xs text-emerald-600 font-semibold mt-1">🎯 선공 (첫 픽)</p>
+                    )}
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg p-4 border border-gray-200">
+                  <p className="text-sm text-gray-600 mb-2">드래프트 설정</p>
+                  <div className="space-y-1 text-xs text-gray-500">
+                    <p>• 첫 턴: {draftSettings.firstPickCount}명 선택</p>
+                    <p>• 이후 턴: {draftSettings.regularPickCount}명씩 선택</p>
+                    {draftSettings.timerEnabled && (
+                      <p>• 턴당 시간: {draftSettings.timerDuration}초</p>
+                    )}
+                    {!draftSettings.timerEnabled && (
+                      <p>• 타이머: 비활성화</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Team 2 */}
+              <div className={`border-2 rounded-xl p-6 ${firstPick === 'captain2' ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                    2
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-xl">{captain2?.name}</p>
+                    <p className="text-sm text-gray-600">{captain2?.position}</p>
+                    {firstPick === 'captain2' && (
+                      <p className="text-xs text-blue-600 font-semibold mt-1">🎯 선공 (첫 픽)</p>
+                    )}
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg p-4 border border-gray-200">
+                  <p className="text-sm text-gray-600 mb-2">참여 선수</p>
+                  <div className="space-y-1 text-xs text-gray-500">
+                    <p>• 총 인원: {participatingPlayers.length}명</p>
+                    <p>• 드래프트 대상: {playerPool.length}명</p>
+                    <p>• 각 팀 예상: {Math.ceil((participatingPlayers.length) / 2)}명</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 시작 버튼 */}
+            <div className="text-center pt-6">
+              <button
+                onClick={startDrafting}
+                className="px-12 py-4 bg-gradient-to-r from-emerald-500 to-blue-500 text-white rounded-xl font-bold text-lg hover:from-emerald-600 hover:to-blue-600 transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+              >
+                🚀 드래프트 시작!
+              </button>
+              <p className="text-xs text-gray-500 mt-3">
+                시작하면 {firstPick === 'captain1' ? captain1?.name : captain2?.name} 주장부터 선택합니다
+              </p>
             </div>
           </div>
         )}
