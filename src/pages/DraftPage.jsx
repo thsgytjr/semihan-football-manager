@@ -5,7 +5,7 @@ import DraftBoard from '../components/DraftBoard'
 import InitialAvatar from '../components/InitialAvatar'
 
 export default function DraftPage({ players }) {
-  const [draftState, setDraftState] = useState('setup') // setup, selectParticipants, selectCaptains, ready, drafting, completed
+  const [draftState, setDraftState] = useState('setup') // setup, selectParticipants, selectCaptains, pickFirst, ready, drafting, completed
   const [captain1, setCaptain1] = useState(null)
   const [captain2, setCaptain2] = useState(null)
   const [firstPick, setFirstPick] = useState(null) // 'captain1' or 'captain2'
@@ -20,6 +20,8 @@ export default function DraftPage({ players }) {
   const [searchTerm, setSearchTerm] = useState('') // 검색어
   const [isReadyForNextTurn, setIsReadyForNextTurn] = useState(false) // 다음 턴 준비 상태
   const isTimeOutProcessing = useRef(false) // 타임아웃 처리 중복 방지
+  const [isSpinning, setIsSpinning] = useState(false) // 룰렛 회전 상태
+  const [spinResult, setSpinResult] = useState(null) // 룰렛 결과
   
   // 드래프트 설정
   const [draftSettings, setDraftSettings] = useState({
@@ -95,17 +97,12 @@ export default function DraftPage({ players }) {
     setCaptain1(player)
   }
 
-  // 주장 선택 완료 및 준비 화면으로 이동
+  // 주장 선택 완료 및 선공 뽑기 화면으로 이동
   const confirmCaptains = () => {
     if (!captain1 || !captain2) {
       alert('두 주장을 모두 선택해주세요.')
       return
     }
-    
-    // 선공 랜덤 결정
-    const first = Math.random() < 0.5 ? 'captain1' : 'captain2'
-    setFirstPick(first)
-    setCurrentTurn(first)
     
     // 주장들을 풀에서 제거하고 각 팀에 추가
     const remainingPool = playerPool.filter(p => p.id !== captain1.id && p.id !== captain2.id)
@@ -113,7 +110,32 @@ export default function DraftPage({ players }) {
     setTeam1([captain1])
     setTeam2([captain2])
     
-    // 준비 화면으로 이동
+    // 선공 뽑기 화면으로 이동
+    setDraftState('pickFirst')
+    setSpinResult(null)
+    setIsSpinning(false)
+  }
+
+  // 선공 룰렛 돌리기
+  const spinForFirstPick = () => {
+    if (isSpinning) return
+    
+    setIsSpinning(true)
+    setSpinResult(null)
+    
+    // 2초 동안 룰렛 회전
+    setTimeout(() => {
+      const first = Math.random() < 0.5 ? 'captain1' : 'captain2'
+      setSpinResult(first)
+      setFirstPick(first)
+      setCurrentTurn(first)
+      setIsSpinning(false)
+    }, 2000)
+  }
+
+  // 선공 확정 후 준비 화면으로
+  const confirmFirstPick = () => {
+    if (!spinResult) return
     setDraftState('ready')
   }
 
@@ -767,6 +789,141 @@ export default function DraftPage({ players }) {
           </div>
         )}
 
+        {/* 선공 뽑기 화면 */}
+        {draftState === 'pickFirst' && (
+          <div className="space-y-8">
+            <div className="text-center">
+              <button
+                onClick={() => {
+                  setDraftState('selectCaptains')
+                  setTeam1([])
+                  setTeam2([])
+                  setPlayerPool([...participatingPlayers])
+                }}
+                className="text-sm text-gray-600 hover:text-gray-800 mb-4 inline-flex items-center gap-1"
+              >
+                ← 뒤로가기
+              </button>
+              <h3 className="text-3xl font-bold mb-2">선공 결정</h3>
+              <p className="text-gray-600 mb-8">
+                누가 먼저 선택할지 랜덤으로 뽑아보세요!
+              </p>
+            </div>
+
+            {/* 룰렛 영역 */}
+            <div className="max-w-2xl mx-auto">
+              <div className="relative">
+                {/* 룰렛 카드들 */}
+                <div className="grid grid-cols-2 gap-6 mb-8">
+                  {/* Team 1 */}
+                  <div className={`relative border-4 rounded-2xl p-8 transition-all duration-700 ${
+                    isSpinning ? 'border-emerald-300 bg-emerald-50/30 animate-[pulse_1s_ease-in-out_infinite]' : 
+                    spinResult === 'captain1' ? 'border-emerald-500 bg-gradient-to-br from-emerald-50 to-emerald-100 shadow-2xl shadow-emerald-500/50 scale-105' : 
+                    spinResult === 'captain2' ? 'border-gray-200 bg-gray-50 opacity-60' :
+                    'border-gray-300 bg-white hover:border-emerald-300 hover:shadow-md'
+                  }`}>
+                    {spinResult === 'captain1' && (
+                      <>
+                        <div className="absolute -top-4 -right-4 w-16 h-16 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-full flex items-center justify-center text-white text-3xl shadow-lg animate-bounce">
+                          🎯
+                        </div>
+                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-emerald-400/20 to-transparent animate-[pulse_2s_ease-in-out_infinite]"></div>
+                      </>
+                    )}
+                    <div className="text-center relative z-10">
+                      <div className={`w-20 h-20 rounded-full flex items-center justify-center text-white font-bold text-3xl mx-auto mb-4 transition-all duration-500 ${
+                        spinResult === 'captain1' ? 'bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-lg' : 'bg-emerald-500'
+                      }`}>
+                        1
+                      </div>
+                      <p className="font-bold text-2xl mb-2">{captain1?.name}</p>
+                      <p className="text-gray-600">{captain1?.position}</p>
+                      {spinResult === 'captain1' && (
+                        <div className="mt-4 inline-block px-4 py-2 bg-emerald-500 text-white rounded-full font-bold text-sm shadow-lg">
+                          ✨ 선공!
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Team 2 */}
+                  <div className={`relative border-4 rounded-2xl p-8 transition-all duration-700 ${
+                    isSpinning ? 'border-blue-300 bg-blue-50/30 animate-[pulse_1s_ease-in-out_infinite]' : 
+                    spinResult === 'captain2' ? 'border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100 shadow-2xl shadow-blue-500/50 scale-105' : 
+                    spinResult === 'captain1' ? 'border-gray-200 bg-gray-50 opacity-60' :
+                    'border-gray-300 bg-white hover:border-blue-300 hover:shadow-md'
+                  }`}>
+                    {spinResult === 'captain2' && (
+                      <>
+                        <div className="absolute -top-4 -right-4 w-16 h-16 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-3xl shadow-lg animate-bounce">
+                          🎯
+                        </div>
+                        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-blue-400/20 to-transparent animate-[pulse_2s_ease-in-out_infinite]"></div>
+                      </>
+                    )}
+                    <div className="text-center relative z-10">
+                      <div className={`w-20 h-20 rounded-full flex items-center justify-center text-white font-bold text-3xl mx-auto mb-4 transition-all duration-500 ${
+                        spinResult === 'captain2' ? 'bg-gradient-to-br from-blue-400 to-blue-600 shadow-lg' : 'bg-blue-500'
+                      }`}>
+                        2
+                      </div>
+                      <p className="font-bold text-2xl mb-2">{captain2?.name}</p>
+                      <p className="text-gray-600">{captain2?.position}</p>
+                      {spinResult === 'captain2' && (
+                        <div className="mt-4 inline-block px-4 py-2 bg-blue-500 text-white rounded-full font-bold text-sm shadow-lg">
+                          ✨ 선공!
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 룰렛 버튼 */}
+                {!spinResult && (
+                  <div className="text-center">
+                    <button
+                      onClick={spinForFirstPick}
+                      disabled={isSpinning}
+                      className={`px-12 py-5 rounded-2xl font-bold text-xl transition-all shadow-lg ${
+                        isSpinning 
+                          ? 'bg-gray-400 cursor-not-allowed' 
+                          : 'bg-gradient-to-r from-emerald-500 to-blue-500 hover:from-emerald-600 hover:to-blue-600 text-white transform hover:scale-105 hover:shadow-2xl'
+                      }`}
+                    >
+                      {isSpinning ? (
+                        <span className="flex items-center gap-3">
+                          <svg className="animate-spin h-6 w-6" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                          </svg>
+                          뽑는 중...
+                        </span>
+                      ) : (
+                        '🎲 선공 뽑기'
+                      )}
+                    </button>
+                    <p className="text-xs text-gray-500 mt-3">
+                      버튼을 눌러 랜덤으로 선공을 결정하세요
+                    </p>
+                  </div>
+                )}
+
+                {/* 결과 확인 버튼 */}
+                {spinResult && (
+                  <div className="text-center">
+                    <button
+                      onClick={confirmFirstPick}
+                      className="px-12 py-5 bg-gradient-to-r from-emerald-500 to-blue-500 text-white rounded-2xl font-bold text-xl hover:from-emerald-600 hover:to-blue-600 transition-all shadow-lg hover:shadow-2xl transform hover:scale-105"
+                    >
+                      다음 단계로 →
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* 드래프트 준비 화면 */}
         {draftState === 'ready' && (
           <div className="space-y-6">
@@ -806,19 +963,6 @@ export default function DraftPage({ players }) {
                     )}
                   </div>
                 </div>
-                <div className="bg-white rounded-lg p-4 border border-gray-200">
-                  <p className="text-sm text-gray-600 mb-2">드래프트 설정</p>
-                  <div className="space-y-1 text-xs text-gray-500">
-                    <p>• 첫 턴: {draftSettings.firstPickCount}명 선택</p>
-                    <p>• 이후 턴: {draftSettings.regularPickCount}명씩 선택</p>
-                    {draftSettings.timerEnabled && (
-                      <p>• 턴당 시간: {draftSettings.timerDuration}초</p>
-                    )}
-                    {!draftSettings.timerEnabled && (
-                      <p>• 타이머: 비활성화</p>
-                    )}
-                  </div>
-                </div>
               </div>
 
               {/* Team 2 */}
@@ -835,13 +979,36 @@ export default function DraftPage({ players }) {
                     )}
                   </div>
                 </div>
-                <div className="bg-white rounded-lg p-4 border border-gray-200">
-                  <p className="text-sm text-gray-600 mb-2">참여 선수</p>
-                  <div className="space-y-1 text-xs text-gray-500">
-                    <p>• 총 인원: {participatingPlayers.length}명</p>
-                    <p>• 드래프트 대상: {playerPool.length}명</p>
-                    <p>• 각 팀 예상: {Math.ceil((participatingPlayers.length) / 2)}명</p>
-                  </div>
+              </div>
+            </div>
+
+            {/* 드래프트 정보 */}
+            <div className="grid md:grid-cols-2 gap-6">
+              {/* 드래프트 설정 */}
+              <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
+                <p className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  ⚙️ 드래프트 설정
+                </p>
+                <div className="space-y-2 text-sm text-gray-600">
+                  <p>• 첫 턴: {draftSettings.firstPickCount}명 선택</p>
+                  <p>• 이후 턴: {draftSettings.regularPickCount}명씩 선택</p>
+                  {draftSettings.timerEnabled ? (
+                    <p>• 턴당 시간: {draftSettings.timerDuration}초</p>
+                  ) : (
+                    <p>• 타이머: 비활성화</p>
+                  )}
+                </div>
+              </div>
+
+              {/* 참여 선수 정보 */}
+              <div className="bg-white rounded-lg p-4 border-2 border-gray-200">
+                <p className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  👥 참여 선수
+                </p>
+                <div className="space-y-2 text-sm text-gray-600">
+                  <p>• 총 인원: {participatingPlayers.length}명</p>
+                  <p>• 드래프트 대상: {playerPool.length}명</p>
+                  <p>• 각 팀 예상: {Math.ceil(participatingPlayers.length / 2)}명</p>
                 </div>
               </div>
             </div>
