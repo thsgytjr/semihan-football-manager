@@ -5,6 +5,8 @@ import { getVisitStats } from '../services/storage.service'
 export default function VisitorStats({ visits }) {
   const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
+  const LOGS_PER_PAGE = 10
 
   useEffect(() => {
     loadStats()
@@ -243,16 +245,18 @@ export default function VisitorStats({ visits }) {
 
       {/* 최근 방문 기록 */}
       <div className="rounded-lg border border-stone-200 p-3 bg-white">
-        <div className="text-xs font-semibold text-stone-700 mb-2">📋 최근 방문 기록</div>
-        <div className="space-y-2 max-h-60 overflow-y-auto">
-          {logs.slice(0, 20).map((log, idx) => {
+        <div className="text-xs font-semibold text-stone-700 mb-3">📋 최근 방문 기록</div>
+        
+        {/* 로그 목록 */}
+        <div className="space-y-2">
+          {logs.slice((currentPage - 1) * LOGS_PER_PAGE, currentPage * LOGS_PER_PAGE).map((log, idx) => {
             const date = new Date(log.visited_at)
             const timeStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`
             
             return (
               <div key={log.id || idx} className="flex items-center justify-between text-xs border-b border-stone-100 last:border-0 py-1.5">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <span className="text-stone-500">{timeStr}</span>
+                  <span className="text-stone-500 flex-shrink-0">{timeStr}</span>
                   <span className="text-stone-400">·</span>
                   <span className="text-stone-600 truncate">{log.device_type || 'Unknown'}</span>
                   <span className="text-stone-400">·</span>
@@ -261,6 +265,65 @@ export default function VisitorStats({ visits }) {
               </div>
             )
           })}
+        </div>
+
+        {/* 페이지네이션 */}
+        {logs.length > LOGS_PER_PAGE && (
+          <div className="flex items-center justify-between mt-4 pt-3 border-t border-stone-200">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1.5 text-xs font-medium rounded-md bg-stone-100 text-stone-700 hover:bg-stone-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              이전
+            </button>
+            
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.ceil(logs.length / LOGS_PER_PAGE) }, (_, i) => i + 1)
+                .filter(page => {
+                  // 현재 페이지 주변만 표시 (1, 2, 3 ... 현재-1, 현재, 현재+1 ... 마지막-1, 마지막)
+                  const totalPages = Math.ceil(logs.length / LOGS_PER_PAGE)
+                  if (totalPages <= 7) return true
+                  if (page === 1 || page === totalPages) return true
+                  if (page >= currentPage - 1 && page <= currentPage + 1) return true
+                  return false
+                })
+                .map((page, idx, arr) => {
+                  // ... 표시
+                  const prevPage = arr[idx - 1]
+                  const showDots = prevPage && page - prevPage > 1
+                  
+                  return (
+                    <React.Fragment key={page}>
+                      {showDots && <span className="text-stone-400 px-1">...</span>}
+                      <button
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                          currentPage === page
+                            ? 'bg-emerald-500 text-white'
+                            : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    </React.Fragment>
+                  )
+                })}
+            </div>
+            
+            <button
+              onClick={() => setCurrentPage(p => Math.min(Math.ceil(logs.length / LOGS_PER_PAGE), p + 1))}
+              disabled={currentPage === Math.ceil(logs.length / LOGS_PER_PAGE)}
+              className="px-3 py-1.5 text-xs font-medium rounded-md bg-stone-100 text-stone-700 hover:bg-stone-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              다음
+            </button>
+          </div>
+        )}
+
+        {/* 총 개수 표시 */}
+        <div className="mt-2 text-center text-[10px] text-stone-500">
+          총 {logs.length.toLocaleString()}개 기록 (페이지 {currentPage} / {Math.ceil(logs.length / LOGS_PER_PAGE)})
         </div>
       </div>
     </div>

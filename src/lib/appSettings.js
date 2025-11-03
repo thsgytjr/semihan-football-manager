@@ -15,7 +15,8 @@ const DEFAULT_SETTINGS = {
     planner: true,      // 매치 플래너
     draft: true,        // 드래프트
     formation: true,    // 포메이션 보드
-    stats: true         // 기록 입력
+    stats: true,        // 기록 입력
+    analytics: true     // 방문자 분석
   }
 }
 

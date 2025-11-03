@@ -167,7 +167,7 @@ export default function App(){
     { key: 'draft', icon: <Shuffle size={16}/>, label: '드래프트', show: isAdmin && featuresEnabled.draft },
     { key: 'formation', icon: <IconPitch size={16}/>, label: '포메이션 보드', show: featuresEnabled.formation },
     { key: 'stats', icon: <ListChecks size={16}/>, label: '기록 입력', show: isAdmin && featuresEnabled.stats },
-    { key: 'analytics', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, label: '방문자 분석', show: isAdmin }
+    { key: 'analytics', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, label: '방문자 분석', show: isAdmin && featuresEnabled.analytics }
   ], [isAdmin, featuresEnabled]);
 
   // ⬇️ 기존 기본값 생성 방식은 유지(필요시 다른 곳에서 사용)
@@ -413,7 +413,7 @@ export default function App(){
               {tab==="draft"&&isAdmin&&featuresEnabled.draft&&(<DraftPage players={players} upcomingMatches={db.upcomingMatches} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>)}
               {tab==="formation"&&featuresEnabled.formation&&(<FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>)}
               {tab==="stats"&&isAdmin&&featuresEnabled.stats&&(<StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
-              {tab==="analytics"&&(<AnalyticsPage visits={visits} isAdmin={isAdmin}/>)}
+              {tab==="analytics"&&isAdmin&&featuresEnabled.analytics&&(<AnalyticsPage visits={visits} isAdmin={isAdmin}/>)}
             </>
           )}
         </div>
@@ -599,7 +599,8 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
     planner: '매치 플래너',
     draft: '드래프트',
     formation: '포메이션 보드',
-    stats: '기록 입력'
+    stats: '기록 입력',
+    analytics: '방문자 분석'
   }
   
   if(!isOpen)return null;
@@ -688,25 +689,6 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
           {/* 기능 활성화 설정 (Admin만) */}
           {isAdmin && (
             <>
-              {/* 총 방문자 & 상세 통계 */}
-              <div className="border-t border-stone-200 pt-4 mt-2">
-                <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 mb-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">👀</span>
-                    <div>
-                      <div className="text-sm font-semibold text-stone-800">총 방문자</div>
-                      <div className="text-xs text-stone-500">앱 전체 누적 방문 수</div>
-                    </div>
-                  </div>
-                  <div className="text-2xl font-bold text-blue-700">
-                    {visits?.toLocaleString() || 0}
-                  </div>
-                </div>
-
-                {/* 상세 통계 */}
-                <VisitorStats visits={visits} />
-              </div>
-
               <div className="border-t border-stone-200 pt-4 mt-2">
                 <div className="mb-3">
                   <h4 className="text-sm font-semibold text-stone-800">기능 활성화 설정</h4>
@@ -745,11 +727,6 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
 
               <div className="text-xs text-stone-500 bg-blue-50 rounded-lg p-3 border border-blue-200 mt-3">
                 ℹ️ 기능을 비활성화해도 저장된 매치와 선수 데이터는 유지됩니다. 기능을 다시 활성화하면 이전 데이터를 볼 수 있습니다.
-              </div>
-              
-              {/* 방문자 통계 안내 */}
-              <div className="text-xs text-stone-500 bg-indigo-50 rounded-lg p-3 border border-indigo-200 mt-3">
-                📊 방문자 통계는 상단의 <strong className="text-indigo-700">'방문자 분석'</strong> 탭에서 확인하실 수 있습니다.
               </div>
             </div>
             </>
