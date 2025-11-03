@@ -5,9 +5,10 @@ import { Trash2 } from 'lucide-react'
 import { labelOf, STAT_KEYS } from '../lib/constants'
 import { overall } from '../lib/players'
 import { toRadarData } from '../lib/stats'
-import { readImageAsDataURL } from '../utils/io'
+import { uploadPlayerPhoto, deletePlayerPhoto } from '../lib/photoUpload'
 import { randomAvatarDataUrl } from '../utils/avatar'
 import VerifiedBadge from './VerifiedBadge'
+import InitialAvatar from './InitialAvatar'
 import Select from './Select'
 import { notify } from './Toast'
 
@@ -21,6 +22,10 @@ const POSITION_OPTIONS = [
 export default function PlayerEditor({ player, onChange, onDelete }){
   const [p, setP] = useState(player)
   const [errors, setErrors] = useState({})
+  const [showUrlInput, setShowUrlInput] = useState(false)
+  const [urlInput, setUrlInput] = useState('')
+  const [uploading, setUploading] = useState(false)
+  
   useEffect(()=> { setP(player); setErrors({}) }, [player.id])
 
   function set(field, value){ setP(prev => ({...prev, [field]: value})) }
@@ -28,13 +33,43 @@ export default function PlayerEditor({ player, onChange, onDelete }){
 
   async function onPickPhoto(file){
     if(!file) return
+    setUploading(true)
     try{
-      const dataUrl = await readImageAsDataURL(file, 256)
-      set('photoUrl', dataUrl)
-    }catch{ notify('이미지를 불러오지 못했어요.', 'error') }
+      const publicUrl = await uploadPlayerPhoto(file, p.id || 'temp', p.photoUrl)
+      set('photoUrl', publicUrl)
+      notify('사진이 업로드되었습니다.')
+    } catch(err) {
+      console.error(err)
+      notify(err.message || '사진 업로드에 실패했습니다.', 'error')
+    } finally {
+      setUploading(false)
+    }
   }
-  function resetToRandom(){
-    set('photoUrl', randomAvatarDataUrl(p.name || p.id, 128))
+  
+  function applyUrlInput(){
+    if(!urlInput.trim()){
+      notify('URL을 입력해주세요.', 'error')
+      return
+    }
+    set('photoUrl', urlInput.trim())
+    setUrlInput('')
+    setShowUrlInput(false)
+    notify('사진 URL이 적용되었습니다.')
+  }
+  
+  async function resetToRandom(){
+    // 기존 업로드된 사진이 있으면 버킷에서 삭제
+    if(p.photoUrl && !p.photoUrl.startsWith('RANDOM:') && p.photoUrl.includes('player-photos')){
+      try {
+        await deletePlayerPhoto(p.photoUrl)
+      } catch(err) {
+        console.error('Failed to delete old photo:', err)
+      }
+    }
+    
+    // 랜덤 버튼 클릭 시 RANDOM: prefix와 랜덤 값으로 매번 다른 색상 생성
+    const randomSeed = 'RANDOM:' + Date.now() + Math.random()
+    set('photoUrl', randomSeed)
   }
 
   function validate(){
@@ -60,18 +95,63 @@ export default function PlayerEditor({ player, onChange, onDelete }){
     <div className="space-y-4">
       {/* 아바타 */}
       <div className="flex items-center gap-4">
-        <div className="h-16 w-16 overflow-hidden rounded-full border border-gray-200 bg-gray-100">
-          {p.photoUrl
-            ? <img src={p.photoUrl} alt="avatar" className="h-full w-full object-cover" />
-            : <div className="flex h-full w-full items-center justify-center text-sm text-gray-500">{p.name?.[0] ?? '🙂'}</div>}
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="cursor-pointer rounded border border-gray-300 bg-white px-3 py-1 text-sm">
-            사진 업로드
-            <input hidden type="file" accept="image/*" onChange={(e)=> onPickPhoto(e.target.files?.[0] || null)} />
-          </label>
-          <button className="text-sm text-gray-700 rounded border border-gray-300 bg-white px-3 py-1" onClick={resetToRandom}>랜덤 아바타</button>
-          {p.photoUrl && <button className="text-sm text-red-600" onClick={()=>set('photoUrl', null)}>삭제</button>}
+        <InitialAvatar 
+          id={p.id} 
+          name={p.name} 
+          size={64} 
+          photoUrl={p.photoUrl}
+          badges={(() => { 
+            const mem = String(p.membership || "").trim().toLowerCase(); 
+            return (mem === 'member' || mem.includes('정회원')) ? [] : ['G'] 
+          })()} 
+        />
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <label className={`cursor-pointer rounded border border-gray-300 bg-white px-3 py-1 text-sm hover:bg-gray-50 ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+              {uploading ? '업로드 중...' : '업로드'}
+              <input hidden type="file" accept="image/*" onChange={(e)=> onPickPhoto(e.target.files?.[0] || null)} disabled={uploading} />
+            </label>
+            <button 
+              className="text-sm text-gray-700 rounded border border-gray-300 bg-white px-3 py-1 hover:bg-gray-50" 
+              onClick={()=>setShowUrlInput(!showUrlInput)}
+              disabled={uploading}
+            >
+              URL
+            </button>
+            <button 
+              className="text-sm text-gray-700 rounded border border-gray-300 bg-white px-3 py-1 hover:bg-gray-50" 
+              onClick={resetToRandom}
+              disabled={uploading}
+            >
+              랜덤
+            </button>
+          </div>
+          
+          {/* URL 입력 필드 */}
+          {showUrlInput && (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={urlInput}
+                onChange={(e)=>setUrlInput(e.target.value)}
+                placeholder="https://...supabase.co/storage/v1/object/public/..."
+                className="flex-1 rounded border border-gray-300 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                onKeyDown={(e)=>e.key==='Enter' && applyUrlInput()}
+              />
+              <button 
+                className="rounded bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-600"
+                onClick={applyUrlInput}
+              >
+                적용
+              </button>
+              <button 
+                className="text-sm text-gray-600 hover:text-gray-800"
+                onClick={()=>{setShowUrlInput(false); setUrlInput('')}}
+              >
+                취소
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -101,9 +181,6 @@ export default function PlayerEditor({ player, onChange, onDelete }){
             <option value="member">정회원</option>
             <option value="guest">게스트</option>
           </select>
-          <div className="mt-1">
-            <VerifiedBadge membership={p.membership} />
-          </div>
           {errors.membership && <p className="mt-1 text-xs text-red-600">{errors.membership}</p>}
         </div>
       </div>

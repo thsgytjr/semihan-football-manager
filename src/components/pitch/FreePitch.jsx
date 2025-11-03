@@ -634,7 +634,7 @@ function FieldDot({ data }) {
       style={style}
       title={`${data.name}${data.role ? ` (${data.role})` : ""}`}
     >
-      <InitialAvatar id={data.id} name={data.name} size={36} badges={!isMember(data?.membership)?['G']:[]} />
+      <InitialAvatar id={data.id} name={data.name} size={36} photoUrl={data.photoUrl} badges={!isMember(data?.membership)?['G']:[]} />
       <div className="mt-1 text-center text-xs text-white">
         <div className="font-semibold">{data.name}</div>
         {data.role && <div className="text-gray-300">{data.role}</div>}

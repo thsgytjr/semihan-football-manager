@@ -652,7 +652,7 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
                 <button key={p.id} type="button" data-idx={idx}
                   className={`flex w-full items-center gap-2 px-2 py-1.5 text-sm hover:bg-gray-50 ${idx===hi?"bg-gray-100":""}`}
                   onMouseEnter={()=>setHi(idx)} onMouseDown={e=>e.preventDefault()} onClick={()=>add(p)}>
-                  <InitialAvatar id={p.id} name={p.name} size={22} badges={(() => { const mem=String(p.membership||"").trim().toLowerCase(); return (mem==='member'||mem.includes('정회원'))?[]:['G'] })()} /><span className="truncate">{p.name}</span>
+                  <InitialAvatar id={p.id} name={p.name} size={28} photoUrl={p.photoUrl} badges={(() => { const mem=String(p.membership||"").trim().toLowerCase(); return (mem==='member'||mem.includes('정회원'))?[]:['G'] })()} /><span className="truncate">{p.name}</span>
                   {(p.position||p.pos)==="GK"&&<span className="ml-auto text-[11px] text-gray-400">GK</span>}
                 </button>
               ))}
@@ -1096,7 +1096,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                               ...(isCaptain ? ['C'] : []),
                               ...(!member ? ['G'] : []),
                             ]
-                            return <InitialAvatar id={p.id} name={p.name} size={22} badges={badges} />
+                            return <InitialAvatar id={p.id} name={p.name} size={32} photoUrl={p.photoUrl} badges={badges} />
                           })()}
                         </div>
                         <div className="min-w-0 truncate font-medium">

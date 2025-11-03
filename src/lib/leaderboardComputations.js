@@ -25,6 +25,7 @@ export function computeAttackRows(players = [], matches = []) {
         id: pid, 
         name: p.name, 
         membership: p.membership || '',
+        photoUrl: p.photoUrl || null,
         gp: 0, 
         g: 0, 
         a: 0
@@ -41,6 +42,7 @@ export function computeAttackRows(players = [], matches = []) {
         id: pid, 
         name: p.name, 
         membership: p.membership || '',
+        photoUrl: p.photoUrl || null,
         gp: 0, 
         g: 0, 
         a: 0
@@ -265,6 +267,8 @@ export function computeDuoRows(players = [], matches = []) {
       duoLabel: `${aP.name} → ${gP.name}`,
       aName: aP.name,
       gName: gP.name,
+      aPhotoUrl: aP.photoUrl || null,
+      gPhotoUrl: gP.photoUrl || null,
       count: cnt,
       aIsGuest: !isMember(aP.membership),
       gIsGuest: !isMember(gP.membership)

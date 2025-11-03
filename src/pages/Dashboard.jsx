@@ -771,8 +771,9 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
                       <InitialAvatar 
                         id={r.id || r.name} 
                         name={r.name} 
-                        size={20} 
+                        size={32} 
                         badges={r.isGuest ? ['G'] : []}
+                        photoUrl={r.photoUrl}
                       />
                     </div>
                     <div className="min-w-0">
@@ -840,10 +841,10 @@ function DuoTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselin
       <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
       <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
         <div className="flex items-center gap-2">
-          <InitialAvatar id={r.assistId} name={r.aName} size={20} badges={r.aIsGuest ? ['G'] : []} />
+          <InitialAvatar id={r.assistId} name={r.aName} size={28} badges={r.aIsGuest ? ['G'] : []} photoUrl={r.aPhotoUrl} />
           <span className="font-medium">{r.aName}</span>
           <span className="mx-1 text-stone-400">→</span>
-          <InitialAvatar id={r.goalId} name={r.gName} size={20} badges={r.gIsGuest ? ['G'] : []} />
+          <InitialAvatar id={r.goalId} name={r.gName} size={28} badges={r.gIsGuest ? ['G'] : []} photoUrl={r.gPhotoUrl} />
           <span className="font-medium">{r.gName}</span>
         </div>
       </td>

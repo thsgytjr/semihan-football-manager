@@ -99,6 +99,7 @@ export default function DraftBoard({
                   id={player.id} 
                   name={player.name} 
                   size={36} 
+                  photoUrl={player.photoUrl}
                   badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
                 />
                 <div className="flex-1 min-w-0">
@@ -157,6 +158,7 @@ export default function DraftBoard({
                   id={player.id} 
                   name={player.name} 
                   size={36} 
+                  photoUrl={player.photoUrl}
                   badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
                 />
                 <div className="flex-1 min-w-0">
@@ -296,6 +298,7 @@ export default function DraftBoard({
                   id={player.id} 
                   name={player.name} 
                   size={28} 
+                  photoUrl={player.photoUrl}
                   badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
                 />
                 <div className="w-full text-center">

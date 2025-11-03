@@ -1040,7 +1040,7 @@ function PlayerRow({player,showOVR,isAdmin,teamIndex,isDraftMode,isCaptain,onRem
   return(
     <li ref={setNodeRef} style={style} className="flex items-start gap-2 border-t border-gray-100 pt-1 first:border-0 first:pt-0 touch-manipulation cursor-grab active:cursor-grabbing" {...attributes}{...listeners}>
       <span className="flex items-center gap-2 min-w-0 flex-1">
-        <InitialAvatar id={player.id} name={player.name} size={24} badges={!member?['G']:isCaptain?['C']:[]} />
+        <InitialAvatar id={player.id} name={player.name} size={24} badges={!member?['G']:isCaptain?['C']:[]} photoUrl={player.photoUrl} />
         <span className="whitespace-normal break-words">{player.name}</span>
         <span
           className={`ml-1 inline-flex items-center rounded-full px-2 py-[2px] text-[11px] ${
@@ -1126,7 +1126,7 @@ function kitForTeam(i){return[
 function DragGhost({player,showOVR}){if(!player)return null;const pos=positionGroupOf(player),isGK=pos==='GK',unknown=isUnknownPlayer(player),ovrVal=unknown?'?':player.ovr??overall(player);const member=isMember(player.membership);return(
   <div className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 shadow-lg">
     <div className="flex items-center gap-2 text-sm">
-  <InitialAvatar id={player.id} name={player.name} size={22} badges={!member?['G']:[]} />
+  <InitialAvatar id={player.id} name={player.name} size={22} badges={!member?['G']:[]} photoUrl={player.photoUrl} />
       <span className="truncate">{player.name}</span>
   {/* guest badge is shown on avatar */}
       <span className={`ml-1 inline-flex items-center rounded-full px-2 py-[2px] text-[11px] ${isGK?'bg-amber-100 text-amber-800':pos==='DF'?'bg-blue-100 text-blue-800':pos==='MF'?'bg-emerald-100 text-emerald-800':pos==='FW'?'bg-purple-100 text-purple-800':'bg-stone-100 text-stone-700'}`}>{pos}</span>
@@ -1212,7 +1212,7 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
                         onClick={() => addPlayerToTeam(p.id)}
                         className="flex items-center gap-2 text-xs p-2 rounded hover:bg-white hover:shadow-sm cursor-pointer transition border border-transparent hover:border-emerald-200"
                       >
-                        <InitialAvatar id={p.id} name={p.name} size={28} badges={!member?['G']:[]} />
+                        <InitialAvatar id={p.id} name={p.name} size={28} badges={!member?['G']:[]} photoUrl={p.photoUrl} />
                         <span className="truncate text-left flex-1">{p.name}</span>
                         <span className="text-emerald-600 text-lg leading-none">+</span>
                       </button>

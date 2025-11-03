@@ -805,6 +805,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                         id={player.id} 
                         name={player.name} 
                         size={28} 
+                        photoUrl={player.photoUrl}
                         badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
                       />
                       <div className="w-full text-center">
@@ -829,7 +830,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                 disabled={participatingPlayers.length < 2}
                 className="px-8 py-3 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                주장 선택하기 ({participatingPlayers.length}명 선택됨)
+                참여 인원 선택({participatingPlayers.length}명 선택됨)
               </button>
             </div>
           </div>
@@ -873,6 +874,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                       id={captain1.id} 
                       name={captain1.name} 
                       size={40} 
+                      photoUrl={captain1.photoUrl}
                       badges={captain1.membership && captain1.membership.includes('게스트') ? ['G'] : []} 
                     />
                     <div>
@@ -896,6 +898,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                       id={captain2.id} 
                       name={captain2.name} 
                       size={40} 
+                      photoUrl={captain2.photoUrl}
                       badges={captain2.membership && captain2.membership.includes('게스트') ? ['G'] : []} 
                     />
                     <div>
@@ -957,6 +960,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                         id={player.id} 
                         name={player.name} 
                         size={28} 
+                        photoUrl={player.photoUrl}
                         badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
                       />
                       <div className="w-full text-center">
@@ -1015,14 +1019,20 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                   </div>
                 )}
                 <div className="flex flex-col items-center gap-3">
-                  <div className={`w-24 h-24 rounded-full flex items-center justify-center text-white font-bold text-4xl transition-all duration-500 ${
+                  <div className={`transition-all duration-500 ${
                     isSpinning 
-                      ? 'bg-gray-400' 
+                      ? 'opacity-50' 
                       : spinResult === 'captain1'
-                      ? 'bg-emerald-500 scale-110'
-                      : 'bg-emerald-500'
+                      ? 'scale-110'
+                      : ''
                   }`}>
-                    1
+                    <InitialAvatar 
+                      id={captain1.id} 
+                      name={captain1.name} 
+                      size={96}
+                      photoUrl={captain1.photoUrl}
+                      badges={captain1.membership && captain1.membership.includes('게스트') ? ['G'] : []} 
+                    />
                   </div>
                   <p className="text-lg font-bold text-gray-900">{captain1.name}</p>
                 </div>
@@ -1046,14 +1056,20 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                   </div>
                 )}
                 <div className="flex flex-col items-center gap-3">
-                  <div className={`w-24 h-24 rounded-full flex items-center justify-center text-white font-bold text-4xl transition-all duration-500 ${
+                  <div className={`transition-all duration-500 ${
                     isSpinning 
-                      ? 'bg-gray-400' 
+                      ? 'opacity-50' 
                       : spinResult === 'captain2'
-                      ? 'bg-blue-500 scale-110'
-                      : 'bg-blue-500'
+                      ? 'scale-110'
+                      : ''
                   }`}>
-                    2
+                    <InitialAvatar 
+                      id={captain2.id} 
+                      name={captain2.name} 
+                      size={96}
+                      photoUrl={captain2.photoUrl}
+                      badges={captain2.membership && captain2.membership.includes('게스트') ? ['G'] : []} 
+                    />
                   </div>
                   <p className="text-lg font-bold text-gray-900">{captain2.name}</p>
                 </div>
@@ -1143,9 +1159,13 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                     : 'border-gray-300 bg-white'
                 }`}>
                   <div className="flex flex-col items-center gap-3">
-                    <div className="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold text-2xl">
-                      1
-                    </div>
+                    <InitialAvatar 
+                      id={captain1.id} 
+                      name={captain1.name} 
+                      size={64}
+                      photoUrl={captain1.photoUrl}
+                      badges={captain1.membership && captain1.membership.includes('게스트') ? ['G'] : []} 
+                    />
                     <div>
                       <p className="font-bold text-lg">{captain1.name}</p>
                       <p className="text-sm text-gray-600 mt-1">{captain1.position}</p>
@@ -1164,9 +1184,13 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                     : 'border-gray-300 bg-white'
                 }`}>
                   <div className="flex flex-col items-center gap-3">
-                    <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold text-2xl">
-                      2
-                    </div>
+                    <InitialAvatar 
+                      id={captain2.id} 
+                      name={captain2.name} 
+                      size={64}
+                      photoUrl={captain2.photoUrl}
+                      badges={captain2.membership && captain2.membership.includes('게스트') ? ['G'] : []} 
+                    />
                     <div>
                       <p className="font-bold text-lg">{captain2.name}</p>
                       <p className="text-sm text-gray-600 mt-1">{captain2.position}</p>

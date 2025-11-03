@@ -517,7 +517,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
                 {roster.map(p => (
                   <li key={toStr(p.id)} className="flex items-center justify-between px-2 sm:px-3 py-2 hover:bg-blue-50 transition-colors">
                     <div className="flex items-center gap-2">
-                      <InitialAvatar id={p.id} name={p.name} size={20} badges={(() => { const s=toStr(p.membership).toLowerCase(); return (s==='member'||s.includes('정회원'))?[]:['G'] })()} />
+                      <InitialAvatar id={p.id} name={p.name} size={20} badges={(() => { const s=toStr(p.membership).toLowerCase(); return (s==='member'||s.includes('정회원'))?[]:['G'] })()} photoUrl={p.photoUrl} />
                       <span className="text-xs sm:text-sm font-medium">{p.name}</span>
                       <span className="text-[10px] sm:text-xs text-gray-500">{p.position||p.pos||'-'}</span>
                     </div>
@@ -979,7 +979,7 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
           if (!p) return null
           return (
             <li key={toStr(pid)} className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 bg-white">
-              <InitialAvatar id={p.id} name={p.name} size={22} badges={(() => { const s=toStr(p.membership).toLowerCase(); return (s==='member'||s.includes('정회원'))?[]:['G'] })()} />
+              <InitialAvatar id={p.id} name={p.name} size={22} badges={(() => { const s=toStr(p.membership).toLowerCase(); return (s==='member'||s.includes('정회원'))?[]:['G'] })()} photoUrl={p.photoUrl} />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-xs sm:text-sm font-medium">
                   {p.name} <span className="ml-1 text-[10px] sm:text-xs text-gray-500">{p.position||p.pos||'-'}</span>

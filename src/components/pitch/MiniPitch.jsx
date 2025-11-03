@@ -32,7 +32,7 @@ export default function MiniPitch({
             style={{ left: `${p.x}%`, top: `${p.y}%` }}
             title={`${p.name}${p.role ? ` (${p.role})` : ""}`}
           >
-            <InitialAvatar id={p.id} name={p.name} size={20} badges={(() => { const s=String(p?.membership||'').trim().toLowerCase(); return (s==='member'||s.includes('정회원'))?[]:['G'] })()} />
+            <InitialAvatar id={p.id} name={p.name} size={20} photoUrl={p.photoUrl} badges={(() => { const s=String(p?.membership||'').trim().toLowerCase(); return (s==='member'||s.includes('정회원'))?[]:['G'] })()} />
           </div>
         ))}
       </div>

@@ -8,6 +8,8 @@ import InitialAvatar from "../components/InitialAvatar"
 import RadarHexagon from "../components/RadarHexagon"
 import { ensureStatsObject, clampStat } from "../lib/stats"
 import { calculateAIPower, aiPowerChipClass } from "../lib/aiPower"
+import { uploadPlayerPhoto, deletePlayerPhoto } from "../lib/photoUpload"
+import { randomAvatarDataUrl } from "../utils/avatar"
 
 const S = (v) => (v == null ? "" : String(v))
 const posOf = (p) => (S(p.position || p.pos).toUpperCase() || "")
@@ -91,6 +93,9 @@ const aiPowerMeterColor = (power) => {
 // ===== 편집 모달 =====
 function EditPlayerModal({ open, player, onClose, onSave }) {
   const [draft, setDraft] = useState(null)
+  const [showUrlInput, setShowUrlInput] = useState(false)
+  const [urlInput, setUrlInput] = useState('')
+  const [uploading, setUploading] = useState(false)
 
   useEffect(() => {
     if (open && player !== undefined) {
@@ -102,7 +107,10 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
         membership: isMember(player.membership) ? "정회원" : "게스트",
         origin: player.origin || "none",
         stats: ensureStatsObject(player.stats),
+        photoUrl: player.photoUrl || null,
       })
+      setShowUrlInput(false)
+      setUrlInput('')
       
       // 모달 열릴 때 body 스크롤 완전히 잠금
       const scrollY = window.scrollY
@@ -130,6 +138,49 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
 
   if (!open || !draft) return null
 
+  // 사진 업로드 함수
+  const onPickPhoto = async (file) => {
+    if(!file) return
+    setUploading(true)
+    try{
+      const publicUrl = await uploadPlayerPhoto(file, draft.id || 'temp', draft.photoUrl)
+      setDraft(prev => ({...prev, photoUrl: publicUrl}))
+      notify('사진이 업로드되었습니다.')
+    } catch(err) {
+      console.error(err)
+      notify(err.message || '사진 업로드에 실패했습니다.', 'error')
+    } finally {
+      setUploading(false)
+    }
+  }
+  
+  const applyUrlInput = () => {
+    if(!urlInput.trim()){
+      notify('URL을 입력해주세요.', 'error')
+      return
+    }
+    setDraft(prev => ({...prev, photoUrl: urlInput.trim()}))
+    setUrlInput('')
+    setShowUrlInput(false)
+    notify('사진 URL이 적용되었습니다.')
+  }
+  
+  const resetToRandom = async () => {
+    // 기존 업로드된 사진이 있으면 버킷에서 삭제
+    if(draft.photoUrl && !draft.photoUrl.startsWith('RANDOM:') && draft.photoUrl.includes('player-photos')){
+      try {
+        await deletePlayerPhoto(draft.photoUrl)
+      } catch(err) {
+        console.error('Failed to delete old photo:', err)
+      }
+    }
+    
+    // 랜덤 버튼 클릭 시 RANDOM: prefix와 랜덤 값으로 매번 다른 색상 생성
+    const randomSeed = 'RANDOM:' + Date.now() + Math.random()
+    setDraft(prev => ({...prev, photoUrl: randomSeed}))
+    notify('랜덤 아바타가 적용되었습니다.')
+  }
+
   const setStat = (k, v) =>
     setDraft((prev) => {
       const next = { ...prev, stats: ensureStatsObject(prev.stats) }
@@ -154,6 +205,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
       membership: draft.membership,
       origin: draft.origin || "none",
       stats: ensureStatsObject(draft.stats),
+      photoUrl: draft.photoUrl || null,
     }
     
     // 새 선수일 경우 ID 제거 (Supabase가 자동 생성)
@@ -210,7 +262,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
           
           <div className="flex items-center gap-4 pr-12">
             <div className="relative">
-              <InitialAvatar id={draft.id} name={draft.name} size={56} badges={isGuest?['G']:[]} />
+              <InitialAvatar id={draft.id} name={draft.name} size={56} badges={isGuest?['G']:[]} photoUrl={draft.photoUrl} />
               {liveOVR >= 75 && (
                 <div className="absolute -top-1 -right-1 w-6 h-6 bg-amber-400 rounded-full flex items-center justify-center text-xs">
                   ⭐
@@ -247,6 +299,72 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
                 </h4>
                 
                 <div className="space-y-4">
+                  {/* 사진 업로드 섹션 */}
+                  <div>
+                    <label className="block text-xs font-semibold text-blue-900 mb-2">선수 사진</label>
+                    <div className="flex items-center gap-3 mb-3">
+                      <InitialAvatar 
+                        id={draft.id} 
+                        name={draft.name} 
+                        size={64} 
+                        photoUrl={draft.photoUrl}
+                        badges={isGuest ? ['G'] : []} 
+                      />
+                      <div className="flex-1 flex flex-col gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <label className={`cursor-pointer rounded-lg border-2 border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                            {uploading ? '업로드 중...' : '업로드'}
+                            <input hidden type="file" accept="image/*" onChange={(e)=> onPickPhoto(e.target.files?.[0] || null)} disabled={uploading} />
+                          </label>
+                          <button 
+                            type="button"
+                            className="text-xs font-medium text-blue-700 rounded-lg border-2 border-blue-200 bg-white px-3 py-1.5 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
+                            onClick={()=>setShowUrlInput(!showUrlInput)}
+                            disabled={uploading}
+                          >
+                            URL
+                          </button>
+                          <button 
+                            type="button"
+                            className="text-xs font-medium text-blue-700 rounded-lg border-2 border-blue-200 bg-white px-3 py-1.5 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
+                            onClick={resetToRandom}
+                            disabled={uploading}
+                          >
+                            랜덤
+                          </button>
+                        </div>
+                        
+                        {/* URL 입력 필드 */}
+                        {showUrlInput && (
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={urlInput}
+                              onChange={(e)=>setUrlInput(e.target.value)}
+                              placeholder="https://...supabase.co/storage/..."
+                              className="flex-1 rounded-lg border-2 border-blue-200 px-3 py-1.5 text-xs focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                              onKeyDown={(e)=>e.key==='Enter' && applyUrlInput()}
+                            />
+                            <button 
+                              type="button"
+                              className="rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-600 transition-colors"
+                              onClick={applyUrlInput}
+                            >
+                              적용
+                            </button>
+                            <button 
+                              type="button"
+                              className="text-xs text-blue-600 hover:text-blue-800"
+                              onClick={()=>{setShowUrlInput(false); setUrlInput('')}}
+                            >
+                              취소
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
                   <div>
                     <label className="block text-xs font-semibold text-blue-900 mb-2">
                       선수 이름<span className="text-rose-500 ml-1">*</span>
@@ -315,7 +433,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
                               : 'bg-white border-2 border-stone-200 text-stone-600 hover:border-stone-300'
                           }`}
                         >
-                          {mem === '정회원' ? '👤 정회원' : '👋 게스트'}
+                          {mem}
                         </button>
                       ))}
                     </div>
@@ -776,7 +894,7 @@ export default function PlayersPage({
               onClick={() => onSelect(p.id)}
             >
               <div className="flex items-start gap-3 mb-3">
-                <InitialAvatar id={p.id} name={p.name} size={48} badges={guest?['G']:[]} />
+                <InitialAvatar id={p.id} name={p.name} size={48} badges={guest?['G']:[]} photoUrl={p.photoUrl} />
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-base text-stone-900 truncate mb-1">
                     {p.name || "이름없음"}
@@ -880,7 +998,7 @@ export default function PlayersPage({
                 className={`flex items-center gap-3 px-4 py-3 hover:bg-stone-50 transition-colors ${selectedId === p.id ? "bg-emerald-50" : ""}`}
                 onClick={() => onSelect(p.id)}
               >
-                <InitialAvatar id={p.id} name={p.name} size={40} badges={guest?['G']:[]} />
+                <InitialAvatar id={p.id} name={p.name} size={40} badges={guest?['G']:[]} photoUrl={p.photoUrl} />
 
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-stone-800 flex items-center gap-2 flex-wrap">
