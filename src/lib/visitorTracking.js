@@ -10,13 +10,15 @@ export function parseUserAgent(ua) {
   if (/mobile/i.test(ua)) device = 'Mobile'
   else if (/tablet|ipad/i.test(ua)) device = 'Tablet'
 
-  // Browser
+  // Browser (우선순위 중요: 구체적인 것부터 체크)
   let browser = 'Unknown'
   if (/edg/i.test(ua)) browser = 'Edge'
+  else if (/opr|opera/i.test(ua)) browser = 'Opera'
+  else if (/crios/i.test(ua)) browser = 'Chrome' // iOS Chrome
+  else if (/fxios/i.test(ua)) browser = 'Firefox' // iOS Firefox
   else if (/chrome/i.test(ua)) browser = 'Chrome'
-  else if (/safari/i.test(ua)) browser = 'Safari'
   else if (/firefox/i.test(ua)) browser = 'Firefox'
-  else if (/opera|opr/i.test(ua)) browser = 'Opera'
+  else if (/safari/i.test(ua)) browser = 'Safari' // 마지막에 체크
 
   // OS
   let os = 'Unknown'
