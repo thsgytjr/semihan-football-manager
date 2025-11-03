@@ -1,14 +1,17 @@
 // src/App.jsx
 import React,{useEffect,useMemo,useState,useCallback}from"react"
 import{Home,Users,CalendarDays,ListChecks,ShieldCheck,Lock,Eye,EyeOff,AlertCircle,CheckCircle2,X,Settings,BookOpen,Shuffle}from"lucide-react"
-import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB}from"./services/storage.service"
+import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB,incrementVisits,logVisit,getVisitStats}from"./services/storage.service"
 import{mkPlayer}from"./lib/players";import{notify}from"./components/Toast"
 import{filterExpiredMatches}from"./lib/upcomingMatch"
+import{getOrCreateVisitorId,getVisitorIP,parseUserAgent,shouldTrackVisit}from"./lib/visitorTracking"
 import ToastHub from"./components/Toast";import Card from"./components/Card"
 import AppTutorial,{TutorialButton,useAutoTutorial}from"./components/AppTutorial"
+import VisitorStats from"./components/VisitorStats"
 import Dashboard from"./pages/Dashboard";import PlayersPage from"./pages/PlayersPage"
 import MatchPlanner from"./pages/MatchPlanner";import StatsInput from"./pages/StatsInput"
 import FormationBoard from"./pages/FormationBoard";import DraftPage from"./pages/DraftPage"
+import AnalyticsPage from"./pages/AnalyticsPage"
 import logoUrl from"./assets/GoalifyLogo.png"
 import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEnabled,updateFeatureEnabled}from"./lib/appSettings"
 const ADMIN_PASS=import.meta.env.VITE_ADMIN_PASSWORD||"letmein"
@@ -81,13 +84,41 @@ export default function App(){
         upcomingMatches:activeUpcomingMatches
       })
 
-      const host=window?.location?.hostname||""
-      const isLocal=host==="localhost"||host==="127.0.0.1"||host==="::1"||host.endsWith?.(".local")
-      const key="sfm_visit_logged",already=sessionStorage?.getItem(key)
-      if(!isLocal&&!already){
-        try{sessionStorage?.setItem(key,"1")}catch{}
-        const next=(typeof shared.visits==="number"?shared.visits:0)+1
-        await saveDB({players:[],matches:shared.matches||[],visits:next,upcomingMatches:shared.upcomingMatches||[]})
+      // 방문 추적 (개발 환경 제외)
+      if(shouldTrackVisit()){
+        try{
+          sessionStorage?.setItem('visited','1')
+          
+          // 방문자 정보 수집
+          const visitorId = getOrCreateVisitorId()
+          const userAgent = navigator?.userAgent || ''
+          const { device, browser, os } = parseUserAgent(userAgent)
+          
+          // IP 주소 조회 (비동기, 실패해도 계속 진행)
+          getVisitorIP().then(async (ipAddress) => {
+            // 방문 로그 저장
+            await logVisit({
+              visitorId,
+              ipAddress,
+              userAgent,
+              deviceType: device,
+              browser,
+              os
+            })
+          }).catch(console.error)
+          
+          // 총 방문자 수 증가
+          await incrementVisits()
+          
+          console.log('📊 [Analytics] Visit tracked')
+        }catch(e){
+          console.error('Visit tracking failed:', e)
+          // sessionStorage 실패 시 localStorage로 폴백
+          try{
+            const now = Date.now()
+            localStorage.setItem('lastVisit', now.toString())
+          }catch{}
+        }
       }
     }catch(e){console.error("[App] initial load failed",e)}
     finally{if(mounted)setLoading(false)}
@@ -135,7 +166,8 @@ export default function App(){
     { key: 'planner', icon: <CalendarDays size={16}/>, label: '매치 플래너', show: isAdmin && featuresEnabled.planner },
     { key: 'draft', icon: <Shuffle size={16}/>, label: '드래프트', show: isAdmin && featuresEnabled.draft },
     { key: 'formation', icon: <IconPitch size={16}/>, label: '포메이션 보드', show: featuresEnabled.formation },
-    { key: 'stats', icon: <ListChecks size={16}/>, label: '기록 입력', show: isAdmin && featuresEnabled.stats }
+    { key: 'stats', icon: <ListChecks size={16}/>, label: '기록 입력', show: isAdmin && featuresEnabled.stats },
+    { key: 'analytics', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, label: '방문자 분석', show: isAdmin }
   ], [isAdmin, featuresEnabled]);
 
   // ⬇️ 기존 기본값 생성 방식은 유지(필요시 다른 곳에서 사용)
@@ -300,17 +332,6 @@ export default function App(){
           </div>
           <div className="ml-2 sm:ml-3 pl-2 sm:pl-3 border-l border-stone-300 flex-shrink-0 relative z-10">
             <div className="flex gap-2">
-              {tutorialEnabled && (
-                <button
-                  onClick={()=>setTutorialOpen(true)}
-                  aria-label="가이드"
-                  title="앱 사용 가이드"
-                  className="inline-flex items-center rounded-lg bg-blue-500 p-2.5 sm:p-3 text-sm font-semibold text-white shadow-sm hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-400 min-h-[42px] min-w-[42px] sm:min-h-[44px] sm:min-w-[44px] touch-manipulation transition-all duration-200 active:scale-95"
-                  style={{touchAction: 'manipulation'}}
-                >
-                  <BookOpen size={16}/>
-                </button>
-              )}
               {isAdmin?(
                 <>
                   <button
@@ -392,6 +413,7 @@ export default function App(){
               {tab==="draft"&&isAdmin&&featuresEnabled.draft&&(<DraftPage players={players} upcomingMatches={db.upcomingMatches} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>)}
               {tab==="formation"&&featuresEnabled.formation&&(<FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>)}
               {tab==="stats"&&isAdmin&&featuresEnabled.stats&&(<StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
+              {tab==="analytics"&&(<AnalyticsPage visits={visits} isAdmin={isAdmin}/>)}
             </>
           )}
         </div>
@@ -405,13 +427,12 @@ export default function App(){
           <li>포메이션 보드: 체크한 선수만 보드에 표시 · 드래그로 수동 배치</li>
           {isAdmin&&(<><li>선수 관리: 선수 생성/수정/삭제, 일괄 가져오기</li><li>매치 플래너: 팀 배정, 포메이션 설정, 저장/삭제</li><li>기록 입력: 경기별 골/어시 기록 입력/수정</li></>)}
         </ul>
-        {isAdmin&&(<div className="mt-3 text-xs text-stone-700">👀 총 방문자: <b>{visits}</b></div>)}
       </Card>
       <div className="mt-4 text-center text-[11px] text-stone-400">Semihan Football Manager · v{import.meta.env.VITE_APP_VERSION} build({import.meta.env.VITE_APP_COMMIT})</div>
     </footer>
 
     <AdminLoginDialog isOpen={loginOpen} onClose={()=>setLoginOpen(false)} onSuccess={onAdminSuccess} adminPass={ADMIN_PASS}/>
-    <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle} tutorialEnabled={tutorialEnabled} onTutorialToggle={handleTutorialToggle} featuresEnabled={featuresEnabled} onFeatureToggle={handleFeatureToggle} isAdmin={isAdmin}/>
+    <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle} tutorialEnabled={tutorialEnabled} onTutorialToggle={handleTutorialToggle} featuresEnabled={featuresEnabled} onFeatureToggle={handleFeatureToggle} isAdmin={isAdmin} visits={visits}/>
     {tutorialEnabled && <AppTutorial isOpen={tutorialOpen} onClose={()=>setTutorialOpen(false)} isAdmin={isAdmin}/>}
   </div>)}
 const TabButton = React.memo(function TabButton({icon,label,active,onClick,loading}){return(<button onClick={onClick} disabled={loading} title={label} aria-label={label} className={`flex items-center gap-1.5 rounded-md px-2.5 py-2.5 sm:px-3 sm:py-3 text-sm transition-all duration-200 min-h-[42px] sm:min-h-[44px] touch-manipulation whitespace-nowrap ${active?"bg-emerald-500 text-white shadow-md":"text-stone-700 hover:bg-stone-200 active:bg-stone-300 active:scale-95"} ${loading?"opacity-75 cursor-wait":""}`} style={{touchAction: 'manipulation'}} aria-pressed={active}>{loading && active ? <svg className="w-4 h-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg> : <span className="w-4 h-4 flex-shrink-0">{icon}</span>}{active && <span className="text-xs font-semibold hidden sm:inline">{label}</span>}</button>)})
@@ -550,7 +571,7 @@ function AdminLoginDialog({isOpen,onClose,onSuccess,adminPass}){const[pw,setPw]=
   </div>)}
 
 /* ── Settings Dialog ─────────────────── */
-function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,onTutorialToggle,featuresEnabled,onFeatureToggle,isAdmin}){
+function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,onTutorialToggle,featuresEnabled,onFeatureToggle,isAdmin,visits}){
   const[newTitle,setNewTitle]=useState(appTitle)
   const[titleEditMode,setTitleEditMode]=useState(false)
   
@@ -666,11 +687,31 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
 
           {/* 기능 활성화 설정 (Admin만) */}
           {isAdmin && (
-            <div className="border-t border-stone-200 pt-4 mt-2">
-              <div className="mb-3">
-                <h4 className="text-sm font-semibold text-stone-800">기능 활성화 설정</h4>
-                <p className="text-xs text-stone-500 mt-0.5">각 탭의 표시 여부를 제어합니다 (데이터는 유지됩니다)</p>
+            <>
+              {/* 총 방문자 & 상세 통계 */}
+              <div className="border-t border-stone-200 pt-4 mt-2">
+                <div className="flex items-center justify-between py-3 px-4 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-2xl">👀</span>
+                    <div>
+                      <div className="text-sm font-semibold text-stone-800">총 방문자</div>
+                      <div className="text-xs text-stone-500">앱 전체 누적 방문 수</div>
+                    </div>
+                  </div>
+                  <div className="text-2xl font-bold text-blue-700">
+                    {visits?.toLocaleString() || 0}
+                  </div>
+                </div>
+
+                {/* 상세 통계 */}
+                <VisitorStats visits={visits} />
               </div>
+
+              <div className="border-t border-stone-200 pt-4 mt-2">
+                <div className="mb-3">
+                  <h4 className="text-sm font-semibold text-stone-800">기능 활성화 설정</h4>
+                  <p className="text-xs text-stone-500 mt-0.5">각 탭의 표시 여부를 제어합니다 (데이터는 유지됩니다)</p>
+                </div>
               
               <div className="space-y-3">
                 {Object.entries(featureLabels).map(([key, label]) => (
@@ -705,7 +746,13 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
               <div className="text-xs text-stone-500 bg-blue-50 rounded-lg p-3 border border-blue-200 mt-3">
                 ℹ️ 기능을 비활성화해도 저장된 매치와 선수 데이터는 유지됩니다. 기능을 다시 활성화하면 이전 데이터를 볼 수 있습니다.
               </div>
+              
+              {/* 방문자 통계 안내 */}
+              <div className="text-xs text-stone-500 bg-indigo-50 rounded-lg p-3 border border-indigo-200 mt-3">
+                📊 방문자 통계는 상단의 <strong className="text-indigo-700">'방문자 분석'</strong> 탭에서 확인하실 수 있습니다.
+              </div>
             </div>
+            </>
           )}
 
           <div className="text-xs text-stone-500 bg-stone-50 rounded-lg p-3 border border-stone-200">

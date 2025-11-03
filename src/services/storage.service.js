@@ -125,3 +125,91 @@ export function subscribeDB(callback) {
     try { supabase.removeChannel?.(channel) } catch {}
   }
 }
+
+// Atomic하게 방문자 수만 증가 (race condition 방지)
+export async function incrementVisits() {
+  try {
+    // 현재 데이터 조회
+    const { data: current } = await supabase
+      .from('appdb')
+      .select('data')
+      .eq('id', ROOM_ID)
+      .single()
+    
+    if (!current) {
+      // 첫 초기화
+      await saveDB({ players: [], matches: [], visits: 1, upcomingMatches: [] })
+      return 1
+    }
+
+    const currentVisits = current.data?.visits || 0
+    const newVisits = currentVisits + 1
+
+    // visits만 업데이트 (다른 데이터는 그대로 유지)
+    const { error } = await supabase
+      .from('appdb')
+      .update({
+        data: { ...current.data, visits: newVisits },
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', ROOM_ID)
+
+    if (error) {
+      console.error('[incrementVisits] error', error)
+      return currentVisits
+    }
+
+    return newVisits
+  } catch (e) {
+    console.error('[incrementVisits] failed', e)
+    return 0
+  }
+}
+
+// 방문 로그 저장
+export async function logVisit({ visitorId, ipAddress, userAgent, deviceType, browser, os }) {
+  try {
+    const { error } = await supabase
+      .from('visit_logs')
+      .insert({
+        visitor_id: visitorId,
+        room_id: ROOM_ID,
+        ip_address: ipAddress,
+        user_agent: userAgent,
+        device_type: deviceType,
+        browser: browser,
+        os: os
+      })
+
+    if (error) {
+      console.error('[logVisit] error', error)
+      return false
+    }
+
+    return true
+  } catch (e) {
+    console.error('[logVisit] failed', e)
+    return false
+  }
+}
+
+// 방문 통계 조회
+export async function getVisitStats() {
+  try {
+    const { data, error } = await supabase
+      .from('visit_logs')
+      .select('*')
+      .eq('room_id', ROOM_ID)
+      .order('visited_at', { ascending: false })
+
+    if (error) {
+      console.error('[getVisitStats] error', error)
+      return null
+    }
+
+    return data || []
+  } catch (e) {
+    console.error('[getVisitStats] failed', e)
+    return null
+  }
+}
