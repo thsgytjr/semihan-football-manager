@@ -689,7 +689,24 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
 
   // ✅ 초안 변경은 반드시 setSnap 경유 → dirty 플래그 유지
   const setSnap=(next)=>{ setDraftSnap(next); setDirty(true) }
-  const resetDraft=()=>{ setDraftSnap(initialSnap); setDirty(false); setLocalDraftMode((m.selectionMode === 'draft') || !!m?.draftMode || !!m?.draft) }
+  const setCaptain=(teamIdx, playerId)=>{ 
+    const next=[...(captainIds||[])]
+    next[teamIdx]=String(playerId)
+    setCaptainIds(next)
+    setDirty(true)
+  }
+  const resetDraft=()=>{ 
+    setDraftSnap(initialSnap)
+    setDirty(false)
+    setLocalDraftMode((m.selectionMode === 'draft') || !!m?.draftMode || !!m?.draft)
+    // Reset captains to initial state
+    const caps = (m?.draft?.captains && Array.isArray(m.draft.captains)) ? m.draft.captains.map(String) : (Array.isArray(m.captains)?m.captains.map(String):(Array.isArray(m.captainIds)?m.captainIds.map(String):[]))
+    if(caps && caps.length) setCaptainIds(caps)
+    else setCaptainIds(initialSnap.map(team=>team[0]?String(team[0]):null))
+    // Reset quarter scores to initial state
+    const qs = (m?.draft?.quarterScores && Array.isArray(m.draft.quarterScores)) ? m.draft.quarterScores : (Array.isArray(m.scores) ? m.scores.map(v=>[v]) : null)
+    setQuarterScores(qs || (initialSnap.length? initialSnap.map(()=>[]): null))
+  }
   const saveDraft=()=>{ onUpdateMatch?.(m.id,{snapshot:draftSnap,attendeeIds:draftSnap.flat()}); setDirty(false) }
 
   useEffect(()=>{ setDraftSnap(initialSnap); setDirty(false); setLocalDraftMode((m.selectionMode === 'draft') || !!m?.draftMode || !!m?.draft) }, [m.id, initialSnap.join('|')])
@@ -1111,13 +1128,13 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                           <div className="flex items-center gap-2">
                             {isDraftMode && (
                               <button
-                                className="border-0 bg-transparent w-6 h-6 flex items-center justify-center hover:opacity-80 p-0 transition-opacity"
-                                title="이 선수를 주장으로 지정"
-                                onClick={()=>{
-                                  const next=[...(captainIds||[])]
-                                  next[i]=String(p.id)
-                                  setCaptainIds(next)
-                                }}
+                                className={`border-0 bg-transparent w-6 h-6 flex items-center justify-center hover:opacity-80 p-0 transition-all ${
+                                  captainIds[i] === String(p.id) 
+                                    ? 'ring-2 ring-yellow-400 rounded-full scale-110 brightness-110' 
+                                    : ''
+                                }`}
+                                title={captainIds[i] === String(p.id) ? "주장으로 지정됨" : "이 선수를 주장으로 지정"}
+                                onClick={()=>setCaptain(i, p.id)}
                                 aria-label="주장 지정"
                               >
                                 <img src={captainIcon} alt="주장" className="w-full h-full object-contain" />
@@ -1171,6 +1188,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                     onClick={()=>{
                       const next = qs.map(arr => [...arr, 0])
                       setQuarterScores(next)
+                      setDirty(true)
                     }}
                   >+</button>
                   <button
@@ -1181,6 +1199,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                       const newLen = Math.max(0, maxQ - 1)
                       const next = qs.map(arr => arr.slice(0, newLen))
                       setQuarterScores(next)
+                      setDirty(true)
                     }}
                   >−</button>
                 </div>
@@ -1221,6 +1240,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                                   const next = qs.map(a=>a.slice())
                                   next[ti][qi] = Math.max(0, val - 1)
                                   setQuarterScores(next)
+                                  setDirty(true)
                                 }}
                                 aria-label="점수 -1"
                               >−</button>
@@ -1237,6 +1257,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                                   const next = qs.map(a=>a.slice())
                                   next[ti][qi] = Math.min(99, val + 1)
                                   setQuarterScores(next)
+                                  setDirty(true)
                                 }}
                                 aria-label="점수 +1"
                               >+</button>
@@ -1257,6 +1278,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                   onClick={()=>{
                     if(confirm('모든 쿼터 점수를 0으로 초기화하시겠습니까?')) {
                       setQuarterScores(initialSnap.map(()=>[]))
+                      setDirty(true)
                     }
                   }}
                 >
@@ -1270,6 +1292,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                 // reset editors to a clearly empty state
                 setCaptainIds(initialSnap.map(()=>null))
                 setQuarterScores(initialSnap.map(()=>[]))
+                setDirty(true)
               }}>전체 초기화</button>
               <button className="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white px-3 py-1.5 sm:px-5 sm:py-2 text-xs sm:text-sm font-semibold shadow-md transition-all hover:shadow-lg" onClick={()=>{
                 // save snapshot + draft info + draft mode
