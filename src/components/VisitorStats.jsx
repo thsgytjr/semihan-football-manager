@@ -30,21 +30,26 @@ export default function VisitorStats({ visits }) {
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
     const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
 
-    // 고유 방문자
-    const uniqueVisitors = new Set(logs.map(l => l.visitor_id)).size
+    // 고유 방문자 (기기/브라우저 기준)
+    const uniqueDevices = new Set(logs.map(l => l.visitor_id)).size
+    
+    // 고유 방문자 (IP 주소 기준)
+    const uniqueIPs = new Set(
+      logs.filter(l => l.ip_address).map(l => l.ip_address)
+    ).size
 
     // 기간별 방문
     const todayVisits = logs.filter(l => new Date(l.visited_at) >= today).length
     const weekVisits = logs.filter(l => new Date(l.visited_at) >= weekAgo).length
     const monthVisits = logs.filter(l => new Date(l.visited_at) >= monthAgo).length
 
-    // 재방문 분석
+    // 재방문 분석 (기기 기준)
     const visitorCounts = {}
     logs.forEach(l => {
       visitorCounts[l.visitor_id] = (visitorCounts[l.visitor_id] || 0) + 1
     })
     const newVisitors = Object.values(visitorCounts).filter(c => c === 1).length
-    const returningVisitors = uniqueVisitors - newVisitors
+    const returningVisitors = uniqueDevices - newVisitors
 
     // 기기 타입
     const deviceCounts = {}
@@ -76,7 +81,8 @@ export default function VisitorStats({ visits }) {
     const peakHour = hourCounts.indexOf(Math.max(...hourCounts))
 
     return {
-      uniqueVisitors,
+      uniqueDevices,
+      uniqueIPs,
       todayVisits,
       weekVisits,
       monthVisits,
@@ -111,16 +117,16 @@ export default function VisitorStats({ visits }) {
       {/* 기본 통계 */}
       <div className="grid grid-cols-2 gap-3">
         <StatCard
-          icon="👥"
-          label="고유 방문자"
-          value={stats.uniqueVisitors.toLocaleString()}
-          subtitle="중복 제외"
+          icon="🌐"
+          label="고유 IP"
+          value={stats.uniqueIPs.toLocaleString()}
+          subtitle="실제 사용자 수"
         />
         <StatCard
-          icon="🔢"
-          label="총 방문"
-          value={visits?.toLocaleString() || 0}
-          subtitle="재방문 포함"
+          icon="📱"
+          label="고유 기기"
+          value={stats.uniqueDevices.toLocaleString()}
+          subtitle="기기/브라우저"
         />
       </div>
 
@@ -145,13 +151,13 @@ export default function VisitorStats({ visits }) {
 
       {/* 재방문률 */}
       <div className="rounded-lg border border-stone-200 p-3 bg-white">
-        <div className="text-xs font-semibold text-stone-700 mb-2">🔁 재방문 분석</div>
+        <div className="text-xs font-semibold text-stone-700 mb-2">🔁 재방문 분석 (기기 기준)</div>
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             <div className="flex-1 bg-stone-100 rounded-full h-2 overflow-hidden">
               <div 
                 className="bg-blue-500 h-full transition-all"
-                style={{ width: `${(stats.newVisitors / stats.uniqueVisitors * 100) || 0}%` }}
+                style={{ width: `${(stats.newVisitors / stats.uniqueDevices * 100) || 0}%` }}
               />
             </div>
             <span className="text-xs text-stone-600 w-16 text-right">{stats.newVisitors}명</span>
@@ -160,7 +166,7 @@ export default function VisitorStats({ visits }) {
             <div className="flex-1 bg-stone-100 rounded-full h-2 overflow-hidden">
               <div 
                 className="bg-emerald-500 h-full transition-all"
-                style={{ width: `${(stats.returningVisitors / stats.uniqueVisitors * 100) || 0}%` }}
+                style={{ width: `${(stats.returningVisitors / stats.uniqueDevices * 100) || 0}%` }}
               />
             </div>
             <span className="text-xs text-stone-600 w-16 text-right">{stats.returningVisitors}명</span>
