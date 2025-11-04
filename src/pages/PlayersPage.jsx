@@ -144,9 +144,11 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
     setUploading(true)
     try{
       const playerName = draft.name?.trim() || 'unnamed'
-      const publicUrl = await uploadPlayerPhoto(file, draft.id || 'temp', playerName, draft.photoUrl)
+      // 원래 선수의 photoUrl을 전달 (draft가 아닌 player에서)
+      const originalPhotoUrl = player?.photoUrl
+      const publicUrl = await uploadPlayerPhoto(file, draft.id || 'temp', playerName, originalPhotoUrl)
       
-      // 강제 리렌더링을 위해 약간의 지연 후 상태 업데이트
+      // 강제 리렌더링을 위해 해시 추가
       setDraft(prev => ({...prev, photoUrl: `${publicUrl}#${Date.now()}`}))
       
       notify('✅ 사진이 업로드되었습니다.', 'success', 2000)

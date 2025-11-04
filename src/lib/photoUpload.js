@@ -169,13 +169,17 @@ export async function uploadPlayerPhoto(file, playerId, playerName = null, oldPh
     const filePath = `players/${fileName}`
     
     // oldPhotoUrl이 있고, 새 파일과 다른 경우만 삭제 (같은 선수의 이전 사진)
-    if (oldPhotoUrl) {
+    if (oldPhotoUrl && oldPhotoUrl.includes('player-photos')) {
       try {
         const cleanOldUrl = oldPhotoUrl.split('?')[0].split('#')[0]
         const oldFileName = cleanOldUrl.split('/').pop()
         
-        // 같은 playerId를 포함하는 파일인지 확인
-        if (oldFileName && oldFileName.includes(playerId) && oldFileName !== fileName) {
+        // playerId를 정확히 포함하는지 확인 (_playerId. 또는 _playerId_)
+        const playerIdPattern = new RegExp(`[_]${playerId}[._]`)
+        const isSamePlayer = oldFileName && playerIdPattern.test(oldFileName)
+        
+        // 같은 선수이고, 다른 파일명인 경우만 삭제
+        if (isSamePlayer && oldFileName !== fileName) {
           await deletePlayerPhoto(oldPhotoUrl)
         }
       } catch (deleteError) {
