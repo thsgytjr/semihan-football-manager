@@ -143,7 +143,8 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
     if(!file) return
     setUploading(true)
     try{
-      const publicUrl = await uploadPlayerPhoto(file, draft.id || 'temp', draft.photoUrl)
+      const playerName = draft.name?.trim() || 'unnamed'
+      const publicUrl = await uploadPlayerPhoto(file, draft.id || 'temp', playerName, draft.photoUrl)
       setDraft(prev => ({...prev, photoUrl: publicUrl}))
       notify('사진이 업로드되었습니다.')
     } catch(err) {
@@ -188,7 +189,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
       return next
     })
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (nameEmpty) {
       notify("이름을 입력해 주세요.", "error")
       return
@@ -197,6 +198,36 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
       notify("포지션을 선택해 주세요.", "error")
       return
     }
+    
+    // 이전 사진이 있었는데 변경된 경우 삭제
+    const oldPhotoUrl = player?.photoUrl
+    const newPhotoUrl = draft.photoUrl || null
+    
+    console.log('🔍 사진 변경 확인:', {
+      oldPhotoUrl,
+      newPhotoUrl,
+      changed: oldPhotoUrl !== newPhotoUrl,
+      isUploadedPhoto: oldPhotoUrl && !oldPhotoUrl.startsWith('RANDOM:') && oldPhotoUrl.includes('player-photos')
+    })
+    
+    if (oldPhotoUrl && oldPhotoUrl !== newPhotoUrl) {
+      // 이전 사진이 업로드된 사진(player-photos 버킷)이고, RANDOM이 아닌 경우
+      if (!oldPhotoUrl.startsWith('RANDOM:') && oldPhotoUrl.includes('player-photos')) {
+        try {
+          console.log('🗑️ 이전 사진 삭제 시작:', oldPhotoUrl)
+          await deletePlayerPhoto(oldPhotoUrl)
+          console.log('✅ 이전 사진 삭제 완료:', oldPhotoUrl)
+        } catch (error) {
+          console.error('❌ 이전 사진 삭제 실패:', error)
+          console.warn('⚠️ 이전 사진 삭제 실패 (무시하고 계속):', error)
+        }
+      } else {
+        console.log('⏭️ 삭제 스킵 (RANDOM 또는 외부 URL)')
+      }
+    } else {
+      console.log('⏭️ 사진 변경 없음')
+    }
+    
     const payload = {
       ...player,
       ...draft,
@@ -205,7 +236,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
       membership: draft.membership,
       origin: draft.origin || "none",
       stats: ensureStatsObject(draft.stats),
-      photoUrl: draft.photoUrl || null,
+      photoUrl: newPhotoUrl,
     }
     
     // 새 선수일 경우 ID 제거 (Supabase가 자동 생성)
