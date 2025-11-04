@@ -538,6 +538,49 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
                           </div>
                         </div>
                       ))}
+                      
+                      {/* 레거시 포지션 (상세 포지션을 모를 때만 사용) */}
+                      <div className="mt-4 pt-4 border-t border-stone-200">
+                        <div className="text-[10px] font-bold mb-2 text-stone-500">
+                          정확한 포지션을 모를 때 (일반)
+                        </div>
+                        <div className="grid grid-cols-4 gap-2">
+                          {[
+                            { value: 'GK', label: 'GK', color: 'amber' },
+                            { value: 'DF', label: 'DF', color: 'blue' },
+                            { value: 'MF', label: 'MF', color: 'emerald' },
+                            { value: 'FW', label: 'FW', color: 'purple' }
+                          ].map(pos => {
+                            const isSelected = draft.positions?.includes(pos.value)
+                            return (
+                              <button
+                                key={pos.value}
+                                type="button"
+                                onClick={() => {
+                                  const currentPositions = draft.positions || []
+                                  const newPositions = isSelected
+                                    ? currentPositions.filter(p => p !== pos.value)
+                                    : [...currentPositions, pos.value]
+                                  setDraft({ ...draft, positions: newPositions })
+                                }}
+                                className={`py-2 px-2 rounded-lg text-xs font-medium transition-all ${
+                                  isSelected
+                                    ? pos.color === 'amber' ? 'bg-amber-400 text-white shadow-sm ring-2 ring-amber-200'
+                                      : pos.color === 'blue' ? 'bg-blue-400 text-white shadow-sm ring-2 ring-blue-200'
+                                      : pos.color === 'emerald' ? 'bg-emerald-400 text-white shadow-sm ring-2 ring-emerald-200'
+                                      : 'bg-purple-400 text-white shadow-sm ring-2 ring-purple-200'
+                                    : 'bg-stone-50 border-2 border-stone-200 text-stone-500 hover:border-stone-300 hover:bg-stone-100'
+                                }`}
+                              >
+                                {pos.label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                        <div className="text-[10px] text-stone-500 mt-2">
+                          예: 수비수인데 정확히 어떤 포지션인지 모를 때 "DF" 선택
+                        </div>
+                      </div>
                     </div>
                     
                     {posMissing && (
