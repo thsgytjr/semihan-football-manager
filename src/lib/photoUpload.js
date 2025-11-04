@@ -168,30 +168,84 @@ export async function uploadPlayerPhoto(file, playerId, playerName = null, oldPh
       : `${playerId}.${fileExtension}`
     const filePath = `players/${fileName}`
     
+    console.log('📝 업로드 파일 정보:', {
+      fileName,
+      filePath,
+      playerId,
+      sanitizedName
+    })
+    
     // oldPhotoUrl이 있고, 새 파일과 다른 경우만 삭제 (같은 선수의 이전 사진)
     if (oldPhotoUrl && oldPhotoUrl.includes('player-photos')) {
       try {
         const cleanOldUrl = oldPhotoUrl.split('?')[0].split('#')[0]
         const oldFileName = cleanOldUrl.split('/').pop()
         
-        // playerId를 정확히 포함하는지 확인 (_playerId. 또는 _playerId_)
-        const playerIdPattern = new RegExp(`[_]${playerId}[._]`)
-        const isSamePlayer = oldFileName && playerIdPattern.test(oldFileName)
+        // playerId를 포함하는지 확인 (언더스코어 있거나 UUID만 있는 경우 모두 체크)
+        const isSamePlayer = oldFileName && (
+          oldFileName.includes(`_${playerId}.`) || // name_uuid.ext 형식
+          oldFileName === `${playerId}.${fileExtension}` || // uuid.ext 형식
+          oldFileName === `${playerId}.png` || // 다른 확장자
+          oldFileName === `${playerId}.jpg`
+        )
+        
+        console.log('🗑️ 삭제 체크:', {
+          oldPhotoUrl,
+          cleanOldUrl,
+          oldFileName,
+          newFileName: fileName,
+          playerId,
+          fileExtension,
+          checks: {
+            hasUnderscore: oldFileName.includes(`_${playerId}.`),
+            exactMatch: oldFileName === `${playerId}.${fileExtension}`,
+            isPng: oldFileName === `${playerId}.png`,
+            isJpg: oldFileName === `${playerId}.jpg`,
+          },
+          isSamePlayer,
+          willDelete: isSamePlayer && oldFileName !== fileName
+        })
         
         // 같은 선수이고, 다른 파일명인 경우만 삭제
         if (isSamePlayer && oldFileName !== fileName) {
+          console.log('🚨 삭제 실행:', oldPhotoUrl)
           await deletePlayerPhoto(oldPhotoUrl)
+          console.log('✅ 이전 사진 삭제 완료')
+        } else if (!isSamePlayer) {
+          console.log('⏭️ 다른 선수의 사진 - 삭제 안함')
+        } else {
+          console.log('⏭️ 같은 파일명 - upsert로 덮어쓰기')
         }
       } catch (deleteError) {
-        // 삭제 실패는 무시
+        console.error('⚠️ 삭제 실패:', deleteError)
       }
+    } else if (oldPhotoUrl) {
+      console.log('⏭️ player-photos 버킷이 아님:', oldPhotoUrl)
     }
     
     // 6. 업로드 (재시도 포함)
-    await uploadWithRetry(filePath, uploadFile, {
+    console.log('📤 업로드 시작:', filePath)
+    
+    const uploadResult = await uploadWithRetry(filePath, uploadFile, {
       contentType: uploadFile.type === 'image/png' ? 'image/png' : 'image/jpeg',
       cacheControl: '3600',
       upsert: true // 같은 playerId는 덮어쓰기
+    })
+    
+    console.log('✅ 업로드 성공:', uploadResult)
+    
+    // 7. 업로드 확인 (파일이 실제로 존재하는지 체크)
+    const { data: files, error: listError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .list('players', {
+        search: fileName
+      })
+    
+    console.log('🔍 업로드 확인:', {
+      fileName,
+      filesFound: files?.length || 0,
+      files: files?.map(f => f.name),
+      listError
     })
     
     // 8. Public URL 생성
@@ -235,14 +289,25 @@ export async function deletePlayerPhoto(photoUrl) {
     
     const filePath = urlParts[1]
     
+    console.log('🗑️ 파일 삭제 시작:', {
+      photoUrl,
+      cleanUrl,
+      filePath,
+      bucket: BUCKET_NAME
+    })
+    
     const { error } = await supabase.storage
       .from(BUCKET_NAME)
       .remove([filePath])
     
     if (error) {
+      console.error('❌ 삭제 에러:', error)
       throw error
     }
+    
+    console.log('✅ 파일 삭제 완료:', filePath)
   } catch (err) {
+    console.error('❌ deletePlayerPhoto 실패:', err)
     throw err
   }
 }

@@ -144,16 +144,28 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
     setUploading(true)
     try{
       const playerName = draft.name?.trim() || 'unnamed'
+      const playerId = draft.id || 'temp'
       // 원래 선수의 photoUrl을 전달 (draft가 아닌 player에서)
       const originalPhotoUrl = player?.photoUrl
-      const publicUrl = await uploadPlayerPhoto(file, draft.id || 'temp', playerName, originalPhotoUrl)
+      
+      console.log('🔍 업로드 정보:', {
+        playerName,
+        playerId,
+        originalPhotoUrl,
+        fileName: file.name,
+        fileSize: (file.size / 1024).toFixed(2) + 'KB'
+      })
+      
+      const publicUrl = await uploadPlayerPhoto(file, playerId, playerName, originalPhotoUrl)
+      
+      console.log('✅ 업로드 완료:', publicUrl)
       
       // 강제 리렌더링을 위해 해시 추가
       setDraft(prev => ({...prev, photoUrl: `${publicUrl}#${Date.now()}`}))
       
       notify('✅ 사진이 업로드되었습니다.', 'success', 2000)
     } catch(err) {
-      console.error(err)
+      console.error('❌ 업로드 에러:', err)
       notify(`❌ ${err.message || '사진 업로드에 실패했습니다.'}`, 'error', 5000)
     } finally {
       setUploading(false)
@@ -206,20 +218,35 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
     
     // 이전 사진이 있었는데 변경된 경우 삭제
     const oldPhotoUrl = player?.photoUrl
-    // URL에서 해시 프래그먼트 제거 (#1234567890)
-    const cleanNewPhotoUrl = draft.photoUrl ? draft.photoUrl.split('#')[0] : null
-    const cleanOldPhotoUrl = oldPhotoUrl ? oldPhotoUrl.split('#')[0] : null
+    // URL에서 해시 프래그먼트와 쿼리 파라미터 모두 제거
+    const cleanNewPhotoUrl = draft.photoUrl ? draft.photoUrl.split('?')[0].split('#')[0] : null
+    const cleanOldPhotoUrl = oldPhotoUrl ? oldPhotoUrl.split('?')[0].split('#')[0] : null
+    
+    console.log('🔍 사진 비교:', {
+      oldPhotoUrl,
+      cleanOldPhotoUrl,
+      newPhotoUrl: draft.photoUrl,
+      cleanNewPhotoUrl,
+      isSame: cleanOldPhotoUrl === cleanNewPhotoUrl
+    })
     
     if (cleanOldPhotoUrl && cleanOldPhotoUrl !== cleanNewPhotoUrl) {
       // 이전 사진이 업로드된 사진(player-photos 버킷)이고, RANDOM이 아닌 경우
       if (!cleanOldPhotoUrl.startsWith('RANDOM:') && cleanOldPhotoUrl.includes('player-photos')) {
+        console.log('🗑️ 이전 사진 삭제 시작 (다른 파일):', cleanOldPhotoUrl)
         try {
           await deletePlayerPhoto(cleanOldPhotoUrl)
+          console.log('✅ 이전 사진 삭제 완료')
         } catch (error) {
-          // 삭제 실패는 무시하고 계속
+          console.error('❌ 삭제 실패:', error)
         }
       }
+    } else {
+      console.log('⏭️ 같은 사진 - 삭제 안함')
     }
+    
+    // 최종 저장할 URL (쿼리 파라미터 포함, 해시만 제거)
+    const finalPhotoUrl = draft.photoUrl ? draft.photoUrl.split('#')[0] : null
     
     const payload = {
       ...player,
@@ -229,8 +256,16 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
       membership: draft.membership,
       origin: draft.origin || "none",
       stats: ensureStatsObject(draft.stats),
-      photoUrl: cleanNewPhotoUrl, // 해시 제거된 깨끗한 URL 저장
+      photoUrl: finalPhotoUrl, // 해시 제거, 쿼리 파라미터 유지
     }
+    
+    console.log('💾 저장할 데이터:', {
+      id: payload.id,
+      name: payload.name,
+      photoUrl: payload.photoUrl,
+      finalPhotoUrl,
+      draftPhotoUrl: draft.photoUrl
+    })
     
     // 새 선수일 경우 ID 제거 (Supabase가 자동 생성)
     if (!player?.id || String(player.id).startsWith('new-')) {
