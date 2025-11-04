@@ -486,7 +486,7 @@ export default function App(){
           {isAdmin&&(<><li>선수 관리: 선수 생성/수정/삭제, 일괄 가져오기</li><li>매치 플래너: 팀 배정, 포메이션 설정, 저장/삭제</li><li>기록 입력: 경기별 골/어시 기록 입력/수정</li></>)}
         </ul>
       </Card>
-      <div className="mt-4 text-center text-[11px] text-stone-400">Semihan Football Manager · v{import.meta.env.VITE_APP_VERSION} build({import.meta.env.VITE_APP_COMMIT})</div>
+      <div className="mt-4 text-center text-[11px] text-stone-400">Goalify · v{import.meta.env.VITE_APP_VERSION} build({import.meta.env.VITE_APP_COMMIT})</div>
     </footer>
 
     <AdminLoginDialog isOpen={loginOpen} onClose={()=>setLoginOpen(false)} onSuccess={onAdminSuccess}/>
