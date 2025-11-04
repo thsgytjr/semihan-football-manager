@@ -155,32 +155,39 @@ export async function uploadPlayerPhoto(file, playerId, playerName = null, oldPh
       }
     }
     
-    // 5. 기존 파일 삭제 (실패해도 계속 진행)
+    // 5. 기존 파일 삭제 (같은 선수의 이전 사진만 삭제)
+    // 먼저 새 파일명 생성
+    const sanitizedName = (playerName || 'player')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .toLowerCase()
+      .slice(0, 20)
+    
+    const fileExtension = uploadFile.type === 'image/png' ? 'png' : 'jpg'
+    const fileName = sanitizedName 
+      ? `${sanitizedName}_${playerId}.${fileExtension}` 
+      : `${playerId}.${fileExtension}`
+    const filePath = `players/${fileName}`
+    
+    // oldPhotoUrl이 있고, 새 파일과 다른 경우만 삭제 (같은 선수의 이전 사진)
     if (oldPhotoUrl) {
       try {
-        await deletePlayerPhoto(oldPhotoUrl)
+        const cleanOldUrl = oldPhotoUrl.split('?')[0].split('#')[0]
+        const oldFileName = cleanOldUrl.split('/').pop()
+        
+        // 같은 playerId를 포함하는 파일인지 확인
+        if (oldFileName && oldFileName.includes(playerId) && oldFileName !== fileName) {
+          await deletePlayerPhoto(oldPhotoUrl)
+        }
       } catch (deleteError) {
         // 삭제 실패는 무시
       }
     }
     
-    // 6. 파일명 및 경로 생성 (영문/숫자만 사용하여 안전한 파일명)
-    // Supabase Storage는 특수문자와 공백에 민감하므로 영문/숫자만 허용
-    const sanitizedName = (playerName || 'player')
-      .replace(/[^a-zA-Z0-9]/g, '') // 영문/숫자만 허용 (한글, 공백, 특수문자 모두 제거)
-      .toLowerCase()
-      .slice(0, 20) // 최대 20자로 제한
-    
-    const fileExtension = uploadFile.type === 'image/png' ? 'png' : 'jpg'
-    // 이름이 비어있으면 ID만 사용
-    const fileName = sanitizedName ? `${sanitizedName}_${playerId}.${fileExtension}` : `${playerId}.${fileExtension}`
-    const filePath = `players/${fileName}`
-    
-    // 7. 업로드 (재시도 포함)
+    // 6. 업로드 (재시도 포함)
     await uploadWithRetry(filePath, uploadFile, {
-      contentType: 'image/jpeg',
+      contentType: uploadFile.type === 'image/png' ? 'image/png' : 'image/jpeg',
       cacheControl: '3600',
-      upsert: true
+      upsert: true // 같은 playerId는 덮어쓰기
     })
     
     // 8. Public URL 생성
