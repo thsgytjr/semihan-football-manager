@@ -53,8 +53,12 @@ export function splitKTeams(players = [], k = 2, criterion = 'overall', matches 
   
   // 각 팀의 총합 계산 (GK 제외)
   const sums = teams.map(list =>
-    list.filter(p => (p.position || p.pos) !== 'GK')
-        .reduce((a, p) => a + (p.ovr ?? overall(p)), 0)
+    list.filter(p => {
+      // positions 배열 또는 레거시 position 필드 체크
+      const positions = p.positions || (p.position ? [p.position] : [p.pos])
+      return !positions.includes('GK') && (p.position || p.pos) !== 'GK'
+    })
+    .reduce((a, p) => a + (p.ovr ?? overall(p)), 0)
   )
   
   return { teams, sums }
@@ -101,13 +105,17 @@ function balanceTeamStrengths(teams, matches) {
     
     for (let i = 0; i < strongAttackTeam.length; i++) {
       const p1 = strongAttackTeam[i]
-      if ((p1.position || p1.pos) === 'GK') continue
+      // positions 배열 또는 레거시 position 필드 체크
+      const p1Positions = p1.positions || (p1.position ? [p1.position] : [p1.pos])
+      if (p1Positions.includes('GK') || (p1.position || p1.pos) === 'GK') continue
       
       const str1 = analyzePlayerStrengths(p1)
       
       for (let j = 0; j < weakAttackTeam.length; j++) {
         const p2 = weakAttackTeam[j]
-        if ((p2.position || p2.pos) === 'GK') continue
+        // positions 배열 또는 레거시 position 필드 체크
+        const p2Positions = p2.positions || (p2.position ? [p2.position] : [p2.pos])
+        if (p2Positions.includes('GK') || (p2.position || p2.pos) === 'GK') continue
         
         const str2 = analyzePlayerStrengths(p2)
         

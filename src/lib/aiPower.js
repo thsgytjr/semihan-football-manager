@@ -107,19 +107,21 @@ export function calculateAIPower(player, matches) {
     const goalsPerGame = stats.goals / stats.gamesPlayed
     const assistsPerGame = stats.assists / stats.gamesPlayed
     
-    // 포지션 고려
-    const position = player.position || player.pos || ''
+    // 포지션 고려 (positions 배열 또는 레거시 position 필드)
+    const positions = player.positions || (player.position ? [player.position] : [])
+    const positionsStr = positions.join(',').toUpperCase()
+    
     let goalWeight = 2.0
     let assistWeight = 1.0
     
-    // 포지션별 가중치 조정
-    if (/FW|ST|CF|LW|RW/i.test(position)) {
+    // 포지션별 가중치 조정 (여러 포지션 중 하나라도 해당하면 적용)
+    if (/FW|ST|CF|LW|RW/i.test(positionsStr)) {
       goalWeight = 2.5  // 공격수는 골 더 중요
       assistWeight = 1.0
-    } else if (/MF|CAM|CDM|CM|LM|RM/i.test(position)) {
+    } else if (/MF|CAM|CDM|CM|LM|RM/i.test(positionsStr)) {
       goalWeight = 2.0
       assistWeight = 1.3 // 미드필더는 어시 중요
-    } else if (/CB|LB|RB|DF|WB/i.test(position)) {
+    } else if (/CB|LB|RB|DF|WB|RWB|LWB/i.test(positionsStr)) {
       goalWeight = 3.0  // 수비수 골은 희소가치
       assistWeight = 2.0
     }
@@ -133,7 +135,7 @@ export function calculateAIPower(player, matches) {
     
     // 수비 포지션에서 승리가 많으면 가중치 추가 (팀 기여도 높음)
     let winBonus = winRate * 150 + drawRate * 30
-    if (/CB|LB|RB|DF|WB|GK/i.test(position)) {
+    if (/CB|LB|RB|DF|WB|RWB|LWB|GK/i.test(positionsStr)) {
       // 수비수/골키퍼는 승리가 더 중요 (클린시트 기여)
       winBonus += winRate * 50  // 추가 보너스
       

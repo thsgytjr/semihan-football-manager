@@ -3,38 +3,41 @@ import React, { useMemo, useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { notify } from "../components/Toast"
 import { overall, isUnknownPlayer } from "../lib/players"
-import { STAT_KEYS, PLAYER_ORIGINS, getOriginLabel } from "../lib/constants"
+import { 
+  STAT_KEYS, 
+  PLAYER_ORIGINS, 
+  getOriginLabel, 
+  DETAILED_POSITIONS,
+  ALL_DETAILED_POSITIONS,
+  getPositionCategory,
+  getPrimaryCategory,
+  migratePositionToPositions,
+  PLAYER_STATUS,
+  getPlayerStatusLabel,
+  getPlayerStatusColor,
+  TAG_COLORS,
+  getTagColorClass
+} from "../lib/constants"
 import InitialAvatar from "../components/InitialAvatar"
 import RadarHexagon from "../components/RadarHexagon"
 import { ensureStatsObject, clampStat } from "../lib/stats"
 import { calculateAIPower, aiPowerChipClass } from "../lib/aiPower"
 import { uploadPlayerPhoto, deletePlayerPhoto } from "../lib/photoUpload"
 import { randomAvatarDataUrl } from "../utils/avatar"
+import PositionChips from "../components/PositionChips"
 
 const S = (v) => (v == null ? "" : String(v))
-const posOf = (p) => (S(p.position || p.pos).toUpperCase() || "")
+const posOf = (p) => {
+  // 새로운 positions 배열 사용
+  if (p.positions && Array.isArray(p.positions) && p.positions.length > 0) {
+    return p.positions[0] // 첫 번째 포지션 반환
+  }
+  // 레거시 position 필드
+  return S(p.position || p.pos).toUpperCase() || ""
+}
 const isMember = (m) => {
   const s = S(m).trim().toLowerCase()
   return s === "member" || s.includes("정회원")
-}
-
-function PosChip({ pos }) {
-  if (!pos) return null
-  const isGK = pos === "GK"
-  const cls = isGK
-    ? "bg-amber-100 text-amber-800"
-    : pos === "DF"
-    ? "bg-blue-100 text-blue-800"
-    : pos === "MF"
-    ? "bg-emerald-100 text-emerald-800"
-    : pos === "FW"
-    ? "bg-purple-100 text-purple-800"
-    : "bg-stone-100 text-stone-700"
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-[2px] text-[11px] ${cls}`}>
-      {pos}
-    </span>
-  )
 }
 
 function OriginChip({ origin }) {
@@ -91,21 +94,28 @@ const aiPowerMeterColor = (power) => {
 }
 
 // ===== 편집 모달 =====
-function EditPlayerModal({ open, player, onClose, onSave }) {
+function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAddTagPreset, isAdmin }) {
   const [draft, setDraft] = useState(null)
   const [showUrlInput, setShowUrlInput] = useState(false)
   const [urlInput, setUrlInput] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [newTagName, setNewTagName] = useState('')
+  const [newTagColor, setNewTagColor] = useState('blue')
 
   useEffect(() => {
     if (open && player !== undefined) {
+      // 레거시 position을 positions 배열로 마이그레이션
+      const migratedPositions = migratePositionToPositions(player)
+      
       setDraft({
         ...player,
         id: player?.id || `new-${Date.now()}`,
         name: player?.name || "",
-        position: player?.position || "",
+        positions: migratedPositions,
         membership: isMember(player.membership) ? "정회원" : "게스트",
         origin: player.origin || "none",
+        status: player.status || "active", // 상태 기본값
+        tags: player.tags || [], // 태그 배열
         stats: ensureStatsObject(player.stats),
         photoUrl: player.photoUrl || null,
       })
@@ -134,7 +144,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
 
   const nameEmpty = !S(draft?.name).trim()
   const isNew = !player?.id
-  const posMissing = isNew && !S(draft?.position).trim()
+  const posMissing = isNew && (!draft?.positions || draft.positions.length === 0)
 
   if (!open || !draft) return null
 
@@ -252,9 +262,12 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
       ...player,
       ...draft,
       name: S(draft.name).trim(),
-      position: S(draft.position).toUpperCase(),
+      positions: draft.positions || [], // 새로운 positions 배열
+      position: undefined, // 레거시 필드 제거
       membership: draft.membership,
       origin: draft.origin || "none",
+      status: draft.status || "active", // 상태
+      tags: draft.tags || [], // 태그
       stats: ensureStatsObject(draft.stats),
       photoUrl: finalPhotoUrl, // 해시 제거, 쿼리 파라미터 유지
     }
@@ -330,8 +343,8 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
                 photoUrl={draft.photoUrl} 
               />
               {liveOVR >= 75 && (
-                <div className="absolute -top-1 -right-1 w-6 h-6 bg-amber-400 rounded-full flex items-center justify-center text-xs">
-                  ⭐
+                <div className="absolute -top-1 -right-1 w-6 h-6 bg-amber-400 rounded-full flex items-center justify-center text-[10px] font-bold text-amber-900">
+                  ★
                 </div>
               )}
             </div>
@@ -339,9 +352,15 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
               <h3 className="text-xl font-bold text-stone-900 mb-1">
                 {isNew ? '새 선수 추가' : '선수 정보 수정'}
               </h3>
-              <p className="text-sm text-stone-500">
-                {draft.name || '이름을 입력하세요'} {draft.position && `· ${draft.position}`}
-              </p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-sm text-stone-500">{draft.name || '이름을 입력하세요'}</span>
+                {draft.positions && draft.positions.length > 0 && (
+                  <>
+                    <span className="text-stone-300">·</span>
+                    <PositionChips positions={draft.positions} size="sm" maxDisplay={3} />
+                  </>
+                )}
+              </div>
             </div>
             <div className={`hidden md:flex items-center justify-center w-20 h-20 rounded-2xl bg-gradient-to-br ${getOVRColor(liveOVR)} text-white shadow-lg`}>
               <div className="text-center">
@@ -460,32 +479,73 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-blue-900 mb-2">포지션<span className="text-rose-500 ml-1">*</span></label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {['GK', 'DF', 'MF', 'FW'].map(pos => (
-                        <button
-                          key={pos}
-                          type="button"
-                          onClick={() => setDraft({ ...draft, position: pos })}
-                          className={`py-3 px-2 rounded-xl text-sm font-bold transition-all ${
-                            draft.position === pos
-                              ? pos === 'GK' ? 'bg-amber-500 text-white shadow-lg scale-105'
-                                : pos === 'DF' ? 'bg-blue-500 text-white shadow-lg scale-105'
-                                : pos === 'MF' ? 'bg-emerald-500 text-white shadow-lg scale-105'
-                                : 'bg-purple-500 text-white shadow-lg scale-105'
-                              : 'bg-white border-2 border-stone-200 text-stone-600 hover:border-stone-300'
-                          }`}
-                        >
-                          {pos}
-                        </button>
+                    <label className="block text-xs font-semibold text-blue-900 mb-2">
+                      선호 포지션<span className="text-rose-500 ml-1">*</span>
+                      <span className="ml-2 text-[10px] font-normal text-blue-600">(여러 개 선택 가능)</span>
+                    </label>
+                    
+                    {/* 선택된 포지션 표시 */}
+                    {draft.positions && draft.positions.length > 0 && (
+                      <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="text-[10px] font-semibold text-blue-700 mb-2">선택된 포지션</div>
+                        <PositionChips positions={draft.positions} size="md" maxDisplay={10} />
+                      </div>
+                    )}
+                    
+                    {/* 카테고리별 상세 포지션 선택 */}
+                    <div className="space-y-3">
+                      {Object.entries(DETAILED_POSITIONS).map(([category, positions]) => (
+                        <div key={category}>
+                          <div className={`text-[10px] font-bold mb-2 ${
+                            category === 'GK' ? 'text-amber-700' :
+                            category === 'DF' ? 'text-blue-700' :
+                            category === 'MF' ? 'text-emerald-700' :
+                            'text-purple-700'
+                          }`}>
+                            {category === 'GK' ? '골키퍼' :
+                             category === 'DF' ? '수비수' :
+                             category === 'MF' ? '미드필더' :
+                             '공격수'}
+                          </div>
+                          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                            {positions.map(pos => {
+                              const isSelected = draft.positions?.includes(pos.value)
+                              return (
+                                <button
+                                  key={pos.value}
+                                  type="button"
+                                  onClick={() => {
+                                    const currentPositions = draft.positions || []
+                                    const newPositions = isSelected
+                                      ? currentPositions.filter(p => p !== pos.value)
+                                      : [...currentPositions, pos.value]
+                                    setDraft({ ...draft, positions: newPositions })
+                                  }}
+                                  className={`py-2 px-2 rounded-lg text-xs font-bold transition-all ${
+                                    isSelected
+                                      ? category === 'GK' ? 'bg-amber-500 text-white shadow-md ring-2 ring-amber-300'
+                                        : category === 'DF' ? 'bg-blue-500 text-white shadow-md ring-2 ring-blue-300'
+                                        : category === 'MF' ? 'bg-emerald-500 text-white shadow-md ring-2 ring-emerald-300'
+                                        : 'bg-purple-500 text-white shadow-md ring-2 ring-purple-300'
+                                      : 'bg-white border-2 border-stone-200 text-stone-600 hover:border-stone-400 hover:shadow-sm'
+                                  }`}
+                                  title={pos.fullLabel}
+                                >
+                                  {pos.label}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
                       ))}
                     </div>
+                    
                     {posMissing && (
-                      <p className="mt-2 text-xs text-rose-600 flex items-center gap-1">
+                      <p className="mt-3 text-xs text-rose-600 flex items-center gap-1 bg-rose-50 p-2 rounded-lg">
                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                         </svg>
-                        포지션을 선택해주세요
+                        최소 1개 이상의 포지션을 선택해주세요
                       </p>
                     )}
                   </div>
@@ -543,6 +603,166 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
                         )
                       })}
                     </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-blue-900 mb-2">선수 상태</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {PLAYER_STATUS.map(status => {
+                        const isSelected = draft.status === status.value
+                        let selectedClass = 'bg-white border-2 border-stone-200 text-stone-600 hover:border-stone-300'
+                        
+                        if (isSelected) {
+                          if (status.color === 'emerald') {
+                            selectedClass = 'bg-emerald-500 text-white shadow-lg scale-105'
+                          } else if (status.color === 'red') {
+                            selectedClass = 'bg-red-500 text-white shadow-lg scale-105'
+                          } else if (status.color === 'blue') {
+                            selectedClass = 'bg-blue-500 text-white shadow-lg scale-105'
+                          } else if (status.color === 'amber') {
+                            selectedClass = 'bg-amber-500 text-white shadow-lg scale-105'
+                          } else if (status.color === 'slate') {
+                            selectedClass = 'bg-slate-500 text-white shadow-lg scale-105'
+                          } else {
+                            selectedClass = 'bg-stone-500 text-white shadow-lg scale-105'
+                          }
+                        }
+                        
+                        return (
+                          <button
+                            key={status.value}
+                            type="button"
+                            onClick={() => setDraft({ ...draft, status: status.value })}
+                            className={`py-3 px-4 rounded-xl text-sm font-bold transition-all ${selectedClass}`}
+                          >
+                            {status.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-blue-900 mb-2">
+                      커스텀 태그
+                      <span className="ml-2 text-[10px] font-normal text-blue-600">(선수 분류 및 정리용)</span>
+                    </label>
+                    
+                    {/* 현재 선택된 태그 표시 */}
+                    {draft.tags && draft.tags.length > 0 && (
+                      <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <div className="text-[10px] font-semibold text-blue-700 mb-2">선택된 태그</div>
+                        <div className="flex flex-wrap gap-2">
+                          {draft.tags.map((tag, idx) => (
+                            <div
+                              key={idx}
+                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border ${getTagColorClass(tag.color)}`}
+                            >
+                              <span>{tag.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newTags = draft.tags.filter((_, i) => i !== idx)
+                                  setDraft({ ...draft, tags: newTags })
+                                }}
+                                className="hover:opacity-70 transition-opacity"
+                              >
+                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* 프리셋 태그 선택 */}
+                    {tagPresets && tagPresets.length > 0 && (
+                      <div className="mb-3">
+                        <div className="text-[10px] font-semibold text-stone-700 mb-2">프리셋 태그 (클릭하여 추가)</div>
+                        <div className="flex flex-wrap gap-2">
+                          {tagPresets.map((preset, idx) => {
+                            const isSelected = draft.tags?.some(t => t.name === preset.name && t.color === preset.color)
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => {
+                                  if (isSelected) {
+                                    // 이미 선택된 태그면 제거
+                                    const newTags = draft.tags.filter(t => !(t.name === preset.name && t.color === preset.color))
+                                    setDraft({ ...draft, tags: newTags })
+                                  } else {
+                                    // 새로 추가
+                                    setDraft({ ...draft, tags: [...(draft.tags || []), preset] })
+                                  }
+                                }}
+                                className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                                  isSelected 
+                                    ? `${getTagColorClass(preset.color)} ring-2 ring-blue-400 shadow-sm` 
+                                    : `${getTagColorClass(preset.color)} opacity-60 hover:opacity-100`
+                                }`}
+                              >
+                                {preset.name}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* 새 태그 추가 (프리셋으로 저장) */}
+                    {isAdmin && (
+                      <div className="space-y-2 p-3 bg-stone-50 rounded-lg border border-stone-200">
+                        <div className="text-[10px] font-semibold text-stone-700 mb-2">새 태그 프리셋 만들기</div>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newTagName}
+                            onChange={(e) => setNewTagName(e.target.value)}
+                            placeholder="태그 이름 (예: Old Boys)"
+                            className="flex-1 rounded-lg border-2 border-stone-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && newTagName.trim()) {
+                                e.preventDefault()
+                                const newPreset = { name: newTagName.trim(), color: newTagColor }
+                                onAddTagPreset(newPreset)
+                                setNewTagName('')
+                              }
+                            }}
+                          />
+                          <select
+                            value={newTagColor}
+                            onChange={(e) => setNewTagColor(e.target.value)}
+                            className="rounded-lg border-2 border-stone-300 px-3 py-2 text-sm font-medium focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                          >
+                            {TAG_COLORS.map(color => (
+                              <option key={color.value} value={color.value}>
+                                {color.label}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (newTagName.trim()) {
+                                const newPreset = { name: newTagName.trim(), color: newTagColor }
+                                onAddTagPreset(newPreset)
+                                setNewTagName('')
+                              }
+                            }}
+                            disabled={!newTagName.trim()}
+                            className="rounded-lg bg-stone-600 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            프리셋 저장
+                          </button>
+                        </div>
+                        <div className="text-[10px] text-stone-500">
+                          프리셋으로 저장하면 모든 선수 편집 시 빠르게 선택할 수 있습니다
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -631,7 +851,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
             </button>
           </div>
           <p className="text-xs text-center text-stone-400 mt-2">
-            💡 Tip: ⌘+Enter (또는 Ctrl+Enter)로 빠르게 저장 | ESC로 닫기
+            Tip: ⌘+Enter (또는 Ctrl+Enter)로 빠르게 저장 | ESC로 닫기
           </p>
         </div>
       </div>
@@ -708,11 +928,17 @@ export default function PlayersPage({
   onCreate = () => {},
   onUpdate = () => {},
   onDelete = async () => {},
+  tagPresets = [],
+  onAddTagPreset = () => {},
+  onDeleteTagPreset = () => {},
+  isAdmin = false,
 }) {
   const [confirm, setConfirm] = useState({ open: false, id: null, name: "" })
   const [editing, setEditing] = useState({ open: false, player: null })
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('playersViewMode') || 'list') // 'card' | 'list'
   const [membershipFilter, setMembershipFilter] = useState('all') // 'all' | 'member' | 'guest'
+  const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'active' | 'injured' | etc.
+  const [selectedTags, setSelectedTags] = useState([]) // 선택된 태그들
 
   // ▼ 정렬 상태: 키 & 방향
   const [sortKey, setSortKey] = useState("name") // 'ovr' | 'pos' | 'name' | 'ai'
@@ -741,11 +967,16 @@ export default function PlayersPage({
   const cmpByNameAsc = (a,b)=> S(a.name).localeCompare(S(b.name))
 
   const cmpByPosAsc = (a,b)=>{
-    const pa = posOf(a) || ""
-    const pb = posOf(b) || ""
-    const ra = POS_ORDER.indexOf(pa)
-    const rb = POS_ORDER.indexOf(pb)
+    // 새로운 positions 배열 사용
+    const categoryA = getPrimaryCategory(a.positions) || "OTHER"
+    const categoryB = getPrimaryCategory(b.positions) || "OTHER"
+    const ra = POS_ORDER.indexOf(categoryA)
+    const rb = POS_ORDER.indexOf(categoryB)
     if (ra !== rb) return ra - rb
+    // 같은 카테고리면 첫 번째 상세 포지션으로 비교
+    const posA = (a.positions && a.positions[0]) || ""
+    const posB = (b.positions && b.positions[0]) || ""
+    if (posA !== posB) return posA.localeCompare(posB)
     return S(a.name).localeCompare(S(b.name))
   }
 
@@ -769,29 +1000,73 @@ export default function PlayersPage({
     return S(a.name).localeCompare(S(b.name))
   }
 
+  const cmpByStatusAsc = (a,b)=>{
+    // 상태 우선순위: active > recovering > suspended > inactive > nocontact
+    const STATUS_ORDER = ['active', 'recovering', 'suspended', 'inactive', 'nocontact']
+    const statusA = a.status || 'active'
+    const statusB = b.status || 'active'
+    const ra = STATUS_ORDER.indexOf(statusA)
+    const rb = STATUS_ORDER.indexOf(statusB)
+    if (ra !== rb) return (ra === -1 ? 999 : ra) - (rb === -1 ? 999 : rb)
+    return S(a.name).localeCompare(S(b.name))
+  }
+
   const sorted = useMemo(() => {
     const arr = [...players]
     let cmp = cmpByNameAsc
     if (sortKey === "ovr") cmp = cmpByOvrAsc
     else if (sortKey === "pos") cmp = cmpByPosAsc
     else if (sortKey === "ai") cmp = cmpByAIAsc
+    else if (sortKey === "status") cmp = cmpByStatusAsc
     arr.sort(applyDir(cmp))
     return arr
   }, [players, sortKey, sortDir])
 
-  // 멤버십 필터 적용
+  // 멤버십, 상태, 태그 필터 적용
   const filtered = useMemo(() => {
-    if (membershipFilter === 'all') return sorted
-    if (membershipFilter === 'member') return sorted.filter(p => isMember(p.membership))
-    if (membershipFilter === 'guest') return sorted.filter(p => !isMember(p.membership))
-    return sorted
-  }, [sorted, membershipFilter])
+    let result = sorted
+    
+    // 멤버십 필터
+    if (membershipFilter === 'member') {
+      result = result.filter(p => isMember(p.membership))
+    } else if (membershipFilter === 'guest') {
+      result = result.filter(p => !isMember(p.membership))
+    }
+    
+    // 상태 필터
+    if (statusFilter !== 'all') {
+      result = result.filter(p => (p.status || 'active') === statusFilter)
+    }
+    
+    // 태그 필터 (선택된 태그가 모두 포함된 선수만)
+    if (selectedTags.length > 0) {
+      result = result.filter(p => {
+        if (!p.tags || p.tags.length === 0) return false
+        return selectedTags.every(selectedTag => 
+          p.tags.some(tag => tag.name === selectedTag)
+        )
+      })
+    }
+    
+    return result
+  }, [sorted, membershipFilter, statusFilter, selectedTags])
 
   const counts = useMemo(() => {
     const total = players.length
     const members = players.filter((p) => isMember(p.membership)).length
     const guests = total - members
     return { total, members, guests }
+  }, [players])
+
+  // 모든 선수의 태그 수집
+  const allTags = useMemo(() => {
+    const tagSet = new Set()
+    players.forEach(p => {
+      if (p.tags && Array.isArray(p.tags)) {
+        p.tags.forEach(tag => tagSet.add(tag.name))
+      }
+    })
+    return Array.from(tagSet).sort()
   }, [players])
 
   // 새 선수 추가
@@ -802,7 +1077,7 @@ export default function PlayersPage({
         id: null,
         name: "",
         membership: "정회원",
-        position: "",
+        positions: [], // 새로운 positions 배열
         origin: "none",
         stats: ensureStatsObject({}),
       },
@@ -908,6 +1183,102 @@ export default function PlayersPage({
           <span>게스트 선수</span>
         </div>
 
+        {/* 상태 & 태그 필터 */}
+        <div className="mb-4 space-y-3">
+          {/* 상태 필터 */}
+          <div>
+            <label className="block text-xs font-semibold text-stone-700 mb-2">상태 필터</label>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setStatusFilter('all')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                  statusFilter === 'all'
+                    ? 'border-blue-500 bg-blue-500 text-white shadow-sm'
+                    : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
+                }`}
+              >
+                전체
+              </button>
+              {PLAYER_STATUS.map(status => {
+                const isActive = statusFilter === status.value
+                let buttonClass = 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
+                
+                if (isActive) {
+                  if (status.color === 'emerald') {
+                    buttonClass = 'border-emerald-500 bg-emerald-500 text-white shadow-sm'
+                  } else if (status.color === 'red') {
+                    buttonClass = 'border-red-500 bg-red-500 text-white shadow-sm'
+                  } else if (status.color === 'blue') {
+                    buttonClass = 'border-blue-500 bg-blue-500 text-white shadow-sm'
+                  } else if (status.color === 'amber') {
+                    buttonClass = 'border-amber-500 bg-amber-500 text-white shadow-sm'
+                  } else if (status.color === 'slate') {
+                    buttonClass = 'border-slate-500 bg-slate-500 text-white shadow-sm'
+                  } else {
+                    buttonClass = 'border-stone-500 bg-stone-500 text-white shadow-sm'
+                  }
+                }
+                
+                return (
+                  <button
+                    key={status.value}
+                    onClick={() => setStatusFilter(status.value)}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${buttonClass}`}
+                  >
+                    {status.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* 태그 필터 */}
+          {allTags.length > 0 && (
+            <div>
+              <label className="block text-xs font-semibold text-stone-700 mb-2">
+                태그 필터 
+                {selectedTags.length > 0 && (
+                  <span className="ml-2 text-[10px] font-normal text-blue-600">
+                    ({selectedTags.length}개 선택됨)
+                  </span>
+                )}
+              </label>
+              <div className="flex items-center gap-2 flex-wrap">
+                {selectedTags.length > 0 && (
+                  <button
+                    onClick={() => setSelectedTags([])}
+                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 transition-all"
+                  >
+                    초기화
+                  </button>
+                )}
+                {allTags.map(tagName => {
+                  const isSelected = selectedTags.includes(tagName)
+                  return (
+                    <button
+                      key={tagName}
+                      onClick={() => {
+                        if (isSelected) {
+                          setSelectedTags(selectedTags.filter(t => t !== tagName))
+                        } else {
+                          setSelectedTags([...selectedTags, tagName])
+                        }
+                      }}
+                      className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                        isSelected
+                          ? 'border-blue-500 bg-blue-500 text-white shadow-sm'
+                          : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
+                      }`}
+                    >
+                      {tagName}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* 정렬 & 뷰 모드 토글 */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2 flex-wrap">
@@ -932,6 +1303,13 @@ export default function PlayersPage({
               title="포지션 정렬 (토글: 오름/내림)"
             >
               포지션 {arrowFor('pos')}
+            </button>
+            <button
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='status' ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
+              onClick={()=>onSortClick('status')}
+              title="상태 정렬 (토글: 오름/내림)"
+            >
+              상태 {arrowFor('status')}
             </button>
             <button
               className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='name' ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
@@ -974,7 +1352,8 @@ export default function PlayersPage({
           const guest = !isMember(mem)
           const pos = posOf(p)
           const ovr = overall(p)
-          const isGK = pos === 'GK'
+          // positions 배열에 GK가 포함되어 있는지 확인
+          const isGK = p.positions?.includes('GK') || pos === 'GK'
           
           return (
             <div
@@ -995,24 +1374,56 @@ export default function PlayersPage({
                     {p.name || "이름없음"}
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    {pos && <PosChip pos={pos} />}
+                    <PositionChips positions={p.positions || []} size="sm" maxDisplay={3} />
                     <OriginChip origin={p.origin} />
+                    
+                    {/* 상태 표시 */}
+                    {p.status && p.status !== 'active' && (
+                      <span className={`inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-medium ${
+                        p.status === 'recovering' ? 'bg-red-100 text-red-800 border border-red-200' :
+                        p.status === 'inactive' ? 'bg-stone-100 text-stone-800 border border-stone-200' :
+                        p.status === 'nocontact' ? 'bg-slate-100 text-slate-800 border border-slate-200' :
+                        p.status === 'suspended' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                        'bg-stone-100 text-stone-800 border border-stone-200'
+                      }`}>
+                        {getPlayerStatusLabel(p.status)}
+                      </span>
+                    )}
                   </div>
+                  
+                  {/* 태그 표시 */}
+                  {p.tags && p.tags.length > 0 && (
+                    <div className="flex items-center gap-1 mt-2 flex-wrap">
+                      {p.tags.slice(0, 3).map((tag, idx) => (
+                        <span
+                          key={idx}
+                          className={`inline-flex items-center rounded-full px-2 py-[2px] text-[10px] font-medium border ${getTagColorClass(tag.color)}`}
+                        >
+                          {tag.name}
+                        </span>
+                      ))}
+                      {p.tags.length > 3 && (
+                        <span className="inline-flex items-center rounded-full px-2 py-[2px] text-[10px] font-medium bg-stone-100 text-stone-600 border border-stone-200">
+                          +{p.tags.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* OVR 표시 - GK가 아닐 때만 (값에 따라 색상 표시) */}
               {!isGK && (
                 <div className={`mb-3 rounded-lg p-3 text-center ${
-                  ovr === 50
+                  ovr === 30
                     ? 'bg-stone-300 text-stone-700'
                     : `bg-gradient-to-br ${ovrGradientClass(ovr)} text-white`
                 }`}>
-                  <div className={`text-xs mb-1 ${ovr === 50 ? 'text-stone-600' : 'text-white/80'}`}>Overall Rating</div>
-                  <div className={`text-3xl font-bold ${ovr === 50 ? 'text-stone-700' : 'text-white'}`}>
-                    {ovr === 50 ? '?' : ovr}
+                  <div className={`text-xs mb-1 ${ovr === 30 ? 'text-stone-600' : 'text-white/80'}`}>Overall Rating</div>
+                  <div className={`text-3xl font-bold ${ovr === 30 ? 'text-stone-700' : 'text-white'}`}>
+                    {ovr === 30 ? '?' : ovr}
                   </div>
-                  {ovr === 50 ? (
+                  {ovr === 30 ? (
                     <div className="text-[10px] text-stone-600 mt-1">Unknown</div>
                   ) : (
                     <div className="mt-2">
@@ -1036,7 +1447,7 @@ export default function PlayersPage({
 
               {/* AI Overall 점수 */}
               <div className={`mb-3 rounded-lg p-3 text-center bg-gradient-to-br ${aiPowerChipClass(calculateAIPower(p, matches)).replace('text-white', '').replace('shadow-sm', '').split(' ').filter(c => c.startsWith('from-') || c.startsWith('to-')).join(' ')} text-white shadow-md`}>
-                <div className="text-xs mb-1 text-white/80">✨ AI Overall</div>
+                <div className="text-xs mb-1 text-white/80">AI Overall</div>
                 <div className="text-2xl font-bold text-white">
                   {calculateAIPower(p, matches)}
                 </div>
@@ -1060,7 +1471,7 @@ export default function PlayersPage({
                     openEdit(p)
                   }}
                 >
-                  ✏️ 편집
+                  편집
                 </button>
                 <button
                   className="px-3 py-2 text-sm font-medium rounded-lg border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors"
@@ -1069,7 +1480,7 @@ export default function PlayersPage({
                     requestDelete(p.id, p.name)
                   }}
                 >
-                  🗑️ 삭제
+                  삭제
                 </button>
               </div>
             </div>
@@ -1085,7 +1496,8 @@ export default function PlayersPage({
             const mem = S(p.membership).trim()
             const guest = !isMember(mem)
             const pos = posOf(p)
-            const isGK = pos === 'GK'
+            // positions 배열에 GK가 포함되어 있는지 확인
+            const isGK = p.positions?.includes('GK') || pos === 'GK'
             const ovr = overall(p)
             return (
               <li
@@ -1104,19 +1516,51 @@ export default function PlayersPage({
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-stone-800 flex items-center gap-2 flex-wrap">
                     <span className="truncate">{p.name || "이름없음"}</span>
-                    {pos && <PosChip pos={pos} />}
+                    <PositionChips positions={p.positions || []} size="sm" maxDisplay={2} />
                     <OriginChip origin={p.origin} />
+                    
+                    {/* 상태 표시 */}
+                    {p.status && p.status !== 'active' && (
+                      <span className={`inline-flex items-center rounded-full px-2 py-[2px] text-[10px] font-medium ${
+                        p.status === 'recovering' ? 'bg-red-100 text-red-800 border border-red-200' :
+                        p.status === 'inactive' ? 'bg-stone-100 text-stone-800 border border-stone-200' :
+                        p.status === 'nocontact' ? 'bg-slate-100 text-slate-800 border border-slate-200' :
+                        p.status === 'suspended' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                        'bg-stone-100 text-stone-800 border border-stone-200'
+                      }`}>
+                        {getPlayerStatusLabel(p.status)}
+                      </span>
+                    )}
+                    
+                    {/* 태그 표시 */}
+                    {p.tags && p.tags.length > 0 && (
+                      <>
+                        {p.tags.slice(0, 2).map((tag, idx) => (
+                          <span
+                            key={idx}
+                            className={`inline-flex items-center rounded-full px-2 py-[2px] text-[10px] font-medium border ${getTagColorClass(tag.color)}`}
+                          >
+                            {tag.name}
+                          </span>
+                        ))}
+                        {p.tags.length > 2 && (
+                          <span className="inline-flex items-center rounded-full px-2 py-[2px] text-[10px] font-medium bg-stone-100 text-stone-600 border border-stone-200">
+                            +{p.tags.length - 2}
+                          </span>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3">
                   {!isGK && (
                     <>
-                      <span className={`inline-flex items-center rounded px-3 py-1 text-sm font-bold ${ovr === 50 ? 'bg-stone-300 text-stone-700' : ovrChipClass(ovr)}`}>
-                        {ovr === 50 ? '?' : ovr}
+                      <span className={`inline-flex items-center rounded px-3 py-1 text-sm font-bold ${ovr === 30 ? 'bg-stone-300 text-stone-700' : ovrChipClass(ovr)}`}>
+                        {ovr === 30 ? '?' : ovr}
                       </span>
                       <span className={`inline-flex items-center rounded-lg px-3 py-1 text-xs font-bold shadow-sm ${aiPowerChipClass(calculateAIPower(p, matches))}`} title="AI Overall (50-100)">
-                        ✨ {calculateAIPower(p, matches)}
+                        AI {calculateAIPower(p, matches)}
                       </span>
                     </>
                   )}
@@ -1126,7 +1570,7 @@ export default function PlayersPage({
                         GK
                       </span>
                       <span className={`inline-flex items-center rounded-lg px-3 py-1 text-xs font-bold shadow-sm ${aiPowerChipClass(calculateAIPower(p, matches))}`} title="AI Overall (50-100)">
-                        ✨ {calculateAIPower(p, matches)}
+                        AI {calculateAIPower(p, matches)}
                       </span>
                     </>
                   )}
@@ -1214,6 +1658,9 @@ export default function PlayersPage({
         player={editing.player}
         onClose={closeEdit}
         onSave={saveEdit}
+        tagPresets={tagPresets}
+        onAddTagPreset={onAddTagPreset}
+        isAdmin={isAdmin}
       />
     </div>
   )

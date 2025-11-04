@@ -32,9 +32,12 @@ export async function listPlayers() {
   return (data || []).map(row => ({
     id: row.id,
     name: row.name,
-    position: row.position || null,
+    position: row.position || null, // 레거시 필드
+    positions: row.positions || [], // 새로운 배열 필드
     membership: row.membership || null,
     origin: row.origin || 'none',
+    status: row.status || 'active', // 선수 상태
+    tags: row.tags || [], // 커스텀 태그
     photoUrl: row.photo_url || null,
     stats: row.stats || {},
     created_at: row.created_at,
@@ -43,13 +46,16 @@ export async function listPlayers() {
 }
 
 export async function upsertPlayer(p) {
-  // p: {id, name, position, membership, origin, photoUrl, stats}
+  // p: {id, name, position, positions, membership, origin, status, tags, photoUrl, stats}
   const row = {
     id: p.id,
     name: p.name ?? '',
-    position: p.position ?? null,
+    position: p.position ?? null, // 레거시 필드 (호환성)
+    positions: p.positions ?? [], // 새로운 배열 필드
     membership: p.membership ?? null,
     origin: p.origin ?? 'none',
+    status: p.status ?? 'active', // 선수 상태 저장
+    tags: p.tags ?? [], // 커스텀 태그 저장
     photo_url: p.photoUrl ?? null,
     stats: p.stats ?? {},
     updated_at: new Date().toISOString(),
@@ -95,7 +101,7 @@ export async function loadDB() {
     .select('data')
     .eq('id', ROOM_ID)
     .single()
-  if (error || !data) return { players: [], matches: [] }
+  if (error || !data) return { players: [], matches: [], tagPresets: [] }
   return data.data
 }
 
@@ -108,6 +114,26 @@ export async function saveDB(db) {
   const { error } = await supabase.from('appdb').upsert(payload)
   if (error) {
     console.error('[saveDB] upsert error', error)
+  }
+}
+
+// 태그 프리셋 관리
+export async function loadTagPresets() {
+  try {
+    const db = await loadDB()
+    return db.tagPresets || []
+  } catch (e) {
+    console.error('[loadTagPresets] failed', e)
+    return []
+  }
+}
+
+export async function saveTagPresets(tagPresets) {
+  try {
+    const db = await loadDB()
+    await saveDB({ ...db, tagPresets })
+  } catch (e) {
+    console.error('[saveTagPresets] failed', e)
   }
 }
 
@@ -141,7 +167,7 @@ export async function incrementVisits() {
     
     if (!current) {
       // 첫 초기화
-      await saveDB({ players: [], matches: [], visits: 1, upcomingMatches: [] })
+      await saveDB({ players: [], matches: [], visits: 1, upcomingMatches: [], tagPresets: [] })
       return 1
     }
 

@@ -7,7 +7,7 @@ export function clampStat(n) {
 export function ensureStatsObject(stats) {
   const out = { ...(stats || {}) }
   for (const k of STAT_KEYS) {
-    const v = Number.isFinite(out[k]) ? Number(out[k]) : 50
+    const v = Number.isFinite(out[k]) ? Number(out[k]) : 30
     out[k] = clampStat(v)
   }
   return out

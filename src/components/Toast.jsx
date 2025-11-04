@@ -6,10 +6,24 @@ export default function ToastHub() {
 
   useEffect(() => {
     function onNotify(e){
-      const id = crypto.randomUUID?.() || String(Date.now())
-      const t = { id, msg: e.detail?.message || String(e.detail || '저장되었습니다'), type: e.detail?.type || 'success' }
-      setToasts(prev => [...prev, t])
-      setTimeout(() => setToasts(prev => prev.filter(x => x.id !== id)), e.detail?.duration ?? 2200)
+      const msg = e.detail?.message || String(e.detail || '저장되었습니다')
+      const type = e.detail?.type || 'success'
+      
+      // 중복 메시지 체크: 같은 메시지가 이미 표시 중이면 무시
+      setToasts(prev => {
+        const isDuplicate = prev.some(t => t.msg === msg && t.type === type)
+        if (isDuplicate) {
+          return prev // 중복이면 추가하지 않음
+        }
+        
+        const id = crypto.randomUUID?.() || String(Date.now())
+        const t = { id, msg, type }
+        
+        // 타임아웃 설정
+        setTimeout(() => setToasts(prev => prev.filter(x => x.id !== id)), e.detail?.duration ?? 2200)
+        
+        return [...prev, t]
+      })
     }
     window.addEventListener('notify', onNotify)
     return () => window.removeEventListener('notify', onNotify)

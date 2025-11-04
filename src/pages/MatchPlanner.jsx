@@ -4,6 +4,7 @@ import Card from'../components/Card'
 import{mkMatch,decideMode,splitKTeams,hydrateMatch}from'../lib/match'
 import{overall,isUnknownPlayer}from'../lib/players'
 import{notify}from'../components/Toast'
+import PositionChips from'../components/PositionChips'
 import{DndContext,DragOverlay,pointerWithin,PointerSensor,TouchSensor,useSensor,useSensors,useDroppable}from'@dnd-kit/core'
 import{SortableContext,useSortable,verticalListSortingStrategy}from'@dnd-kit/sortable'
 import{CSS}from'@dnd-kit/utilities'
@@ -49,7 +50,34 @@ function calcFees({ total, memberCount, guestCount, guestSurcharge = 2 }) {
 
 const nextSaturday0630Local=()=>{const n=new Date(),d=new Date(n),dow=n.getDay();let add=(6-dow+7)%7;if(add===0){const t=new Date(n);t.setHours(6,30,0,0);if(n>t)add=7}d.setDate(n.getDate()+add);d.setHours(6,30,0,0);const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0'),H=String(d.getHours()).padStart(2,'0'),M=String(d.getMinutes()).padStart(2,'0');return`${y}-${m}-${dd}T${H}:${M}`}
 const POS_ORDER=['GK','DF','MF','FW','OTHER']
-const positionGroupOf=p=>{const raw=String(p.position||p.pos||'').toUpperCase();if(raw==='GK'||raw.includes('GK'))return'GK';const df=['DF','CB','LB','RB','LWB','RWB','CBR','CBL','SW'],mf=['MF','CM','DM','AM','LM','RM','CDM','CAM','RDM','LDM','RCM','LCM'],fw=['FW','ST','CF','LW','RW','RF','LF'];if(df.some(k=>raw.includes(k)))return'DF';if(mf.some(k=>raw.includes(k)))return'MF';if(fw.some(k=>raw.includes(k)))return'FW';return'OTHER'}
+
+// 멀티 포지션 지원: positions 배열 또는 레거시 position 필드
+const positionGroupOf=p=>{
+  // positions 배열 사용
+  if (p.positions && Array.isArray(p.positions) && p.positions.length > 0) {
+    const firstPos = p.positions[0].toUpperCase()
+    // GK
+    if (firstPos === 'GK') return 'GK'
+    // DF
+    if (['CB','LB','RB','LWB','RWB','SW'].includes(firstPos)) return 'DF'
+    // MF
+    if (['CDM','CM','CAM','LM','RM'].includes(firstPos)) return 'MF'
+    // FW
+    if (['ST','CF','LW','RW'].includes(firstPos)) return 'FW'
+  }
+  
+  // 레거시 position 필드
+  const raw=String(p.position||p.pos||'').toUpperCase()
+  if(raw==='GK'||raw.includes('GK'))return'GK'
+  const df=['DF','CB','LB','RB','LWB','RWB','CBR','CBL','SW']
+  const mf=['MF','CM','DM','AM','LM','RM','CDM','CAM','RDM','LDM','RCM','LCM']
+  const fw=['FW','ST','CF','LW','RW','RF','LF']
+  if(df.some(k=>raw.includes(k)))return'DF'
+  if(mf.some(k=>raw.includes(k)))return'MF'
+  if(fw.some(k=>raw.includes(k)))return'FW'
+  return'OTHER'
+}
+
 const posIndex=p=>POS_ORDER.indexOf(positionGroupOf(p))
 const sortByOVRDescWithSeed=(list,seed=0)=>seededShuffle(list.slice(),seed||0x9e3779b1).sort((a,b)=>{
   const ovrA=isUnknownPlayer(a)?0:(b.ovr??overall(b))
@@ -238,7 +266,7 @@ export default function MatchPlanner({
     const teamsSnapshot = previewTeams.map(team => team.map(p => p.id))
     const assignedPlayerIds = previewTeams.flat().map(p => p.id)
 
-    // 변경사항 자동 업데이트
+    // 변경사항 자동 업데이트 (알림 없이 - silent mode)
     const updates = {
       snapshot: teamsSnapshot,
       participantIds: assignedPlayerIds,
@@ -247,7 +275,7 @@ export default function MatchPlanner({
       teamCount: teams
     }
 
-    onUpdateUpcomingMatch(linkedUpcomingMatchId, updates)
+    onUpdateUpcomingMatch(linkedUpcomingMatchId, updates, true) // silent=true
   }, [captainIds, previewTeams, formations]) // 주장, 팀 구성, 포메이션 변경 시 자동 업데이트
 
   // Drag and drop handlers
@@ -982,7 +1010,27 @@ export default function MatchPlanner({
 function Row({label,children}){return(<div className="grid items-start gap-2 sm:grid-cols-[120px_minmax(0,1fr)]"><label className="mt-1 text-sm text-gray-600">{label}</label><div>{children}</div></div>)}
 
 /* 컬럼/플레이어 렌더 */
-function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraftMode,captainId,onRemovePlayer,onSetCaptain,matches,showAIPower}){const id=`team-${teamIndex}`,{setNodeRef,isOver}=useDroppable({id}),non=players.filter(p=>(p.position||p.pos)!=='GK'&&!isUnknownPlayer(p)),sum=non.reduce((a,p)=>a+(p.ovr??overall(p)),0),avg=non.length?Math.round(sum/non.length):0,showIndicator=dropHint?.team===teamIndex,indicator=(<li className="my-1 h-2 rounded bg-emerald-500/70 animate-pulse shadow-[0_0_0_2px_rgba(16,185,129,.35)]"/>);const rendered=[];for(let i=0;i<players.length;i++){if(showIndicator&&dropHint.index===i)rendered.push(<React.Fragment key={`hint-${i}`}>{indicator}</React.Fragment>);rendered.push(<PlayerRow key={players[i].id} player={players[i]} showOVR={showOVR} isAdmin={isAdmin} teamIndex={teamIndex} isDraftMode={isDraftMode} isCaptain={captainId===players[i].id} onRemove={onRemovePlayer} onSetCaptain={onSetCaptain} matches={matches} showAIPower={showAIPower}/>)}if(showIndicator&&dropHint.index===players.length)rendered.push(<React.Fragment key="hint-end">{indicator}</React.Fragment>)
+function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraftMode,captainId,onRemovePlayer,onSetCaptain,matches,showAIPower}){
+  const id=`team-${teamIndex}`
+  const {setNodeRef,isOver}=useDroppable({id})
+  
+  // GK 제외 (positions 배열 또는 레거시 position 필드 체크)
+  const non=players.filter(p=>{
+    const positions = p.positions || (p.position ? [p.position] : [p.pos])
+    return !positions.includes('GK') && (p.position||p.pos)!=='GK' && !isUnknownPlayer(p)
+  })
+  
+  const sum=non.reduce((a,p)=>a+(p.ovr??overall(p)),0)
+  const avg=non.length?Math.round(sum/non.length):0
+  const showIndicator=dropHint?.team===teamIndex
+  const indicator=(<li className="my-1 h-2 rounded bg-emerald-500/70 animate-pulse shadow-[0_0_0_2px_rgba(16,185,129,.35)]"/>)
+  
+  const rendered=[]
+  for(let i=0;i<players.length;i++){
+    if(showIndicator&&dropHint.index===i)rendered.push(<React.Fragment key={`hint-${i}`}>{indicator}</React.Fragment>)
+    rendered.push(<PlayerRow key={players[i].id} player={players[i]} showOVR={showOVR} isAdmin={isAdmin} teamIndex={teamIndex} isDraftMode={isDraftMode} isCaptain={captainId===players[i].id} onRemove={onRemovePlayer} onSetCaptain={onSetCaptain} matches={matches} showAIPower={showAIPower}/>)
+  }
+  if(showIndicator&&dropHint.index===players.length)rendered.push(<React.Fragment key="hint-end">{indicator}</React.Fragment>)
   return(<div ref={setNodeRef} className={`rounded-lg border bg-white transition ${isOver?'border-emerald-500 ring-2 ring-emerald-200':'border-gray-200'}`}>
     <div className={`mb-1 flex items-center justify-between px-3 py-2 text-xs ${labelKit.headerClass}`}>
       <div className="font-semibold">팀 {teamIndex+1}</div>
@@ -1042,17 +1090,7 @@ function PlayerRow({player,showOVR,isAdmin,teamIndex,isDraftMode,isCaptain,onRem
       <span className="flex items-center gap-2 min-w-0 flex-1">
         <InitialAvatar id={player.id} name={player.name} size={24} badges={!member?['G']:isCaptain?['C']:[]} photoUrl={player.photoUrl} />
         <span className="whitespace-normal break-words">{player.name}</span>
-        <span
-          className={`ml-1 inline-flex items-center rounded-full px-2 py-[2px] text-[11px] ${
-            isGK ? 'bg-amber-100 text-amber-800'
-                 : pos==='DF' ? 'bg-blue-100 text-blue-800'
-                 : pos==='MF' ? 'bg-emerald-100 text-emerald-800'
-                 : pos==='FW' ? 'bg-purple-100 text-purple-800'
-                 : 'bg-stone-100 text-stone-700'
-          }`}
-        >
-          {pos}
-        </span>
+        <PositionChips positions={player.positions || []} size="sm" maxDisplay={2} />
       </span>
 
       {!isGK && showOVR && <span className={`ovr-chip shrink-0 rounded-lg bg-gradient-to-br ${unknown?'from-stone-400 to-stone-500':getOVRColor(ovrVal)} text-white text-[11px] px-2 py-[2px] font-semibold shadow-sm`} data-ovr>
@@ -1068,7 +1106,7 @@ function PlayerRow({player,showOVR,isAdmin,teamIndex,isDraftMode,isCaptain,onRem
             animation: 'fadeIn 0.5s ease-in-out'
           }}
         >
-          ✨ {aiPower}
+          AI {aiPower}
         </span>
       )}
       

@@ -19,7 +19,7 @@ import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEna
 const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden role="img" className="shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5"/><rect x="2" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/><rect x="18.5" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>)
 
 export default function App(){
-  const[tab,setTab]=useState("dashboard"),[db,setDb]=useState({players:[],matches:[],visits:0,upcomingMatches:[]}),[selectedPlayerId,setSelectedPlayerId]=useState(null)
+  const[tab,setTab]=useState("dashboard"),[db,setDb]=useState({players:[],matches:[],visits:0,upcomingMatches:[],tagPresets:[]}),[selectedPlayerId,setSelectedPlayerId]=useState(null)
   const[isAdmin,setIsAdmin]=useState(false),[loginOpen,setLoginOpen]=useState(false)
   const[loading,setLoading]=useState(true)
   const[pageLoading,setPageLoading]=useState(false)
@@ -226,13 +226,18 @@ export default function App(){
   async function handleDeletePlayer(id){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,players:(prev.players||[]).filter(p=>p.id!==id)}));if(selectedPlayerId===id)setSelectedPlayerId(null);try{await deletePlayer(id);notify("선수를 삭제했습니다.")}catch(e){console.error(e)}}
   function handleImportPlayers(list){if(!isAdmin)return notify("Admin만 가능합니다.");const safe=Array.isArray(list)?list:[];setDb(prev=>({...prev,players:safe}));Promise.all(safe.map(upsertPlayer)).then(()=>notify("선수 목록을 가져왔습니다.")).catch(console.error);setSelectedPlayerId(null)}
   function handleResetPlayers(){if(!isAdmin)return notify("Admin만 가능합니다.");(async()=>{const fresh=await listPlayers();setDb(prev=>({...prev,players:fresh}));setSelectedPlayerId(null);notify("선수 목록을 리셋했습니다.")})()}
-  function handleSaveMatch(match){if(!isAdmin)return notify("Admin만 가능합니다.");const next=[...(db.matches||[]),match];setDb(prev=>({...prev,matches:next}));saveDB({players:[],matches:next,visits,upcomingMatches})}
-  function handleDeleteMatch(id){if(!isAdmin)return notify("Admin만 가능합니다.");const next=(db.matches||[]).filter(m=>m.id!==id);setDb(prev=>({...prev,matches:next}));saveDB({players:[],matches:next,visits,upcomingMatches});notify("매치를 삭제했습니다.")}
-  function handleUpdateMatch(id,patch){const next=(db.matches||[]).map(m=>m.id===id?{...m,...patch}:m);setDb(prev=>({...prev,matches:next}));saveDB({players:[],matches:next,visits,upcomingMatches});notify("업데이트되었습니다.")}
+  function handleSaveMatch(match){if(!isAdmin)return notify("Admin만 가능합니다.");const next=[...(db.matches||[]),match];setDb(prev=>({...prev,matches:next}));saveDB({players:[],matches:next,visits,upcomingMatches,tagPresets:db.tagPresets||[]})}
+  function handleDeleteMatch(id){if(!isAdmin)return notify("Admin만 가능합니다.");const next=(db.matches||[]).filter(m=>m.id!==id);setDb(prev=>({...prev,matches:next}));saveDB({players:[],matches:next,visits,upcomingMatches,tagPresets:db.tagPresets||[]});notify("매치를 삭제했습니다.")}
+  function handleUpdateMatch(id,patch){const next=(db.matches||[]).map(m=>m.id===id?{...m,...patch}:m);setDb(prev=>({...prev,matches:next}));saveDB({players:[],matches:next,visits,upcomingMatches,tagPresets:db.tagPresets||[]});notify("업데이트되었습니다.")}
   
-  function handleSaveUpcomingMatch(upcomingMatch){if(!isAdmin)return notify("Admin만 가능합니다.");const next=[...(db.upcomingMatches||[]),upcomingMatch];setDb(prev=>({...prev,upcomingMatches:next}));saveDB({players:[],matches,visits,upcomingMatches:next})}
-  function handleDeleteUpcomingMatch(id){if(!isAdmin)return notify("Admin만 가능합니다.");const next=(db.upcomingMatches||[]).filter(m=>m.id!==id);setDb(prev=>({...prev,upcomingMatches:next}));saveDB({players:[],matches,visits,upcomingMatches:next});notify("예정된 매치를 삭제했습니다.")}
-  function handleUpdateUpcomingMatch(id,patch){const next=(db.upcomingMatches||[]).map(m=>m.id===id?{...m,...patch}:m);setDb(prev=>({...prev,upcomingMatches:next}));saveDB({players:[],matches,visits,upcomingMatches:next});notify("예정된 매치가 업데이트되었습니다.")}
+  function handleSaveUpcomingMatch(upcomingMatch){if(!isAdmin)return notify("Admin만 가능합니다.");const next=[...(db.upcomingMatches||[]),upcomingMatch];setDb(prev=>({...prev,upcomingMatches:next}));saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:db.tagPresets||[]})}
+  function handleDeleteUpcomingMatch(id){if(!isAdmin)return notify("Admin만 가능합니다.");const next=(db.upcomingMatches||[]).filter(m=>m.id!==id);setDb(prev=>({...prev,upcomingMatches:next}));saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:db.tagPresets||[]})}
+  function handleUpdateUpcomingMatch(id,patch,silent=false){const next=(db.upcomingMatches||[]).map(m=>m.id===id?{...m,...patch}:m);setDb(prev=>({...prev,upcomingMatches:next}));saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:db.tagPresets||[]});if(!silent)notify("예정된 매치가 업데이트되었습니다.")}
+
+  // 태그 프리셋 관리
+  function handleSaveTagPresets(tagPresets){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,tagPresets}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets});notify("태그 프리셋이 저장되었습니다.")}
+  function handleAddTagPreset(preset){if(!isAdmin)return notify("Admin만 가능합니다.");const next=[...(db.tagPresets||[]),preset];setDb(prev=>({...prev,tagPresets:next}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets:next})}
+  function handleDeleteTagPreset(index){if(!isAdmin)return notify("Admin만 가능합니다.");const next=(db.tagPresets||[]).filter((_,i)=>i!==index);setDb(prev=>({...prev,tagPresets:next}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets:next})}
 
   // Supabase Auth: 로그아웃
   async function adminLogout(){
@@ -465,6 +470,10 @@ export default function App(){
                   onDelete={handleDeletePlayer}
                   onImport={handleImportPlayers}
                   onReset={handleResetPlayers}
+                  tagPresets={db.tagPresets||[]}
+                  onAddTagPreset={handleAddTagPreset}
+                  onDeleteTagPreset={handleDeleteTagPreset}
+                  isAdmin={isAdmin}
                 />
               )}
               {tab==="planner"&&isAdmin&&featuresEnabled.planner&&(<MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>)}
