@@ -145,11 +145,14 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
     try{
       const playerName = draft.name?.trim() || 'unnamed'
       const publicUrl = await uploadPlayerPhoto(file, draft.id || 'temp', playerName, draft.photoUrl)
-      setDraft(prev => ({...prev, photoUrl: publicUrl}))
-      notify('사진이 업로드되었습니다.')
+      
+      // 강제 리렌더링을 위해 약간의 지연 후 상태 업데이트
+      setDraft(prev => ({...prev, photoUrl: `${publicUrl}#${Date.now()}`}))
+      
+      notify('✅ 사진이 업로드되었습니다.', 'success', 2000)
     } catch(err) {
       console.error(err)
-      notify(err.message || '사진 업로드에 실패했습니다.', 'error')
+      notify(`❌ ${err.message || '사진 업로드에 실패했습니다.'}`, 'error', 5000)
     } finally {
       setUploading(false)
     }
@@ -201,22 +204,24 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
     
     // 이전 사진이 있었는데 변경된 경우 삭제
     const oldPhotoUrl = player?.photoUrl
-    const newPhotoUrl = draft.photoUrl || null
+    // URL에서 해시 프래그먼트 제거 (#1234567890)
+    const cleanNewPhotoUrl = draft.photoUrl ? draft.photoUrl.split('#')[0] : null
+    const cleanOldPhotoUrl = oldPhotoUrl ? oldPhotoUrl.split('#')[0] : null
     
     console.log('🔍 사진 변경 확인:', {
-      oldPhotoUrl,
-      newPhotoUrl,
-      changed: oldPhotoUrl !== newPhotoUrl,
-      isUploadedPhoto: oldPhotoUrl && !oldPhotoUrl.startsWith('RANDOM:') && oldPhotoUrl.includes('player-photos')
+      oldPhotoUrl: cleanOldPhotoUrl,
+      newPhotoUrl: cleanNewPhotoUrl,
+      changed: cleanOldPhotoUrl !== cleanNewPhotoUrl,
+      isUploadedPhoto: cleanOldPhotoUrl && !cleanOldPhotoUrl.startsWith('RANDOM:') && cleanOldPhotoUrl.includes('player-photos')
     })
     
-    if (oldPhotoUrl && oldPhotoUrl !== newPhotoUrl) {
+    if (cleanOldPhotoUrl && cleanOldPhotoUrl !== cleanNewPhotoUrl) {
       // 이전 사진이 업로드된 사진(player-photos 버킷)이고, RANDOM이 아닌 경우
-      if (!oldPhotoUrl.startsWith('RANDOM:') && oldPhotoUrl.includes('player-photos')) {
+      if (!cleanOldPhotoUrl.startsWith('RANDOM:') && cleanOldPhotoUrl.includes('player-photos')) {
         try {
-          console.log('🗑️ 이전 사진 삭제 시작:', oldPhotoUrl)
-          await deletePlayerPhoto(oldPhotoUrl)
-          console.log('✅ 이전 사진 삭제 완료:', oldPhotoUrl)
+          console.log('🗑️ 이전 사진 삭제 시작:', cleanOldPhotoUrl)
+          await deletePlayerPhoto(cleanOldPhotoUrl)
+          console.log('✅ 이전 사진 삭제 완료:', cleanOldPhotoUrl)
         } catch (error) {
           console.error('❌ 이전 사진 삭제 실패:', error)
           console.warn('⚠️ 이전 사진 삭제 실패 (무시하고 계속):', error)
@@ -236,7 +241,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
       membership: draft.membership,
       origin: draft.origin || "none",
       stats: ensureStatsObject(draft.stats),
-      photoUrl: newPhotoUrl,
+      photoUrl: cleanNewPhotoUrl, // 해시 제거된 깨끗한 URL 저장
     }
     
     // 새 선수일 경우 ID 제거 (Supabase가 자동 생성)
@@ -343,8 +348,14 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
                       />
                       <div className="flex-1 flex flex-col gap-2">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <label className={`cursor-pointer rounded-lg border-2 border-blue-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 transition-colors ${uploading ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                            {uploading ? '업로드 중...' : '업로드'}
+                          <label className={`cursor-pointer rounded-lg border-2 bg-white px-3 py-1.5 text-xs font-medium transition-colors flex items-center gap-2 ${uploading ? 'opacity-50 cursor-not-allowed border-stone-300 text-stone-500' : 'border-blue-200 text-blue-700 hover:bg-blue-50'}`}>
+                            {uploading && (
+                              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/>
+                                <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                              </svg>
+                            )}
+                            {uploading ? '업로드 중...' : '📸 업로드'}
                             <input hidden type="file" accept="image/*" onChange={(e)=> onPickPhoto(e.target.files?.[0] || null)} disabled={uploading} />
                           </label>
                           <button 
@@ -353,7 +364,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
                             onClick={()=>setShowUrlInput(!showUrlInput)}
                             disabled={uploading}
                           >
-                            URL
+                            🔗 URL
                           </button>
                           <button 
                             type="button"
@@ -361,7 +372,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
                             onClick={resetToRandom}
                             disabled={uploading}
                           >
-                            랜덤
+                            🎲 랜덤
                           </button>
                         </div>
                         
@@ -635,6 +646,22 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
           box-shadow: 0 3px 8px rgba(16, 185, 129, 0.4);
         }
       `}</style>
+      
+      {/* 업로드 로딩 오버레이 */}
+      {uploading && (
+        <div className="absolute inset-0 z-10 bg-black/40 backdrop-blur-sm flex items-center justify-center rounded-2xl">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 flex flex-col items-center gap-4 max-w-sm mx-4">
+            <svg className="w-16 h-16 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.25"/>
+              <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+            </svg>
+            <div className="text-center">
+              <div className="text-lg font-bold text-stone-900 mb-1">사진 업로드 중...</div>
+              <div className="text-sm text-stone-500">잠시만 기다려주세요</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 

@@ -20,7 +20,7 @@ export default function ToastHub() {
   }
 
   return (
-    <div className="pointer-events-none fixed left-0 right-0 z-[250] flex flex-col items-center gap-2 px-2" style={{ top: '60px' }}>
+    <div className="pointer-events-none fixed left-0 right-0 z-[350] flex flex-col items-center gap-2 px-2" style={{ top: '60px' }}>
       {toasts.map(t => (
         <div key={t.id}
           className={`pointer-events-auto w-full max-w-sm rounded-xl border px-4 py-3 shadow-lg backdrop-blur flex items-center justify-between gap-3

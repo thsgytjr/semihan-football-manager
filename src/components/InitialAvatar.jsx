@@ -97,16 +97,19 @@ export default function InitialAvatar({ id, name, size = 24, badges = [], photoU
         // 사진이 있으면 이미지 표시 (흰색 배경 + 테두리)
         <div className="h-full w-full rounded-full bg-white border-2 border-gray-200 shadow-sm overflow-hidden">
           <img 
-            src={actualPhotoUrl} 
+            src={actualPhotoUrl}
             alt={name || 'Player'} 
             className="h-full w-full object-cover"
+            key={actualPhotoUrl} // URL이 변경되면 이미지 엘리먼트를 새로 생성
+            loading="eager" // 즉시 로드
             onError={(e) => {
               // 이미지 로드 실패 시 폴백
               e.target.style.display = 'none'
               const parent = e.target.parentElement
               if (parent) {
                 parent.style.display = 'none'
-                parent.nextSibling.style.display = 'flex'
+                const fallback = parent.nextSibling
+                if (fallback) fallback.style.display = 'flex'
               }
             }}
           />
