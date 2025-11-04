@@ -13,10 +13,10 @@ const BUCKET_NAME = 'player-photos' // Supabase Storage 버킷 이름
 export async function uploadPlayerPhoto(file, playerId, oldPhotoUrl = null) {
   if (!file) throw new Error('파일이 없습니다.')
   
-  // 파일 크기 검증 (1MB = 1048576 bytes)
-  const MAX_SIZE = 1 * 1024 * 1024 // 1MB
+  // 파일 크기 검증 (5MB = 5242880 bytes)
+  const MAX_SIZE = 5 * 1024 * 1024 // 5MB
   if (file.size > MAX_SIZE) {
-    throw new Error('파일 크기는 1MB 이하여야 합니다.')
+    throw new Error('파일 크기는 5MB 이하여야 합니다.')
   }
   
   // 이미지 파일 타입 검증
