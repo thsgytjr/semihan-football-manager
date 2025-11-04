@@ -175,15 +175,19 @@ export async function uploadPlayerPhoto(file, playerId, playerName = null, oldPh
       }
     }
     
-    // 6. 파일명 및 경로 생성 (선수 이름 사용, 특수문자 제거)
-    const sanitizedName = (playerName || playerId)
-      .replace(/[^a-zA-Z0-9가-힣ㄱ-ㅎㅏ-ㅣ\s-]/g, '') // 특수문자 제거
-      .replace(/\s+/g, '_') // 공백을 언더스코어로
-      .trim()
+    // 6. 파일명 및 경로 생성 (영문/숫자만 사용하여 안전한 파일명)
+    // Supabase Storage는 특수문자와 공백에 민감하므로 영문/숫자만 허용
+    const sanitizedName = (playerName || 'player')
+      .replace(/[^a-zA-Z0-9]/g, '') // 영문/숫자만 허용 (한글, 공백, 특수문자 모두 제거)
+      .toLowerCase()
+      .slice(0, 20) // 최대 20자로 제한
     
     const fileExtension = uploadFile.type === 'image/png' ? 'png' : 'jpg'
-    const fileName = `${sanitizedName}_${playerId}.${fileExtension}`
+    // 이름이 비어있으면 ID만 사용
+    const fileName = sanitizedName ? `${sanitizedName}_${playerId}.${fileExtension}` : `${playerId}.${fileExtension}`
     const filePath = `players/${fileName}`
+    
+    console.log('📝 파일 경로:', filePath)
     
     // 7. 업로드 (재시도 포함)
     await uploadWithRetry(filePath, uploadFile, {
