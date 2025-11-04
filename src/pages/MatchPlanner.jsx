@@ -20,6 +20,14 @@ import captainIcon from '../assets/Captain.PNG'
 /* ───────── 게스트 판별/뱃지 유틸 ───────── */
 const S=(v)=>v==null?'':String(v)
 const isMember=(m)=>{const s=S(m).trim().toLowerCase();return s==='member'||s.includes('정회원')}
+const isAssociate=(m)=>{const s=S(m).trim().toLowerCase();return s==='associate'||s.includes('준회원')}
+const isGuest=(m)=>{const s=S(m).trim().toLowerCase();return s==='guest'||s.includes('게스트')}
+const getBadges=(membership,isCaptain=false)=>{
+  if(isCaptain)return['C']
+  if(isAssociate(membership))return['준']
+  if(isGuest(membership))return['G']
+  return[]
+}
 const GuestBadge=()=>(
   <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200">G</span>
 )
@@ -1088,7 +1096,7 @@ function PlayerRow({player,showOVR,isAdmin,teamIndex,isDraftMode,isCaptain,onRem
   return(
     <li ref={setNodeRef} style={style} className="flex items-start gap-2 border-t border-gray-100 pt-1 first:border-0 first:pt-0 touch-manipulation cursor-grab active:cursor-grabbing" {...attributes}{...listeners}>
       <span className="flex items-center gap-2 min-w-0 flex-1">
-        <InitialAvatar id={player.id} name={player.name} size={24} badges={!member?['G']:isCaptain?['C']:[]} photoUrl={player.photoUrl} />
+        <InitialAvatar id={player.id} name={player.name} size={24} badges={getBadges(player.membership,isCaptain)} photoUrl={player.photoUrl} />
         <span className="whitespace-normal break-words">{player.name}</span>
         <PositionChips positions={player.positions || []} size="sm" maxDisplay={2} />
       </span>
@@ -1161,10 +1169,10 @@ function kitForTeam(i){return[
   {label:"핑크",headerClass:"bg-pink-600 text-white border-b border-pink-700"},
   {label:"옐로",headerClass:"bg-yellow-400 text-stone-900 border-b border-yellow-500"},
 ][i%10]}
-function DragGhost({player,showOVR}){if(!player)return null;const pos=positionGroupOf(player),isGK=pos==='GK',unknown=isUnknownPlayer(player),ovrVal=unknown?'?':player.ovr??overall(player);const member=isMember(player.membership);return(
+function DragGhost({player,showOVR}){if(!player)return null;const pos=positionGroupOf(player),isGK=pos==='GK',unknown=isUnknownPlayer(player),ovrVal=unknown?'?':player.ovr??overall(player);return(
   <div className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 shadow-lg">
     <div className="flex items-center gap-2 text-sm">
-  <InitialAvatar id={player.id} name={player.name} size={22} badges={!member?['G']:[]} photoUrl={player.photoUrl} />
+  <InitialAvatar id={player.id} name={player.name} size={22} badges={getBadges(player.membership)} photoUrl={player.photoUrl} />
       <span className="truncate">{player.name}</span>
   {/* guest badge is shown on avatar */}
       <span className={`ml-1 inline-flex items-center rounded-full px-2 py-[2px] text-[11px] ${isGK?'bg-amber-100 text-amber-800':pos==='DF'?'bg-blue-100 text-blue-800':pos==='MF'?'bg-emerald-100 text-emerald-800':pos==='FW'?'bg-purple-100 text-purple-800':'bg-stone-100 text-stone-700'}`}>{pos}</span>
@@ -1243,14 +1251,13 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
               <div className="max-h-[400px] overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
                   {filtered.map(p => {
-                    const member = isMember(p.membership)
                     return (
                       <button 
                         key={p.id} 
                         onClick={() => addPlayerToTeam(p.id)}
                         className="flex items-center gap-2 text-xs p-2 rounded hover:bg-white hover:shadow-sm cursor-pointer transition border border-transparent hover:border-emerald-200"
                       >
-                        <InitialAvatar id={p.id} name={p.name} size={28} badges={!member?['G']:[]} photoUrl={p.photoUrl} />
+                        <InitialAvatar id={p.id} name={p.name} size={28} badges={getBadges(p.membership)} photoUrl={p.photoUrl} />
                         <span className="truncate text-left flex-1">{p.name}</span>
                         <span className="text-emerald-600 text-lg leading-none">+</span>
                       </button>

@@ -269,6 +269,8 @@ export function computeDuoRows(players = [], matches = []) {
       gName: gP.name,
       aPhotoUrl: aP.photoUrl || null,
       gPhotoUrl: gP.photoUrl || null,
+      aMembership: aP.membership || '',
+      gMembership: gP.membership || '',
       count: cnt,
       aIsGuest: !isMember(aP.membership),
       gIsGuest: !isMember(gP.membership)

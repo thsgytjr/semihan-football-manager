@@ -39,6 +39,14 @@ const isMember = (m) => {
   const s = S(m).trim().toLowerCase()
   return s === "member" || s.includes("정회원")
 }
+const isAssociate = (m) => {
+  const s = S(m).trim().toLowerCase()
+  return s === "associate" || s.includes("준회원")
+}
+const isGuest = (m) => {
+  const s = S(m).trim().toLowerCase()
+  return s === "guest" || s.includes("게스트")
+}
 
 function OriginChip({ origin }) {
   if (!origin || origin === "none") return null
@@ -107,12 +115,25 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
       // 레거시 position을 positions 배열로 마이그레이션
       const migratedPositions = migratePositionToPositions(player)
       
+      // 멤버십 정규화: DB 값을 한글로 변환
+      let normalizedMembership = "정회원" // 기본값
+      if (player.membership) {
+        const mem = S(player.membership).trim()
+        if (isAssociate(mem)) {
+          normalizedMembership = "준회원"
+        } else if (isGuest(mem)) {
+          normalizedMembership = "게스트"
+        } else if (isMember(mem)) {
+          normalizedMembership = "정회원"
+        }
+      }
+      
       setDraft({
         ...player,
         id: player?.id || `new-${Date.now()}`,
         name: player?.name || "",
         positions: migratedPositions,
-        membership: isMember(player.membership) ? "정회원" : "게스트",
+        membership: normalizedMembership,
         origin: player.origin || "none",
         status: player.status || "active", // 상태 기본값
         tags: player.tags || [], // 태그 배열
@@ -300,7 +321,9 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
 
   // 실시간 OVR
   const liveOVR = overall(draft) ?? 0
-  const isGuest = S(draft.membership).includes("게스트")
+  const mem = S(draft.membership).trim()
+  const isAssociatePlayer = isAssociate(mem)
+  const isGuestPlayer = isGuest(mem)
 
   // OVR에 따른 색상
   const getOVRColor = (ovr) => {
@@ -339,7 +362,7 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
                 id={draft.id} 
                 name={draft.name} 
                 size={56} 
-                badges={isGuest?['G']:[]} 
+                badges={isAssociatePlayer ? ['준'] : isGuestPlayer ? ['G'] : []} 
                 photoUrl={draft.photoUrl} 
               />
               {liveOVR >= 75 && (
@@ -394,7 +417,7 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
                         name={draft.name} 
                         size={64} 
                         photoUrl={draft.photoUrl}
-                        badges={isGuest ? ['G'] : []} 
+                        badges={isAssociatePlayer ? ['준'] : isGuestPlayer ? ['G'] : []} 
                       />
                       <div className="flex-1 flex flex-col gap-2">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -595,8 +618,8 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
 
                   <div>
                     <label className="block text-xs font-semibold text-blue-900 mb-2">멤버십</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {['정회원', '게스트'].map(mem => (
+                    <div className="grid grid-cols-3 gap-2">
+                      {['정회원', '준회원', '게스트'].map(mem => (
                         <button
                           key={mem}
                           type="button"
@@ -605,6 +628,8 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
                             draft.membership === mem
                               ? mem === '정회원' 
                                 ? 'bg-emerald-500 text-white shadow-lg scale-105'
+                                : mem === '준회원'
+                                ? 'bg-amber-500 text-white shadow-lg scale-105'
                                 : 'bg-stone-500 text-white shadow-lg scale-105'
                               : 'bg-white border-2 border-stone-200 text-stone-600 hover:border-stone-300'
                           }`}
@@ -979,7 +1004,7 @@ export default function PlayersPage({
   const [confirm, setConfirm] = useState({ open: false, id: null, name: "" })
   const [editing, setEditing] = useState({ open: false, player: null })
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('playersViewMode') || 'list') // 'card' | 'list'
-  const [membershipFilter, setMembershipFilter] = useState('all') // 'all' | 'member' | 'guest'
+  const [membershipFilter, setMembershipFilter] = useState('all') // 'all' | 'member' | 'associate' | 'guest'
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'active' | 'injured' | etc.
   const [selectedTags, setSelectedTags] = useState([]) // 선택된 태그들
 
@@ -1072,8 +1097,10 @@ export default function PlayersPage({
     // 멤버십 필터
     if (membershipFilter === 'member') {
       result = result.filter(p => isMember(p.membership))
+    } else if (membershipFilter === 'associate') {
+      result = result.filter(p => isAssociate(p.membership))
     } else if (membershipFilter === 'guest') {
-      result = result.filter(p => !isMember(p.membership))
+      result = result.filter(p => isGuest(p.membership))
     }
     
     // 상태 필터
@@ -1097,8 +1124,9 @@ export default function PlayersPage({
   const counts = useMemo(() => {
     const total = players.length
     const members = players.filter((p) => isMember(p.membership)).length
-    const guests = total - members
-    return { total, members, guests }
+    const associates = players.filter((p) => isAssociate(p.membership)).length
+    const guests = players.filter((p) => isGuest(p.membership)).length
+    return { total, members, associates, guests }
   }, [players])
 
   // 모든 선수의 태그 수집
@@ -1184,12 +1212,12 @@ export default function PlayersPage({
         </div>
 
         {/* 통계 카드 */}
-        <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-4 gap-3 mb-4">
           <button
             onClick={() => setMembershipFilter('all')}
             className={`bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-4 border-2 transition-all hover:shadow-md ${membershipFilter === 'all' ? 'border-blue-500 shadow-md' : 'border-blue-200'}`}
           >
-            <div className="text-xs font-medium text-blue-700 mb-1">전체 선수</div>
+            <div className="text-xs font-medium text-blue-700 mb-1">전체</div>
             <div className="text-2xl font-bold text-blue-900">{counts.total}</div>
           </button>
           <button
@@ -1198,6 +1226,13 @@ export default function PlayersPage({
           >
             <div className="text-xs font-medium text-emerald-700 mb-1">정회원</div>
             <div className="text-2xl font-bold text-emerald-900">{counts.members}</div>
+          </button>
+          <button
+            onClick={() => setMembershipFilter('associate')}
+            className={`bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-4 border-2 transition-all hover:shadow-md ${membershipFilter === 'associate' ? 'border-amber-500 shadow-md' : 'border-amber-200'}`}
+          >
+            <div className="text-xs font-medium text-amber-700 mb-1">준회원</div>
+            <div className="text-2xl font-bold text-amber-900">{counts.associates}</div>
           </button>
           <button
             onClick={() => setMembershipFilter('guest')}
@@ -1211,19 +1246,34 @@ export default function PlayersPage({
           </button>
         </div>
 
-        {/* G 뱃지 설명 */}
-        <div className="mb-4 flex items-center gap-2 text-xs text-stone-600">
-          <span 
-            className="inline-flex items-center justify-center w-4 h-4 rounded-full text-white text-[8px] font-bold border"
-            style={{ 
-              backgroundColor: 'rgb(251, 229, 230)',
-              borderColor: 'rgb(244, 201, 204)',
-              color: 'rgb(136, 19, 55)'
-            }}
-          >
-            G
-          </span>
-          <span>게스트 선수</span>
+        {/* 배지 설명 */}
+        <div className="mb-4 flex items-center gap-4 text-xs text-stone-600">
+          <div className="flex items-center gap-2">
+            <span 
+              className="inline-flex items-center justify-center w-4 h-4 rounded-full text-white text-[8px] font-bold border"
+              style={{ 
+                backgroundColor: 'rgb(254, 243, 199)',
+                borderColor: 'rgb(253, 224, 71)',
+                color: 'rgb(146, 64, 14)'
+              }}
+            >
+              준
+            </span>
+            <span>준회원</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span 
+              className="inline-flex items-center justify-center w-4 h-4 rounded-full text-white text-[8px] font-bold border"
+              style={{ 
+                backgroundColor: 'rgb(251, 229, 230)',
+                borderColor: 'rgb(244, 201, 204)',
+                color: 'rgb(136, 19, 55)'
+              }}
+            >
+              G
+            </span>
+            <span>게스트</span>
+          </div>
         </div>
 
         {/* 상태 & 태그 필터 */}
@@ -1392,7 +1442,9 @@ export default function PlayersPage({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map((p) => {
           const mem = S(p.membership).trim()
-          const guest = !isMember(mem)
+          const associate = isAssociate(mem)
+          const guest = isGuest(mem)
+          const badges = associate ? ['준'] : guest ? ['G'] : []
           const pos = posOf(p)
           const ovr = overall(p)
           // positions 배열에 GK가 포함되어 있는지 확인
@@ -1409,7 +1461,7 @@ export default function PlayersPage({
                   id={p.id} 
                   name={p.name} 
                   size={48} 
-                  badges={guest?['G']:[]} 
+                  badges={badges} 
                   photoUrl={p.photoUrl} 
                 />
                 <div className="flex-1 min-w-0">
@@ -1537,7 +1589,9 @@ export default function PlayersPage({
         <ul className="rounded-lg border border-stone-200 bg-white divide-y divide-stone-200 shadow-sm">
           {filtered.map((p) => {
             const mem = S(p.membership).trim()
-            const guest = !isMember(mem)
+            const associate = isAssociate(mem)
+            const guest = isGuest(mem)
+            const badges = associate ? ['준'] : guest ? ['G'] : []
             const pos = posOf(p)
             // positions 배열에 GK가 포함되어 있는지 확인
             const isGK = p.positions?.includes('GK') || pos === 'GK'
@@ -1552,7 +1606,7 @@ export default function PlayersPage({
                   id={p.id} 
                   name={p.name} 
                   size={40} 
-                  badges={guest?['G']:[]} 
+                  badges={badges} 
                   photoUrl={p.photoUrl} 
                 />
 

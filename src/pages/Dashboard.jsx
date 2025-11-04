@@ -20,6 +20,22 @@ import {
   computeDraftAttackRows
 } from '../lib/leaderboardComputations'
 
+// 멤버십 helper 함수
+const S = (v) => v == null ? '' : String(v)
+const isAssociate = (m) => {
+  const s = S(m).trim().toLowerCase()
+  return s === 'associate' || s.includes('준회원')
+}
+const isGuest = (m) => {
+  const s = S(m).trim().toLowerCase()
+  return s === 'guest' || s.includes('게스트')
+}
+const getBadges = (membership) => {
+  if (isAssociate(membership)) return ['준']
+  if (isGuest(membership)) return ['G']
+  return []
+}
+
 /* --------------------------------------------------------
    MOBILE-FIRST LEADERBOARD (Compact Segmented Tabs)
    - Tabs collapse into scrollable chips on small screens
@@ -397,7 +413,7 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls, apDateKey, initia
   const renderRow = (r, tone) => (
     <>
       <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
-      <PlayerNameCell id={r.id} name={r.name} isGuest={r.isGuest} tone={tone} photoUrl={r.photoUrl} />
+      <PlayerNameCell id={r.id} name={r.name} membership={r.membership} tone={tone} photoUrl={r.photoUrl} />
       <StatCell value={r.points} tone={tone} align="center" />
       <FormDotsCell form={r.last5} tone={tone} />
     </>
@@ -454,7 +470,7 @@ function DraftWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialB
   const renderRow = (r, tone) => (
     <>
       <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
-      <PlayerNameCell id={r.id} name={r.name} isGuest={r.isGuest} tone={tone} photoUrl={r.photoUrl} />
+      <PlayerNameCell id={r.id} name={r.name} membership={r.membership} tone={tone} photoUrl={r.photoUrl} />
       <StatCell value={r.points} tone={tone} align="center" />
       <FormDotsCell form={r.last5} tone={tone} />
     </>
@@ -512,7 +528,7 @@ function DraftAttackTable({ rows, showAll, onToggle, controls, apDateKey, initia
   const renderRow = (r, tone) => (
     <>
       <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
-      <PlayerNameCell id={r.id} name={r.name} isGuest={r.isGuest} tone={tone} photoUrl={r.photoUrl} />
+      <PlayerNameCell id={r.id} name={r.name} membership={r.membership} tone={tone} photoUrl={r.photoUrl} />
       <StatCell value={r.gp} tone={tone} align="center" />
       <StatCell value={r.g} tone={tone} align="center" />
       <StatCell value={r.a} tone={tone} align="center" />
@@ -772,7 +788,7 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
                         id={r.id || r.name} 
                         name={r.name} 
                         size={32} 
-                        badges={r.isGuest ? ['G'] : []}
+                        badges={getBadges(r.membership)}
                         photoUrl={r.photoUrl}
                       />
                     </div>
@@ -841,10 +857,10 @@ function DuoTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselin
       <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
       <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
         <div className="flex items-center gap-2">
-          <InitialAvatar id={r.assistId} name={r.aName} size={28} badges={r.aIsGuest ? ['G'] : []} photoUrl={r.aPhotoUrl} />
+          <InitialAvatar id={r.assistId} name={r.aName} size={28} badges={getBadges(r.aMembership)} photoUrl={r.aPhotoUrl} />
           <span className="font-medium">{r.aName}</span>
           <span className="mx-1 text-stone-400">→</span>
-          <InitialAvatar id={r.goalId} name={r.gName} size={28} badges={r.gIsGuest ? ['G'] : []} photoUrl={r.gPhotoUrl} />
+          <InitialAvatar id={r.goalId} name={r.gName} size={28} badges={getBadges(r.gMembership)} photoUrl={r.gPhotoUrl} />
           <span className="font-medium">{r.gName}</span>
         </div>
       </td>

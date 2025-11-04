@@ -39,6 +39,7 @@ function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null }) {
   const renderBadge = (label, idx) => {
     const isCaptain = String(label).toUpperCase() === 'C'
     const isGuest = String(label).toUpperCase() === 'G'
+    const isAssociate = String(label).toUpperCase() === '준'
     
     // 주장 뱃지: Captain.PNG 이미지 사용
     if (isCaptain) {
@@ -61,19 +62,26 @@ function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null }) {
     }
     
     // 게스트 뱃지: RGB(251, 229, 230) 배경, RGB(136, 19, 55) 텍스트
+    // 준회원 뱃지: RGB(254, 243, 199) 배경, RGB(146, 64, 14) 텍스트 (노란색 계열)
     const badgeStyle = isGuest 
       ? { 
           backgroundColor: 'rgb(251, 229, 230)', 
           borderColor: 'rgb(244, 201, 204)',
           color: 'rgb(136, 19, 55)'
         }
+      : isAssociate
+      ? {
+          backgroundColor: 'rgb(254, 243, 199)',
+          borderColor: 'rgb(253, 224, 71)',
+          color: 'rgb(146, 64, 14)'
+        }
       : {}
     
-    const bgCls = isGuest 
+    const bgCls = (isGuest || isAssociate)
       ? 'border' // 스타일로 색상 지정
       : 'bg-white border-stone-300 text-stone-800'
     
-    const title = isGuest ? '게스트' : String(label)
+    const title = isGuest ? '게스트' : isAssociate ? '준회원' : String(label)
     // Offset badges from right to left
     const right = idx * (badgeSize - badgeGap)
     return (
@@ -88,7 +96,7 @@ function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null }) {
           transform: 'translate(25%, 25%)',
           fontSize: badgeFont,
           lineHeight: 1,
-          ...(isGuest ? badgeStyle : {})
+          ...((isGuest || isAssociate) ? badgeStyle : {})
         }}
       >
         {String(label).toUpperCase()}
