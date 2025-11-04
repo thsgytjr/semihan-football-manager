@@ -15,7 +15,6 @@ const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
  */
 async function convertToJPEG(file) {
   return new Promise((resolve, reject) => {
-    console.log(`🔄 ${file.type || file.name} 변환 시작...`)
     const reader = new FileReader()
     
     reader.onload = (e) => {
@@ -55,7 +54,6 @@ async function convertToJPEG(file) {
                 type: 'image/jpeg',
                 lastModified: Date.now()
               })
-              console.log(`✅ 변환 완료: ${(blob.size / 1024).toFixed(2)}KB`)
               resolve(newFile)
             } else {
               reject(new Error('이미지 변환 실패: Blob 생성 실패'))
@@ -80,8 +78,6 @@ async function convertToJPEG(file) {
  */
 async function uploadWithRetry(filePath, file, options, retries = 0) {
   try {
-    console.log(`📤 업로드 시도 (${retries + 1}/${MAX_RETRIES + 1})`)
-    
     const { data, error } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(filePath, file, options)
@@ -100,7 +96,6 @@ async function uploadWithRetry(filePath, file, options, retries = 0) {
       
       // 재시도 가능한 에러 (네트워크 등)
       if (retries < MAX_RETRIES) {
-        console.warn(`⚠️ 업로드 실패, ${RETRY_DELAY}ms 후 재시도...`, error.message)
         await delay(RETRY_DELAY)
         return uploadWithRetry(filePath, file, options, retries + 1)
       }
@@ -108,11 +103,9 @@ async function uploadWithRetry(filePath, file, options, retries = 0) {
       throw new Error(`업로드 실패 (${MAX_RETRIES + 1}회 시도): ${error.message}`)
     }
     
-    console.log('✅ 업로드 성공')
     return data
   } catch (err) {
     if (retries < MAX_RETRIES && !err.message.includes('Bucket') && !err.message.includes('권한') && !err.message.includes('너무 큽니다')) {
-      console.warn(`⚠️ 예외 발생, ${RETRY_DELAY}ms 후 재시도...`, err.message)
       await delay(RETRY_DELAY)
       return uploadWithRetry(filePath, file, options, retries + 1)
     }
@@ -134,8 +127,6 @@ export async function uploadPlayerPhoto(file, playerId, playerName = null, oldPh
     if (!file) {
       throw new Error('파일이 선택되지 않았습니다.')
     }
-    
-    console.log(`📸 업로드 시작: ${file.name} (${(file.size / 1024).toFixed(2)}KB)`)
     
     // 2. 파일 크기 검증 (5MB)
     const MAX_SIZE = 5 * 1024 * 1024
@@ -160,7 +151,6 @@ export async function uploadPlayerPhoto(file, playerId, playerName = null, oldPh
       try {
         uploadFile = await convertToJPEG(file)
       } catch (conversionError) {
-        console.error('❌ 변환 실패:', conversionError)
         throw new Error(`이미지 변환 실패: ${conversionError.message}`)
       }
     }
@@ -169,9 +159,8 @@ export async function uploadPlayerPhoto(file, playerId, playerName = null, oldPh
     if (oldPhotoUrl) {
       try {
         await deletePlayerPhoto(oldPhotoUrl)
-        console.log('🗑️ 기존 사진 삭제 완료')
       } catch (deleteError) {
-        console.warn('⚠️ 기존 사진 삭제 실패 (무시):', deleteError)
+        // 삭제 실패는 무시
       }
     }
     
@@ -186,8 +175,6 @@ export async function uploadPlayerPhoto(file, playerId, playerName = null, oldPh
     // 이름이 비어있으면 ID만 사용
     const fileName = sanitizedName ? `${sanitizedName}_${playerId}.${fileExtension}` : `${playerId}.${fileExtension}`
     const filePath = `players/${fileName}`
-    
-    console.log('📝 파일 경로:', filePath)
     
     // 7. 업로드 (재시도 포함)
     await uploadWithRetry(filePath, uploadFile, {
@@ -207,19 +194,10 @@ export async function uploadPlayerPhoto(file, playerId, playerName = null, oldPh
     
     // 9. 캐시 방지용 타임스탬프 추가
     const finalUrl = `${publicUrl}?t=${Date.now()}`
-    console.log('🎉 업로드 완료:', finalUrl)
     
     return finalUrl
     
   } catch (error) {
-    // 상세한 에러 로깅
-    console.error('❌ 업로드 실패:', {
-      message: error.message,
-      file: file?.name,
-      size: file?.size,
-      type: file?.type
-    })
-    
     // 사용자 친화적인 에러 메시지
     throw error
   }
@@ -231,7 +209,6 @@ export async function uploadPlayerPhoto(file, playerId, playerName = null, oldPh
  */
 export async function deletePlayerPhoto(photoUrl) {
   if (!photoUrl || !photoUrl.includes(BUCKET_NAME)) {
-    console.log('⏭️ 삭제 스킵: 유효하지 않은 URL')
     return
   }
   
@@ -242,25 +219,19 @@ export async function deletePlayerPhoto(photoUrl) {
     // URL에서 파일 경로 추출
     const urlParts = cleanUrl.split(`${BUCKET_NAME}/`)
     if (urlParts.length < 2) {
-      console.warn('⚠️ 파일 경로 추출 실패:', photoUrl)
       return
     }
     
     const filePath = urlParts[1]
-    console.log('🗑️ Storage 삭제 시도:', filePath)
     
     const { error } = await supabase.storage
       .from(BUCKET_NAME)
       .remove([filePath])
     
     if (error) {
-      console.error('❌ Storage 삭제 에러:', error)
       throw error
     }
-    
-    console.log('✅ Storage 삭제 성공:', filePath)
   } catch (err) {
-    console.error('❌ 사진 삭제 실패:', err)
     throw err
   }
 }

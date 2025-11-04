@@ -7,14 +7,19 @@ import captainIcon from "../assets/Captain.PNG"
  * - If photoUrl is provided, displays the image instead
  * - Optional small corner badges (e.g., ['C','G']) overlayed on the avatar
  */
-export default function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null }) {
+function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null }) {
   // 한글, 영문 모두 첫 글자 추출 (toUpperCase는 영문에만 적용)
   const firstChar = (name || "?").trim().charAt(0) || "?"
   const initial = /[a-zA-Z]/.test(firstChar) ? firstChar.toUpperCase() : firstChar
   
   // photoUrl이 RANDOM:으로 시작하면 랜덤 색상 모드
   const isRandomColor = photoUrl && String(photoUrl).startsWith('RANDOM:')
-  const actualPhotoUrl = isRandomColor ? null : photoUrl
+  let actualPhotoUrl = isRandomColor ? null : photoUrl
+  
+  // actualPhotoUrl이 있고 이미 쿼리 파라미터나 해시가 없으면 타임스탬프 추가 (캐시 방지)
+  if (actualPhotoUrl && !actualPhotoUrl.includes('?') && !actualPhotoUrl.includes('#')) {
+    actualPhotoUrl = `${actualPhotoUrl}?v=${Date.now()}`
+  }
   
   // 색상 seed 생성
   let colorSeed
@@ -138,6 +143,19 @@ export default function InitialAvatar({ id, name, size = 24, badges = [], photoU
     </div>
   )
 }
+
+// React.memo로 감싸서 photoUrl이 변경될 때만 리렌더링
+export default React.memo(InitialAvatar, (prevProps, nextProps) => {
+  // photoUrl이 변경되면 항상 리렌더링
+  if (prevProps.photoUrl !== nextProps.photoUrl) return false
+  // 다른 props도 체크
+  if (prevProps.id !== nextProps.id) return false
+  if (prevProps.name !== nextProps.name) return false
+  if (prevProps.size !== nextProps.size) return false
+  if (JSON.stringify(prevProps.badges) !== JSON.stringify(nextProps.badges)) return false
+  // 모든 props가 같으면 리렌더링 스킵
+  return true
+})
 
 // 색상 밝기 조절 함수 (그라데이션용)
 function adjustBrightness(hexColor, percent) {

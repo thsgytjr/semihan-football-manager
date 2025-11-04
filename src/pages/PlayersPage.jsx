@@ -208,29 +208,15 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
     const cleanNewPhotoUrl = draft.photoUrl ? draft.photoUrl.split('#')[0] : null
     const cleanOldPhotoUrl = oldPhotoUrl ? oldPhotoUrl.split('#')[0] : null
     
-    console.log('🔍 사진 변경 확인:', {
-      oldPhotoUrl: cleanOldPhotoUrl,
-      newPhotoUrl: cleanNewPhotoUrl,
-      changed: cleanOldPhotoUrl !== cleanNewPhotoUrl,
-      isUploadedPhoto: cleanOldPhotoUrl && !cleanOldPhotoUrl.startsWith('RANDOM:') && cleanOldPhotoUrl.includes('player-photos')
-    })
-    
     if (cleanOldPhotoUrl && cleanOldPhotoUrl !== cleanNewPhotoUrl) {
       // 이전 사진이 업로드된 사진(player-photos 버킷)이고, RANDOM이 아닌 경우
       if (!cleanOldPhotoUrl.startsWith('RANDOM:') && cleanOldPhotoUrl.includes('player-photos')) {
         try {
-          console.log('🗑️ 이전 사진 삭제 시작:', cleanOldPhotoUrl)
           await deletePlayerPhoto(cleanOldPhotoUrl)
-          console.log('✅ 이전 사진 삭제 완료:', cleanOldPhotoUrl)
         } catch (error) {
-          console.error('❌ 이전 사진 삭제 실패:', error)
-          console.warn('⚠️ 이전 사진 삭제 실패 (무시하고 계속):', error)
+          // 삭제 실패는 무시하고 계속
         }
-      } else {
-        console.log('⏭️ 삭제 스킵 (RANDOM 또는 외부 URL)')
       }
-    } else {
-      console.log('⏭️ 사진 변경 없음')
     }
     
     const payload = {
@@ -298,7 +284,14 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
           
           <div className="flex items-center gap-4 pr-12">
             <div className="relative">
-              <InitialAvatar id={draft.id} name={draft.name} size={56} badges={isGuest?['G']:[]} photoUrl={draft.photoUrl} />
+              <InitialAvatar 
+                key={draft.photoUrl || 'no-photo'} 
+                id={draft.id} 
+                name={draft.name} 
+                size={56} 
+                badges={isGuest?['G']:[]} 
+                photoUrl={draft.photoUrl} 
+              />
               {liveOVR >= 75 && (
                 <div className="absolute -top-1 -right-1 w-6 h-6 bg-amber-400 rounded-full flex items-center justify-center text-xs">
                   ⭐
@@ -340,6 +333,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
                     <label className="block text-xs font-semibold text-blue-900 mb-2">선수 사진</label>
                     <div className="flex items-center gap-3 mb-3">
                       <InitialAvatar 
+                        key={draft.photoUrl || 'no-photo'}
                         id={draft.id} 
                         name={draft.name} 
                         size={64} 
@@ -355,7 +349,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
                                 <path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
                               </svg>
                             )}
-                            {uploading ? '업로드 중...' : '📸 업로드'}
+                            {uploading ? '업로드 중...' : '업로드'}
                             <input hidden type="file" accept="image/*" onChange={(e)=> onPickPhoto(e.target.files?.[0] || null)} disabled={uploading} />
                           </label>
                           <button 
@@ -364,7 +358,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
                             onClick={()=>setShowUrlInput(!showUrlInput)}
                             disabled={uploading}
                           >
-                            🔗 URL
+                            URL
                           </button>
                           <button 
                             type="button"
@@ -372,7 +366,7 @@ function EditPlayerModal({ open, player, onClose, onSave }) {
                             onClick={resetToRandom}
                             disabled={uploading}
                           >
-                            🎲 랜덤
+                            랜덤
                           </button>
                         </div>
                         
@@ -952,7 +946,13 @@ export default function PlayersPage({
               onClick={() => onSelect(p.id)}
             >
               <div className="flex items-start gap-3 mb-3">
-                <InitialAvatar id={p.id} name={p.name} size={48} badges={guest?['G']:[]} photoUrl={p.photoUrl} />
+                <InitialAvatar 
+                  id={p.id} 
+                  name={p.name} 
+                  size={48} 
+                  badges={guest?['G']:[]} 
+                  photoUrl={p.photoUrl} 
+                />
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-base text-stone-900 truncate mb-1">
                     {p.name || "이름없음"}
@@ -1056,7 +1056,13 @@ export default function PlayersPage({
                 className={`flex items-center gap-3 px-4 py-3 hover:bg-stone-50 transition-colors ${selectedId === p.id ? "bg-emerald-50" : ""}`}
                 onClick={() => onSelect(p.id)}
               >
-                <InitialAvatar id={p.id} name={p.name} size={40} badges={guest?['G']:[]} photoUrl={p.photoUrl} />
+                <InitialAvatar 
+                  id={p.id} 
+                  name={p.name} 
+                  size={40} 
+                  badges={guest?['G']:[]} 
+                  photoUrl={p.photoUrl} 
+                />
 
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-stone-800 flex items-center gap-2 flex-wrap">
