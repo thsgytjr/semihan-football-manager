@@ -253,7 +253,9 @@ export default function App(){
   // 태그 프리셋 관리
   function handleSaveTagPresets(tagPresets){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,tagPresets}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets,membershipSettings:db.membershipSettings||[]});notify("태그 프리셋이 저장되었습니다.")}
   function handleAddTagPreset(preset){if(!isAdmin)return notify("Admin만 가능합니다.");const next=[...(db.tagPresets||[]),preset];setDb(prev=>({...prev,tagPresets:next}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets:next,membershipSettings:db.membershipSettings||[]})}
+  function handleUpdateTagPreset(index,updatedPreset){if(!isAdmin)return notify("Admin만 가능합니다.");const next=(db.tagPresets||[]).map((p,i)=>i===index?updatedPreset:p);setDb(prev=>({...prev,tagPresets:next}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets:next,membershipSettings:db.membershipSettings||[]});notify("태그 프리셋이 업데이트되었습니다.")}
   function handleDeleteTagPreset(index){if(!isAdmin)return notify("Admin만 가능합니다.");const next=(db.tagPresets||[]).filter((_,i)=>i!==index);setDb(prev=>({...prev,tagPresets:next}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets:next,membershipSettings:db.membershipSettings||[]})}
+
 
   // 멤버십 설정 관리
   function handleSaveMembershipSettings(membershipSettings){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,membershipSettings}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets:db.tagPresets||[],membershipSettings});notify("멤버십 설정이 저장되었습니다.")}
@@ -491,6 +493,7 @@ export default function App(){
                   onReset={handleResetPlayers}
                   tagPresets={db.tagPresets||[]}
                   onAddTagPreset={handleAddTagPreset}
+                  onUpdateTagPreset={handleUpdateTagPreset}
                   onDeleteTagPreset={handleDeleteTagPreset}
                   membershipSettings={db.membershipSettings||[]}
                   onSaveMembershipSettings={handleSaveMembershipSettings}

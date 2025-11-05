@@ -104,13 +104,16 @@ const aiPowerMeterColor = (power) => {
 }
 
 // ===== 편집 모달 =====
-function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAddTagPreset, customMemberships = [], isAdmin }) {
+function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAddTagPreset, onUpdateTagPreset, onDeleteTagPreset, customMemberships = [], isAdmin }) {
   const [draft, setDraft] = useState(null)
   const [showUrlInput, setShowUrlInput] = useState(false)
   const [urlInput, setUrlInput] = useState('')
   const [uploading, setUploading] = useState(false)
   const [newTagName, setNewTagName] = useState('')
   const [newTagColor, setNewTagColor] = useState('blue')
+  const [editingTagIndex, setEditingTagIndex] = useState(null)
+  const [editTagName, setEditTagName] = useState('')
+  const [editTagColor, setEditTagColor] = useState('blue')
 
   useEffect(() => {
     if (open && player !== undefined) {
@@ -765,26 +768,36 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
                       <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
                         <div className="text-[10px] font-semibold text-blue-700 mb-2">선택된 태그</div>
                         <div className="flex flex-wrap gap-2">
-                          {draft.tags.map((tag, idx) => (
-                            <div
-                              key={idx}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border ${getTagColorClass(tag.color)}`}
-                            >
-                              <span>{tag.name}</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const newTags = draft.tags.filter((_, i) => i !== idx)
-                                  setDraft({ ...draft, tags: newTags })
-                                }}
-                                className="hover:opacity-70 transition-opacity"
+                          {draft.tags.map((tag, idx) => {
+                            const isCustomColor = tag.color && tag.color.startsWith('#')
+                            return (
+                              <div
+                                key={idx}
+                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border ${
+                                  isCustomColor ? 'border-stone-300' : getTagColorClass(tag.color)
+                                }`}
+                                style={isCustomColor ? {
+                                  backgroundColor: tag.color + '20',
+                                  color: tag.color,
+                                  borderColor: tag.color
+                                } : {}}
                               >
-                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                                </svg>
-                              </button>
-                            </div>
-                          ))}
+                                <span>{tag.name}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const newTags = draft.tags.filter((_, i) => i !== idx)
+                                    setDraft({ ...draft, tags: newTags })
+                                  }}
+                                  className="hover:opacity-70 transition-opacity"
+                                >
+                                  <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                  </svg>
+                                </button>
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
                     )}
@@ -796,28 +809,152 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
                         <div className="flex flex-wrap gap-2">
                           {tagPresets.map((preset, idx) => {
                             const isSelected = draft.tags?.some(t => t.name === preset.name && t.color === preset.color)
+                            const isEditing = editingTagIndex === idx
+                            
+                            if (isEditing && isAdmin) {
+                              return (
+                                <div key={idx} className="flex flex-col gap-2 bg-blue-50 border-2 border-blue-300 rounded-lg p-3">
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="text"
+                                      value={editTagName}
+                                      onChange={(e) => setEditTagName(e.target.value)}
+                                      placeholder="태그 이름"
+                                      className="flex-1 rounded border-2 border-blue-300 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none"
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && editTagName.trim()) {
+                                          e.preventDefault()
+                                          onUpdateTagPreset(idx, { name: editTagName.trim(), color: editTagColor })
+                                          setEditingTagIndex(null)
+                                        } else if (e.key === 'Escape') {
+                                          setEditingTagIndex(null)
+                                        }
+                                      }}
+                                      autoFocus
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (editTagName.trim()) {
+                                          onUpdateTagPreset(idx, { name: editTagName.trim(), color: editTagColor })
+                                          setEditingTagIndex(null)
+                                        }
+                                      }}
+                                      className="p-1 hover:bg-blue-100 rounded transition-colors"
+                                      title="저장"
+                                    >
+                                      <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setEditingTagIndex(null)}
+                                      className="p-1 hover:bg-blue-100 rounded transition-colors"
+                                      title="취소"
+                                    >
+                                      <svg className="w-4 h-4 text-stone-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                  {/* 색상 팔레트 */}
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    {TAG_COLORS.map(color => (
+                                      <button
+                                        key={color.value}
+                                        type="button"
+                                        onClick={() => setEditTagColor(color.value)}
+                                        className={`w-6 h-6 rounded border-2 transition-all hover:scale-110 ${getTagColorClass(color.value)} ${
+                                          editTagColor === color.value ? 'ring-2 ring-blue-500 scale-110 shadow-sm' : ''
+                                        }`}
+                                        title={color.label}
+                                      ></button>
+                                    ))}
+                                    {/* 커스텀 색상 */}
+                                    <div className="relative">
+                                      <input
+                                        type="color"
+                                        value={editTagColor.startsWith('#') ? editTagColor : '#3b82f6'}
+                                        onChange={(e) => setEditTagColor(e.target.value)}
+                                        className="w-6 h-6 rounded border-2 border-stone-300 cursor-pointer"
+                                        title="커스텀 색상"
+                                      />
+                                      {editTagColor.startsWith('#') && (
+                                        <div 
+                                          className="absolute inset-0 rounded border-2 border-stone-300 pointer-events-none"
+                                          style={{ backgroundColor: editTagColor }}
+                                        />
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            }
+                            
                             return (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => {
-                                  if (isSelected) {
-                                    // 이미 선택된 태그면 제거
-                                    const newTags = draft.tags.filter(t => !(t.name === preset.name && t.color === preset.color))
-                                    setDraft({ ...draft, tags: newTags })
-                                  } else {
-                                    // 새로 추가
-                                    setDraft({ ...draft, tags: [...(draft.tags || []), preset] })
-                                  }
-                                }}
-                                className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                                  isSelected 
-                                    ? `${getTagColorClass(preset.color)} ring-2 ring-blue-400 shadow-sm` 
-                                    : `${getTagColorClass(preset.color)} opacity-60 hover:opacity-100`
-                                }`}
-                              >
-                                {preset.name}
-                              </button>
+                              <div key={idx} className="relative group">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (isSelected) {
+                                      const newTags = draft.tags.filter(t => !(t.name === preset.name && t.color === preset.color))
+                                      setDraft({ ...draft, tags: newTags })
+                                    } else {
+                                      setDraft({ ...draft, tags: [...(draft.tags || []), preset] })
+                                    }
+                                  }}
+                                  className={`inline-flex items-center px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+                                    preset.color && preset.color.startsWith('#')
+                                      ? 'border-stone-300'
+                                      : isSelected 
+                                        ? `${getTagColorClass(preset.color)} ring-2 ring-blue-400 shadow-sm` 
+                                        : `${getTagColorClass(preset.color)} opacity-60 hover:opacity-100`
+                                  }`}
+                                  style={preset.color && preset.color.startsWith('#') ? {
+                                    backgroundColor: isSelected ? preset.color + '40' : preset.color + '20',
+                                    color: preset.color,
+                                    borderColor: preset.color,
+                                    opacity: isSelected ? 1 : 0.6
+                                  } : {}}
+                                >
+                                  {preset.name}
+                                </button>
+                                {isAdmin && (
+                                  <div className="absolute -top-2 -right-2 hidden group-hover:flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        setEditingTagIndex(idx)
+                                        setEditTagName(preset.name)
+                                        setEditTagColor(preset.color)
+                                      }}
+                                      className="p-1 bg-blue-500 text-white rounded-full hover:bg-blue-600 shadow-lg transition-colors"
+                                      title="편집"
+                                    >
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        if (confirm(`"${preset.name}" 태그를 삭제하시겠습니까?`)) {
+                                          onDeleteTagPreset(idx)
+                                        }
+                                      }}
+                                      className="p-1 bg-rose-500 text-white rounded-full hover:bg-rose-600 shadow-lg transition-colors"
+                                      title="삭제"
+                                    >
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
                             )
                           })}
                         </div>
@@ -826,7 +963,7 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
                     
                     {/* 새 태그 추가 (프리셋으로 저장) */}
                     {isAdmin && (
-                      <div className="space-y-2 p-3 bg-stone-50 rounded-lg border border-stone-200">
+                      <div className="space-y-3 p-3 bg-stone-50 rounded-lg border border-stone-200">
                         <div className="text-[10px] font-semibold text-stone-700 mb-2">새 태그 프리셋 만들기</div>
                         <div className="flex gap-2">
                           <input
@@ -841,20 +978,11 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
                                 const newPreset = { name: newTagName.trim(), color: newTagColor }
                                 onAddTagPreset(newPreset)
                                 setNewTagName('')
+                                setNewTagColor('blue')
                               }
                             }}
                           />
-                          <select
-                            value={newTagColor}
-                            onChange={(e) => setNewTagColor(e.target.value)}
-                            className="rounded-lg border-2 border-stone-300 px-3 py-2 text-sm font-medium focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200"
-                          >
-                            {TAG_COLORS.map(color => (
-                              <option key={color.value} value={color.value}>
-                                {color.label}
-                              </option>
-                            ))}
-                          </select>
+                          
                           <button
                             type="button"
                             onClick={() => {
@@ -862,14 +990,61 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
                                 const newPreset = { name: newTagName.trim(), color: newTagColor }
                                 onAddTagPreset(newPreset)
                                 setNewTagName('')
+                                setNewTagColor('blue')
                               }
                             }}
                             disabled={!newTagName.trim()}
-                            className="rounded-lg bg-stone-600 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="rounded-lg bg-stone-600 px-4 py-2 text-sm font-semibold text-white hover:bg-stone-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
                           >
                             프리셋 저장
                           </button>
                         </div>
+                        
+                        {/* 색상 팔레트 */}
+                        <div className="space-y-2">
+                          <span className="text-[10px] font-semibold text-stone-700">색상 선택:</span>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {TAG_COLORS.map(color => (
+                              <button
+                                key={color.value}
+                                type="button"
+                                onClick={() => setNewTagColor(color.value)}
+                                className={`w-8 h-8 rounded-lg border-2 transition-all hover:scale-110 ${getTagColorClass(color.value)} ${
+                                  newTagColor === color.value ? 'ring-2 ring-blue-500 scale-110 shadow-md' : 'hover:shadow-sm'
+                                }`}
+                                title={color.label}
+                              ></button>
+                            ))}
+                            {/* 커스텀 색상 선택 */}
+                            <div className="relative">
+                              <input
+                                type="color"
+                                value={newTagColor.startsWith('#') ? newTagColor : '#3b82f6'}
+                                onChange={(e) => setNewTagColor(e.target.value)}
+                                className="w-8 h-8 rounded-lg border-2 border-stone-300 cursor-pointer overflow-hidden"
+                                style={{
+                                  WebkitAppearance: 'none',
+                                  appearance: 'none',
+                                  backgroundColor: 'transparent'
+                                }}
+                                title="커스텀 색상 선택"
+                              />
+                              <div 
+                                className="absolute inset-0 rounded-lg border-2 border-stone-300 pointer-events-none flex items-center justify-center"
+                                style={{
+                                  backgroundColor: newTagColor.startsWith('#') ? newTagColor : 'transparent'
+                                }}
+                              >
+                                {newTagColor.startsWith('#') && (
+                                  <svg className="w-4 h-4 text-white drop-shadow" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                                  </svg>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                        
                         <div className="text-[10px] text-stone-500">
                           프리셋으로 저장하면 모든 선수 편집 시 빠르게 선택할 수 있습니다
                         </div>
@@ -1042,6 +1217,7 @@ export default function PlayersPage({
   onDelete = async () => {},
   tagPresets = [],
   onAddTagPreset = () => {},
+  onUpdateTagPreset = () => {},
   onDeleteTagPreset = () => {},
   membershipSettings = [],
   onSaveMembershipSettings = () => {},
@@ -1643,14 +1819,24 @@ export default function PlayersPage({
                   {/* 태그 표시 */}
                   {p.tags && p.tags.length > 0 && (
                     <div className="flex items-center gap-1 mt-2 flex-wrap">
-                      {p.tags.slice(0, 3).map((tag, idx) => (
-                        <span
-                          key={idx}
-                          className={`inline-flex items-center rounded-full px-2 py-[2px] text-[10px] font-medium border ${getTagColorClass(tag.color)}`}
-                        >
-                          {tag.name}
-                        </span>
-                      ))}
+                      {p.tags.slice(0, 3).map((tag, idx) => {
+                        const isCustomColor = tag.color && tag.color.startsWith('#')
+                        return (
+                          <span
+                            key={idx}
+                            className={`inline-flex items-center rounded-full px-2 py-[2px] text-[10px] font-medium border ${
+                              isCustomColor ? '' : getTagColorClass(tag.color)
+                            }`}
+                            style={isCustomColor ? {
+                              backgroundColor: tag.color + '20',
+                              color: tag.color,
+                              borderColor: tag.color
+                            } : {}}
+                          >
+                            {tag.name}
+                          </span>
+                        )
+                      })}
                       {p.tags.length > 3 && (
                         <span className="inline-flex items-center rounded-full px-2 py-[2px] text-[10px] font-medium bg-stone-100 text-stone-600 border border-stone-200">
                           +{p.tags.length - 3}
@@ -1787,14 +1973,24 @@ export default function PlayersPage({
                     {/* 태그 표시 */}
                     {p.tags && p.tags.length > 0 && (
                       <>
-                        {p.tags.slice(0, 2).map((tag, idx) => (
-                          <span
-                            key={idx}
-                            className={`inline-flex items-center rounded-full px-2 py-[2px] text-[10px] font-medium border ${getTagColorClass(tag.color)}`}
-                          >
-                            {tag.name}
-                          </span>
-                        ))}
+                        {p.tags.slice(0, 2).map((tag, idx) => {
+                          const isCustomColor = tag.color && tag.color.startsWith('#')
+                          return (
+                            <span
+                              key={idx}
+                              className={`inline-flex items-center rounded-full px-2 py-[2px] text-[10px] font-medium border ${
+                                isCustomColor ? '' : getTagColorClass(tag.color)
+                              }`}
+                              style={isCustomColor ? {
+                                backgroundColor: tag.color + '20',
+                                color: tag.color,
+                                borderColor: tag.color
+                              } : {}}
+                            >
+                              {tag.name}
+                            </span>
+                          )
+                        })}
                         {p.tags.length > 2 && (
                           <span className="inline-flex items-center rounded-full px-2 py-[2px] text-[10px] font-medium bg-stone-100 text-stone-600 border border-stone-200">
                             +{p.tags.length - 2}
@@ -1912,6 +2108,8 @@ export default function PlayersPage({
         onSave={saveEdit}
         tagPresets={tagPresets}
         onAddTagPreset={onAddTagPreset}
+        onUpdateTagPreset={onUpdateTagPreset}
+        onDeleteTagPreset={onDeleteTagPreset}
         customMemberships={customMemberships}
         isAdmin={isAdmin}
       />

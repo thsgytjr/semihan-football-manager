@@ -157,6 +157,10 @@ export const TAG_COLORS = [
 ]
 
 export const getTagColorClass = (color) => {
+  // 커스텀 hex 색상 체크
+  if (color && color.startsWith('#')) {
+    return '' // 인라인 스타일로 처리
+  }
   const tag = TAG_COLORS.find(t => t.value === color)
   return tag ? tag.class : 'bg-stone-100 text-stone-800 border-stone-200'
 }
