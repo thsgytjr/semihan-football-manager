@@ -16,31 +16,31 @@ export const DEFAULT_MEMBERSHIPS = [
     id: 'associate',
     name: '준회원',
     badge: '준',
-    badgeColor: 'amber', // 노란색
-    color: 'amber',
+    badgeColor: 'yellow', // 노란색 (amber -> yellow)
+    color: 'yellow',
     deletable: true,
   },
   {
     id: 'guest',
     name: '게스트',
     badge: 'G',
-    badgeColor: 'rose', // 빨간색
+    badgeColor: 'red', // 빨간색 (rose -> red)
     color: 'stone',
     deletable: true,
   },
 ]
 
-// 배지 색상 옵션
+// 배지 색상 옵션 (대비가 명확한 색상들)
 export const BADGE_COLORS = [
-  { value: 'red', label: '빨강', bg: 'rgb(254, 226, 226)', border: 'rgb(248, 180, 180)', text: 'rgb(153, 27, 27)' },
-  { value: 'orange', label: '주황', bg: 'rgb(254, 237, 220)', border: 'rgb(253, 186, 140)', text: 'rgb(154, 52, 18)' },
-  { value: 'amber', label: '노랑', bg: 'rgb(254, 243, 199)', border: 'rgb(253, 224, 71)', text: 'rgb(146, 64, 14)' },
-  { value: 'emerald', label: '초록', bg: 'rgb(209, 250, 229)', border: 'rgb(110, 231, 183)', text: 'rgb(6, 95, 70)' },
-  { value: 'blue', label: '파랑', bg: 'rgb(219, 234, 254)', border: 'rgb(147, 197, 253)', text: 'rgb(30, 64, 175)' },
-  { value: 'purple', label: '보라', bg: 'rgb(237, 233, 254)', border: 'rgb(196, 181, 253)', text: 'rgb(91, 33, 182)' },
-  { value: 'pink', label: '분홍', bg: 'rgb(252, 231, 243)', border: 'rgb(249, 168, 212)', text: 'rgb(157, 23, 77)' },
-  { value: 'rose', label: '로즈', bg: 'rgb(251, 229, 230)', border: 'rgb(244, 201, 204)', text: 'rgb(136, 19, 55)' },
-  { value: 'stone', label: '회색', bg: 'rgb(245, 245, 244)', border: 'rgb(214, 211, 209)', text: 'rgb(68, 64, 60)' },
+  { value: 'red', label: '빨강', bg: 'rgb(254, 226, 226)', border: 'rgb(248, 113, 113)', text: 'rgb(153, 27, 27)' },
+  { value: 'orange', label: '주황', bg: 'rgb(254, 237, 220)', border: 'rgb(251, 146, 60)', text: 'rgb(154, 52, 18)' },
+  { value: 'yellow', label: '노랑', bg: 'rgb(254, 249, 195)', border: 'rgb(250, 204, 21)', text: 'rgb(113, 63, 18)' },
+  { value: 'emerald', label: '초록', bg: 'rgb(209, 250, 229)', border: 'rgb(52, 211, 153)', text: 'rgb(6, 95, 70)' },
+  { value: 'blue', label: '파랑', bg: 'rgb(219, 234, 254)', border: 'rgb(59, 130, 246)', text: 'rgb(30, 58, 138)' },
+  { value: 'purple', label: '보라', bg: 'rgb(237, 233, 254)', border: 'rgb(147, 51, 234)', text: 'rgb(88, 28, 135)' },
+  { value: 'pink', label: '핑크', bg: 'rgb(252, 231, 243)', border: 'rgb(236, 72, 153)', text: 'rgb(157, 23, 77)' },
+  { value: 'cyan', label: '하늘', bg: 'rgb(207, 250, 254)', border: 'rgb(34, 211, 238)', text: 'rgb(14, 116, 144)' },
+  { value: 'stone', label: '회색', bg: 'rgb(245, 245, 244)', border: 'rgb(168, 162, 158)', text: 'rgb(68, 64, 60)' },
 ]
 
 // 배지 색상 가져오기
@@ -54,14 +54,11 @@ export function getBadgeColorStyle(colorValue) {
 export function getMembershipBadge(membership, customMemberships = []) {
   if (!membership) return null
   
-  const mem = String(membership).trim().toLowerCase()
+  const mem = String(membership).trim()
   
-  // 커스텀 멤버십에서 찾기
+  // 1. 커스텀 멤버십에서 정확히 이름으로 찾기 (우선순위 1)
   for (const custom of customMemberships) {
-    const customName = String(custom.name || '').trim().toLowerCase()
-    const customId = String(custom.id || '').trim().toLowerCase()
-    
-    if (mem === customId || mem.includes(customName)) {
+    if (custom.name === mem) {
       if (!custom.badge) return null
       const colorStyle = getBadgeColorStyle(custom.badgeColor || 'stone')
       return {
@@ -72,12 +69,13 @@ export function getMembershipBadge(membership, customMemberships = []) {
     }
   }
   
-  // 기본 멤버십에서 찾기 (하위 호환성)
+  // 2. 기본 멤버십에서 찾기 (하위 호환성)
+  const memLower = mem.toLowerCase()
+  
   for (const def of DEFAULT_MEMBERSHIPS) {
     const defName = String(def.name).trim().toLowerCase()
-    const defId = String(def.id).trim().toLowerCase()
     
-    if (mem === defId || mem.includes(defName)) {
+    if (memLower === defName || memLower.includes(defName)) {
       if (!def.badge) return null
       const colorStyle = getBadgeColorStyle(def.badgeColor || 'stone')
       return {

@@ -1353,12 +1353,12 @@ export default function PlayersPage({
             const colorMap = {
               red: { from: 'rgb(254, 242, 242)', to: 'rgb(254, 226, 226)', text: 'rgb(185, 28, 28)', border: isActive ? 'rgb(239, 68, 68)' : 'rgb(254, 202, 202)' },
               orange: { from: 'rgb(255, 247, 237)', to: 'rgb(254, 237, 220)', text: 'rgb(154, 52, 18)', border: isActive ? 'rgb(251, 146, 60)' : 'rgb(253, 186, 140)' },
-              amber: { from: 'rgb(254, 252, 232)', to: 'rgb(254, 243, 199)', text: 'rgb(146, 64, 14)', border: isActive ? 'rgb(245, 158, 11)' : 'rgb(253, 224, 71)' },
+              yellow: { from: 'rgb(254, 252, 232)', to: 'rgb(254, 249, 195)', text: 'rgb(113, 63, 18)', border: isActive ? 'rgb(250, 204, 21)' : 'rgb(253, 224, 71)' },
               emerald: { from: 'rgb(236, 253, 245)', to: 'rgb(209, 250, 229)', text: 'rgb(5, 150, 105)', border: isActive ? 'rgb(16, 185, 129)' : 'rgb(110, 231, 183)' },
-              blue: { from: 'rgb(239, 246, 255)', to: 'rgb(219, 234, 254)', text: 'rgb(30, 64, 175)', border: isActive ? 'rgb(59, 130, 246)' : 'rgb(147, 197, 253)' },
-              purple: { from: 'rgb(250, 245, 255)', to: 'rgb(243, 232, 255)', text: 'rgb(107, 33, 168)', border: isActive ? 'rgb(168, 85, 247)' : 'rgb(216, 180, 254)' },
+              blue: { from: 'rgb(239, 246, 255)', to: 'rgb(219, 234, 254)', text: 'rgb(30, 58, 138)', border: isActive ? 'rgb(59, 130, 246)' : 'rgb(147, 197, 253)' },
+              purple: { from: 'rgb(250, 245, 255)', to: 'rgb(237, 233, 254)', text: 'rgb(88, 28, 135)', border: isActive ? 'rgb(147, 51, 234)' : 'rgb(216, 180, 254)' },
               pink: { from: 'rgb(253, 242, 248)', to: 'rgb(252, 231, 243)', text: 'rgb(157, 23, 77)', border: isActive ? 'rgb(236, 72, 153)' : 'rgb(249, 168, 212)' },
-              rose: { from: 'rgb(255, 241, 242)', to: 'rgb(255, 228, 230)', text: 'rgb(159, 18, 57)', border: isActive ? 'rgb(244, 63, 94)' : 'rgb(252, 165, 165)' },
+              cyan: { from: 'rgb(236, 254, 255)', to: 'rgb(207, 250, 254)', text: 'rgb(14, 116, 144)', border: isActive ? 'rgb(34, 211, 238)' : 'rgb(165, 243, 252)' },
               stone: { from: 'rgb(250, 250, 249)', to: 'rgb(245, 245, 244)', text: 'rgb(68, 64, 60)', border: isActive ? 'rgb(120, 113, 108)' : 'rgb(214, 211, 209)' }
             }
             
@@ -1387,32 +1387,39 @@ export default function PlayersPage({
 
         {/* 배지 설명 */}
         <div className="mb-4 flex items-center gap-4 text-xs text-stone-600 flex-wrap">
-          <div className="flex items-center gap-2">
-            <span 
-              className="inline-flex items-center justify-center w-4 h-4 rounded-full text-white text-[8px] font-bold border"
-              style={{ 
-                backgroundColor: 'rgb(254, 243, 199)',
-                borderColor: 'rgb(253, 224, 71)',
-                color: 'rgb(146, 64, 14)'
-              }}
-            >
-              준
-            </span>
-            <span>준회원</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span 
-              className="inline-flex items-center justify-center w-4 h-4 rounded-full text-white text-[8px] font-bold border"
-              style={{ 
-                backgroundColor: 'rgb(251, 229, 230)',
-                borderColor: 'rgb(244, 201, 204)',
-                color: 'rgb(136, 19, 55)'
-              }}
-            >
-              G
-            </span>
-            <span>게스트</span>
-          </div>
+          {/* 기본 멤버십: 준회원 - 커스텀 멤버십에 없으면 표시 */}
+          {!customMemberships.some(cm => cm.name === '준회원') && (
+            <div className="flex items-center gap-2">
+              <span 
+                className="inline-flex items-center justify-center w-4 h-4 rounded-full text-white text-[8px] font-bold border"
+                style={{ 
+                  backgroundColor: 'rgb(254, 243, 199)',
+                  borderColor: 'rgb(253, 224, 71)',
+                  color: 'rgb(146, 64, 14)'
+                }}
+              >
+                준
+              </span>
+              <span>준회원</span>
+            </div>
+          )}
+          
+          {/* 기본 멤버십: 게스트 - 커스텀 멤버십에 없으면 표시 */}
+          {!customMemberships.some(cm => cm.name === '게스트') && (
+            <div className="flex items-center gap-2">
+              <span 
+                className="inline-flex items-center justify-center w-4 h-4 rounded-full text-white text-[8px] font-bold border"
+                style={{ 
+                  backgroundColor: 'rgb(251, 229, 230)',
+                  borderColor: 'rgb(244, 201, 204)',
+                  color: 'rgb(136, 19, 55)'
+                }}
+              >
+                G
+              </span>
+              <span>게스트</span>
+            </div>
+          )}
           
           {/* 커스텀 멤버십 배지 설명 */}
           {customMemberships.map(cm => {

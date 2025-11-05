@@ -16,7 +16,19 @@ export async function getMembershipSettings() {
       return []
     }
 
-    return data || []
+    // DB 필드명을 앱에서 사용하는 필드명으로 변환
+    const mappedData = (data || []).map(item => ({
+      id: item.id,
+      name: item.name,
+      badge: item.badge,
+      badgeColor: item.badge_color, // badge_color -> badgeColor 변환
+      deletable: item.deletable,
+      sortOrder: item.sort_order,
+      createdAt: item.created_at,
+      updatedAt: item.updated_at
+    }))
+
+    return mappedData
   } catch (err) {
     console.error('❌ 멤버십 설정 조회 오류:', err)
     return []
@@ -39,7 +51,17 @@ export async function addMembershipSetting(membership) {
       throw error
     }
 
-    return data
+    // DB 필드명을 앱에서 사용하는 필드명으로 변환
+    return {
+      id: data.id,
+      name: data.name,
+      badge: data.badge,
+      badgeColor: data.badge_color,
+      deletable: data.deletable,
+      sortOrder: data.sort_order,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    }
   } catch (err) {
     console.error('❌ 멤버십 추가 오류:', err)
     throw err
@@ -63,7 +85,17 @@ export async function updateMembershipSetting(id, updates) {
       throw error
     }
 
-    return data
+    // DB 필드명을 앱에서 사용하는 필드명으로 변환
+    return {
+      id: data.id,
+      name: data.name,
+      badge: data.badge,
+      badgeColor: data.badge_color,
+      deletable: data.deletable,
+      sortOrder: data.sort_order,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    }
   } catch (err) {
     console.error('❌ 멤버십 수정 오류:', err)
     throw err
