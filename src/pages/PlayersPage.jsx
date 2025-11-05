@@ -1719,14 +1719,6 @@ export default function PlayersPage({
                 )}
               </label>
               <div className="flex items-center gap-2 flex-wrap">
-                {selectedTags.length > 0 && (
-                  <button
-                    onClick={() => setSelectedTags([])}
-                    className="px-3 py-1.5 text-xs font-medium rounded-lg border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 transition-all"
-                  >
-                    초기화
-                  </button>
-                )}
                 {allTags.map(tagName => {
                   const isSelected = selectedTags.includes(tagName)
                   return (
