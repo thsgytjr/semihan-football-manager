@@ -10,6 +10,21 @@ const ROOM_ID = `${TEAM_CONFIG.shortName}-lite-room-1`
 // Supabase DB 컬럼명 → 앱 내부 필드명 변환
 // 주의: matches 테이블은 camelCase 컬럼명 사용 (dateISO, attendeeIds 등)
 function toAppFormat(row) {
+  // videos 배열 파싱: JSONB에서 문자열로 저장된 경우 파싱
+  let videos = row.videos || []
+  if (Array.isArray(videos)) {
+    videos = videos.map(v => {
+      if (typeof v === 'string') {
+        try {
+          return JSON.parse(v)
+        } catch {
+          return v
+        }
+      }
+      return v
+    })
+  }
+
   return {
     id: row.id,
     dateISO: row.dateISO || row.date_iso, // camelCase 우선
@@ -23,7 +38,7 @@ function toAppFormat(row) {
     formations: row.formations || [],
     selectionMode: row.selectionMode || row.selection_mode || 'manual',
     locked: row.locked || false,
-    videos: row.videos || [],
+    videos: videos,
     teamIds: row.teamids || row.teamIds || [], // 주의: 테이블은 teamids (소문자)
     stats: row.stats || {}, // 골/어시 기록
     draft: row.draft || {}, // Draft 데이터 (선수승점, 주장승점 등)
