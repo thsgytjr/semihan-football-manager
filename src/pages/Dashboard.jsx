@@ -19,6 +19,7 @@ import {
   computeCaptainStatsRows,
   computeDraftAttackRows
 } from '../lib/leaderboardComputations'
+import { getMembershipBadge } from '../lib/membershipConfig'
 
 // 멤버십 helper 함수
 const S = (v) => v == null ? '' : String(v)
@@ -30,10 +31,11 @@ const isGuest = (m) => {
   const s = S(m).trim().toLowerCase()
   return s === 'guest' || s.includes('게스트')
 }
-const getBadges = (membership) => {
-  if (isAssociate(membership)) return ['준']
-  if (isGuest(membership)) return ['G']
-  return []
+
+// 커스텀 멤버십 기반 배지 가져오기
+const getBadgesWithCustom = (membership, customMemberships = []) => {
+  const badgeInfo = getMembershipBadge(membership, customMemberships)
+  return badgeInfo ? [badgeInfo.badge] : []
 }
 
 /* --------------------------------------------------------
@@ -70,8 +72,10 @@ export default function Dashboard({
   upcomingMatches = [],
   onSaveUpcomingMatch,
   onDeleteUpcomingMatch,
-  onUpdateUpcomingMatch
+  onUpdateUpcomingMatch,
+  membershipSettings = []
 }) {
+  const customMemberships = membershipSettings.length > 0 ? membershipSettings : []
   const [apDateKey, setApDateKey] = useState('all')
   const dateOptions = useMemo(() => {
     const set = new Set()
@@ -216,6 +220,7 @@ export default function Dashboard({
               controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
               apDateKey={apDateKey}
               initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.draftCaptain || null) : null}
+              customMemberships={customMemberships}
             />
           ) : draftTab === 'attack' ? (
             <DraftAttackTable
@@ -226,6 +231,7 @@ export default function Dashboard({
               controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
               apDateKey={apDateKey}
               initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.draftAttack || null) : null}
+              customMemberships={customMemberships}
             />
           ) : (
             <DraftWinsTable
@@ -236,6 +242,7 @@ export default function Dashboard({
               controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
               apDateKey={apDateKey}
               initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.draftPlayer || null) : null}
+              customMemberships={customMemberships}
             />
           )
         ) : (
@@ -248,6 +255,7 @@ export default function Dashboard({
               controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
               apDateKey={apDateKey}
               initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.duo || null) : null}
+              customMemberships={customMemberships}
             />
           ) : (
             <AttackPointsTable
@@ -262,6 +270,7 @@ export default function Dashboard({
               controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
               apDateKey={apDateKey}
               initialBaselineRanks={apDateKey === 'all' ? (previousBaselineByMetric[apTab] || null) : null}
+              customMemberships={customMemberships}
             />
           )
         )}
@@ -376,7 +385,7 @@ export default function Dashboard({
   )
 }
 
-function CaptainWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null }) {
+function CaptainWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null, customMemberships = [] }) {
   const baselineKey = 'draft_captain_points_v1'
   const [baselineRanks] = useState(() => {
     try {
@@ -413,9 +422,9 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls, apDateKey, initia
   const renderRow = (r, tone) => (
     <>
       <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
-      <PlayerNameCell id={r.id} name={r.name} membership={r.membership} tone={tone} photoUrl={r.photoUrl} />
+      <PlayerNameCell id={r.id} name={r.name} membership={r.membership} tone={tone} photoUrl={r.photoUrl} customMemberships={customMemberships} />
       <StatCell value={r.points} tone={tone} align="center" />
-      <FormDotsCell form={r.last5} tone={tone} />
+      <FormDotsCell form={r.form} tone={tone} />
     </>
   )
 
@@ -428,12 +437,13 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls, apDateKey, initia
       title="Draft 주장 승점"
       columns={columns}
       renderRow={renderRow}
+      membershipSettings={customMemberships}
     />
   )
 }
 
 /* ---------------- Draft 승리 테이블 ---------------- */
-function DraftWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null }) {
+function DraftWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null, customMemberships = [] }) {
   const baselineKey = 'draft_player_points_v1'
   const [baselineRanks] = useState(() => {
     try {
@@ -470,7 +480,7 @@ function DraftWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialB
   const renderRow = (r, tone) => (
     <>
       <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
-      <PlayerNameCell id={r.id} name={r.name} membership={r.membership} tone={tone} photoUrl={r.photoUrl} />
+      <PlayerNameCell id={r.id} name={r.name} membership={r.membership} tone={tone} photoUrl={r.photoUrl} customMemberships={customMemberships} />
       <StatCell value={r.points} tone={tone} align="center" />
       <FormDotsCell form={r.last5} tone={tone} />
     </>
@@ -485,11 +495,12 @@ function DraftWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialB
       title="Draft 선수 승점"
       columns={columns}
       renderRow={renderRow}
+      membershipSettings={customMemberships}
     />
   )
 }
 
-function DraftAttackTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null }) {
+function DraftAttackTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null, customMemberships = [] }) {
   const baselineKey = 'draft_attack_pts_v1'
   const [baselineRanks] = useState(() => {
     try {
@@ -528,7 +539,7 @@ function DraftAttackTable({ rows, showAll, onToggle, controls, apDateKey, initia
   const renderRow = (r, tone) => (
     <>
       <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
-      <PlayerNameCell id={r.id} name={r.name} membership={r.membership} tone={tone} photoUrl={r.photoUrl} />
+      <PlayerNameCell id={r.id} name={r.name} membership={r.membership} tone={tone} photoUrl={r.photoUrl} customMemberships={customMemberships} />
       <StatCell value={r.gp} tone={tone} align="center" />
       <StatCell value={r.g} tone={tone} align="center" />
       <StatCell value={r.a} tone={tone} align="center" />
@@ -545,6 +556,7 @@ function DraftAttackTable({ rows, showAll, onToggle, controls, apDateKey, initia
       title="Draft 골/어시"
       columns={columns}
       renderRow={renderRow}
+      membershipSettings={customMemberships}
     />
   )
 }
@@ -655,7 +667,7 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
 }
 
 /* --------------- 공격포인트 테이블 --------------- */
-function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', headHi, colHi, onRequestTab, apDateKey, initialBaselineRanks = null }) {
+function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', headHi, colHi, onRequestTab, apDateKey, initialBaselineRanks = null, customMemberships = [] }) {
   const data = showAll ? rows : rows.slice(0, 5)
 
   // Baseline ranks for "모든 매치" only. We keep the first seen snapshot
@@ -788,8 +800,10 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
                         id={r.id || r.name} 
                         name={r.name} 
                         size={32} 
-                        badges={getBadges(r.membership)}
+                        badges={getBadgesWithCustom(r.membership, customMemberships)}
                         photoUrl={r.photoUrl}
+                        customMemberships={customMemberships}
+                        badgeInfo={getMembershipBadge(r.membership, customMemberships)}
                       />
                     </div>
                     <div className="min-w-0">
@@ -819,7 +833,7 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
 }
 
 /* ---------------------- 듀오 테이블 --------------------- */
-function DuoTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null }) {
+function DuoTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null, customMemberships = [] }) {
   const baselineKey = 'duo_count_v1'
   const [baselineRanks] = useState(() => {
     try {
@@ -852,21 +866,44 @@ function DuoTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselin
     { label: '회수', px: 1.5, align: 'center' }
   ]
 
-  const renderRow = (r, tone) => (
-    <>
-      <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
-      <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
-        <div className="flex items-center gap-2">
-          <InitialAvatar id={r.assistId} name={r.aName} size={28} badges={getBadges(r.aMembership)} photoUrl={r.aPhotoUrl} />
-          <span className="font-medium">{r.aName}</span>
-          <span className="mx-1 text-stone-400">→</span>
-          <InitialAvatar id={r.goalId} name={r.gName} size={28} badges={getBadges(r.gMembership)} photoUrl={r.gPhotoUrl} />
-          <span className="font-medium">{r.gName}</span>
-        </div>
-      </td>
-      <StatCell value={r.count} tone={tone} align="center" />
-    </>
-  )
+  const renderRow = (r, tone) => {
+    const aBadges = getBadgesWithCustom(r.aMembership, customMemberships)
+    const aBadgeInfo = getMembershipBadge(r.aMembership, customMemberships)
+    const gBadges = getBadgesWithCustom(r.gMembership, customMemberships)
+    const gBadgeInfo = getMembershipBadge(r.gMembership, customMemberships)
+    
+    return (
+      <>
+        <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
+        <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
+          <div className="flex items-center gap-2">
+            <InitialAvatar 
+              id={r.assistId} 
+              name={r.aName} 
+              size={28} 
+              badges={aBadges} 
+              photoUrl={r.aPhotoUrl} 
+              customMemberships={customMemberships}
+              badgeInfo={aBadgeInfo}
+            />
+            <span className="font-medium">{r.aName}</span>
+            <span className="mx-1 text-stone-400">→</span>
+            <InitialAvatar 
+              id={r.goalId} 
+              name={r.gName} 
+              size={28} 
+              badges={gBadges} 
+              photoUrl={r.gPhotoUrl} 
+              customMemberships={customMemberships}
+              badgeInfo={gBadgeInfo}
+            />
+            <span className="font-medium">{r.gName}</span>
+          </div>
+        </td>
+        <StatCell value={r.count} tone={tone} align="center" />
+      </>
+    )
+  }
 
   return (
     <LeaderboardTable
@@ -877,6 +914,7 @@ function DuoTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselin
       title="총 듀오"
       columns={columns}
       renderRow={renderRow}
+      membershipSettings={customMemberships}
     />
   )
 }

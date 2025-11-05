@@ -1,13 +1,16 @@
 import React from "react"
 import captainIcon from "../assets/Captain.PNG"
+import { getMembershipBadge } from "../lib/membershipConfig"
 
 /**
  * InitialAvatar
  * - Renders a colored circular avatar with the initial OR photo
  * - If photoUrl is provided, displays the image instead
  * - Optional small corner badges (e.g., ['C','G']) overlayed on the avatar
+ * - customMemberships: 커스텀 멤버십 설정 배열 (배지 색상 커스터마이징)
+ * - badgeInfo: 미리 계산된 배지 정보 객체 (선택적, 성능 최적화용)
  */
-function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null }) {
+function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null, customMemberships = [], badgeInfo = null }) {
   // 한글, 영문 모두 첫 글자 추출 (toUpperCase는 영문에만 적용)
   const firstChar = (name || "?").trim().charAt(0) || "?"
   const initial = /[a-zA-Z]/.test(firstChar) ? firstChar.toUpperCase() : firstChar
@@ -38,8 +41,6 @@ function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null }) {
 
   const renderBadge = (label, idx) => {
     const isCaptain = String(label).toUpperCase() === 'C'
-    const isGuest = String(label).toUpperCase() === 'G'
-    const isAssociate = String(label).toUpperCase() === '준'
     
     // 주장 뱃지: Captain.PNG 이미지 사용
     if (isCaptain) {
@@ -61,27 +62,51 @@ function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null }) {
       )
     }
     
-    // 게스트 뱃지: RGB(251, 229, 230) 배경, RGB(136, 19, 55) 텍스트
-    // 준회원 뱃지: RGB(254, 243, 199) 배경, RGB(146, 64, 14) 텍스트 (노란색 계열)
-    const badgeStyle = isGuest 
-      ? { 
-          backgroundColor: 'rgb(251, 229, 230)', 
-          borderColor: 'rgb(244, 201, 204)',
-          color: 'rgb(136, 19, 55)'
-        }
-      : isAssociate
-      ? {
-          backgroundColor: 'rgb(254, 243, 199)',
-          borderColor: 'rgb(253, 224, 71)',
-          color: 'rgb(146, 64, 14)'
-        }
-      : {}
+    // 먼저 전달받은 badgeInfo 사용 (성능 최적화)
+    let customBadge = badgeInfo
     
-    const bgCls = (isGuest || isAssociate)
-      ? 'border' // 스타일로 색상 지정
-      : 'bg-white border-stone-300 text-stone-800'
+    // badgeInfo가 없으면 직접 검색 (폴백)
+    if (!customBadge && customMemberships.length > 0) {
+      customBadge = getMembershipBadge(String(label), customMemberships)
+    }
     
-    const title = isGuest ? '게스트' : isAssociate ? '준회원' : String(label)
+    // 하드코딩 폴백 (커스텀 설정이 없을 때)
+    const isGuest = String(label).toUpperCase() === 'G'
+    const isAssociate = String(label).toUpperCase() === '준'
+    
+    let badgeStyle = {}
+    let bgCls = 'bg-white border-stone-300 text-stone-800'
+    let title = String(label)
+    
+    if (customBadge && customBadge.colorStyle) {
+      // 커스텀 멤버십 스타일 적용
+      badgeStyle = {
+        backgroundColor: customBadge.colorStyle.bg,
+        borderColor: customBadge.colorStyle.border,
+        color: customBadge.colorStyle.text
+      }
+      bgCls = 'border'
+      title = customBadge.membership?.name || String(label)
+    } else if (isGuest) {
+      // 기본 게스트 스타일
+      badgeStyle = { 
+        backgroundColor: 'rgb(251, 229, 230)', 
+        borderColor: 'rgb(244, 201, 204)',
+        color: 'rgb(136, 19, 55)'
+      }
+      bgCls = 'border'
+      title = '게스트'
+    } else if (isAssociate) {
+      // 기본 준회원 스타일
+      badgeStyle = {
+        backgroundColor: 'rgb(254, 243, 199)',
+        borderColor: 'rgb(253, 224, 71)',
+        color: 'rgb(146, 64, 14)'
+      }
+      bgCls = 'border'
+      title = '준회원'
+    }
+    
     // Offset badges from right to left
     const right = idx * (badgeSize - badgeGap)
     return (
@@ -96,7 +121,7 @@ function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null }) {
           transform: 'translate(25%, 25%)',
           fontSize: badgeFont,
           lineHeight: 1,
-          ...((isGuest || isAssociate) ? badgeStyle : {})
+          ...badgeStyle
         }}
       >
         {String(label).toUpperCase()}
@@ -161,6 +186,7 @@ export default React.memo(InitialAvatar, (prevProps, nextProps) => {
   if (prevProps.name !== nextProps.name) return false
   if (prevProps.size !== nextProps.size) return false
   if (JSON.stringify(prevProps.badges) !== JSON.stringify(nextProps.badges)) return false
+  if (JSON.stringify(prevProps.customMemberships) !== JSON.stringify(nextProps.customMemberships)) return false
   // 모든 props가 같으면 리렌더링 스킵
   return true
 })

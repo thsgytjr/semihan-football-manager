@@ -16,18 +16,21 @@ import SavedMatchesList from'../components/SavedMatchesList'
 import { createUpcomingMatch, filterExpiredMatches } from '../lib/upcomingMatch'
 import { calculateAIPower } from '../lib/aiPower'
 import captainIcon from '../assets/Captain.PNG'
+import { getMembershipBadge } from '../lib/membershipConfig'
 
 /* ───────── 게스트 판별/뱃지 유틸 ───────── */
 const S=(v)=>v==null?'':String(v)
 const isMember=(m)=>{const s=S(m).trim().toLowerCase();return s==='member'||s.includes('정회원')}
 const isAssociate=(m)=>{const s=S(m).trim().toLowerCase();return s==='associate'||s.includes('준회원')}
 const isGuest=(m)=>{const s=S(m).trim().toLowerCase();return s==='guest'||s.includes('게스트')}
-const getBadges=(membership,isCaptain=false)=>{
+
+// 커스텀 멤버십 기반 배지 가져오기
+const getBadgesWithCustom=(membership,isCaptain=false,customMemberships=[])=>{
   if(isCaptain)return['C']
-  if(isAssociate(membership))return['준']
-  if(isGuest(membership))return['G']
-  return[]
+  const badgeInfo = getMembershipBadge(membership, customMemberships)
+  return badgeInfo ? [badgeInfo.badge] : []
 }
+
 const GuestBadge=()=>(
   <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200">G</span>
 )
@@ -104,8 +107,10 @@ export default function MatchPlanner({
   upcomingMatches = [],
   onSaveUpcomingMatch,
   onDeleteUpcomingMatch,
-  onUpdateUpcomingMatch
+  onUpdateUpcomingMatch,
+  membershipSettings = []
 }){
+  const customMemberships = membershipSettings.length > 0 ? membershipSettings : []
   const[dateISO,setDateISO]=useState(()=>nextSaturday0630Local()),[attendeeIds,setAttendeeIds]=useState([]),[criterion,setCriterion]=useState('overall'),[shuffleSeed,setShuffleSeed]=useState(0)
   const[locationPreset,setLocationPreset]=useState(''),[locationName,setLocationName]=useState(''),[locationAddress,setLocationAddress]=useState('')
   const[customBaseCost,setCustomBaseCost]=useState(0),[guestSurcharge,setGuestSurcharge]=useState(2),[teamCount,setTeamCount]=useState(2)
@@ -661,7 +666,7 @@ export default function MatchPlanner({
         </Row>
 
         {/* 빠른 선수 추가 - 상단 고정 */}
-        <QuickAttendanceEditor players={players} snapshot={previewTeams.map(team=>team.map(p=>p.id))} onDraftChange={(newSnap)=>{const byId=new Map(players.map(p=>[String(p.id),p]));const newTeams=newSnap.map(ids=>ids.map(id=>byId.get(String(id))).filter(Boolean));setManualTeams(newTeams);latestTeamsRef.current=newTeams;setShowAIPower(false);setActiveSortMode(null)}}/>
+        <QuickAttendanceEditor players={players} snapshot={previewTeams.map(team=>team.map(p=>p.id))} onDraftChange={(newSnap)=>{const byId=new Map(players.map(p=>[String(p.id),p]));const newTeams=newSnap.map(ids=>ids.map(id=>byId.get(String(id))).filter(Boolean));setManualTeams(newTeams);latestTeamsRef.current=newTeams;setShowAIPower(false);setActiveSortMode(null)}} customMemberships={customMemberships}/>
 
         {/* 팀 배정 테이블 with 드래그 앤 드롭 */}
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
@@ -852,13 +857,14 @@ export default function MatchPlanner({
                       onSetCaptain={handleSetCaptain}
                       matches={matches}
                       showAIPower={showAIPower}
+                      customMemberships={customMemberships}
                     />
                   </div>
                 ))}
               </div>
             </div>
             <DragOverlay>
-              {activePlayerId?(<DragGhost player={players.find(p=>String(p.id)===String(activePlayerId))} showOVR={isAdmin}/>):null}
+              {activePlayerId?(<DragGhost player={players.find(p=>String(p.id)===String(activePlayerId))} showOVR={isAdmin} customMemberships={customMemberships}/>):null}
             </DragOverlay>
           </DndContext>
         </div>
@@ -1018,7 +1024,7 @@ export default function MatchPlanner({
 function Row({label,children}){return(<div className="grid items-start gap-2 sm:grid-cols-[120px_minmax(0,1fr)]"><label className="mt-1 text-sm text-gray-600">{label}</label><div>{children}</div></div>)}
 
 /* 컬럼/플레이어 렌더 */
-function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraftMode,captainId,onRemovePlayer,onSetCaptain,matches,showAIPower}){
+function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraftMode,captainId,onRemovePlayer,onSetCaptain,matches,showAIPower,customMemberships=[]}){
   const id=`team-${teamIndex}`
   const {setNodeRef,isOver}=useDroppable({id})
   
@@ -1036,7 +1042,7 @@ function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraft
   const rendered=[]
   for(let i=0;i<players.length;i++){
     if(showIndicator&&dropHint.index===i)rendered.push(<React.Fragment key={`hint-${i}`}>{indicator}</React.Fragment>)
-    rendered.push(<PlayerRow key={players[i].id} player={players[i]} showOVR={showOVR} isAdmin={isAdmin} teamIndex={teamIndex} isDraftMode={isDraftMode} isCaptain={captainId===players[i].id} onRemove={onRemovePlayer} onSetCaptain={onSetCaptain} matches={matches} showAIPower={showAIPower}/>)
+    rendered.push(<PlayerRow key={players[i].id} player={players[i]} showOVR={showOVR} isAdmin={isAdmin} teamIndex={teamIndex} isDraftMode={isDraftMode} isCaptain={captainId===players[i].id} onRemove={onRemovePlayer} onSetCaptain={onSetCaptain} matches={matches} showAIPower={showAIPower} customMemberships={customMemberships}/>)
   }
   if(showIndicator&&dropHint.index===players.length)rendered.push(<React.Fragment key="hint-end">{indicator}</React.Fragment>)
   return(<div ref={setNodeRef} className={`rounded-lg border bg-white transition ${isOver?'border-emerald-500 ring-2 ring-emerald-200':'border-gray-200'}`}>
@@ -1068,11 +1074,15 @@ function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraft
   </div>)}
 
 /* PlayerRow */
-function PlayerRow({player,showOVR,isAdmin,teamIndex,isDraftMode,isCaptain,onRemove,onSetCaptain,matches,showAIPower}){
+function PlayerRow({player,showOVR,isAdmin,teamIndex,isDraftMode,isCaptain,onRemove,onSetCaptain,matches,showAIPower,customMemberships=[]}){
   const{attributes,listeners,setNodeRef,transform,transition,isDragging}=useSortable({id:String(player.id)})
   const style={transform:CSS.Transform.toString(transform),transition,opacity:isDragging?0.7:1,boxShadow:isDragging?'0 6px 18px rgba(0,0,0,.12)':undefined,borderRadius:8,background:isDragging?'rgba(16,185,129,0.06)':undefined}
   const pos=positionGroupOf(player),isGK=pos==='GK',unknown=isUnknownPlayer(player),ovrVal=unknown?'?':player.ovr??overall(player)
   const member=isMember(player.membership)
+  
+  // 배지 정보 가져오기
+  const badges = getBadgesWithCustom(player.membership, isCaptain, customMemberships)
+  const badgeInfo = isCaptain ? null : getMembershipBadge(player.membership, customMemberships)
   
   // OVR 색상 함수
   const getOVRColor = (ovr) => {
@@ -1096,7 +1106,7 @@ function PlayerRow({player,showOVR,isAdmin,teamIndex,isDraftMode,isCaptain,onRem
   return(
     <li ref={setNodeRef} style={style} className="flex items-start gap-2 border-t border-gray-100 pt-1 first:border-0 first:pt-0 touch-manipulation cursor-grab active:cursor-grabbing" {...attributes}{...listeners}>
       <span className="flex items-center gap-2 min-w-0 flex-1">
-        <InitialAvatar id={player.id} name={player.name} size={24} badges={getBadges(player.membership,isCaptain)} photoUrl={player.photoUrl} />
+        <InitialAvatar id={player.id} name={player.name} size={24} badges={badges} photoUrl={player.photoUrl} customMemberships={customMemberships} badgeInfo={badgeInfo} />
         <span className="whitespace-normal break-words">{player.name}</span>
         <PositionChips positions={player.positions || []} size="sm" maxDisplay={2} />
       </span>
@@ -1169,10 +1179,16 @@ function kitForTeam(i){return[
   {label:"핑크",headerClass:"bg-pink-600 text-white border-b border-pink-700"},
   {label:"옐로",headerClass:"bg-yellow-400 text-stone-900 border-b border-yellow-500"},
 ][i%10]}
-function DragGhost({player,showOVR}){if(!player)return null;const pos=positionGroupOf(player),isGK=pos==='GK',unknown=isUnknownPlayer(player),ovrVal=unknown?'?':player.ovr??overall(player);return(
+function DragGhost({player,showOVR,customMemberships=[]}){
+  if(!player)return null
+  const pos=positionGroupOf(player),isGK=pos==='GK',unknown=isUnknownPlayer(player),ovrVal=unknown?'?':player.ovr??overall(player)
+  const badges = getBadgesWithCustom(player.membership, false, customMemberships)
+  const badgeInfo = getMembershipBadge(player.membership, customMemberships)
+  
+  return(
   <div className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 shadow-lg">
     <div className="flex items-center gap-2 text-sm">
-  <InitialAvatar id={player.id} name={player.name} size={22} badges={getBadges(player.membership)} photoUrl={player.photoUrl} />
+  <InitialAvatar id={player.id} name={player.name} size={22} badges={badges} photoUrl={player.photoUrl} customMemberships={customMemberships} badgeInfo={badgeInfo} />
       <span className="truncate">{player.name}</span>
   {/* guest badge is shown on avatar */}
       <span className={`ml-1 inline-flex items-center rounded-full px-2 py-[2px] text-[11px] ${isGK?'bg-amber-100 text-amber-800':pos==='DF'?'bg-blue-100 text-blue-800':pos==='MF'?'bg-emerald-100 text-emerald-800':pos==='FW'?'bg-purple-100 text-purple-800':'bg-stone-100 text-stone-700'}`}>{pos}</span>
@@ -1183,7 +1199,7 @@ function DragGhost({player,showOVR}){if(!player)return null;const pos=positionGr
 function FullscreenModal({children,onClose}){return(<div className="fixed inset-0 z-50 bg-black/50 p-4 overflow-auto"><div className="mx-auto max-w-5xl rounded-lg bg-white p-4">{children}<div className="mt-3 text-right"><button onClick={onClose} className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm">닫기</button></div></div></div>)}
 
 /* 빠른 출석 편집 */
-function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
+function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMemberships=[] }){
   const [teamIdx,setTeamIdx]=useState(0)
   const [q,setQ]=useState("")
   const [showList,setShowList]=useState(false) // 선수 목록 표시 여부
@@ -1254,13 +1270,15 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
               <div className="max-h-[400px] overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
                   {filtered.map(p => {
+                    const badges = getBadgesWithCustom(p.membership, false, customMemberships)
+                    const badgeInfo = getMembershipBadge(p.membership, customMemberships)
                     return (
                       <button 
                         key={p.id} 
                         onClick={() => addPlayerToTeam(p.id)}
                         className="flex items-center gap-2 text-xs p-2 rounded hover:bg-white hover:shadow-sm cursor-pointer transition border border-transparent hover:border-emerald-200"
                       >
-                        <InitialAvatar id={p.id} name={p.name} size={28} badges={getBadges(p.membership)} photoUrl={p.photoUrl} />
+                        <InitialAvatar id={p.id} name={p.name} size={28} badges={badges} photoUrl={p.photoUrl} customMemberships={customMemberships} badgeInfo={badgeInfo} />
                         <span className="truncate text-left flex-1">{p.name}</span>
                         <span className="text-emerald-600 text-lg leading-none">+</span>
                       </button>

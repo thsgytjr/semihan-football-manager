@@ -101,7 +101,7 @@ export async function loadDB() {
     .select('data')
     .eq('id', ROOM_ID)
     .single()
-  if (error || !data) return { players: [], matches: [], tagPresets: [] }
+  if (error || !data) return { players: [], matches: [], tagPresets: [], membershipSettings: [] }
   return data.data
 }
 
@@ -134,6 +134,26 @@ export async function saveTagPresets(tagPresets) {
     await saveDB({ ...db, tagPresets })
   } catch (e) {
     console.error('[saveTagPresets] failed', e)
+  }
+}
+
+// 멤버십 설정 관리
+export async function loadMembershipSettings() {
+  try {
+    const db = await loadDB()
+    return db.membershipSettings || []
+  } catch (e) {
+    console.error('[loadMembershipSettings] failed', e)
+    return []
+  }
+}
+
+export async function saveMembershipSettings(membershipSettings) {
+  try {
+    const db = await loadDB()
+    await saveDB({ ...db, membershipSettings })
+  } catch (e) {
+    console.error('[saveMembershipSettings] failed', e)
   }
 }
 

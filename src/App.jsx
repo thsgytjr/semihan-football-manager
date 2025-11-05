@@ -2,10 +2,12 @@
 import React,{useEffect,useMemo,useState,useCallback}from"react"
 import{Home,Users,CalendarDays,ListChecks,ShieldCheck,Lock,Eye,EyeOff,AlertCircle,CheckCircle2,X,Settings,BookOpen,Shuffle}from"lucide-react"
 import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB,incrementVisits,logVisit,getVisitStats}from"./services/storage.service"
+import{getMembershipSettings,subscribeMembershipSettings}from"./services/membership.service"
 import{mkPlayer}from"./lib/players";import{notify}from"./components/Toast"
 import{filterExpiredMatches}from"./lib/upcomingMatch"
 import{getOrCreateVisitorId,getVisitorIP,parseUserAgent,shouldTrackVisit}from"./lib/visitorTracking"
 import{signInAdmin,signOut,getSession,onAuthStateChange}from"./lib/auth"
+import{runMigrations}from"./lib/dbMigration"
 import ToastHub from"./components/Toast";import Card from"./components/Card"
 import AppTutorial,{TutorialButton,useAutoTutorial}from"./components/AppTutorial"
 import VisitorStats from"./components/VisitorStats"
@@ -19,7 +21,7 @@ import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEna
 const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden role="img" className="shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5"/><rect x="2" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/><rect x="18.5" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>)
 
 export default function App(){
-  const[tab,setTab]=useState("dashboard"),[db,setDb]=useState({players:[],matches:[],visits:0,upcomingMatches:[],tagPresets:[]}),[selectedPlayerId,setSelectedPlayerId]=useState(null)
+  const[tab,setTab]=useState("dashboard"),[db,setDb]=useState({players:[],matches:[],visits:0,upcomingMatches:[],tagPresets:[],membershipSettings:[]}),[selectedPlayerId,setSelectedPlayerId]=useState(null)
   const[isAdmin,setIsAdmin]=useState(false),[loginOpen,setLoginOpen]=useState(false)
   const[loading,setLoading]=useState(true)
   const[pageLoading,setPageLoading]=useState(false)
@@ -96,7 +98,14 @@ export default function App(){
 
   useEffect(()=>{let mounted=true;(async()=>{
     try{
+      // DB 마이그레이션 실행 (membership_settings 테이블 확인)
+      await runMigrations()
+      
       const playersFromDB=await listPlayers(),shared=await loadDB()
+      
+      // 멤버십 설정 로드 (새 테이블에서)
+      const membershipSettings = await getMembershipSettings()
+      
       if(!mounted)return
       
       // 만료된 예정 매치들을 필터링
@@ -112,7 +121,9 @@ export default function App(){
         players:playersFromDB,
         matches:shared.matches||[],
         visits:typeof shared.visits==="number"?shared.visits:0,
-        upcomingMatches:activeUpcomingMatches
+        upcomingMatches:activeUpcomingMatches,
+        tagPresets:shared.tagPresets||[],
+        membershipSettings:membershipSettings||[]
       })
 
       // 방문 추적 (개발 환경 제외)
@@ -158,12 +169,17 @@ export default function App(){
     const offDB=subscribeDB(next=>{
       // 실시간으로 들어오는 데이터도 필터링
       const activeUpcomingMatches = filterExpiredMatches(next.upcomingMatches||[])
-      setDb(prev=>({...prev,matches:next.matches||prev.matches||[],visits:typeof next.visits==="number"?next.visits:(prev.visits||0),upcomingMatches:activeUpcomingMatches}))
+      setDb(prev=>({...prev,matches:next.matches||prev.matches||[],visits:typeof next.visits==="number"?next.visits:(prev.visits||0),upcomingMatches:activeUpcomingMatches,tagPresets:next.tagPresets||prev.tagPresets||[]}))
     })
-    return()=>{mounted=false;offP?.();offDB?.()}
+    // 멤버십 설정 실시간 구독
+    const offMembership=subscribeMembershipSettings(async()=>{
+      const membershipSettings = await getMembershipSettings()
+      setDb(prev=>({...prev,membershipSettings:membershipSettings||[]}))
+    })
+    return()=>{mounted=false;offP?.();offDB?.();offMembership?.()}
   },[])
 
-  const players=db.players||[],matches=db.matches||[],visits=typeof db.visits==="number"?db.visits:0,upcomingMatches=db.upcomingMatches||[]
+  const players=db.players||[],matches=db.matches||[],visits=typeof db.visits==="number"?db.visits:0,upcomingMatches=db.upcomingMatches||[],membershipSettings=db.membershipSettings||[]
 
   const totals=useMemo(()=>{
     const cnt=players.length
@@ -235,9 +251,12 @@ export default function App(){
   function handleUpdateUpcomingMatch(id,patch,silent=false){const next=(db.upcomingMatches||[]).map(m=>m.id===id?{...m,...patch}:m);setDb(prev=>({...prev,upcomingMatches:next}));saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:db.tagPresets||[]});if(!silent)notify("예정된 매치가 업데이트되었습니다.")}
 
   // 태그 프리셋 관리
-  function handleSaveTagPresets(tagPresets){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,tagPresets}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets});notify("태그 프리셋이 저장되었습니다.")}
-  function handleAddTagPreset(preset){if(!isAdmin)return notify("Admin만 가능합니다.");const next=[...(db.tagPresets||[]),preset];setDb(prev=>({...prev,tagPresets:next}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets:next})}
-  function handleDeleteTagPreset(index){if(!isAdmin)return notify("Admin만 가능합니다.");const next=(db.tagPresets||[]).filter((_,i)=>i!==index);setDb(prev=>({...prev,tagPresets:next}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets:next})}
+  function handleSaveTagPresets(tagPresets){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,tagPresets}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets,membershipSettings:db.membershipSettings||[]});notify("태그 프리셋이 저장되었습니다.")}
+  function handleAddTagPreset(preset){if(!isAdmin)return notify("Admin만 가능합니다.");const next=[...(db.tagPresets||[]),preset];setDb(prev=>({...prev,tagPresets:next}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets:next,membershipSettings:db.membershipSettings||[]})}
+  function handleDeleteTagPreset(index){if(!isAdmin)return notify("Admin만 가능합니다.");const next=(db.tagPresets||[]).filter((_,i)=>i!==index);setDb(prev=>({...prev,tagPresets:next}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets:next,membershipSettings:db.membershipSettings||[]})}
+
+  // 멤버십 설정 관리
+  function handleSaveMembershipSettings(membershipSettings){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,membershipSettings}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets:db.tagPresets||[],membershipSettings});notify("멤버십 설정이 저장되었습니다.")}
 
   // Supabase Auth: 로그아웃
   async function adminLogout(){
@@ -458,7 +477,7 @@ export default function App(){
             <PageSkeleton tab={tab} />
           ) : (
             <>
-              {tab==="dashboard"&&(<Dashboard totals={totals} players={players} matches={matches} isAdmin={isAdmin} onUpdateMatch={handleUpdateMatch} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>)}
+              {tab==="dashboard"&&(<Dashboard totals={totals} players={players} matches={matches} isAdmin={isAdmin} onUpdateMatch={handleUpdateMatch} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch} membershipSettings={db.membershipSettings||[]}/>)}
               {tab==="players"&&isAdmin&&featuresEnabled.players&&(
                 <PlayersPage
                   players={players}
@@ -473,10 +492,12 @@ export default function App(){
                   tagPresets={db.tagPresets||[]}
                   onAddTagPreset={handleAddTagPreset}
                   onDeleteTagPreset={handleDeleteTagPreset}
+                  membershipSettings={db.membershipSettings||[]}
+                  onSaveMembershipSettings={handleSaveMembershipSettings}
                   isAdmin={isAdmin}
                 />
               )}
-              {tab==="planner"&&isAdmin&&featuresEnabled.planner&&(<MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>)}
+              {tab==="planner"&&isAdmin&&featuresEnabled.planner&&(<MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch} membershipSettings={db.membershipSettings||[]}/>)}
               {tab==="draft"&&isAdmin&&featuresEnabled.draft&&(<DraftPage players={players} upcomingMatches={db.upcomingMatches} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>)}
               {tab==="formation"&&featuresEnabled.formation&&(<FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>)}
               {tab==="stats"&&isAdmin&&featuresEnabled.stats&&(<StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}

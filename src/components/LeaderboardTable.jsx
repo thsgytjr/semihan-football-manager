@@ -4,6 +4,7 @@ import InitialAvatar from './InitialAvatar'
 import Medal from './ranking/Medal'
 import FormDots from './ranking/FormDots'
 import { rankTone } from '../lib/rankingUtils'
+import { getMembershipBadge } from '../lib/membershipConfig'
 
 // 멤버십 helper 함수
 const S = (v) => v == null ? '' : String(v)
@@ -19,10 +20,11 @@ const isGuest = (m) => {
   const s = S(m).trim().toLowerCase()
   return s === 'guest' || s.includes('게스트')
 }
-const getBadges = (membership) => {
-  if (isAssociate(membership)) return ['준']
-  if (isGuest(membership)) return ['G']
-  return []
+
+// 커스텀 멤버십 기반 배지 가져오기
+const getBadgesWithCustom = (membership, customMemberships = []) => {
+  const badgeInfo = getMembershipBadge(membership, customMemberships)
+  return badgeInfo ? [badgeInfo.badge] : []
 }
 
 /**
@@ -43,8 +45,10 @@ export default function LeaderboardTable({
   controls, 
   title,
   columns = [],
-  renderRow
+  renderRow,
+  membershipSettings = []
 }) {
+  const customMemberships = membershipSettings.length > 0 ? membershipSettings : []
   const data = showAll ? rows : rows.slice(0, 5)
   const totalPlayers = rows.length
 
@@ -127,14 +131,23 @@ export function RankCell({ rank, tone, delta }) {
 /**
  * Standard player name cell with avatar
  */
-export function PlayerNameCell({ id, name, isGuest, membership, tone, photoUrl }) {
-  // membership prop이 있으면 그것을 사용, 없으면 isGuest prop 사용 (하위 호환성)
-  const badges = membership ? getBadges(membership) : (isGuest ? ['G'] : [])
+export function PlayerNameCell({ id, name, isGuest, membership, tone, photoUrl, customMemberships = [] }) {
+  // membership prop이 있으면 커스텀 배지 사용, 없으면 isGuest prop 사용 (하위 호환성)
+  const badges = membership ? getBadgesWithCustom(membership, customMemberships) : (isGuest ? ['G'] : [])
+  const badgeInfo = membership ? getMembershipBadge(membership, customMemberships) : null
   
   return (
     <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
       <div className="flex items-center gap-2">
-        <InitialAvatar id={id} name={name} size={32} badges={badges} photoUrl={photoUrl} />
+        <InitialAvatar 
+          id={id} 
+          name={name} 
+          size={32} 
+          badges={badges} 
+          photoUrl={photoUrl} 
+          customMemberships={customMemberships}
+          badgeInfo={badgeInfo}
+        />
         <span className="font-medium truncate">{name}</span>
       </div>
     </td>
