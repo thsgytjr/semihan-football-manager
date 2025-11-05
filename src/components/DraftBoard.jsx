@@ -74,130 +74,15 @@ export default function DraftBoard({
         </div>
       )}
 
-      {/* 팀 표시 */}
-      <div className="grid md:grid-cols-2 gap-6">
-        {/* Team 1 */}
-        <div className={`border-2 rounded-xl p-4 ${currentTurn === 'captain1' && !isCompleted ? 'border-emerald-500 bg-emerald-50' : 'border-gray-200'}`}>
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold">
-              1
-            </div>
-            <div>
-              <p className="font-bold text-lg">{captain1?.name}</p>
-              <p className="text-xs text-gray-500">
-                주장 {firstPick === 'captain1' && '(선공)'}
-              </p>
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            {team1.map((player, idx) => (
-              <div
-                key={player.id}
-                className={`p-3 rounded-lg flex items-center gap-3 relative ${idx === 0 ? 'bg-emerald-100 border-2 border-emerald-300' : 'bg-white border border-gray-200'}`}
-              >
-                <InitialAvatar 
-                  id={player.id} 
-                  name={player.name} 
-                  size={36} 
-                  photoUrl={player.photoUrl}
-                  badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold truncate">{player.name}</p>
-                  <p className="text-xs text-gray-500">{player.position}</p>
-                </div>
-                {idx === 0 ? (
-                  <span className="text-xs bg-emerald-500 text-white px-2 py-1 rounded flex-shrink-0">주장</span>
-                ) : (
-                  // X 버튼: 자기 차례 + 드래프트 진행중 + 다음 턴 준비 전 + 현재 턴에서 추가된 선수만
-                  currentTurn === 'captain1' && 
-                  !isCompleted && 
-                  !isReadyForNextTurn &&
-                  idx >= team1StartSize && (
-                    <button
-                      onClick={() => onRemovePlayer(player, 'team1')}
-                      className="p-1 hover:bg-red-100 rounded-full transition-colors"
-                      title="선수 제거"
-                    >
-                      <X className="w-4 h-4 text-red-500" />
-                    </button>
-                  )
-                )}
-              </div>
-            ))}
-          </div>
-          
-          <div className="mt-4 text-center text-sm text-gray-500">
-            <Users className="w-4 h-4 inline mr-1" />
-            {team1.length}명
-          </div>
-        </div>
-
-        {/* Team 2 */}
-        <div className={`border-2 rounded-xl p-4 ${currentTurn === 'captain2' && !isCompleted ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
-              2
-            </div>
-            <div>
-              <p className="font-bold text-lg">{captain2?.name}</p>
-              <p className="text-xs text-gray-500">
-                주장 {firstPick === 'captain2' && '(선공)'}
-              </p>
-            </div>
-          </div>
-          
-          <div className="space-y-2">
-            {team2.map((player, idx) => (
-              <div
-                key={player.id}
-                className={`p-3 rounded-lg flex items-center gap-3 relative ${idx === 0 ? 'bg-blue-100 border-2 border-blue-300' : 'bg-white border border-gray-200'}`}
-              >
-                <InitialAvatar 
-                  id={player.id} 
-                  name={player.name} 
-                  size={36} 
-                  photoUrl={player.photoUrl}
-                  badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
-                />
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold truncate">{player.name}</p>
-                  <p className="text-xs text-gray-500">{player.position}</p>
-                </div>
-                {idx === 0 ? (
-                  <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded flex-shrink-0">주장</span>
-                ) : (
-                  // X 버튼: 자기 차례 + 드래프트 진행중 + 다음 턴 준비 전 + 현재 턴에서 추가된 선수만
-                  currentTurn === 'captain2' && 
-                  !isCompleted && 
-                  !isReadyForNextTurn &&
-                  idx >= team2StartSize && (
-                    <button
-                      onClick={() => onRemovePlayer(player, 'team2')}
-                      className="p-1 hover:bg-red-100 rounded-full transition-colors"
-                      title="선수 제거"
-                    >
-                      <X className="w-4 h-4 text-red-500" />
-                    </button>
-                  )
-                )}
-              </div>
-            ))}
-          </div>
-          
-          <div className="mt-4 text-center text-sm text-gray-500">
-            <Users className="w-4 h-4 inline mr-1" />
-            {team2.length}명
-          </div>
-        </div>
-      </div>
-
-      {/* 현재 턴 및 타이머 - 팀과 선수 풀 사이 */}
+      {/* 현재 턴 및 타이머 */}
       {!isCompleted && (
         <div 
           ref={currentTurnRef}
-          className="sticky top-0 z-10 bg-gradient-to-r from-emerald-50 to-blue-50 border-2 border-emerald-200 rounded-xl p-6 shadow-lg"
+          className={`sticky top-0 z-20 rounded-xl p-6 shadow-lg ${
+            currentTurn === 'captain1' 
+              ? 'bg-gradient-to-r from-emerald-50 to-emerald-100 border-2 border-emerald-200' 
+              : 'bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-200'
+          }`}
           style={{
             animation: 'highlight-pulse 2s ease-in-out infinite'
           }}
@@ -283,58 +168,283 @@ export default function DraftBoard({
         </div>
       )}
 
-      {/* 선수 풀 */}
-      {!isCompleted && totalPlayers > 0 && (
-        <div className="border-2 border-gray-200 rounded-xl p-4">
-          <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-            <Users className="w-5 h-5" />
-            선수 풀 ({totalPlayers}명)
-          </h3>
-
-          {/* 검색바 */}
-          <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="선수 이름 또는 포지션 검색..."
-              value={searchTerm}
-              onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-            />
-          </div>
-
-          <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-1.5">
-            {playerPool.map(player => (
-              <button
-                key={player.id}
-                onClick={() => onPickPlayer(player)}
-                disabled={isPickComplete}
-                className={`p-2 border rounded-md transition-all flex flex-col items-center gap-1 ${
-                  isPickComplete 
-                    ? 'border-gray-200 bg-gray-100 opacity-50 cursor-not-allowed' 
-                    : 'border-gray-200 hover:border-emerald-500 hover:bg-emerald-50'
-                }`}
-              >
-                <InitialAvatar 
-                  id={player.id} 
-                  name={player.name} 
-                  size={64} 
-                  photoUrl={player.photoUrl}
-                  badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
-                />
-                <div className="w-full text-center">
-                  <p className="font-semibold text-xs truncate leading-tight">{player.name}</p>
-                  <p className="text-[10px] text-gray-500 truncate">{player.position}</p>
+      {/* 2단 슬라이딩 레이아웃: 드래프트 진행 중 */}
+      {!isCompleted ? (
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* 현재 턴 팀만 표시 */}
+          {currentTurn === 'captain1' && (
+            <div 
+              key="team1-active"
+              className="border-2 border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200 rounded-xl p-4"
+              style={{ animation: 'slideInFromLeft 0.5s ease-in-out' }}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold">
+                  1
                 </div>
-              </button>
-            ))}
-          </div>
-
-          {playerPool.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
-              검색 결과가 없습니다.
+                <div>
+                  <p className="font-bold text-lg">{captain1?.name}</p>
+                  <p className="text-xs text-gray-500">
+                    주장 {firstPick === 'captain1' && '(선공)'}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                {team1.map((player, idx) => (
+                  <div
+                    key={player.id}
+                    className={`p-3 rounded-lg flex items-center gap-3 relative ${idx === 0 ? 'bg-emerald-100 border-2 border-emerald-300' : 'bg-white border border-gray-200'}`}
+                  >
+                    <InitialAvatar 
+                      id={player.id} 
+                      name={player.name} 
+                      size={36} 
+                      photoUrl={player.photoUrl}
+                      badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold truncate">{player.name}</p>
+                      <p className="text-xs text-gray-500">{player.position}</p>
+                    </div>
+                    {idx === 0 ? (
+                      <span className="text-xs bg-emerald-500 text-white px-2 py-1 rounded flex-shrink-0">주장</span>
+                    ) : (
+                      currentTurn === 'captain1' && 
+                      !isCompleted && 
+                      !isReadyForNextTurn &&
+                      idx >= team1StartSize && (
+                        <button
+                          onClick={() => onRemovePlayer(player, 'team1')}
+                          className="p-1 hover:bg-red-100 rounded-full transition-colors"
+                          title="선수 제거"
+                        >
+                          <X className="w-4 h-4 text-red-500" />
+                        </button>
+                      )
+                    )}
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-4 text-center text-sm text-gray-500">
+                <Users className="w-4 h-4 inline mr-1" />
+                {team1.length}명
+              </div>
             </div>
           )}
+
+          {currentTurn === 'captain2' && (
+            <div 
+              key="team2-active"
+              className="border-2 border-blue-500 bg-blue-50 ring-2 ring-blue-200 rounded-xl p-4"
+              style={{ animation: 'slideInFromLeft 0.5s ease-in-out' }}
+            >
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
+                  2
+                </div>
+                <div>
+                  <p className="font-bold text-lg">{captain2?.name}</p>
+                  <p className="text-xs text-gray-500">
+                    주장 {firstPick === 'captain2' && '(선공)'}
+                  </p>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                {team2.map((player, idx) => (
+                  <div
+                    key={player.id}
+                    className={`p-3 rounded-lg flex items-center gap-3 relative ${idx === 0 ? 'bg-blue-100 border-2 border-blue-300' : 'bg-white border border-gray-200'}`}
+                  >
+                    <InitialAvatar 
+                      id={player.id} 
+                      name={player.name} 
+                      size={36} 
+                      photoUrl={player.photoUrl}
+                      badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold truncate">{player.name}</p>
+                      <p className="text-xs text-gray-500">{player.position}</p>
+                    </div>
+                    {idx === 0 ? (
+                      <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded flex-shrink-0">주장</span>
+                    ) : (
+                      currentTurn === 'captain2' && 
+                      !isCompleted && 
+                      !isReadyForNextTurn &&
+                      idx >= team2StartSize && (
+                        <button
+                          onClick={() => onRemovePlayer(player, 'team2')}
+                          className="p-1 hover:bg-red-100 rounded-full transition-colors"
+                          title="선수 제거"
+                        >
+                          <X className="w-4 h-4 text-red-500" />
+                        </button>
+                      )
+                    )}
+                  </div>
+                ))}
+              </div>
+              
+              <div className="mt-4 text-center text-sm text-gray-500">
+                <Users className="w-4 h-4 inline mr-1" />
+                {team2.length}명
+              </div>
+            </div>
+          )}
+
+          {/* 선수 풀 - 오른쪽에서 슬라이딩 */}
+          {totalPlayers > 0 && (
+            <div 
+              key={`pool-${currentTurn}`}
+              className="border-2 border-gray-200 rounded-xl p-4"
+              style={{ animation: 'slideInFromRight 0.5s ease-in-out' }}
+            >
+              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
+                <Users className="w-5 h-5" />
+                선수 풀 ({totalPlayers}명)
+              </h3>
+
+              {/* 검색바 */}
+              <div className="relative mb-4">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type="text"
+                  placeholder="선수 이름 또는 포지션 검색..."
+                  value={searchTerm}
+                  onChange={(e) => onSearchChange(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5 max-h-[600px] overflow-y-auto">
+                {playerPool.map(player => (
+                  <button
+                    key={player.id}
+                    onClick={() => onPickPlayer(player)}
+                    disabled={isPickComplete}
+                    className={`p-2 border rounded-md transition-all flex flex-col items-center gap-1 ${
+                      isPickComplete 
+                        ? 'border-gray-200 bg-gray-100 opacity-50 cursor-not-allowed' 
+                        : 'border-gray-200 hover:border-emerald-500 hover:bg-emerald-50'
+                    }`}
+                  >
+                    <InitialAvatar 
+                      id={player.id} 
+                      name={player.name} 
+                      size={56} 
+                      photoUrl={player.photoUrl}
+                      badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
+                    />
+                    <div className="w-full text-center">
+                      <p className="font-semibold text-xs truncate leading-tight">{player.name}</p>
+                      <p className="text-[10px] text-gray-500 truncate">{player.position}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {playerPool.length === 0 && (
+                <div className="text-center py-8 text-gray-500">
+                  검색 결과가 없습니다.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        /* 완료 시: 두 팀 모두 표시 */
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Team 1 */}
+          <div className="border-2 border-gray-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center text-white font-bold">
+                1
+              </div>
+              <div>
+                <p className="font-bold text-lg">{captain1?.name}</p>
+                <p className="text-xs text-gray-500">
+                  주장 {firstPick === 'captain1' && '(선공)'}
+                </p>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              {team1.map((player, idx) => (
+                <div
+                  key={player.id}
+                  className={`p-3 rounded-lg flex items-center gap-3 ${idx === 0 ? 'bg-emerald-100 border-2 border-emerald-300' : 'bg-white border border-gray-200'}`}
+                >
+                  <InitialAvatar 
+                    id={player.id} 
+                    name={player.name} 
+                    size={36} 
+                    photoUrl={player.photoUrl}
+                    badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold truncate">{player.name}</p>
+                    <p className="text-xs text-gray-500">{player.position}</p>
+                  </div>
+                  {idx === 0 && (
+                    <span className="text-xs bg-emerald-500 text-white px-2 py-1 rounded flex-shrink-0">주장</span>
+                  )}
+                </div>
+              ))}
+            </div>
+            
+            <div className="mt-4 text-center text-sm text-gray-500">
+              <Users className="w-4 h-4 inline mr-1" />
+              {team1.length}명
+            </div>
+          </div>
+
+          {/* Team 2 */}
+          <div className="border-2 border-gray-200 rounded-xl p-4">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
+                2
+              </div>
+              <div>
+                <p className="font-bold text-lg">{captain2?.name}</p>
+                <p className="text-xs text-gray-500">
+                  주장 {firstPick === 'captain2' && '(선공)'}
+                </p>
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              {team2.map((player, idx) => (
+                <div
+                  key={player.id}
+                  className={`p-3 rounded-lg flex items-center gap-3 ${idx === 0 ? 'bg-blue-100 border-2 border-blue-300' : 'bg-white border border-gray-200'}`}
+                >
+                  <InitialAvatar 
+                    id={player.id} 
+                    name={player.name} 
+                    size={36} 
+                    photoUrl={player.photoUrl}
+                    badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold truncate">{player.name}</p>
+                    <p className="text-xs text-gray-500">{player.position}</p>
+                  </div>
+                  {idx === 0 && (
+                    <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded flex-shrink-0">주장</span>
+                  )}
+                </div>
+              ))}
+            </div>
+            
+            <div className="mt-4 text-center text-sm text-gray-500">
+              <Users className="w-4 h-4 inline mr-1" />
+              {team2.length}명
+            </div>
+          </div>
         </div>
       )}
     </div>

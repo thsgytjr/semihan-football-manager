@@ -895,8 +895,10 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
               <div className="mt-4 p-3 bg-blue-100 rounded-lg">
                 <p className="text-xs text-blue-800">
                   💡 첫 번째 턴: <strong>{draftSettings.firstPickCount}명</strong> 선택, 
-                  이후 턴: <strong>{draftSettings.regularPickCount}명</strong>씩 선택, 
-                  제한시간: <strong>{draftSettings.timerDuration}초</strong>
+                  이후 턴: <strong>{draftSettings.regularPickCount}명</strong>씩 선택
+                  {draftSettings.timerEnabled && (
+                    <>, 제한시간: <strong>{draftSettings.timerDuration}초</strong></>
+                  )}
                   {draftSettings.turnTransitionEnabled && (
                     <>, 턴 전환: <strong>{draftSettings.turnTransitionDelay}초</strong> 후 자동</>
                   )}
@@ -1558,6 +1560,39 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
           50% {
             box-shadow: 0 8px 30px rgba(16, 185, 129, 0.5);
             border-color: rgb(52, 211, 153);
+          }
+        }
+        
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        
+        @keyframes slideInFromLeft {
+          from {
+            opacity: 0;
+            transform: translateX(-100px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+        
+        @keyframes slideInFromRight {
+          from {
+            opacity: 0;
+            transform: translateX(100px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
           }
         }
       `}</style>
