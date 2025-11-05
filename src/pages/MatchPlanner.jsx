@@ -17,6 +17,7 @@ import { createUpcomingMatch, filterExpiredMatches } from '../lib/upcomingMatch'
 import { calculateAIPower } from '../lib/aiPower'
 import captainIcon from '../assets/Captain.PNG'
 import { getMembershipBadge } from '../lib/membershipConfig'
+import { getTagColorClass } from '../lib/constants'
 
 /* ───────── 게스트 판별/뱃지 유틸 ───────── */
 const S=(v)=>v==null?'':String(v)
@@ -1209,17 +1210,50 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
   const [q,setQ]=useState("")
   const [showList,setShowList]=useState(false) // 선수 목록 표시 여부
   const [isComposing,setIsComposing]=useState(false) // 한글 입력 중 여부
+  const [selectedTag,setSelectedTag]=useState("") // 선택된 태그 필터
   
   const notInMatch = useMemo(()=>{
     const inside=new Set(snapshot.flat().map(String))
     return players.filter(p=>!inside.has(String(p.id)))
   }, [players, snapshot])
   
+  // 모든 사용 가능한 태그 목록 추출 (이름, 색상 포함) - 전체 선수에서 추출
+  const allTags = useMemo(() => {
+    const tagMap = new Map()
+    players.forEach(p => {
+      if (p.tags && Array.isArray(p.tags)) {
+        p.tags.forEach(tag => {
+          if (tag && tag.name) {
+            // 같은 이름의 태그가 여러 색상으로 있을 수 있지만, 첫 번째 것을 사용
+            if (!tagMap.has(tag.name)) {
+              tagMap.set(tag.name, { name: tag.name, color: tag.color })
+            }
+          }
+        })
+      }
+    })
+    return Array.from(tagMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [players])
+  
   const filtered=useMemo(()=>{
     const t=q.trim().toLowerCase()
-    const base=t?notInMatch.filter(p=>(p.name||"").toLowerCase().includes(t)):notInMatch
+    let base = notInMatch
+    
+    // 태그 필터 적용
+    if (selectedTag) {
+      base = base.filter(p => 
+        p.tags && Array.isArray(p.tags) && 
+        p.tags.some(tag => tag.name === selectedTag)
+      )
+    }
+    
+    // 이름 필터 적용
+    if (t) {
+      base = base.filter(p => (p.name||"").toLowerCase().includes(t))
+    }
+    
     return base.slice().sort((a,b)=>(a.name||"").localeCompare(b.name||""))
-  },[notInMatch,q])
+  },[notInMatch,q,selectedTag])
   
   // 검색어가 입력되면 자동으로 목록 표시
   const shouldShowList = showList || q.trim().length > 0
@@ -1255,7 +1289,57 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
           onCompositionStart={()=>setIsComposing(true)}
           onCompositionEnd={()=>setIsComposing(false)}
         />
+        {(selectedTag || q.trim()) && (
+          <button 
+            onClick={()=>{setSelectedTag('');setQ('')}}
+            className="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+            title="필터 초기화"
+          >
+            ✕
+          </button>
+        )}
       </div>
+      
+      {allTags.length > 0 && (
+        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-gray-500">태그:</span>
+          <button
+            onClick={() => setSelectedTag('')}
+            className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
+              selectedTag === '' 
+                ? 'bg-stone-700 text-white shadow-sm' 
+                : 'bg-stone-100 text-stone-700 border border-stone-200 hover:bg-stone-200'
+            }`}
+          >
+            전체
+          </button>
+          {allTags.map(tag => {
+            const colorClass = getTagColorClass(tag.color)
+            const isActive = selectedTag === tag.name
+            const style = tag.color && tag.color.startsWith('#') 
+              ? { 
+                  backgroundColor: isActive ? tag.color : tag.color + '20', 
+                  borderColor: tag.color + '40', 
+                  color: isActive ? '#ffffff' : tag.color 
+                } 
+              : {}
+            return (
+              <button
+                key={tag.name}
+                onClick={() => setSelectedTag(tag.name)}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-medium border transition-all ${
+                  isActive 
+                    ? colorClass ? colorClass.replace('bg-', 'bg-').replace('-100', '-600').replace('text-', 'text-white border-') : 'shadow-sm'
+                    : colorClass || 'bg-stone-100 text-stone-700 border-stone-200'
+                } ${!isActive && 'hover:opacity-80'}`}
+                style={Object.keys(style).length > 0 ? style : undefined}
+              >
+                {tag.name}
+              </button>
+            )
+          })}
+        </div>
+      )}
       
       {notInMatch.length === 0 ? (
         <div className="text-xs text-gray-400 py-2">모든 선수가 팀에 배정되었습니다</div>
@@ -1272,6 +1356,12 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
             </div>
           ) : (
             <>
+              {(selectedTag || q.trim()) && (
+                <div className="mb-2 text-xs text-gray-600">
+                  필터된 선수: {filtered.length}명
+                  {selectedTag && <span className="ml-1 font-medium">({selectedTag})</span>}
+                </div>
+              )}
               <div className="max-h-[400px] overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
                   {filtered.map(p => {
