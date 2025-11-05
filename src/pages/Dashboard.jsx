@@ -424,7 +424,7 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls, apDateKey, initia
       <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
       <PlayerNameCell id={r.id} name={r.name} membership={r.membership} tone={tone} photoUrl={r.photoUrl} customMemberships={customMemberships} />
       <StatCell value={r.points} tone={tone} align="center" />
-      <FormDotsCell form={r.form} tone={tone} />
+      <FormDotsCell form={r.last5} tone={tone} />
     </>
   )
 
