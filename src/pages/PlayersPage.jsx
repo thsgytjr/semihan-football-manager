@@ -1772,8 +1772,10 @@ export default function PlayersPage({
           const badges = badgeInfo ? [badgeInfo.badge] : []
           const pos = posOf(p)
           const ovr = overall(p)
-          // positions 배열에 GK가 포함되어 있는지 확인
-          const isGK = p.positions?.includes('GK') || pos === 'GK'
+          // 오직 GK 포지션만 있는 선수인지 확인
+          const isOnlyGK = p.positions && Array.isArray(p.positions) && p.positions.length > 0
+            ? p.positions.length === 1 && p.positions[0] === 'GK'
+            : pos === 'GK'
           
           return (
             <div
@@ -1844,8 +1846,8 @@ export default function PlayersPage({
                 </div>
               </div>
 
-              {/* OVR 표시 - GK가 아닐 때만 (값에 따라 색상 표시) */}
-              {!isGK && (
+              {/* OVR 표시 - 오직 GK 포지션만 있는 선수가 아닐 때 */}
+              {!isOnlyGK && (
                 <div className={`mb-3 rounded-lg p-3 text-center ${
                   ovr === 30
                     ? 'bg-stone-300 text-stone-700'
@@ -1869,7 +1871,7 @@ export default function PlayersPage({
                   )}
                 </div>
               )}
-              {isGK && (
+              {isOnlyGK && (
                 <div className="mb-3 rounded-lg p-3 text-center bg-amber-100 border border-amber-200">
                   <div className="text-xs text-amber-700 mb-1">Position</div>
                   <div className="text-3xl font-bold text-amber-900">GK</div>
@@ -1929,8 +1931,10 @@ export default function PlayersPage({
             const badgeInfo = getMembershipBadge(mem, customMemberships)
             const badges = badgeInfo ? [badgeInfo.badge] : []
             const pos = posOf(p)
-            // positions 배열에 GK가 포함되어 있는지 확인
-            const isGK = p.positions?.includes('GK') || pos === 'GK'
+            // 오직 GK 포지션만 있는 선수인지 확인
+            const isOnlyGK = p.positions && Array.isArray(p.positions) && p.positions.length > 0
+              ? p.positions.length === 1 && p.positions[0] === 'GK'
+              : pos === 'GK'
             const ovr = overall(p)
             return (
               <li
@@ -1999,7 +2003,7 @@ export default function PlayersPage({
                 </div>
 
                 <div className="flex items-center gap-3">
-                  {!isGK && (
+                  {!isOnlyGK && (
                     <>
                       <span className={`inline-flex items-center rounded px-3 py-1 text-sm font-bold ${ovr === 30 ? 'bg-stone-300 text-stone-700' : ovrChipClass(ovr)}`}>
                         {ovr === 30 ? '?' : ovr}
@@ -2009,7 +2013,7 @@ export default function PlayersPage({
                       </span>
                     </>
                   )}
-                  {isGK && (
+                  {isOnlyGK && (
                     <>
                       <span className="inline-flex items-center rounded px-3 py-1 text-sm font-bold bg-amber-100 text-amber-800 border border-amber-200">
                         GK
