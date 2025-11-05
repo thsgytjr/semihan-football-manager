@@ -1683,43 +1683,60 @@ export default function PlayersPage({
 
         {/* 정렬 & 뷰 모드 토글 */}
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-medium text-stone-600 mr-1">정렬:</span>
-            <button
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='ovr' ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
-              onClick={()=>onSortClick('ovr')}
-              title="Overall 정렬 (토글: 오름/내림)"
-            >
-              Overall {arrowFor('ovr')}
-            </button>
-            <button
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='ai' ? 'border-purple-500 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
-              onClick={()=>onSortClick('ai')}
-              title="AI Overall 정렬 (토글: 오름/내림)"
-            >
-              AI Overall {arrowFor('ai')}
-            </button>
-            <button
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='pos' ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
-              onClick={()=>onSortClick('pos')}
-              title="포지션 정렬 (토글: 오름/내림)"
-            >
-              포지션 {arrowFor('pos')}
-            </button>
-            <button
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='status' ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
-              onClick={()=>onSortClick('status')}
-              title="상태 정렬 (토글: 오름/내림)"
-            >
-              상태 {arrowFor('status')}
-            </button>
-            <button
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='name' ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
-              onClick={()=>onSortClick('name')}
-              title="이름 정렬 (토글: 오름/내림)"
-            >
-              이름 {arrowFor('name')}
-            </button>
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* 필터링된 선수 수 표시 */}
+            <div className="text-sm font-semibold text-stone-700">
+              선수 목록 
+              <span className="ml-2 text-emerald-600">
+                {filtered.length}명
+              </span>
+              {filtered.length !== players.length && (
+                <span className="ml-1 text-xs text-stone-500">
+                  (전체 {players.length}명)
+                </span>
+              )}
+            </div>
+            
+            <div className="h-5 w-px bg-stone-300"></div>
+            
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-medium text-stone-600">정렬:</span>
+              <button
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='ovr' ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
+                onClick={()=>onSortClick('ovr')}
+                title="Overall 정렬 (토글: 오름/내림)"
+              >
+                Overall {arrowFor('ovr')}
+              </button>
+              <button
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='ai' ? 'border-purple-500 bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
+                onClick={()=>onSortClick('ai')}
+                title="AI Overall 정렬 (토글: 오름/내림)"
+              >
+                AI Overall {arrowFor('ai')}
+              </button>
+              <button
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='pos' ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
+                onClick={()=>onSortClick('pos')}
+                title="포지션 정렬 (토글: 오름/내림)"
+              >
+                포지션 {arrowFor('pos')}
+              </button>
+              <button
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='status' ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
+                onClick={()=>onSortClick('status')}
+                title="상태 정렬 (토글: 오름/내림)"
+              >
+                상태 {arrowFor('status')}
+              </button>
+              <button
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='name' ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
+                onClick={()=>onSortClick('name')}
+                title="이름 정렬 (토글: 오름/내림)"
+              >
+                이름 {arrowFor('name')}
+              </button>
+            </div>
           </div>
 
           {/* 뷰 모드 토글 */}
