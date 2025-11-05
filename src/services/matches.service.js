@@ -27,6 +27,7 @@ function toAppFormat(row) {
     teamIds: row.teamids || row.teamIds || [], // 주의: 테이블은 teamids (소문자)
     stats: row.stats || {}, // 골/어시 기록
     draft: row.draft || {}, // Draft 데이터 (선수승점, 주장승점 등)
+    teamColors: row.teamColors || row.team_colors || null, // 팀 색상 설정
     created_at: row.created_at,
     updated_at: row.updated_at,
   }
@@ -53,6 +54,7 @@ function toDbFormat(match) {
     teamids: match.teamIds ?? [], // 주의: 테이블 컬럼은 teamids (소문자)
     stats: match.stats ?? {}, // 골/어시 기록
     draft: match.draft ?? {}, // Draft 데이터 (선수승점, 주장승점 등)
+    teamColors: match.teamColors ?? null, // 팀 색상 설정
   }
 }
 
@@ -93,6 +95,7 @@ export async function updateMatchInDB(matchId, patch) {
     if ('teamIds' in patch) payload.teamids = patch.teamIds // 주의: 소문자 teamids
     if ('stats' in patch) payload.stats = patch.stats // 골/어시 기록
     if ('draft' in patch) payload.draft = patch.draft // Draft 데이터
+    if ('teamColors' in patch) payload.teamColors = patch.teamColors // 팀 색상 설정
     
     payload.updated_at = new Date().toISOString()
 

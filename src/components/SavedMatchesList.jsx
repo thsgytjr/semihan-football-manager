@@ -1094,6 +1094,9 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
             return 0
           }):list
           
+          // Get saved team color if available (check for non-null value)
+          const teamColor = (m.teamColors && Array.isArray(m.teamColors) && m.teamColors[i] && typeof m.teamColors[i] === 'object') ? m.teamColors[i] : null
+          
           // compute winner index from quarterScores or m.scores
           let teamTotals = null
           let isWinner = false
@@ -1110,13 +1113,25 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
             }
           }
           
+          // Header style: use teamColor if available, otherwise kit color
+          const headerStyle = teamColor ? {
+            backgroundColor: teamColor.bg,
+            color: teamColor.text,
+            borderColor: teamColor.border,
+          } : {}
+          
           return (
             <div key={i} className="overflow-hidden rounded border border-gray-200 relative">
-              <div className={`flex items-center justify-between px-3 py-1.5 text-xs ${kit.headerClass} relative z-10`}>
-                <div className="font-semibold">팀 {i+1} {isWinner && <span className="ml-2">🏆</span>}</div>
+              <div 
+                className={`flex items-center justify-between px-3 py-1.5 text-xs ${!teamColor ? kit.headerClass : ''} relative z-10`}
+                style={teamColor ? headerStyle : {}}
+              >
+                <div className="font-semibold">
+                  팀 {i+1} {isWinner && <span className="ml-2">🏆</span>}
+                </div>
                 {isAdmin && !hideOVR
-                  ? <div className="opacity-80">{kit.label} · {list.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</div>
-                  : <div className="opacity-80">{kit.label} · {list.length}명</div>}
+                  ? <div className="opacity-80">{teamColor ? teamColor.label : kit.label} · {list.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</div>
+                  : <div className="opacity-80">{teamColor ? teamColor.label : kit.label} · {list.length}명</div>}
               </div>
               <ul className="divide-y divide-gray-100 relative z-10">
                 {isWinner && isDraftMode && m?.id===latestDraftId && <Confetti />}

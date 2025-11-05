@@ -1,5 +1,6 @@
 // src/pages/MatchPlanner.jsx
 import React,{useEffect,useMemo,useRef,useState}from'react'
+import ReactDOM from'react-dom'
 import Card from'../components/Card'
 import{mkMatch,decideMode,splitKTeams,hydrateMatch}from'../lib/match'
 import{overall,isUnknownPlayer}from'../lib/players'
@@ -132,6 +133,7 @@ export default function MatchPlanner({
   const[linkedUpcomingMatchId,setLinkedUpcomingMatchId]=useState(null) // 현재 편집 중인 예정 매치 ID
   const[activeSortMode,setActiveSortMode]=useState(null) // 현재 활성화된 정렬 모드: 'name' | 'position' | 'ovr' | 'aipower' | null
   const[aiDistributedTeams,setAiDistributedTeams]=useState(null) // AI 배정 이전 상태 (Revert용)
+  const[teamColors,setTeamColors]=useState([]) // Team colors: [{bg, text, border, label}, ...] - empty array means use default kit colors
   
   // Extract unique locations from saved matches (by name only, no duplicates)
   const locationOptions = useMemo(() => {
@@ -170,6 +172,13 @@ export default function MatchPlanner({
     }
     // 팀 수 변경 시 주장 정보 초기화
     setCaptainIds([])
+    
+    // Adjust teamColors array length to match team count (preserve existing colors, fill with null for new teams)
+    setTeamColors(prev => {
+      if (prev.length === teams) return prev
+      const newColors = Array.from({length: teams}, (_, i) => prev[i] || null)
+      return newColors
+    })
   }, [teams]) // eslint-disable-line
 
   // Base cost from custom input or location history
@@ -232,7 +241,9 @@ export default function MatchPlanner({
         mode,snapshot,board:placedByTeam,formations,locked:true,videos:[],
         ...draftFields
       }),
-      fees
+      fees,
+      // Only include teamColors if at least one team has a custom color
+      ...(teamColors && teamColors.length > 0 && teamColors.some(c => c !== null && c !== undefined) ? { teamColors } : {})
     }
     onSaveMatch(payload);notify(`${isDraftMode ? '드래프트 ' : ''}매치가 저장되었습니다 ✅`)
   }
@@ -266,7 +277,9 @@ export default function MatchPlanner({
       snapshot: teamsSnapshot, // 팀 구성 저장
       formations: formations, // 포메이션 저장
       captainIds: captainIds, // 주장 정보 저장
-      criterion: posAware ? 'pos-aware' : criterion // 배정 기준 저장
+      criterion: posAware ? 'pos-aware' : criterion, // 배정 기준 저장
+      // Only include teamColors if at least one team has a custom color
+      ...(teamColors && teamColors.length > 0 && teamColors.some(c => c !== null && c !== undefined) ? { teamColors } : {})
     })
 
     onSaveUpcomingMatch(upcomingMatch)
@@ -291,11 +304,13 @@ export default function MatchPlanner({
       participantIds: assignedPlayerIds,
       captainIds: captainIds,
       formations: formations,
-      teamCount: teams
+      teamCount: teams,
+      // Only include teamColors if at least one team has a custom color
+      ...(teamColors && teamColors.length > 0 && teamColors.some(c => c !== null && c !== undefined) ? { teamColors } : {})
     }
 
     onUpdateUpcomingMatch(linkedUpcomingMatchId, updates, true) // silent=true
-  }, [captainIds, previewTeams, formations]) // 주장, 팀 구성, 포메이션 변경 시 자동 업데이트
+  }, [captainIds, previewTeams, formations, teamColors]) // 주장, 팀 구성, 포메이션, 팀 색상 변경 시 자동 업데이트
 
   // Drag and drop handlers
   const sensors=useSensors(useSensor(PointerSensor,{activationConstraint:{distance:4}}),useSensor(TouchSensor,{activationConstraint:{delay:120,tolerance:6}}))
@@ -456,7 +471,7 @@ export default function MatchPlanner({
     notify('AI 배정 이전 상태로 되돌렸습니다 ↩️')
   }
 
-  function loadSavedIntoPlanner(match){if(!match)return;skipAutoResetRef.current=true;const h=hydrateMatch(match,players),ts=h.teams||[];if(ts.length===0){notify('불러올 팀 구성이 없습니다.');return}const ids=ts.flat().map(p=>p.id);setTeamCount(ts.length);if(match.criterion)setCriterion(match.criterion);if(match.location){setLocationName(match.location.name||'');setLocationAddress(match.location.address||'')}if(match.dateISO)setDateISO(match.dateISO.slice(0,16));if(match.fees?.total)setCustomBaseCost(match.fees.total);setShuffleSeed(0);setManualTeams(ts);latestTeamsRef.current=ts;setShowAIPower(false);const baseFormations=Array.isArray(match.formations)&&match.formations.length===ts.length?match.formations.slice():ts.map(list=>recommendFormation({count:list.length,mode:match.mode||'11v11',positions:countPositions(list)}));setFormations(baseFormations);const baseBoard=Array.isArray(match.board)&&match.board.length===ts.length?match.board.map(a=>Array.isArray(a)?a.slice():[]):ts.map((list,i)=>assignToFormation({players:list,formation:baseFormations[i]||'4-3-3'}));setPlacedByTeam(baseBoard);if(match.selectionMode==='draft'){setIsDraftMode(true);if(Array.isArray(match.captainIds)){setCaptainIds(match.captainIds)}}else{setIsDraftMode(false);setCaptainIds([])};notify('저장된 매치를 팀배정에 불러왔습니다 ✅')}
+  function loadSavedIntoPlanner(match){if(!match)return;skipAutoResetRef.current=true;const h=hydrateMatch(match,players),ts=h.teams||[];if(ts.length===0){notify('불러올 팀 구성이 없습니다.');return}const ids=ts.flat().map(p=>p.id);setTeamCount(ts.length);if(match.criterion)setCriterion(match.criterion);if(match.location){setLocationName(match.location.name||'');setLocationAddress(match.location.address||'')}if(match.dateISO)setDateISO(match.dateISO.slice(0,16));if(match.fees?.total)setCustomBaseCost(match.fees.total);setShuffleSeed(0);setManualTeams(ts);latestTeamsRef.current=ts;setShowAIPower(false);const baseFormations=Array.isArray(match.formations)&&match.formations.length===ts.length?match.formations.slice():ts.map(list=>recommendFormation({count:list.length,mode:match.mode||'11v11',positions:countPositions(list)}));setFormations(baseFormations);const baseBoard=Array.isArray(match.board)&&match.board.length===ts.length?match.board.map(a=>Array.isArray(a)?a.slice():[]):ts.map((list,i)=>assignToFormation({players:list,formation:baseFormations[i]||'4-3-3'}));setPlacedByTeam(baseBoard);if(match.selectionMode==='draft'){setIsDraftMode(true);if(Array.isArray(match.captainIds)){setCaptainIds(match.captainIds)}}else{setIsDraftMode(false);setCaptainIds([])};if(match.teamColors&&Array.isArray(match.teamColors)&&match.teamColors.length===ts.length){setTeamColors(match.teamColors)};notify('저장된 매치를 팀배정에 불러왔습니다 ✅')}
 
   function loadUpcomingMatchIntoPlanner(upcomingMatch) {
     if (!upcomingMatch) return
@@ -524,6 +539,11 @@ export default function MatchPlanner({
       setShowAIPower(false)
       setShuffleSeed(0)
       
+      // Load team colors if available
+      if (upcomingMatch.teamColors && Array.isArray(upcomingMatch.teamColors) && upcomingMatch.teamColors.length === snapshotTeams.length) {
+        setTeamColors(upcomingMatch.teamColors)
+      }
+      
       notify('드래프트 결과를 불러왔습니다 ✅')
     } else {
       // 드래프트가 완료되지 않은 경우
@@ -553,6 +573,11 @@ export default function MatchPlanner({
         // 주장 정보가 있으면 불러오기 (드래프트 모드 여부와 관계없이)
         if (upcomingMatch.captainIds && upcomingMatch.captainIds.length > 0) {
           setCaptainIds(upcomingMatch.captainIds.slice())
+        }
+        
+        // Load team colors if available
+        if (upcomingMatch.teamColors && Array.isArray(upcomingMatch.teamColors)) {
+          setTeamColors(upcomingMatch.teamColors)
         }
       } else {
         setManualTeams(null)
@@ -864,6 +889,13 @@ export default function MatchPlanner({
                       matches={matches}
                       showAIPower={showAIPower}
                       customMemberships={customMemberships}
+                      teamColor={teamColors[i]}
+                      onColorChange={(newColor) => {
+                        const updated = Array.from({length: previewTeams.length}, (_, idx) => 
+                          idx === i ? newColor : (teamColors[idx] || null)
+                        )
+                        setTeamColors(updated)
+                      }}
                     />
                   </div>
                 ))}
@@ -1030,9 +1062,63 @@ export default function MatchPlanner({
 function Row({label,children}){return(<div className="grid items-start gap-2 sm:grid-cols-[120px_minmax(0,1fr)]"><label className="mt-1 text-sm text-gray-600">{label}</label><div>{children}</div></div>)}
 
 /* 컬럼/플레이어 렌더 */
-function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraftMode,captainId,onRemovePlayer,onSetCaptain,matches,showAIPower,customMemberships=[]}){
+function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraftMode,captainId,onRemovePlayer,onSetCaptain,matches,showAIPower,customMemberships=[],teamColor,onColorChange}){
   const id=`team-${teamIndex}`
   const {setNodeRef,isOver}=useDroppable({id})
+  const [showColorPicker, setShowColorPicker] = React.useState(false)
+  const [customColorHex, setCustomColorHex] = React.useState('#3b82f6')
+  const [customLabel, setCustomLabel] = React.useState('')
+  
+  // Preset colors
+  const presetColors = [
+    { bg: '#ffffff', label: 'White' },
+    { bg: '#1c1917', label: 'Black' },
+    { bg: '#2563eb', label: 'Blue' },
+    { bg: '#dc2626', label: 'Red' },
+    { bg: '#059669', label: 'Green' },
+    { bg: '#7c3aed', label: 'Purple' },
+    { bg: '#f97316', label: 'Orange' },
+    { bg: '#0d9488', label: 'Teal' },
+    { bg: '#db2777', label: 'Pink' },
+    { bg: '#facc15', label: 'Yellow' },
+  ]
+  
+  // Calculate text color based on background brightness
+  const getTextColor = (bgHex) => {
+    const hex = bgHex.replace('#', '')
+    const r = parseInt(hex.substr(0, 2), 16)
+    const g = parseInt(hex.substr(2, 2), 16)
+    const b = parseInt(hex.substr(4, 2), 16)
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000
+    return brightness > 155 ? '#000000' : '#ffffff'
+  }
+  
+  // Apply preset color
+  const applyPresetColor = (preset) => {
+    const textColor = getTextColor(preset.bg)
+    const borderColor = preset.bg === '#ffffff' ? '#d1d5db' : preset.bg
+    onColorChange({
+      bg: preset.bg,
+      text: textColor,
+      border: borderColor,
+      label: preset.label
+    })
+    setShowColorPicker(false)
+  }
+  
+  // Apply custom color
+  const applyCustomColor = () => {
+    const textColor = getTextColor(customColorHex)
+    const label = customLabel.trim() || 'Custom'
+    onColorChange({
+      bg: customColorHex,
+      text: textColor,
+      border: customColorHex,
+      label: label
+    })
+    setShowColorPicker(false)
+  }
+  
   
   // 오직 GK 포지션만 있는 선수만 제외 (멀티 포지션 GK는 포함)
   const non=players.filter(p=>{
@@ -1062,11 +1148,24 @@ function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraft
     rendered.push(<PlayerRow key={players[i].id} player={players[i]} showOVR={showOVR} isAdmin={isAdmin} teamIndex={teamIndex} isDraftMode={isDraftMode} isCaptain={captainId===players[i].id} onRemove={onRemovePlayer} onSetCaptain={onSetCaptain} matches={matches} showAIPower={showAIPower} customMemberships={customMemberships}/>)
   }
   if(showIndicator&&dropHint.index===players.length)rendered.push(<React.Fragment key="hint-end">{indicator}</React.Fragment>)
+  
+  // Use teamColor for styling
+  const headerStyle = teamColor ? {
+    backgroundColor: teamColor.bg,
+    color: teamColor.text,
+    borderColor: teamColor.border,
+  } : {}
+  
   return(<div ref={setNodeRef} className={`rounded-lg border bg-white transition ${isOver?'border-emerald-500 ring-2 ring-emerald-200':'border-gray-200'}`}>
-    <div className={`mb-1 flex items-center justify-between px-3 py-2 text-xs ${labelKit.headerClass}`}>
-      <div className="font-semibold">팀 {teamIndex+1}</div>
+    <div 
+      className={`mb-1 flex items-center justify-between px-3 py-2 text-xs ${!teamColor ? labelKit.headerClass : ''}`}
+      style={teamColor ? headerStyle : {}}
+    >
+      <div className="font-semibold flex items-center gap-2">
+        <span>팀 {teamIndex+1}</span>
+      </div>
       <div className="opacity-80 flex items-center gap-2">
-        <span>{labelKit.label} · {players.length}명</span>
+        <span>{teamColor ? teamColor.label : labelKit.label} · {players.length}명</span>
         {isAdmin&&(
             <span
             className="
@@ -1079,8 +1178,98 @@ function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraft
             <b>팀파워</b> {sum} · 평균 {avg}
             </span>
           )}
+        {isAdmin && (
+          <button
+            onClick={() => setShowColorPicker(true)}
+            className="ml-2 px-2 py-1 rounded-md text-[10px] font-medium border transition-all hover:shadow-md"
+            style={{
+              backgroundColor: teamColor ? teamColor.bg : '#f3f4f6',
+              color: teamColor ? teamColor.text : '#374151',
+              borderColor: teamColor ? teamColor.border : '#d1d5db'
+            }}
+            title="팀 색상 변경"
+          >
+            색상
+          </button>
+        )}
       </div>
     </div>
+    
+    {/* Color Picker Modal - Using Portal for proper z-index */}
+    {showColorPicker && ReactDOM.createPortal(
+      <div 
+        className="fixed inset-0 bg-black/50 flex items-center justify-center" 
+        style={{ zIndex: 9999 }}
+        onClick={() => setShowColorPicker(false)}
+      >
+        <div 
+          className="bg-white rounded-lg p-4 sm:p-6 max-w-md w-full mx-4 shadow-2xl" 
+          onClick={e => e.stopPropagation()}
+        >
+          <h3 className="text-lg font-semibold mb-3">팀 {teamIndex+1} 색상 선택</h3>
+          
+          {/* Preset Colors */}
+          <div className="mb-4">
+            <p className="text-sm text-gray-600 mb-2">프리셋 색상</p>
+            <div className="grid grid-cols-5 gap-2">
+              {presetColors.map((preset, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => applyPresetColor(preset)}
+                  className="h-12 rounded-lg border-2 hover:scale-105 transition-transform shadow-sm"
+                  style={{
+                    backgroundColor: preset.bg,
+                    borderColor: preset.bg === '#ffffff' ? '#d1d5db' : preset.bg
+                  }}
+                  title={preset.label}
+                />
+              ))}
+            </div>
+          </div>
+          
+          {/* Custom Color */}
+          <div className="mb-4">
+            <p className="text-sm text-gray-600 mb-2">커스텀 색상</p>
+            <div className="flex gap-2 items-end">
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 mb-1">색상 선택</label>
+                <input
+                  type="color"
+                  value={customColorHex}
+                  onChange={(e) => setCustomColorHex(e.target.value)}
+                  className="w-full h-10 rounded cursor-pointer border border-gray-300"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs text-gray-500 mb-1">색상 이름</label>
+                <input
+                  type="text"
+                  value={customLabel}
+                  onChange={(e) => setCustomLabel(e.target.value)}
+                  placeholder="예: 하늘색"
+                  className="w-full px-2 py-2 border border-gray-300 rounded text-sm"
+                />
+              </div>
+            </div>
+            <button
+              onClick={applyCustomColor}
+              className="mt-2 w-full px-4 py-2 bg-emerald-500 text-white rounded hover:bg-emerald-600 transition font-medium"
+            >
+              커스텀 색상 적용
+            </button>
+          </div>
+          
+          <button
+            onClick={() => setShowColorPicker(false)}
+            className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition font-medium"
+          >
+            닫기
+          </button>
+        </div>
+      </div>,
+      document.body
+    )}
+    
     <SortableContext id={id} items={players.map(p=>String(p.id))} strategy={verticalListSortingStrategy}>
       <ul className="space-y-1 px-3 pb-3 text-sm min-h-[44px]">
         {isOver&&!showIndicator&&(<li className="rounded border-2 border-dashed border-emerald-400/70 bg-emerald-50/40 px-2 py-1 text-xs text-emerald-700">여기에 드롭</li>)}
