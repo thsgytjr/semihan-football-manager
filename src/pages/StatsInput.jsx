@@ -254,8 +254,16 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
         const nameList = rosterNamesForBulkMatch()
         const raw = String(namesField || '').trim()
         const tokens = raw.split(/\s+/).filter(Boolean)
+        
         let found = null, foundSplits = []
-        // Try all possible splits
+        
+        // 먼저 전체 텍스트가 한 명의 선수 이름인지 확인 (어시스트 없는 골)
+        if (nameList.has(raw)) {
+          out.push({ date: dt, type: 'goals', name: raw })
+          continue
+        }
+        
+        // Try all possible splits (두 명의 선수 이름으로 분리)
         for (let i = 1; i < tokens.length; ++i) {
           const left = tokens.slice(0, i).join(' ')
           const right = tokens.slice(i).join(' ')
@@ -275,9 +283,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
         } else if (found && found.ambiguous) {
           out.push({ date: dt, type: 'ambiguous', splits: found.splits, raw })
         } else {
-          // fallback: old logic (first/last)
-          const parts = tokens
-          if (parts.length < 2) return []
+          // No valid split found - treat as error
           out.push({ date: dt, type: 'ambiguous', splits: [], raw })
         }
       } else {
@@ -395,9 +401,26 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
         const k = toStr(pid)
         const now = next[k] || { goals: 0, assists: 0, events: [] }
         const events = Array.isArray(now.events) ? now.events.slice() : []
-        // append parsed events
-        for (const e of (delta.events || [])) events.push({ type: e.type, date: e.date })
-        next[k] = { goals: (now.goals || 0) + (delta.goals || 0), assists: (now.assists || 0) + (delta.assists || 0), events }
+        
+        // 중복 이벤트 체크를 위한 Set (type + date 조합)
+        const existingEventKeys = new Set(
+          events.map(e => `${e.type}:${e.date}`)
+        )
+        
+        // append parsed events (중복 제거)
+        for (const e of (delta.events || [])) {
+          const eventKey = `${e.type}:${e.date}`
+          if (!existingEventKeys.has(eventKey)) {
+            events.push({ type: e.type, date: e.date })
+            existingEventKeys.add(eventKey)
+          }
+        }
+        
+        // 이벤트 기반으로 골/어시스트 재계산
+        const goalCount = events.filter(e => e.type === 'goal').length
+        const assistCount = events.filter(e => e.type === 'assist').length
+        
+        next[k] = { goals: goalCount, assists: assistCount, events }
       }
       return next
     })
@@ -1001,12 +1024,7 @@ function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, 
 
               <button 
                 onClick={()=>{
-                  // Reset this player's draft stats to zero when removed from panel
-                  setDraft(prev=>{
-                    const next = { ...(prev||{}) }
-                    next[toStr(pid)] = { goals: 0, assists: 0, events: [] }
-                    return next
-                  })
+                  // Only remove from panel, keep draft data intact
                   setPanelIds(prev=>prev.filter(id=>id!==toStr(pid)))
                 }}
                 className="ml-1 rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-2 py-1 text-[10px] sm:text-xs font-medium transition-colors"
