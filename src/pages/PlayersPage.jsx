@@ -1058,6 +1058,21 @@ export default function PlayersPage({
   // 커스텀 멤버십 (없으면 기본값)
   const customMemberships = membershipSettings.length > 0 ? membershipSettings : DEFAULT_MEMBERSHIPS
 
+  // 멤버십이 삭제되었을 때 필터 초기화
+  useEffect(() => {
+    // 'all', 'member', 'associate', 'guest'는 기본 필터이므로 항상 유효
+    if (['all', 'member', 'associate', 'guest'].includes(membershipFilter)) {
+      return
+    }
+    
+    // 현재 필터가 커스텀 멤버십 이름인 경우
+    const exists = customMemberships.some(cm => cm.name === membershipFilter)
+    if (!exists) {
+      // 삭제된 멤버십으로 필터링 중이면 'all'로 초기화
+      setMembershipFilter('all')
+    }
+  }, [customMemberships, membershipFilter])
+
   // ▼ 정렬 상태: 키 & 방향
   const [sortKey, setSortKey] = useState("name") // 'ovr' | 'pos' | 'name' | 'ai'
   const [sortDir, setSortDir] = useState("asc")  // 'asc' | 'desc'
@@ -1307,17 +1322,6 @@ export default function PlayersPage({
             </button>
           )}
           
-          {/* 기본 멤버십: 준회원 - 커스텀 멤버십에 없으면 표시 */}
-          {!customMemberships.some(cm => cm.name === '준회원') && (
-            <button
-              onClick={() => setMembershipFilter('associate')}
-              className={`bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-4 border-2 transition-all hover:shadow-md ${membershipFilter === 'associate' ? 'border-amber-500 shadow-md' : 'border-amber-200'}`}
-            >
-              <div className="text-xs font-medium text-amber-700 mb-1">준회원</div>
-              <div className="text-2xl font-bold text-amber-900">{counts.associates}</div>
-            </button>
-          )}
-          
           {/* 기본 멤버십: 게스트 - 커스텀 멤버십에 없으면 표시 */}
           {!customMemberships.some(cm => cm.name === '게스트') && (
             <button
@@ -1343,8 +1347,6 @@ export default function PlayersPage({
             // 기본 멤버십 이름과 같으면 기본 카운트 사용
             if (cm.name === '정회원') {
               count = counts.members
-            } else if (cm.name === '준회원') {
-              count = counts.associates
             } else if (cm.name === '게스트') {
               count = counts.guests
             }
@@ -1387,23 +1389,6 @@ export default function PlayersPage({
 
         {/* 배지 설명 */}
         <div className="mb-4 flex items-center gap-4 text-xs text-stone-600 flex-wrap">
-          {/* 기본 멤버십: 준회원 - 커스텀 멤버십에 없으면 표시 */}
-          {!customMemberships.some(cm => cm.name === '준회원') && (
-            <div className="flex items-center gap-2">
-              <span 
-                className="inline-flex items-center justify-center w-4 h-4 rounded-full text-white text-[8px] font-bold border"
-                style={{ 
-                  backgroundColor: 'rgb(254, 243, 199)',
-                  borderColor: 'rgb(253, 224, 71)',
-                  color: 'rgb(146, 64, 14)'
-                }}
-              >
-                준
-              </span>
-              <span>준회원</span>
-            </div>
-          )}
-          
           {/* 기본 멤버십: 게스트 - 커스텀 멤버십에 없으면 표시 */}
           {!customMemberships.some(cm => cm.name === '게스트') && (
             <div className="flex items-center gap-2">

@@ -13,14 +13,6 @@ export const DEFAULT_MEMBERSHIPS = [
     deletable: true,
   },
   {
-    id: 'associate',
-    name: '준회원',
-    badge: '준',
-    badgeColor: 'yellow', // 노란색 (amber -> yellow)
-    color: 'yellow',
-    deletable: true,
-  },
-  {
     id: 'guest',
     name: '게스트',
     badge: 'G',

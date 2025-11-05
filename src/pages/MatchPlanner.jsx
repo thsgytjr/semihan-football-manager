@@ -64,17 +64,22 @@ const POS_ORDER=['GK','DF','MF','FW','OTHER']
 
 // 멀티 포지션 지원: positions 배열 또는 레거시 position 필드
 const positionGroupOf=p=>{
-  // positions 배열 사용
+  // positions 배열 사용 - 우선순위: DF > MF > FW > GK
   if (p.positions && Array.isArray(p.positions) && p.positions.length > 0) {
-    const firstPos = p.positions[0].toUpperCase()
-    // GK
-    if (firstPos === 'GK') return 'GK'
-    // DF
-    if (['CB','LB','RB','LWB','RWB','SW'].includes(firstPos)) return 'DF'
-    // MF
-    if (['CDM','CM','CAM','LM','RM'].includes(firstPos)) return 'MF'
-    // FW
-    if (['ST','CF','LW','RW'].includes(firstPos)) return 'FW'
+    const categories = p.positions.map(pos => {
+      const upperPos = pos.toUpperCase()
+      if (upperPos === 'GK') return 'GK'
+      if (['CB','LB','RB','LWB','RWB','SW'].includes(upperPos)) return 'DF'
+      if (['CDM','CM','CAM','LM','RM'].includes(upperPos)) return 'MF'
+      if (['ST','CF','LW','RW'].includes(upperPos)) return 'FW'
+      return null
+    }).filter(Boolean)
+    
+    // 우선순위로 반환 (DF > MF > FW > GK)
+    if (categories.includes('DF')) return 'DF'
+    if (categories.includes('MF')) return 'MF'
+    if (categories.includes('FW')) return 'FW'
+    if (categories.includes('GK')) return 'GK'
   }
   
   // 레거시 position 필드
@@ -95,7 +100,7 @@ const sortByOVRDescWithSeed=(list,seed=0)=>seededShuffle(list.slice(),seed||0x9e
   const ovrB=isUnknownPlayer(b)?0:(b.ovr??overall(b))
   return ovrB-ovrA
 })
-function splitKTeamsPosAware(players,k,seed=0){const teams=Array.from({length:k},()=>[]),meta=Array.from({length:k},()=>({nonGkOVR:0,counts:{GK:0,DF:0,MF:0,FW:0,OTHER:0}})),gs={GK:players.filter(p=>positionGroupOf(p)==='GK'),DF:players.filter(p=>positionGroupOf(p)==='DF'),MF:players.filter(p=>positionGroupOf(p)==='MF'),FW:players.filter(p=>positionGroupOf(p)==='FW'),OTHER:players.filter(p=>positionGroupOf(p)==='OTHER')};for(const key of Object.keys(gs))gs[key]=sortByOVRDescWithSeed(gs[key],seed+key.length);const place=key=>{const list=gs[key];let dir=1;while(list.length){const ordered=[...Array(k).keys()].sort((i,j)=>{const ci=meta[i].counts[key],cj=meta[j].counts[key];return ci!==cj?ci-cj:meta[i].nonGkOVR-meta[j].nonGkOVR}),pick=dir===1?ordered:ordered.slice().reverse();for(const ti of pick){if(!list.length)break;const p=list.shift();teams[ti].push(p);meta[ti].counts[key]++;if(key!=='GK'&&!isUnknownPlayer(p))meta[ti].nonGkOVR+=(p.ovr??overall(p))}dir*=-1}};['GK','DF','MF','FW','OTHER'].forEach(place);return{teams}}
+function splitKTeamsPosAware(players,k,seed=0){const teams=Array.from({length:k},()=>[]),meta=Array.from({length:k},()=>({nonGkOVR:0,counts:{GK:0,DF:0,MF:0,FW:0,OTHER:0}})),gs={GK:players.filter(p=>positionGroupOf(p)==='GK'),DF:players.filter(p=>positionGroupOf(p)==='DF'),MF:players.filter(p=>positionGroupOf(p)==='MF'),FW:players.filter(p=>positionGroupOf(p)==='FW'),OTHER:players.filter(p=>positionGroupOf(p)==='OTHER')};for(const key of Object.keys(gs))gs[key]=sortByOVRDescWithSeed(gs[key],seed+key.length);const place=key=>{const list=gs[key];let dir=1;while(list.length){const ordered=[...Array(k).keys()].sort((i,j)=>{const ci=meta[i].counts[key],cj=meta[j].counts[key];return ci!==cj?ci-cj:meta[i].nonGkOVR-meta[j].nonGkOVR}),pick=dir===1?ordered:ordered.slice().reverse();for(const ti of pick){if(!list.length)break;const p=list.shift();teams[ti].push(p);meta[ti].counts[key]++;if(key!=='GK'&&!isUnknownPlayer(p))meta[ti].nonGkOVR+=(p.ovr??overall(p))}dir*=-1}};['DF','MF','FW','GK','OTHER'].forEach(place);return{teams}}
 
 export default function MatchPlanner({
   players,
@@ -398,9 +403,9 @@ export default function MatchPlanner({
       positions: { GK: 0, DF: 0, MF: 0, FW: 0, OTHER: 0 }
     }))
     
-    // 4. 포지션별로 배정 (GK -> DF -> MF -> FW -> OTHER)
-    // 각 포지션에서 가장 강한 선수부터 약한 팀에 배정 (밸런스 유지)
-    const positionOrder = ['GK', 'DF', 'MF', 'FW', 'OTHER']
+    // 4. 포지션별로 배정 (DF -> MF -> FW -> GK -> OTHER)
+    // 수비가 항상 부족하므로 수비 우선 배정
+    const positionOrder = ['DF', 'MF', 'FW', 'GK', 'OTHER']
     
     positionOrder.forEach(pos => {
       const playerList = byPosition[pos]
