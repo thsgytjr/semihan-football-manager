@@ -1034,10 +1034,21 @@ function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraft
   const id=`team-${teamIndex}`
   const {setNodeRef,isOver}=useDroppable({id})
   
-  // GK 제외 (positions 배열 또는 레거시 position 필드 체크)
+  // 오직 GK 포지션만 있는 선수만 제외 (멀티 포지션 GK는 포함)
   const non=players.filter(p=>{
+    // Unknown 선수는 제외
+    if (isUnknownPlayer(p)) return false
+    
     const positions = p.positions || (p.position ? [p.position] : [p.pos])
-    return !positions.includes('GK') && (p.position||p.pos)!=='GK' && !isUnknownPlayer(p)
+    
+    // positions 배열이 있는 경우
+    if (positions && Array.isArray(positions) && positions.length > 0) {
+      // 오직 GK만 있으면 제외, 그 외는 포함 (GK + 다른 포지션 = 포함)
+      return !(positions.length === 1 && positions[0] === 'GK')
+    }
+    
+    // 레거시 position 필드 체크 (GK만 있으면 제외)
+    return (p.position||p.pos) !== 'GK'
   })
   
   const sum=non.reduce((a,p)=>a+(p.ovr??overall(p)),0)
@@ -1265,6 +1276,17 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
     setQ('') // 검색어 초기화
   }
   
+  // 필터된 모든 선수를 팀에 추가
+  const addAllFilteredToTeam = () => {
+    if (filtered.length === 0) return
+    const filteredIds = filtered.map(p => p.id)
+    const next = snapshot.map((arr,i)=>i===teamIdx?[...arr, ...filteredIds]:arr)
+    onDraftChange(next)
+    setQ('') // 검색어 초기화
+    setSelectedTag('') // 태그 필터 초기화
+    notify(`${filtered.length}명의 선수를 팀 ${teamIdx + 1}에 추가했습니다 ✅`)
+  }
+  
   // Enter 키로 1명일 때 바로 추가
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !isComposing && filtered.length === 1) {
@@ -1301,43 +1323,61 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
       </div>
       
       {allTags.length > 0 && (
-        <div className="mb-2 flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-gray-500">태그:</span>
-          <button
-            onClick={() => setSelectedTag('')}
-            className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
-              selectedTag === '' 
-                ? 'bg-stone-700 text-white shadow-sm' 
-                : 'bg-stone-100 text-stone-700 border border-stone-200 hover:bg-stone-200'
-            }`}
-          >
-            전체
-          </button>
-          {allTags.map(tag => {
-            const colorClass = getTagColorClass(tag.color)
-            const isActive = selectedTag === tag.name
-            const style = tag.color && tag.color.startsWith('#') 
-              ? { 
-                  backgroundColor: isActive ? tag.color : tag.color + '20', 
-                  borderColor: tag.color + '40', 
-                  color: isActive ? '#ffffff' : tag.color 
-                } 
-              : {}
-            return (
-              <button
-                key={tag.name}
-                onClick={() => setSelectedTag(tag.name)}
-                className={`rounded-full px-2.5 py-1 text-[11px] font-medium border transition-all ${
-                  isActive 
-                    ? colorClass ? colorClass.replace('bg-', 'bg-').replace('-100', '-600').replace('text-', 'text-white border-') : 'shadow-sm'
-                    : colorClass || 'bg-stone-100 text-stone-700 border-stone-200'
-                } ${!isActive && 'hover:opacity-80'}`}
-                style={Object.keys(style).length > 0 ? style : undefined}
-              >
-                {tag.name}
-              </button>
-            )
-          })}
+        <div className="mb-2">
+          <div className="flex flex-wrap items-center gap-1.5 mb-2">
+            <span className="text-xs text-gray-500">태그:</span>
+            <button
+              onClick={() => setSelectedTag('')}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
+                selectedTag === '' 
+                  ? 'bg-stone-700 text-white shadow-sm' 
+                  : 'bg-stone-100 text-stone-700 border border-stone-200 hover:bg-stone-200'
+              }`}
+            >
+              전체
+            </button>
+            {allTags.map(tag => {
+              const colorClass = getTagColorClass(tag.color)
+              const isActive = selectedTag === tag.name
+              const style = tag.color && tag.color.startsWith('#') 
+                ? { 
+                    backgroundColor: isActive ? tag.color : tag.color + '20', 
+                    borderColor: tag.color + '40', 
+                    color: isActive ? '#ffffff' : tag.color 
+                  } 
+                : {}
+              return (
+                <button
+                  key={tag.name}
+                  onClick={() => setSelectedTag(tag.name)}
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium border transition-all ${
+                    isActive 
+                      ? colorClass ? colorClass.replace('bg-', 'bg-').replace('-100', '-600').replace('text-', 'text-white border-') : 'shadow-sm'
+                      : colorClass || 'bg-stone-100 text-stone-700 border-stone-200'
+                  } ${!isActive && 'hover:opacity-80'}`}
+                  style={Object.keys(style).length > 0 ? style : undefined}
+                >
+                  {tag.name}
+                </button>
+              )
+            })}
+          </div>
+          {/* 전체 추가 버튼 */}
+          {filtered.length > 0 && (
+            <button
+              onClick={addAllFilteredToTeam}
+              className="w-full rounded-lg border-2 border-dashed border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400 transition-all flex items-center justify-center gap-1.5"
+              title={`${selectedTag ? `"${selectedTag}" 태그의 ` : ''}모든 선수 (${filtered.length}명)를 팀 ${teamIdx + 1}에 추가`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              <span>
+                {selectedTag ? `"${selectedTag}" 태그 모두 추가` : '전체 선수 모두 추가'}
+                <span className="ml-1 text-emerald-600">({filtered.length}명)</span>
+              </span>
+            </button>
+          )}
         </div>
       )}
       
