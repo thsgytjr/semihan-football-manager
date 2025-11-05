@@ -1,5 +1,5 @@
 import React from 'react'
-import { Clock, Trophy, Users, Search, Undo2, X, ArrowRight, Check, Save, RefreshCw } from 'lucide-react'
+import { Clock, Trophy, Users, Search, Undo2, X, ArrowRight, Check, Save, RefreshCw, ArrowLeft } from 'lucide-react'
 import InitialAvatar from './InitialAvatar'
 
 export default function DraftBoard({
@@ -14,19 +14,20 @@ export default function DraftBoard({
   onPickPlayer,
   isCompleted,
   onReset,
+  onGoBack,
   firstPick,
   pickCount,
   searchTerm,
   onSearchChange,
   draftSettings,
-  onUndo,
-  canUndo,
   onRemovePlayer,
   isReadyForNextTurn,
   onProceedToNextTurn,
   onCompleteTurn,
   onSaveToUpcomingMatch,
-  selectedUpcomingMatchId
+  selectedUpcomingMatchId,
+  turnTransitionCountdown = 0,
+  currentTurnRef
 }) {
   // 첫 번째 턴 판단: 선공 주장의 턴이고, 양쪽 팀 모두 주장만 있거나 선공 주장이 1명 선택한 상태
   const isVeryFirstTurn = (currentTurn === firstPick && team1.length <= 2 && team2.length <= 2)
@@ -109,11 +110,10 @@ export default function DraftBoard({
                 {idx === 0 ? (
                   <span className="text-xs bg-emerald-500 text-white px-2 py-1 rounded flex-shrink-0">주장</span>
                 ) : (
-                  // X 버튼: 자기 차례 + 드래프트 진행중 + 시간 남음 + 현재 턴에서 추가된 선수만
+                  // X 버튼: 자기 차례 + 드래프트 진행중 + 다음 턴 준비 전 + 현재 턴에서 추가된 선수만
                   currentTurn === 'captain1' && 
                   !isCompleted && 
-                  !isReadyForNextTurn && 
-                  (draftSettings.timerEnabled ? timeLeft > 0 : true) &&
+                  !isReadyForNextTurn &&
                   idx >= team1StartSize && (
                     <button
                       onClick={() => onRemovePlayer(player, 'team1')}
@@ -168,11 +168,10 @@ export default function DraftBoard({
                 {idx === 0 ? (
                   <span className="text-xs bg-blue-500 text-white px-2 py-1 rounded flex-shrink-0">주장</span>
                 ) : (
-                  // X 버튼: 자기 차례 + 드래프트 진행중 + 시간 남음 + 현재 턴에서 추가된 선수만
+                  // X 버튼: 자기 차례 + 드래프트 진행중 + 다음 턴 준비 전 + 현재 턴에서 추가된 선수만
                   currentTurn === 'captain2' && 
                   !isCompleted && 
-                  !isReadyForNextTurn && 
-                  (draftSettings.timerEnabled ? timeLeft > 0 : true) &&
+                  !isReadyForNextTurn &&
                   idx >= team2StartSize && (
                     <button
                       onClick={() => onRemovePlayer(player, 'team2')}
@@ -196,9 +195,26 @@ export default function DraftBoard({
 
       {/* 현재 턴 및 타이머 - 팀과 선수 풀 사이 */}
       {!isCompleted && (
-        <div className="sticky top-0 z-10 bg-gradient-to-r from-emerald-50 to-blue-50 border-2 border-emerald-200 rounded-xl p-6 shadow-lg">
+        <div 
+          ref={currentTurnRef}
+          className="sticky top-0 z-10 bg-gradient-to-r from-emerald-50 to-blue-50 border-2 border-emerald-200 rounded-xl p-6 shadow-lg"
+          style={{
+            animation: 'highlight-pulse 2s ease-in-out infinite'
+          }}
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
+              {/* 뒤로가기 버튼 */}
+              {onGoBack && (
+                <button
+                  onClick={onGoBack}
+                  className="flex items-center gap-1 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-white rounded-lg transition-colors border border-gray-300"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>뒤로가기</span>
+                </button>
+              )}
+              
               <div className={`w-3 h-3 rounded-full ${currentTurn === 'captain1' ? 'bg-emerald-500' : 'bg-blue-500'} animate-pulse`}></div>
               <div>
                 <p className="text-sm text-gray-600">현재 턴</p>
@@ -212,8 +228,21 @@ export default function DraftBoard({
             </div>
             
             <div className="flex items-center gap-3">
-              {/* 타이머 - 타이머가 켜져있을 때 항상 표시 */}
-              {draftSettings.timerEnabled && (
+              {/* 턴 전환 카운트다운 표시 */}
+              {isReadyForNextTurn && turnTransitionCountdown > 0 && (
+                <div className="text-center">
+                  <div className="flex items-center gap-2 justify-center mb-1">
+                    <Clock className="w-5 h-5 text-orange-600" />
+                    <span className="text-sm text-orange-600">다음 턴까지</span>
+                  </div>
+                  <div className="text-4xl font-bold text-orange-500 animate-pulse">
+                    {turnTransitionCountdown}초
+                  </div>
+                </div>
+              )}
+              
+              {/* 타이머 - 타이머가 켜져있고 다음 턴 준비 중이 아닐 때 표시 */}
+              {draftSettings.timerEnabled && !isReadyForNextTurn && (
                 <div className="text-center">
                   <div className="flex items-center gap-2 justify-center mb-1">
                     <Clock className="w-5 h-5 text-gray-600" />
@@ -224,37 +253,29 @@ export default function DraftBoard({
                   </div>
                 </div>
               )}
-
-              {/* 되돌리기 버튼 */}
-              <button
-                onClick={onUndo}
-                disabled={!canUndo}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                title="마지막 선택 취소"
-              >
-                <Undo2 className="w-4 h-4" />
-                <span className="hidden sm:inline">되돌리기</span>
-              </button>
               
-              {/* 완료 버튼 - 선택 완료 시 표시 */}
+              {/* 선택 완료 버튼 - 선택 완료 시 && 다음 턴 준비 전 */}
               {isPickComplete && !isReadyForNextTurn && (
                 <button
                   onClick={onCompleteTurn}
-                  className="flex items-center gap-2 px-6 py-2 bg-blue-500 text-white rounded-lg font-bold hover:bg-blue-600 transition-colors shadow-lg"
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-blue-500 text-white rounded-lg font-bold hover:from-emerald-600 hover:to-blue-600 transition-all shadow-lg hover:shadow-xl"
+                  style={{
+                    animation: 'pulse-glow 2s ease-in-out infinite'
+                  }}
                 >
-                  <Check className="w-5 h-5" />
-                  <span>선택 완료</span>
+                  <Check className="w-6 h-6" />
+                  <span className="text-lg">선택 완료</span>
                 </button>
               )}
               
-              {/* 다음 진행 버튼 - 선택 완료 시 항상 표시 (타이머 상관없이) */}
-              {isReadyForNextTurn && (
+              {/* 다음 턴 버튼 - 다음 턴 준비 중이고 카운트다운이 0일 때 (수동 모드) */}
+              {isReadyForNextTurn && turnTransitionCountdown === 0 && (
                 <button
                   onClick={onProceedToNextTurn}
-                  className="flex items-center gap-2 px-6 py-2 bg-emerald-500 text-white rounded-lg font-bold hover:bg-emerald-600 transition-all shadow-lg hover:shadow-xl"
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-blue-500 text-white rounded-lg font-bold hover:from-emerald-600 hover:to-blue-600 transition-all shadow-lg hover:shadow-xl animate-bounce"
                 >
-                  <span>다음 턴</span>
-                  <ArrowRight className="w-5 h-5" />
+                  <span className="text-lg">다음 턴</span>
+                  <ArrowRight className="w-6 h-6" />
                 </button>
               )}
             </div>
