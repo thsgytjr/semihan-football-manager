@@ -1199,6 +1199,7 @@ export default function PlayersPage({
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('playersViewMode') || 'list') // 'card' | 'list'
   const [membershipFilter, setMembershipFilter] = useState('all') // 'all' | 'member' | 'associate' | 'guest'
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'active' | 'injured' | etc.
+  const [positionFilter, setPositionFilter] = useState('all') // 'all' | 'GK' | 'DF' | 'MF' | 'FW'
   const [selectedTags, setSelectedTags] = useState([]) // 선택된 태그들
 
   // 커스텀 멤버십 (없으면 기본값)
@@ -1311,7 +1312,7 @@ export default function PlayersPage({
     return arr
   }, [players, sortKey, sortDir])
 
-  // 멤버십, 상태, 태그 필터 적용
+  // 멤버십, 상태, 포지션, 태그 필터 적용
   const filtered = useMemo(() => {
     let result = sorted
     
@@ -1332,6 +1333,21 @@ export default function PlayersPage({
       result = result.filter(p => (p.status || 'active') === statusFilter)
     }
     
+    // 포지션 필터
+    if (positionFilter !== 'all') {
+      result = result.filter(p => {
+        if (!p.positions || p.positions.length === 0) return false
+        // 선택된 카테고리에 해당하는 포지션이 하나라도 있으면 포함
+        return p.positions.some(pos => {
+          if (positionFilter === 'GK') return pos === 'GK'
+          if (positionFilter === 'DF') return ['RB', 'RWB', 'CB', 'LB', 'LWB'].includes(pos)
+          if (positionFilter === 'MF') return ['CDM', 'CM', 'CAM', 'RM', 'LM'].includes(pos)
+          if (positionFilter === 'FW') return ['RW', 'ST', 'CF', 'LW'].includes(pos)
+          return false
+        })
+      })
+    }
+    
     // 태그 필터 (선택된 태그가 모두 포함된 선수만)
     if (selectedTags.length > 0) {
       result = result.filter(p => {
@@ -1343,7 +1359,7 @@ export default function PlayersPage({
     }
     
     return result
-  }, [sorted, membershipFilter, statusFilter, selectedTags])
+  }, [sorted, membershipFilter, statusFilter, positionFilter, selectedTags])
 
   const counts = useMemo(() => {
     const total = players.length
@@ -1585,7 +1601,7 @@ export default function PlayersPage({
           })}
         </div>
 
-        {/* 상태 & 태그 필터 */}
+        {/* 상태, 포지션, 태그 필터 */}
         <div className="mb-4 space-y-3">
           {/* 상태 필터 */}
           <div>
@@ -1631,6 +1647,63 @@ export default function PlayersPage({
                   </button>
                 )
               })}
+            </div>
+          </div>
+
+          {/* 포지션 필터 */}
+          <div>
+            <label className="block text-xs font-semibold text-stone-700 mb-2">포지션 필터</label>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setPositionFilter('all')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                  positionFilter === 'all'
+                    ? 'border-blue-500 bg-blue-500 text-white shadow-sm'
+                    : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
+                }`}
+              >
+                전체
+              </button>
+              <button
+                onClick={() => setPositionFilter('GK')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                  positionFilter === 'GK'
+                    ? 'border-yellow-500 bg-yellow-500 text-white shadow-sm'
+                    : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
+                }`}
+              >
+                GK
+              </button>
+              <button
+                onClick={() => setPositionFilter('DF')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                  positionFilter === 'DF'
+                    ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm'
+                    : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
+                }`}
+              >
+                DF
+              </button>
+              <button
+                onClick={() => setPositionFilter('MF')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                  positionFilter === 'MF'
+                    ? 'border-cyan-500 bg-cyan-500 text-white shadow-sm'
+                    : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
+                }`}
+              >
+                MF
+              </button>
+              <button
+                onClick={() => setPositionFilter('FW')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
+                  positionFilter === 'FW'
+                    ? 'border-red-500 bg-red-500 text-white shadow-sm'
+                    : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
+                }`}
+              >
+                FW
+              </button>
             </div>
           </div>
 
