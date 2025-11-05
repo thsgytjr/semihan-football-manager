@@ -792,7 +792,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                     <button
                       key={player.id}
                       onClick={() => toggleParticipant(player)}
-                      className={`p-1.5 border rounded-md transition-all flex flex-col items-center gap-1 relative ${
+                      className={`p-2 border rounded-md transition-all flex flex-col items-center gap-1 relative ${
                         isSelected 
                           ? 'border-emerald-500 bg-emerald-50' 
                           : 'border-gray-200 hover:border-emerald-500 hover:bg-emerald-50'
@@ -804,13 +804,13 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                       <InitialAvatar 
                         id={player.id} 
                         name={player.name} 
-                        size={28} 
+                        size={64} 
                         photoUrl={player.photoUrl}
                         badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
                       />
                       <div className="w-full text-center">
-                        <p className="font-semibold text-[10px] truncate leading-tight">{player.name}</p>
-                        <p className="text-[9px] text-gray-500 truncate">{player.position}</p>
+                        <p className="font-semibold text-xs truncate leading-tight">{player.name}</p>
+                        <p className="text-[10px] text-gray-500 truncate">{player.position}</p>
                       </div>
                     </button>
                   )
@@ -942,7 +942,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                     <button
                       key={player.id}
                       onClick={() => toggleCaptain(player)}
-                      className={`p-1.5 border rounded-md transition-all flex flex-col items-center gap-1 relative ${
+                      className={`p-2 border rounded-md transition-all flex flex-col items-center gap-1 relative ${
                         isCaptain1 
                           ? 'border-emerald-500 bg-emerald-50' 
                           : isCaptain2
@@ -959,13 +959,13 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                       <InitialAvatar 
                         id={player.id} 
                         name={player.name} 
-                        size={28} 
+                        size={64} 
                         photoUrl={player.photoUrl}
                         badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
                       />
                       <div className="w-full text-center">
-                        <p className="font-semibold text-[10px] truncate leading-tight">{player.name}</p>
-                        <p className="text-[9px] text-gray-500 truncate">{player.position}</p>
+                        <p className="font-semibold text-xs truncate leading-tight">{player.name}</p>
+                        <p className="text-[10px] text-gray-500 truncate">{player.position}</p>
                       </div>
                     </button>
                   )

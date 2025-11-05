@@ -1187,6 +1187,7 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
   const [teamIdx,setTeamIdx]=useState(0)
   const [q,setQ]=useState("")
   const [showList,setShowList]=useState(false) // 선수 목록 표시 여부
+  const [isComposing,setIsComposing]=useState(false) // 한글 입력 중 여부
   
   const notInMatch = useMemo(()=>{
     const inside=new Set(snapshot.flat().map(String))
@@ -1206,14 +1207,14 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
   const addPlayerToTeam = (pid) => {
     const next = snapshot.map((arr,i)=>i===teamIdx?[...arr, pid]:arr)
     onDraftChange(next)
+    setQ('') // 검색어 초기화
   }
   
   // Enter 키로 1명일 때 바로 추가
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && filtered.length === 1) {
+    if (e.key === 'Enter' && !isComposing && filtered.length === 1) {
       e.preventDefault()
       addPlayerToTeam(filtered[0].id)
-      setQ('') // 검색어 초기화
     }
   }
   
@@ -1230,6 +1231,8 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
           value={q}
           onChange={e=>setQ(e.target.value)}
           onKeyDown={handleKeyDown}
+          onCompositionStart={()=>setIsComposing(true)}
+          onCompositionEnd={()=>setIsComposing(false)}
         />
       </div>
       

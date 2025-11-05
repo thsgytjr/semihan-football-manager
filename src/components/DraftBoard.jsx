@@ -288,7 +288,7 @@ export default function DraftBoard({
                 key={player.id}
                 onClick={() => onPickPlayer(player)}
                 disabled={isPickComplete}
-                className={`p-1.5 border rounded-md transition-all flex flex-col items-center gap-1 ${
+                className={`p-2 border rounded-md transition-all flex flex-col items-center gap-1 ${
                   isPickComplete 
                     ? 'border-gray-200 bg-gray-100 opacity-50 cursor-not-allowed' 
                     : 'border-gray-200 hover:border-emerald-500 hover:bg-emerald-50'
@@ -297,13 +297,13 @@ export default function DraftBoard({
                 <InitialAvatar 
                   id={player.id} 
                   name={player.name} 
-                  size={28} 
+                  size={64} 
                   photoUrl={player.photoUrl}
                   badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
                 />
                 <div className="w-full text-center">
-                  <p className="font-semibold text-[10px] truncate leading-tight">{player.name}</p>
-                  <p className="text-[9px] text-gray-500 truncate">{player.position}</p>
+                  <p className="font-semibold text-xs truncate leading-tight">{player.name}</p>
+                  <p className="text-[10px] text-gray-500 truncate">{player.position}</p>
                 </div>
               </button>
             ))}
