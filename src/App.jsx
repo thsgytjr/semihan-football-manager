@@ -36,12 +36,10 @@ export default function App(){
   useEffect(()=>{
     getSession().then(session=>{
       if(session?.user){
-        console.log('✅ [App] Existing session found:', session.user.email)
         setIsAdmin(true)
         // 하위 호환성을 위해 localStorage도 설정 (optional)
         localStorage.setItem("isAdmin","1")
       }else{
-        console.log('ℹ️ [App] No existing session')
         setIsAdmin(false)
         localStorage.removeItem("isAdmin")
       }
@@ -50,11 +48,9 @@ export default function App(){
     // 인증 상태 변경 리스너
     const unsubscribe = onAuthStateChange(session=>{
       if(session?.user){
-        console.log('✅ [App] Auth state changed: signed in')
         setIsAdmin(true)
         localStorage.setItem("isAdmin","1")
       }else{
-        console.log('ℹ️ [App] Auth state changed: signed out')
         setIsAdmin(false)
         localStorage.removeItem("isAdmin")
       }
@@ -151,8 +147,6 @@ export default function App(){
           
           // 총 방문자 수 증가
           await incrementVisits()
-          
-          console.log('📊 [Analytics] Visit tracked')
         }catch(e){
           console.error('Visit tracking failed:', e)
           // sessionStorage 실패 시 localStorage로 폴백
@@ -253,8 +247,57 @@ export default function App(){
   // 태그 프리셋 관리
   function handleSaveTagPresets(tagPresets){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,tagPresets}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets,membershipSettings:db.membershipSettings||[]});notify("태그 프리셋이 저장되었습니다.")}
   function handleAddTagPreset(preset){if(!isAdmin)return notify("Admin만 가능합니다.");const next=[...(db.tagPresets||[]),preset];setDb(prev=>({...prev,tagPresets:next}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets:next,membershipSettings:db.membershipSettings||[]})}
-  function handleUpdateTagPreset(index,updatedPreset){if(!isAdmin)return notify("Admin만 가능합니다.");const next=(db.tagPresets||[]).map((p,i)=>i===index?updatedPreset:p);setDb(prev=>({...prev,tagPresets:next}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets:next,membershipSettings:db.membershipSettings||[]});notify("태그 프리셋이 업데이트되었습니다.")}
-  function handleDeleteTagPreset(index){if(!isAdmin)return notify("Admin만 가능합니다.");const next=(db.tagPresets||[]).filter((_,i)=>i!==index);setDb(prev=>({...prev,tagPresets:next}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets:next,membershipSettings:db.membershipSettings||[]})}
+  function handleUpdateTagPreset(index,updatedPreset){
+    if(!isAdmin)return notify("Admin만 가능합니다.");
+    const oldPreset=(db.tagPresets||[])[index];
+    const next=(db.tagPresets||[]).map((p,i)=>i===index?updatedPreset:p);
+    
+    // 모든 선수의 태그를 업데이트: 이전 프리셋과 일치하는 태그를 새 프리셋으로 교체
+    const updatedPlayers=(db.players||[]).map(player=>{
+      if(!player.tags||player.tags.length===0)return player;
+      const updatedTags=player.tags.map(tag=>{
+        // 이전 프리셋과 일치하는 태그를 찾아서 새 프리셋으로 교체
+        if(tag.name===oldPreset.name&&tag.color===oldPreset.color){
+          return updatedPreset;
+        }
+        return tag;
+      });
+      return{...player,tags:updatedTags};
+    });
+    
+    // 업데이트된 선수들을 Supabase에 저장
+    updatedPlayers.forEach(player=>{
+      upsertPlayer(player).catch(console.error);
+    });
+    
+    setDb(prev=>({...prev,tagPresets:next,players:updatedPlayers}));
+    saveDB({players:[],matches,visits,upcomingMatches,tagPresets:next,membershipSettings:db.membershipSettings||[]});
+    notify("태그 프리셋이 업데이트되었습니다.");
+  }
+  function handleDeleteTagPreset(index){
+    if(!isAdmin)return notify("Admin만 가능합니다.");
+    const deletedPreset=(db.tagPresets||[])[index];
+    const next=(db.tagPresets||[]).filter((_,i)=>i!==index);
+    
+    // 모든 선수의 태그에서 삭제되는 프리셋과 일치하는 태그를 제거
+    const updatedPlayers=(db.players||[]).map(player=>{
+      if(!player.tags||player.tags.length===0)return player;
+      const updatedTags=player.tags.filter(tag=>{
+        // 삭제되는 프리셋과 일치하지 않는 태그만 유지
+        return!(tag.name===deletedPreset.name&&tag.color===deletedPreset.color);
+      });
+      return{...player,tags:updatedTags};
+    });
+    
+    // 업데이트된 선수들을 Supabase에 저장
+    updatedPlayers.forEach(player=>{
+      upsertPlayer(player).catch(console.error);
+    });
+    
+    setDb(prev=>({...prev,tagPresets:next,players:updatedPlayers}));
+    saveDB({players:[],matches,visits,upcomingMatches,tagPresets:next,membershipSettings:db.membershipSettings||[]});
+    notify("태그 프리셋이 삭제되었습니다.");
+  }
 
 
   // 멤버십 설정 관리
@@ -278,7 +321,6 @@ export default function App(){
     }
     
     if(user){
-      console.log('✅ [App] Login success:', user.email)
       setIsAdmin(true)
       setLoginOpen(false)
       localStorage.setItem("isAdmin","1")

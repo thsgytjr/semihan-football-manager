@@ -30,7 +30,6 @@ export async function loadAppSettingsFromServer() {
       .single()
     
     if (error) {
-      console.log('No server settings found, using defaults')
       return DEFAULT_SETTINGS
     }
     

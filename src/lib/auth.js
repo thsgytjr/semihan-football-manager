@@ -19,7 +19,6 @@ export async function signInAdmin(email, password) {
       return { user: null, error }
     }
     
-    console.log('✅ [Auth] Admin signed in:', data.user.email)
     return { user: data.user, error: null }
   } catch (err) {
     console.error('[Auth] Unexpected error:', err)
@@ -37,7 +36,6 @@ export async function signOut() {
       console.error('[Auth] Sign out error:', error.message)
       return { error }
     }
-    console.log('✅ [Auth] Admin signed out')
     return { error: null }
   } catch (err) {
     console.error('[Auth] Unexpected error:', err)

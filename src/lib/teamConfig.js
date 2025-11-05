@@ -25,10 +25,3 @@ export const TEAM_CONFIG = {
 
 // 로컬스토리지 키 프리픽스
 export const STORAGE_PREFIX = `${TEAM_CONFIG.shortName}_`
-
-// 디버그 로그
-console.log('🏆 Team Config:', {
-  name: TEAM_CONFIG.name,
-  shortName: TEAM_CONFIG.shortName,
-  hasSupabase: !!TEAM_CONFIG.supabase.url
-})

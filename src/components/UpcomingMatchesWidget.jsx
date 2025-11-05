@@ -234,7 +234,7 @@ export default function UpcomingMatchesWidget({
                 matches={matches}
                 isAdmin={isAdmin}
                 onEdit={(match) => {
-                  console.log('Edit match:', match)
+                  // Edit functionality
                 }}
                 onDelete={(match) => {
                   if (window.confirm('정말로 이 예정된 매치를 삭제하시겠습니까?')) {
@@ -247,7 +247,6 @@ export default function UpcomingMatchesWidget({
                 }}
                 onCreateMatch={(match) => {
                   const regularMatch = convertToRegularMatch(match)
-                  console.log('Create match from upcoming:', regularMatch)
                   alert('매치 생성 기능은 MatchPlanner에서 "불러오기" 버튼을 사용하세요!')
                 }}
                 onUpdateCaptains={(match, updatedMatch) => {

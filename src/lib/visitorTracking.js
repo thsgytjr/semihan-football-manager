@@ -64,7 +64,6 @@ export async function getVisitorIP() {
     const data = await response.json()
     return data.ip || null
   } catch (e) {
-    console.warn('Failed to get IP:', e)
     return null
   }
 }
@@ -93,7 +92,6 @@ export function isDevelopmentEnvironment() {
 export function shouldTrackVisit() {
   // 개발 환경이면 추적하지 않음
   if (isDevelopmentEnvironment()) {
-    console.log('📊 [Analytics] Development mode - visit not tracked')
     return false
   }
   
@@ -101,7 +99,6 @@ export function shouldTrackVisit() {
   try {
     const alreadyVisited = window.sessionStorage.getItem('visited')
     if (alreadyVisited) {
-      console.log('📊 [Analytics] Already visited in this session - not tracked')
       return false
     }
   } catch (e) {
@@ -111,7 +108,6 @@ export function shouldTrackVisit() {
       const now = Date.now()
       // 30분 이내 재방문은 제외
       if (lastVisit && (now - parseInt(lastVisit)) < 30 * 60 * 1000) {
-        console.log('📊 [Analytics] Recently visited - not tracked')
         return false
       }
     } catch (e2) {

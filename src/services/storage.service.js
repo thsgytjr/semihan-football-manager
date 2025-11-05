@@ -17,7 +17,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnon)
 // 팀별로 자동으로 다른 room ID 사용 (semihan-lite-room-1, dksc-lite-room-1 등)
 let ROOM_ID = `${TEAM_CONFIG.shortName}-lite-room-1`
 export function setRoomId(id) { ROOM_ID = id || ROOM_ID }
-console.log(`📦 Room ID: ${ROOM_ID}`)
 
 // -----------------------------
 // [A] Players (정규화 테이블)

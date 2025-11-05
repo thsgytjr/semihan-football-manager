@@ -138,7 +138,6 @@ export function subscribeMembershipSettings(callback) {
         table: 'membership_settings'
       },
       (payload) => {
-        console.log('🔄 멤버십 설정 변경 감지:', payload)
         callback(payload)
       }
     )

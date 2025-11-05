@@ -23,7 +23,6 @@ export async function initMembershipSettings() {
       return false
     }
 
-    console.log('✅ membership_settings 테이블 확인됨')
     return true
   } catch (err) {
     console.error('❌ DB 마이그레이션 오류:', err)
@@ -35,7 +34,5 @@ export async function initMembershipSettings() {
  * 모든 마이그레이션 실행
  */
 export async function runMigrations() {
-  console.log('🔄 DB 마이그레이션 시작...')
   await initMembershipSettings()
-  console.log('✅ DB 마이그레이션 완료')
 }
