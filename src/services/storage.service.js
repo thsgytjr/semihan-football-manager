@@ -4,6 +4,9 @@
 import { createClient } from '@supabase/supabase-js'
 import { TEAM_CONFIG } from '../lib/teamConfig'
 
+// 마이그레이션 플래그: true면 Supabase matches 테이블 사용, false면 appdb JSON 사용
+export const USE_MATCHES_TABLE = true
+
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnon = import.meta.env.VITE_SUPABASE_ANON_KEY
 

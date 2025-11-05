@@ -1,0 +1,173 @@
+// src/services/matches.service.js
+// Match 데이터를 Supabase에 저장/로드하는 서비스
+// Room 기반으로 동작 (user_id 대신 room_id 사용)
+
+import { supabase } from './storage.service'
+import { TEAM_CONFIG } from '../lib/teamConfig'
+
+const ROOM_ID = `${TEAM_CONFIG.shortName}-lite-room-1`
+
+// Supabase DB 컬럼명 → 앱 내부 필드명 변환
+// 주의: matches 테이블은 camelCase 컬럼명 사용 (dateISO, attendeeIds 등)
+function toAppFormat(row) {
+  return {
+    id: row.id,
+    dateISO: row.dateISO || row.date_iso, // camelCase 우선
+    attendeeIds: row.attendeeIds || row.attendee_ids || [],
+    criterion: row.criterion || 'overall',
+    teamCount: row.teamCount || row.team_count || 2,
+    location: row.location || null,
+    mode: row.mode || '7v7',
+    snapshot: row.snapshot || {},
+    board: row.board || [],
+    formations: row.formations || [],
+    selectionMode: row.selectionMode || row.selection_mode || 'manual',
+    locked: row.locked || false,
+    videos: row.videos || [],
+    teamIds: row.teamids || row.teamIds || [], // 주의: 테이블은 teamids (소문자)
+    stats: row.stats || {}, // 골/어시 기록
+    draft: row.draft || {}, // Draft 데이터 (선수승점, 주장승점 등)
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  }
+}
+
+// 앱 내부 필드명 → Supabase DB 컬럼명 변환
+// 주의: matches 테이블은 camelCase 컬럼명 사용
+function toDbFormat(match) {
+  return {
+    id: match.id, // ID 보존 (마이그레이션 시 필수)
+    room_id: ROOM_ID,
+    dateISO: match.dateISO ?? null,
+    attendeeIds: match.attendeeIds ?? [],
+    criterion: match.criterion ?? 'overall',
+    teamCount: match.teamCount ?? 2,
+    location: match.location ?? null,
+    mode: match.mode ?? '7v7',
+    snapshot: match.snapshot ?? {},
+    board: match.board ?? [],
+    formations: match.formations ?? [],
+    selectionMode: match.selectionMode ?? 'manual',
+    locked: !!match.locked,
+    videos: match.videos ?? [],
+    teamids: match.teamIds ?? [], // 주의: 테이블 컬럼은 teamids (소문자)
+    stats: match.stats ?? {}, // 골/어시 기록
+    draft: match.draft ?? {}, // Draft 데이터 (선수승점, 주장승점 등)
+  }
+}
+
+export async function saveMatchToDB(match) {
+  try {
+    const payload = toDbFormat(match)
+    const { data, error } = await supabase
+      .from('matches')
+      .insert(payload)
+      .select('*')
+      .single()
+    
+    if (error) throw error
+    return toAppFormat(data)
+  } catch (e) {
+    console.error('[saveMatchToDB] failed', e)
+    throw e
+  }
+}
+
+export async function updateMatchInDB(matchId, patch) {
+  try {
+    const payload = {}
+    
+    // camelCase 컬럼명 사용
+    if ('dateISO' in patch) payload.dateISO = patch.dateISO
+    if ('attendeeIds' in patch) payload.attendeeIds = patch.attendeeIds
+    if ('criterion' in patch) payload.criterion = patch.criterion
+    if ('teamCount' in patch) payload.teamCount = patch.teamCount
+    if ('location' in patch) payload.location = patch.location
+    if ('mode' in patch) payload.mode = patch.mode
+    if ('snapshot' in patch) payload.snapshot = patch.snapshot
+    if ('board' in patch) payload.board = patch.board
+    if ('formations' in patch) payload.formations = patch.formations
+    if ('selectionMode' in patch) payload.selectionMode = patch.selectionMode
+    if ('locked' in patch) payload.locked = !!patch.locked
+    if ('videos' in patch) payload.videos = patch.videos
+    if ('teamIds' in patch) payload.teamids = patch.teamIds // 주의: 소문자 teamids
+    if ('stats' in patch) payload.stats = patch.stats // 골/어시 기록
+    if ('draft' in patch) payload.draft = patch.draft // Draft 데이터
+    
+    payload.updated_at = new Date().toISOString()
+
+    const { data, error } = await supabase
+      .from('matches')
+      .update(payload)
+      .eq('id', matchId)
+      .eq('room_id', ROOM_ID)
+      .select('*')
+      .single()
+
+    if (error) throw error
+    return toAppFormat(data)
+  } catch (e) {
+    console.error('[updateMatchInDB] failed', e)
+    throw e
+  }
+}
+
+export async function deleteMatchFromDB(matchId) {
+  try {
+    const { error } = await supabase
+      .from('matches')
+      .delete()
+      .eq('id', matchId)
+      .eq('room_id', ROOM_ID)
+    
+    if (error) throw error
+    return true
+  } catch (e) {
+    console.error('[deleteMatchFromDB] failed', e)
+    throw e
+  }
+}
+
+export async function listMatchesFromDB() {
+  try {
+    const { data, error } = await supabase
+      .from('matches')
+      .select('*')
+      .eq('room_id', ROOM_ID)
+      .order('dateISO', { ascending: false })
+    
+    if (error) throw error
+    return (data || []).map(toAppFormat)
+  } catch (e) {
+    console.error('[listMatchesFromDB] failed', e)
+    return []
+  }
+}
+
+// Matches 실시간 구독
+export function subscribeMatches(callback) {
+  const channel = supabase
+    .channel('matches_changes')
+    .on(
+      'postgres_changes',
+      { 
+        event: '*', 
+        schema: 'public', 
+        table: 'matches',
+        filter: `room_id=eq.${ROOM_ID}`
+      },
+      async () => {
+        try {
+          const matches = await listMatchesFromDB()
+          callback(matches)
+        } catch (e) {
+          console.error('[subscribeMatches] reload failed', e)
+        }
+      }
+    )
+    .subscribe()
+
+  return () => {
+    try { supabase.removeChannel?.(channel) } catch {}
+  }
+}

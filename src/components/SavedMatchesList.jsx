@@ -672,7 +672,19 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
   const [draftSnap,setDraftSnap]=useState(initialSnap), [dirty,setDirty]=useState(false)
   const [captainIds, setCaptainIds] = useState([])
   const [quarterScores, setQuarterScores] = useState(null)
-  const [localDraftMode, setLocalDraftMode] = useState((m.selectionMode === 'draft') || !!m?.draftMode || !!m?.draft)
+  const [localDraftMode, setLocalDraftMode] = useState(() => {
+    // Check if it's actually a draft match by looking at selectionMode or actual draft data
+    if (m.selectionMode === 'draft' || m?.draftMode) return true
+    // Check if draft object has actual data (not just empty object)
+    if (m?.draft) {
+      const hasDraftData = (
+        (m.draft.quarterScores && m.draft.quarterScores.length > 0) ||
+        (m.draft.captains && Object.keys(m.draft.captains).length > 0)
+      )
+      return hasDraftData
+    }
+    return false
+  })
   const byId=useMemo(()=>new Map(players.map(p=>[String(p.id),p])),[players])
   const draftTeams=useMemo(()=>draftSnap.map(ids=>ids.map(id=>byId.get(String(id))).filter(Boolean)),[draftSnap,byId])
   const draftCount=useMemo(()=>draftSnap.flat().length,[draftSnap])
@@ -698,7 +710,18 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
   const resetDraft=()=>{ 
     setDraftSnap(initialSnap)
     setDirty(false)
-    setLocalDraftMode((m.selectionMode === 'draft') || !!m?.draftMode || !!m?.draft)
+    // Reset draft mode state - check for actual draft data
+    if (m.selectionMode === 'draft' || m?.draftMode) {
+      setLocalDraftMode(true)
+    } else if (m?.draft) {
+      const hasDraftData = (
+        (m.draft.quarterScores && m.draft.quarterScores.length > 0) ||
+        (m.draft.captains && Object.keys(m.draft.captains).length > 0)
+      )
+      setLocalDraftMode(hasDraftData)
+    } else {
+      setLocalDraftMode(false)
+    }
     // Reset captains to initial state
     const caps = (m?.draft?.captains && Array.isArray(m.draft.captains)) ? m.draft.captains.map(String) : (Array.isArray(m.captains)?m.captains.map(String):(Array.isArray(m.captainIds)?m.captainIds.map(String):[]))
     if(caps && caps.length) setCaptainIds(caps)
@@ -709,7 +732,22 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
   }
   const saveDraft=()=>{ onUpdateMatch?.(m.id,{snapshot:draftSnap,attendeeIds:draftSnap.flat()}); setDirty(false) }
 
-  useEffect(()=>{ setDraftSnap(initialSnap); setDirty(false); setLocalDraftMode((m.selectionMode === 'draft') || !!m?.draftMode || !!m?.draft) }, [m.id, initialSnap.join('|')])
+  useEffect(()=>{ 
+    setDraftSnap(initialSnap); 
+    setDirty(false); 
+    // Check for actual draft mode
+    if (m.selectionMode === 'draft' || m?.draftMode) {
+      setLocalDraftMode(true)
+    } else if (m?.draft) {
+      const hasDraftData = (
+        (m.draft.quarterScores && m.draft.quarterScores.length > 0) ||
+        (m.draft.captains && Object.keys(m.draft.captains).length > 0)
+      )
+      setLocalDraftMode(hasDraftData)
+    } else {
+      setLocalDraftMode(false)
+    }
+  }, [m.id, initialSnap.join('|')])
   useEffect(()=>{
     // initialize captains and quarter scores from m.draft or fallback
     const caps = (m?.draft?.captains && Array.isArray(m.draft.captains)) ? m.draft.captains.map(String) : (Array.isArray(m.captains)?m.captains.map(String):(Array.isArray(m.captainIds)?m.captainIds.map(String):[]))

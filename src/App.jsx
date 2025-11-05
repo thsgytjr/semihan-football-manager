@@ -1,7 +1,8 @@
 // src/App.jsx
 import React,{useEffect,useMemo,useState,useCallback}from"react"
 import{Home,Users,CalendarDays,ListChecks,ShieldCheck,Lock,Eye,EyeOff,AlertCircle,CheckCircle2,X,Settings,BookOpen,Shuffle}from"lucide-react"
-import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB,incrementVisits,logVisit,getVisitStats}from"./services/storage.service"
+import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB,incrementVisits,logVisit,getVisitStats,USE_MATCHES_TABLE}from"./services/storage.service"
+import{saveMatchToDB,updateMatchInDB,deleteMatchFromDB,listMatchesFromDB,subscribeMatches}from"./services/matches.service"
 import{getMembershipSettings,subscribeMembershipSettings}from"./services/membership.service"
 import{mkPlayer}from"./lib/players";import{notify}from"./components/Toast"
 import{filterExpiredMatches}from"./lib/upcomingMatch"
@@ -102,6 +103,16 @@ export default function App(){
       // 멤버십 설정 로드 (새 테이블에서)
       const membershipSettings = await getMembershipSettings()
       
+      // Matches 로드: USE_MATCHES_TABLE 플래그에 따라 분기
+      let matchesData = []
+      if (USE_MATCHES_TABLE) {
+        console.log('[App] Loading matches from Supabase matches table')
+        matchesData = await listMatchesFromDB()
+      } else {
+        console.log('[App] Loading matches from appdb JSON')
+        matchesData = shared.matches || []
+      }
+      
       if(!mounted)return
       
       // 만료된 예정 매치들을 필터링
@@ -115,7 +126,7 @@ export default function App(){
       
       setDb({
         players:playersFromDB,
-        matches:shared.matches||[],
+        matches:matchesData,
         visits:typeof shared.visits==="number"?shared.visits:0,
         upcomingMatches:activeUpcomingMatches,
         tagPresets:shared.tagPresets||[],
@@ -160,17 +171,31 @@ export default function App(){
     finally{if(mounted)setLoading(false)}
   })()
     const offP=subscribePlayers(list=>setDb(prev=>({...prev,players:list})))
+    
+    // Matches 구독: USE_MATCHES_TABLE 플래그에 따라 분기
+    let offMatches = () => {}
+    if (USE_MATCHES_TABLE) {
+      console.log('[App] Subscribing to matches table')
+      offMatches = subscribeMatches(list=>setDb(prev=>({...prev,matches:list})))
+    }
+    
     const offDB=subscribeDB(next=>{
       // 실시간으로 들어오는 데이터도 필터링
       const activeUpcomingMatches = filterExpiredMatches(next.upcomingMatches||[])
-      setDb(prev=>({...prev,matches:next.matches||prev.matches||[],visits:typeof next.visits==="number"?next.visits:(prev.visits||0),upcomingMatches:activeUpcomingMatches,tagPresets:next.tagPresets||prev.tagPresets||[]}))
+      
+      // USE_MATCHES_TABLE이 false일 때만 appdb의 matches 사용
+      if (USE_MATCHES_TABLE) {
+        setDb(prev=>({...prev,visits:typeof next.visits==="number"?next.visits:(prev.visits||0),upcomingMatches:activeUpcomingMatches,tagPresets:next.tagPresets||prev.tagPresets||[]}))
+      } else {
+        setDb(prev=>({...prev,matches:next.matches||prev.matches||[],visits:typeof next.visits==="number"?next.visits:(prev.visits||0),upcomingMatches:activeUpcomingMatches,tagPresets:next.tagPresets||prev.tagPresets||[]}))
+      }
     })
     // 멤버십 설정 실시간 구독
     const offMembership=subscribeMembershipSettings(async()=>{
       const membershipSettings = await getMembershipSettings()
       setDb(prev=>({...prev,membershipSettings:membershipSettings||[]}))
     })
-    return()=>{mounted=false;offP?.();offDB?.();offMembership?.()}
+    return()=>{mounted=false;offP?.();offMatches?.();offDB?.();offMembership?.()}
   },[])
 
   const players=db.players||[],matches=db.matches||[],visits=typeof db.visits==="number"?db.visits:0,upcomingMatches=db.upcomingMatches||[],membershipSettings=db.membershipSettings||[]
@@ -236,9 +261,91 @@ export default function App(){
   async function handleDeletePlayer(id){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,players:(prev.players||[]).filter(p=>p.id!==id)}));if(selectedPlayerId===id)setSelectedPlayerId(null);try{await deletePlayer(id);notify("선수를 삭제했습니다.")}catch(e){console.error(e)}}
   function handleImportPlayers(list){if(!isAdmin)return notify("Admin만 가능합니다.");const safe=Array.isArray(list)?list:[];setDb(prev=>({...prev,players:safe}));Promise.all(safe.map(upsertPlayer)).then(()=>notify("선수 목록을 가져왔습니다.")).catch(console.error);setSelectedPlayerId(null)}
   function handleResetPlayers(){if(!isAdmin)return notify("Admin만 가능합니다.");(async()=>{const fresh=await listPlayers();setDb(prev=>({...prev,players:fresh}));setSelectedPlayerId(null);notify("선수 목록을 리셋했습니다.")})()}
-  function handleSaveMatch(match){if(!isAdmin)return notify("Admin만 가능합니다.");const next=[...(db.matches||[]),match];setDb(prev=>({...prev,matches:next}));saveDB({players:[],matches:next,visits,upcomingMatches,tagPresets:db.tagPresets||[]})}
-  function handleDeleteMatch(id){if(!isAdmin)return notify("Admin만 가능합니다.");const next=(db.matches||[]).filter(m=>m.id!==id);setDb(prev=>({...prev,matches:next}));saveDB({players:[],matches:next,visits,upcomingMatches,tagPresets:db.tagPresets||[]});notify("매치를 삭제했습니다.")}
-  function handleUpdateMatch(id,patch){const next=(db.matches||[]).map(m=>m.id===id?{...m,...patch}:m);setDb(prev=>({...prev,matches:next}));saveDB({players:[],matches:next,visits,upcomingMatches,tagPresets:db.tagPresets||[]});notify("업데이트되었습니다.")}
+  async function handleSaveMatch(match){
+    if(!isAdmin)return notify("Admin만 가능합니다.")
+    
+    try {
+      if (USE_MATCHES_TABLE) {
+        // Supabase matches 테이블에 저장
+        const saved = await saveMatchToDB(match)
+        setDb(prev=>({...prev,matches:[...(prev.matches||[]),saved]}))
+        notify("매치가 저장되었습니다.")
+      } else {
+        // 기존 appdb JSON 방식
+        const next=[...(db.matches||[]),match]
+        setDb(prev=>({...prev,matches:next}))
+        saveDB({players:[],matches:next,visits,upcomingMatches,tagPresets:db.tagPresets||[]})
+        notify("매치가 저장되었습니다.")
+      }
+      
+      // 백업용으로 appdb에도 저장 (이중 저장)
+      if (USE_MATCHES_TABLE) {
+        const appdbMatches = await listMatchesFromDB()
+        saveDB({players:[],matches:appdbMatches,visits,upcomingMatches,tagPresets:db.tagPresets||[]}).catch(console.error)
+      }
+    } catch(e) {
+      console.error('[handleSaveMatch] failed', e)
+      notify("매치 저장에 실패했습니다.")
+    }
+  }
+  
+  async function handleDeleteMatch(id){
+    if(!isAdmin)return notify("Admin만 가능합니다.")
+    
+    try {
+      if (USE_MATCHES_TABLE) {
+        // Supabase matches 테이블에서 삭제
+        await deleteMatchFromDB(id)
+        const next=(db.matches||[]).filter(m=>m.id!==id)
+        setDb(prev=>({...prev,matches:next}))
+        notify("매치를 삭제했습니다.")
+      } else {
+        // 기존 appdb JSON 방식
+        const next=(db.matches||[]).filter(m=>m.id!==id)
+        setDb(prev=>({...prev,matches:next}))
+        saveDB({players:[],matches:next,visits,upcomingMatches,tagPresets:db.tagPresets||[]})
+        notify("매치를 삭제했습니다.")
+      }
+      
+      // 백업용으로 appdb도 동기화 (이중 저장)
+      if (USE_MATCHES_TABLE) {
+        const appdbMatches = await listMatchesFromDB()
+        saveDB({players:[],matches:appdbMatches,visits,upcomingMatches,tagPresets:db.tagPresets||[]}).catch(console.error)
+      }
+    } catch(e) {
+      console.error('[handleDeleteMatch] failed', e)
+      notify("매치 삭제에 실패했습니다.")
+    }
+  }
+  
+  async function handleUpdateMatch(id,patch){
+    if(!isAdmin)return notify("Admin만 가능합니다.")
+    
+    try {
+      if (USE_MATCHES_TABLE) {
+        // Supabase matches 테이블 업데이트
+        const updated = await updateMatchInDB(id, patch)
+        const next=(db.matches||[]).map(m=>m.id===id?updated:m)
+        setDb(prev=>({...prev,matches:next}))
+        notify("업데이트되었습니다.")
+      } else {
+        // 기존 appdb JSON 방식
+        const next=(db.matches||[]).map(m=>m.id===id?{...m,...patch}:m)
+        setDb(prev=>({...prev,matches:next}))
+        saveDB({players:[],matches:next,visits,upcomingMatches,tagPresets:db.tagPresets||[]})
+        notify("업데이트되었습니다.")
+      }
+      
+      // 백업용으로 appdb도 동기화 (이중 저장)
+      if (USE_MATCHES_TABLE) {
+        const appdbMatches = await listMatchesFromDB()
+        saveDB({players:[],matches:appdbMatches,visits,upcomingMatches,tagPresets:db.tagPresets||[]}).catch(console.error)
+      }
+    } catch(e) {
+      console.error('[handleUpdateMatch] failed', e)
+      notify("업데이트에 실패했습니다.")
+    }
+  }
   
   function handleSaveUpcomingMatch(upcomingMatch){if(!isAdmin)return notify("Admin만 가능합니다.");const next=[...(db.upcomingMatches||[]),upcomingMatch];setDb(prev=>({...prev,upcomingMatches:next}));saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:db.tagPresets||[]})}
   function handleDeleteUpcomingMatch(id){if(!isAdmin)return notify("Admin만 가능합니다.");const next=(db.upcomingMatches||[]).filter(m=>m.id!==id);setDb(prev=>({...prev,upcomingMatches:next}));saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:db.tagPresets||[]})}

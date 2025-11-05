@@ -62,7 +62,12 @@ export function calculateAIPower(player, matches) {
         }
         
         // 드래프트전 클린시트 계산 (쿼터별 무실점)
-        const isDraft = (match.selectionMode === 'draft') || match.draft || match.draftMode
+        // draft 객체에 실제 데이터가 있는지 확인
+        const hasDraftData = match.draft && (
+          (match.draft.quarterScores && match.draft.quarterScores.length > 0) ||
+          (match.draft.captains && Object.keys(match.draft.captains).length > 0)
+        )
+        const isDraft = (match.selectionMode === 'draft') || hasDraftData || match.draftMode
         if (isDraft && match.quarterScores) {
           // quarterScores 구조 확인
           let quarterScores = match.quarterScores

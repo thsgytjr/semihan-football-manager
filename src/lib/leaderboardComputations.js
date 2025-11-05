@@ -316,8 +316,18 @@ export function coerceQuarterScores(m) {
  * Check if match is a draft match
  */
 export function isDraftMatch(m) {
-  return (m?.selectionMode === 'draft') || 
-         !!m?.draft || 
+  // selectionMode가 가장 신뢰할 수 있는 기준
+  if (m?.selectionMode === 'draft') return true
+  
+  // draft 객체에 실제 데이터가 있는지 확인
+  const hasDraftData = m?.draft && (
+    (m.draft.quarterScores && m.draft.quarterScores.length > 0) ||
+    (m.draft.captains && Object.keys(m.draft.captains).length > 0) ||
+    (m.draft.playerPoints && Object.keys(m.draft.playerPoints).length > 0) ||
+    (m.draft.captainPoints && Object.keys(m.draft.captainPoints).length > 0)
+  )
+  
+  return hasDraftData || 
          !!m?.draftMode || 
          Array.isArray(m?.captains) || 
          Array.isArray(m?.captainIds)
