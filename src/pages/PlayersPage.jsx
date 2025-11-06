@@ -6,7 +6,9 @@ import { overall, isUnknownPlayer } from "../lib/players"
 import { 
   STAT_KEYS, 
   PLAYER_ORIGINS, 
+  PLAYER_GRADES,
   getOriginLabel, 
+  migrateOriginToGrade,
   DETAILED_POSITIONS,
   ALL_DETAILED_POSITIONS,
   getPositionCategory,
@@ -55,10 +57,12 @@ function OriginChip({ origin }) {
   const label = getOriginLabel(origin)
   const cls = origin === "pro"
     ? "bg-purple-100 text-purple-800 border border-purple-200"
+    : origin === "semi-pro"
+    ? "bg-indigo-100 text-indigo-800 border border-indigo-200"
     : origin === "amateur"
     ? "bg-blue-100 text-blue-800 border border-blue-200"
-    : origin === "college"
-    ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+    : origin === "college" // 레거시 지원
+    ? "bg-indigo-100 text-indigo-800 border border-indigo-200"
     : "bg-stone-100 text-stone-800 border border-stone-200"
   return (
     <span className={`inline-flex items-center rounded-full px-2 py-[2px] text-[11px] font-medium ${cls}`}>
@@ -145,13 +149,16 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
         }
       }
       
+      // 선수 등급 마이그레이션: 기존 college → semi-pro, none → regular
+      const migratedOrigin = player.origin ? migrateOriginToGrade(player.origin) : "regular"
+      
       setDraft({
         ...player,
         id: player?.id || `new-${Date.now()}`,
         name: player?.name || "",
         positions: migratedPositions,
         membership: normalizedMembership,
-        origin: player.origin || "none",
+        origin: migratedOrigin,
         status: player.status || "active", // 상태 기본값
         tags: player.tags || [], // 태그 배열
         stats: ensureStatsObject(player.stats),
@@ -658,19 +665,19 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-blue-900 mb-2">선수 출신</label>
+                    <label className="block text-xs font-semibold text-blue-900 mb-2">선수 등급</label>
                     <div className="grid grid-cols-2 gap-2">
-                      {PLAYER_ORIGINS.map(origin => {
-                        const isSelected = draft.origin === origin.value
+                      {PLAYER_ORIGINS.map(grade => {
+                        const isSelected = draft.origin === grade.value
                         let selectedClass = 'bg-white border-2 border-stone-200 text-stone-600 hover:border-stone-300'
                         
                         if (isSelected) {
-                          if (origin.value === 'pro') {
+                          if (grade.value === 'pro') {
                             selectedClass = 'bg-purple-500 text-white shadow-lg scale-105'
-                          } else if (origin.value === 'amateur') {
+                          } else if (grade.value === 'semi-pro') {
+                            selectedClass = 'bg-indigo-500 text-white shadow-lg scale-105'
+                          } else if (grade.value === 'amateur') {
                             selectedClass = 'bg-blue-500 text-white shadow-lg scale-105'
-                          } else if (origin.value === 'college') {
-                            selectedClass = 'bg-emerald-500 text-white shadow-lg scale-105'
                           } else {
                             selectedClass = 'bg-stone-500 text-white shadow-lg scale-105'
                           }
@@ -678,12 +685,12 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
                         
                         return (
                           <button
-                            key={origin.value}
+                            key={grade.value}
                             type="button"
-                            onClick={() => setDraft({ ...draft, origin: origin.value })}
+                            onClick={() => setDraft({ ...draft, origin: grade.value })}
                             className={`py-3 px-4 rounded-xl text-sm font-bold transition-all ${selectedClass}`}
                           >
-                            {origin.label}
+                            {grade.label}
                           </button>
                         )
                       })}

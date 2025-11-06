@@ -14,22 +14,40 @@ export const LABELS = {
 }
 export const labelOf = (k) => LABELS[k] || k
 
-// 선수 출신 옵션
-export const PLAYER_ORIGINS = [
-  { value: "pro", label: "프로", color: "purple" },
-  { value: "amateur", label: "아마추어", color: "blue" },
-  { value: "college", label: "대학팀", color: "emerald" },
-  { value: "none", label: "일반", color: "stone" },
+// 선수 등급 옵션
+export const PLAYER_GRADES = [
+  { value: "pro", label: "Pro", color: "purple" },
+  { value: "semi-pro", label: "Semi-Pro", color: "indigo" },
+  { value: "amateur", label: "Amateur", color: "blue" },
+  { value: "regular", label: "Regular", color: "stone" },
 ]
 
+// 레거시: 기존 "선수 출신" 호환을 위해 유지
+export const PLAYER_ORIGINS = PLAYER_GRADES
+
+// 기존 태그를 새 등급으로 마이그레이션
+export const migrateOriginToGrade = (oldValue) => {
+  const mapping = {
+    'pro': 'pro',           // 프로 → Pro
+    'amateur': 'semi-pro',  // 아마추어 → Semi-Pro
+    'college': 'amateur',   // 대학팀 → Amateur
+    'none': 'regular',      // 일반 → Regular
+  }
+  return mapping[oldValue] || oldValue
+}
+
 export const getOriginLabel = (value) => {
-  const origin = PLAYER_ORIGINS.find(o => o.value === value)
-  return origin ? origin.label : "일반"
+  // 레거시 값 자동 변환
+  const migratedValue = migrateOriginToGrade(value)
+  const grade = PLAYER_GRADES.find(g => g.value === migratedValue)
+  return grade ? grade.label : "Regular"
 }
 
 export const getOriginColor = (value) => {
-  const origin = PLAYER_ORIGINS.find(o => o.value === value)
-  return origin ? origin.color : "stone"
+  // 레거시 값 자동 변환
+  const migratedValue = migrateOriginToGrade(value)
+  const grade = PLAYER_GRADES.find(g => g.value === migratedValue)
+  return grade ? grade.color : "stone"
 }
 
 // 상세 포지션 정의

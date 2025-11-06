@@ -186,23 +186,33 @@ export function calculateAIPower(player, matches) {
     power = baseOVR * 10
   }
   
-  // 4. 선수 출신에 따른 보너스 (실력 경력 반영)
-  const origin = player.origin || 'none'
+  // 4. 선수 등급에 따른 보너스 (실력 경력 반영)
+  const origin = player.origin || 'regular'
   let originBonus = 0
   
-  // 프로 출신: 프로 경험 보너스 (압도적 어드벤티지)
+  // Pro: 프로 출신, 압도적 실력 (경기당 골 2개 수준의 엄청난 보너스)
   if (origin === 'pro') {
-    originBonus = 200  // 경기당 골 2개 수준의 엄청난 보너스
+    originBonus = 200
   } 
-  // 아마추어 출신: 아마추어 팀 경험 (상당한 어드벤티지)
-  else if (origin === 'amateur') {
+  // Semi-Pro: 아마추어 출신 → 세미프로 (상당한 어드벤티지)
+  else if (origin === 'semi-pro') {
     originBonus = 120
   }
-  // 대학팀 출신: 조직적 훈련 경험 (어드벤티지)
-  else if (origin === 'college') {
+  // Amateur: 대학팀 출신 → 아마추어 (조직적 훈련 경험)
+  else if (origin === 'amateur') {
     originBonus = 70
   }
-  // 일반: 보너스 없음
+  // Regular: 일반 (보너스 없음)
+  else if (origin === 'regular') {
+    originBonus = 0
+  }
+  // 레거시 값 처리 (마이그레이션 전 데이터)
+  else if (origin === 'college') {
+    originBonus = 70  // college → amateur와 동일
+  }
+  else if (origin === 'none') {
+    originBonus = 0   // none → regular와 동일
+  }
   
   power += originBonus
   
