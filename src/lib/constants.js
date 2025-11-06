@@ -16,10 +16,10 @@ export const labelOf = (k) => LABELS[k] || k
 
 // 선수 등급 옵션
 export const PLAYER_GRADES = [
-  { value: "pro", label: "Pro", color: "purple" },
-  { value: "semi-pro", label: "Semi-Pro", color: "indigo" },
-  { value: "amateur", label: "Amateur", color: "blue" },
-  { value: "regular", label: "Regular", color: "stone" },
+  { value: "pro", label: "프로선출", color: "purple" },
+  { value: "semi-pro", label: "고교선출", color: "indigo" },
+  { value: "amateur", label: "지역리그", color: "blue" },
+  { value: "regular", label: "일반", color: "stone" },
 ]
 
 // 레거시: 기존 "선수 출신" 호환을 위해 유지

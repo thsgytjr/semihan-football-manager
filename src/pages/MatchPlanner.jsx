@@ -20,11 +20,9 @@ import captainIcon from '../assets/Captain.PNG'
 import { getMembershipBadge } from '../lib/membershipConfig'
 import { getTagColorClass } from '../lib/constants'
 
-/* ───────── 게스트 판별/뱃지 유틸 ───────── */
+/* ───────── 공통 유틸 ───────── */
 const S=(v)=>v==null?'':String(v)
 const isMember=(m)=>{const s=S(m).trim().toLowerCase();return s==='member'||s.includes('정회원')}
-const isAssociate=(m)=>{const s=S(m).trim().toLowerCase();return s==='associate'||s.includes('준회원')}
-const isGuest=(m)=>{const s=S(m).trim().toLowerCase();return s==='guest'||s.includes('게스트')}
 
 // 커스텀 멤버십 기반 배지 가져오기
 const getBadgesWithCustom=(membership,isCaptain=false,customMemberships=[])=>{
@@ -32,10 +30,6 @@ const getBadgesWithCustom=(membership,isCaptain=false,customMemberships=[])=>{
   const badgeInfo = getMembershipBadge(membership, customMemberships)
   return badgeInfo ? [badgeInfo.badge] : []
 }
-
-const GuestBadge=()=>(
-  <span className="inline-flex items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200">G</span>
-)
 /* ─────────────────────────────────────── */
 
 /* ───────── 공통 요금 유틸 ───────── */
@@ -393,7 +387,7 @@ export default function MatchPlanner({
     }, 1000)
   }
   
-  // 똑똑한 팀 배정 알고리즘 (고급 버전)
+  // 똑똑한 팀 배정 알고리즘 (고급 버전 - 개선)
   const smartDistributeAdvanced = (players, teamCount, seed = 0) => {
     // 1. 각 선수의 종합 파워 계산
     const playersWithPower = players.map(p => ({
@@ -419,30 +413,41 @@ export default function MatchPlanner({
       positions: { GK: 0, DF: 0, MF: 0, FW: 0, OTHER: 0 }
     }))
     
-    // 4. 포지션별로 배정 (DF -> MF -> FW -> GK -> OTHER)
-    // 수비가 항상 부족하므로 수비 우선 배정
-    const positionOrder = ['DF', 'MF', 'FW', 'GK', 'OTHER']
+    // 4. 포지션별로 배정 (GK -> DF -> MF -> FW -> OTHER)
+    // 골키퍼를 먼저 각 팀에 균등 배정
+    const positionOrder = ['GK', 'DF', 'MF', 'FW', 'OTHER']
     
     positionOrder.forEach(pos => {
       const playerList = byPosition[pos]
       
-      playerList.forEach(player => {
+      playerList.forEach((player, playerIndex) => {
         // 가장 적합한 팀 찾기
-        const bestTeamIdx = teamStats
+        const candidates = teamStats
           .map((stat, idx) => ({
             idx,
             count: stat.count,
             posCount: stat.positions[pos],
             avgPower: stat.count > 0 ? stat.totalPower / stat.count : 0
           }))
-          .sort((a, b) => {
-            // 1순위: 인원수가 적은 팀
-            if (a.count !== b.count) return a.count - b.count
-            // 2순위: 해당 포지션이 적은 팀
-            if (a.posCount !== b.posCount) return a.posCount - b.posCount
-            // 3순위: 평균 파워가 낮은 팀
+        
+        // 정렬 기준 개선: 인원수 균등 최우선
+        candidates.sort((a, b) => {
+          // 1순위: 인원수가 적은 팀 (확실한 차이)
+          if (a.count !== b.count) return a.count - b.count
+          
+          // 2순위: 해당 포지션이 적은 팀
+          if (a.posCount !== b.posCount) return a.posCount - b.posCount
+          
+          // 3순위: 평균 파워가 낮은 팀
+          if (Math.abs(a.avgPower - b.avgPower) > 1) {
             return a.avgPower - b.avgPower
-          })[0].idx
+          }
+          
+          // 4순위: 인덱스 순서 (같은 조건이면 순차 배정)
+          return a.idx - b.idx
+        })
+        
+        const bestTeamIdx = candidates[0].idx
         
         // 선수 배정
         teams[bestTeamIdx].push(player)
@@ -451,6 +456,15 @@ export default function MatchPlanner({
         teamStats[bestTeamIdx].positions[pos]++
       })
     })
+    
+    // 5. 최종 확인: 인원수가 너무 불균형하면 재조정
+    const maxCount = Math.max(...teamStats.map(s => s.count))
+    const minCount = Math.min(...teamStats.map(s => s.count))
+    
+    // 인원수 차이가 2명 이상이면 경고 (디버깅용)
+    if (maxCount - minCount > 1) {
+      console.warn('AI 배정: 팀 인원수 불균형 감지', teamStats.map(s => s.count))
+    }
     
     return teams
   }
@@ -1411,6 +1425,7 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
   const [showList,setShowList]=useState(false) // 선수 목록 표시 여부
   const [isComposing,setIsComposing]=useState(false) // 한글 입력 중 여부
   const [selectedTag,setSelectedTag]=useState("") // 선택된 태그 필터
+  const [selectedMembership,setSelectedMembership]=useState("") // 선택된 멤버십 필터
   
   const notInMatch = useMemo(()=>{
     const inside=new Set(snapshot.flat().map(String))
@@ -1435,6 +1450,30 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
     return Array.from(tagMap.values()).sort((a, b) => a.name.localeCompare(b.name))
   }, [players])
   
+  // 모든 사용 가능한 멤버십 목록 추출 - 전체 선수에서 추출
+  const allMemberships = useMemo(() => {
+    const membershipSet = new Set()
+    players.forEach(p => {
+      const membership = S(p.membership || '').trim()
+      if (membership) {
+        membershipSet.add(membership)
+      }
+    })
+    // customMemberships 기반으로 정렬
+    const membershipArray = Array.from(membershipSet)
+    return membershipArray.sort((a, b) => {
+      const badgeA = getMembershipBadge(a, customMemberships)
+      const badgeB = getMembershipBadge(b, customMemberships)
+      // 순서: customMemberships 순서 우선, 그 다음 알파벳
+      const indexA = customMemberships.findIndex(m => m.name === a)
+      const indexB = customMemberships.findIndex(m => m.name === b)
+      if (indexA !== -1 && indexB !== -1) return indexA - indexB
+      if (indexA !== -1) return -1
+      if (indexB !== -1) return 1
+      return a.localeCompare(b)
+    })
+  }, [players, customMemberships])
+  
   const filtered=useMemo(()=>{
     const t=q.trim().toLowerCase()
     let base = notInMatch
@@ -1447,13 +1486,21 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
       )
     }
     
+    // 멤버십 필터 적용
+    if (selectedMembership) {
+      base = base.filter(p => {
+        const membership = S(p.membership || '').trim()
+        return membership === selectedMembership
+      })
+    }
+    
     // 이름 필터 적용
     if (t) {
       base = base.filter(p => (p.name||"").toLowerCase().includes(t))
     }
     
     return base.slice().sort((a,b)=>(a.name||"").localeCompare(b.name||""))
-  },[notInMatch,q,selectedTag])
+  },[notInMatch,q,selectedTag,selectedMembership])
   
   // 검색어가 입력되면 자동으로 목록 표시
   const shouldShowList = showList || q.trim().length > 0
@@ -1463,6 +1510,8 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
     const next = snapshot.map((arr,i)=>i===teamIdx?[...arr, pid]:arr)
     onDraftChange(next)
     setQ('') // 검색어 초기화
+    const playerName = players.find(p => p.id === pid)?.name || '선수'
+    notify(`${playerName}을(를) 팀 ${teamIdx + 1}에 추가했습니다 ✅`)
   }
   
   // 필터된 모든 선수를 팀에 추가
@@ -1473,6 +1522,7 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
     onDraftChange(next)
     setQ('') // 검색어 초기화
     setSelectedTag('') // 태그 필터 초기화
+    setSelectedMembership('') // 멤버십 필터 초기화
     notify(`${filtered.length}명의 선수를 팀 ${teamIdx + 1}에 추가했습니다 ✅`)
   }
   
@@ -1488,9 +1538,16 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
     <div className="mt-3 rounded border border-gray-200 bg-white p-3">
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <label className="text-xs text-gray-600 font-medium">빠른 선수 추가</label>
-        <select className="rounded border border-gray-300 bg-white px-2 py-1 text-xs" value={teamIdx} onChange={e=>setTeamIdx(Number(e.target.value))}>
-          {snapshot.map((_,i)=><option key={i} value={i}>팀 {i+1}</option>)}
-        </select>
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200">
+          <span className="text-xs text-emerald-700 font-medium">추가할 팀:</span>
+          <select 
+            className="rounded border-0 bg-transparent px-1.5 py-0.5 text-xs font-bold text-emerald-700 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer" 
+            value={teamIdx} 
+            onChange={e=>setTeamIdx(Number(e.target.value))}
+          >
+            {snapshot.map((_,i)=><option key={i} value={i}>팀 {i+1}</option>)}
+          </select>
+        </div>
         <input 
           className="flex-1 min-w-[180px] rounded border border-gray-300 bg-white px-2 py-1.5 text-sm" 
           placeholder="이름 검색..."
@@ -1500,9 +1557,9 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
           onCompositionStart={()=>setIsComposing(true)}
           onCompositionEnd={()=>setIsComposing(false)}
         />
-        {(selectedTag || q.trim()) && (
+        {(selectedTag || selectedMembership || q.trim()) && (
           <button 
-            onClick={()=>{setSelectedTag('');setQ('')}}
+            onClick={()=>{setSelectedTag('');setSelectedMembership('');setQ('')}}
             className="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
             title="필터 초기화"
           >
@@ -1551,18 +1608,53 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
               )
             })}
           </div>
+          
+          {/* 멤버십 필터 */}
+          {allMemberships.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 mb-2">
+              <span className="text-xs text-gray-500">멤버십:</span>
+              <button
+                onClick={() => setSelectedMembership('')}
+                className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
+                  selectedMembership === '' 
+                    ? 'bg-stone-700 text-white shadow-sm' 
+                    : 'bg-stone-100 text-stone-700 border border-stone-200 hover:bg-stone-200'
+                }`}
+              >
+                전체
+              </button>
+              {allMemberships.map(membership => {
+                const badgeInfo = getMembershipBadge(membership, customMemberships)
+                const isActive = selectedMembership === membership
+                return (
+                  <button
+                    key={membership}
+                    onClick={() => setSelectedMembership(membership)}
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium border transition-all ${
+                      isActive 
+                        ? badgeInfo?.bgColor || 'bg-blue-600 text-white shadow-sm' 
+                        : badgeInfo?.bgColor?.replace('bg-', 'bg-').replace('-600', '-100').replace('text-white', badgeInfo.textColor || 'text-stone-700') || 'bg-stone-100 text-stone-700 border-stone-200'
+                    } ${!isActive && 'hover:opacity-80'}`}
+                  >
+                    {membership}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          
           {/* 전체 추가 버튼 */}
           {filtered.length > 0 && (
             <button
               onClick={addAllFilteredToTeam}
               className="w-full rounded-lg border-2 border-dashed border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400 transition-all flex items-center justify-center gap-1.5"
-              title={`${selectedTag ? `"${selectedTag}" 태그의 ` : ''}모든 선수 (${filtered.length}명)를 팀 ${teamIdx + 1}에 추가`}
+              title={`${selectedTag ? `"${selectedTag}" 태그의 ` : ''}${selectedMembership ? `"${selectedMembership}" 멤버십의 ` : ''}모든 선수 (${filtered.length}명)를 팀 ${teamIdx + 1}에 추가`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
               </svg>
               <span>
-                {selectedTag ? `"${selectedTag}" 태그 모두 추가` : '전체 선수 모두 추가'}
+                {selectedTag || selectedMembership ? `필터된 선수 모두 추가` : '전체 선수 모두 추가'}
                 <span className="ml-1 text-emerald-600">({filtered.length}명)</span>
               </span>
             </button>
@@ -1585,10 +1677,11 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
             </div>
           ) : (
             <>
-              {(selectedTag || q.trim()) && (
+              {(selectedTag || selectedMembership || q.trim()) && (
                 <div className="mb-2 text-xs text-gray-600">
                   필터된 선수: {filtered.length}명
-                  {selectedTag && <span className="ml-1 font-medium">({selectedTag})</span>}
+                  {selectedTag && <span className="ml-1 font-medium">(태그: {selectedTag})</span>}
+                  {selectedMembership && <span className="ml-1 font-medium">(멤버십: {selectedMembership})</span>}
                 </div>
               )}
               <div className="max-h-[400px] overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
@@ -1600,11 +1693,15 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
                       <button 
                         key={p.id} 
                         onClick={() => addPlayerToTeam(p.id)}
-                        className="flex items-center gap-2 text-xs p-2 rounded hover:bg-white hover:shadow-sm cursor-pointer transition border border-transparent hover:border-emerald-200"
+                        className="group flex items-center gap-2 text-xs p-2 rounded hover:bg-white hover:shadow-sm cursor-pointer transition border border-transparent hover:border-emerald-300 relative"
+                        title={`팀 ${teamIdx + 1}에 추가`}
                       >
                         <InitialAvatar id={p.id} name={p.name} size={28} badges={badges} photoUrl={p.photoUrl} customMemberships={customMemberships} badgeInfo={badgeInfo} />
                         <span className="truncate text-left flex-1">{p.name}</span>
-                        <span className="text-emerald-600 text-lg leading-none">+</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-emerald-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity">팀{teamIdx + 1}</span>
+                          <span className="text-emerald-600 text-lg leading-none">+</span>
+                        </div>
                       </button>
                     )
                   })}
