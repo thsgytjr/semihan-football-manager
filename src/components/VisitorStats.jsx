@@ -74,6 +74,14 @@ export default function VisitorStats({ visits }) {
       osCounts[os] = (osCounts[os] || 0) + 1
     })
 
+    // 핸드폰 모델
+    const phoneModelCounts = {}
+    logs.forEach(l => {
+      if (l.phone_model) {
+        phoneModelCounts[l.phone_model] = (phoneModelCounts[l.phone_model] || 0) + 1
+      }
+    })
+
     // 시간대별 분석 (0-23시)
     const hourCounts = Array(24).fill(0)
     logs.forEach(l => {
@@ -93,6 +101,7 @@ export default function VisitorStats({ visits }) {
       deviceCounts,
       browserCounts,
       osCounts,
+      phoneModelCounts,
       peakHour,
       hourCounts
     }
@@ -243,6 +252,23 @@ export default function VisitorStats({ visits }) {
         </div>
       </div>
 
+      {/* 핸드폰 모델 */}
+      {Object.keys(stats.phoneModelCounts).length > 0 && (
+        <div className="rounded-lg border border-stone-200 p-3 bg-white">
+          <div className="text-xs font-semibold text-stone-700 mb-2">📲 핸드폰 모델</div>
+          <div className="space-y-2">
+            {Object.entries(stats.phoneModelCounts)
+              .sort(([,a], [,b]) => b - a)
+              .map(([model, count]) => (
+                <div key={model} className="flex items-center justify-between text-sm">
+                  <span className="text-stone-600">{model}</span>
+                  <span className="font-semibold text-stone-900">{count}회</span>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
       {/* 최근 방문 기록 */}
       <div className="rounded-lg border border-stone-200 p-3 bg-white">
         <div className="text-xs font-semibold text-stone-700 mb-3">📋 최근 방문 기록</div>
@@ -254,8 +280,8 @@ export default function VisitorStats({ visits }) {
             const timeStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`
             
             return (
-              <div key={log.id || idx} className="flex items-center justify-between text-xs border-b border-stone-100 last:border-0 py-1.5">
-                <div className="flex items-center gap-2 min-w-0 flex-1">
+              <div key={log.id || idx} className="flex flex-col gap-1 text-xs border-b border-stone-100 last:border-0 py-2">
+                <div className="flex items-center gap-2 min-w-0">
                   <span className="text-stone-500 flex-shrink-0">{timeStr}</span>
                   <span className="text-stone-400">·</span>
                   <span className="text-stone-600 truncate">{log.device_type || 'Unknown'}</span>
@@ -264,6 +290,19 @@ export default function VisitorStats({ visits }) {
                   <span className="text-stone-400">·</span>
                   <span className="text-stone-600 truncate">{log.os || 'Unknown'}</span>
                 </div>
+                {log.phone_model && (
+                  <div className="flex items-center gap-1.5 ml-12">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">
+                      📱 {log.phone_model}
+                    </span>
+                  </div>
+                )}
+                {/* DEBUG: User Agent 표시 */}
+                {log.user_agent && (
+                  <div className="text-[9px] text-stone-400 ml-12 truncate" title={log.user_agent}>
+                    UA: {log.user_agent}
+                  </div>
+                )}
               </div>
             )
           })}

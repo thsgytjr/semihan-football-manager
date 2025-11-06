@@ -141,7 +141,9 @@ export default function App(){
           // 방문자 정보 수집
           const visitorId = getOrCreateVisitorId()
           const userAgent = navigator?.userAgent || ''
-          const { device, browser, os, phoneModel } = parseUserAgent(userAgent)
+          const screenWidth = window?.screen?.width || null
+          const screenHeight = window?.screen?.height || null
+          const { device, browser, os, phoneModel } = parseUserAgent(userAgent, screenWidth, screenHeight)
           
           // IP 주소 조회 (비동기, 실패해도 계속 진행)
           getVisitorIP().then(async (ipAddress) => {
