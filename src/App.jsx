@@ -33,6 +33,7 @@ export default function App(){
   const[featuresEnabled,setFeaturesEnabled]=useState(()=>getAppSettings().features||{})
   const{shouldShowTutorial,setShouldShowTutorial}=useAutoTutorial(isAdmin)
   const[previewMode,setPreviewMode]=useState(()=>isPreviewMode())
+  const[isDev,setIsDev]=useState(()=>isDevelopmentEnvironment())
 
   // Supabase Auth: 앱 시작 시 세션 확인
   useEffect(()=>{
@@ -577,6 +578,12 @@ export default function App(){
   return(
   <div className="min-h-screen bg-stone-100 text-stone-800 antialiased leading-relaxed w-full max-w-full overflow-x-auto">
     <ToastHub/>
+    {/* 개발 모드 표시 배너 (localhost) */}
+    {isDev && !previewMode && (
+      <div className="bg-blue-500 text-white text-center py-1 px-4 text-xs font-medium sticky top-0 z-[201]">
+        🚧 개발 모드 (localhost) - 방문자 추적 비활성화됨
+      </div>
+    )}
     {/* 프리뷰 모드 표시 배너 */}
     {previewMode && (
       <div className="bg-amber-500 text-white text-center py-1 px-4 text-xs font-medium sticky top-0 z-[201]">
@@ -589,6 +596,7 @@ export default function App(){
         <div className="flex items-center gap-2 flex-shrink-0 relative z-10">
           <img src={logoUrl} alt="Goalify Logo" className="h-6 w-6 sm:h-7 sm:w-7 object-contain flex-shrink-0" width={28} height={28} decoding="async"/>
           <h1 className="text-sm sm:text-base font-semibold tracking-tight whitespace-nowrap">{appTitle}</h1>
+          {isDev && !previewMode && <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 font-semibold">Dev</span>}
           {previewMode && <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">Preview</span>}
         </div>
         <nav className="flex gap-1 sm:gap-2 items-center min-w-0">
