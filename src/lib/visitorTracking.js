@@ -54,20 +54,20 @@ const IPHONE_MODELS = {
 
 // iPhone 화면 해상도로 모델 추정 (대략적)
 const IPHONE_SCREEN_MODELS = {
-  // iPhone 15 Pro Max, 14 Pro Max, 13 Pro Max, 12 Pro Max
+  // iPhone 16 Pro Max, 15 Pro Max
+  '440x956': 'iPhone Pro Max (16/15)',
+  // iPhone 16 Pro, 15 Pro Max (older)
   '430x932': 'iPhone Pro Max (15/14/13/12)',
   // iPhone 15 Plus, 14 Plus
   '428x926': 'iPhone Plus (15/14)',
-  // iPhone 15 Pro, 14 Pro
-  '393x852': 'iPhone Pro (15/14)',
-  // iPhone 15, 14, 13, 12
-  '390x844': 'iPhone (15/14/13/12)',
-  // iPhone 13 mini, 12 mini
+  // iPhone 16 Pro, 15 Pro, 14 Pro
+  '393x852': 'iPhone Pro (16/15/14)',
+  // iPhone 16, 15, 14, 13, 12
+  '390x844': 'iPhone (16/15/14/13/12)',
+  // iPhone 13 mini, 12 mini, X/XS/11 Pro
   '375x812': 'iPhone mini (13/12) or X/XS/11 Pro',
   // iPhone 11 Pro Max, XS Max
   '414x896': 'iPhone 11 Pro Max or XS Max',
-  // iPhone 11, XR
-  '414x896': 'iPhone 11 or XR',
   // iPhone SE (2nd/3rd gen), 8, 7, 6s
   '375x667': 'iPhone SE or 8/7/6s',
   // iPhone 8 Plus, 7 Plus, 6s Plus
