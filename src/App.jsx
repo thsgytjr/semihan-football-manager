@@ -661,14 +661,7 @@ export default function App(){
     </main>
 
     <footer className="mx-auto mt-10 max-w-6xl px-4 pb-8">
-      <Card title="도움말">
-        <ul className="list-disc pl-5 text-sm text-stone-600">
-          <li>대시보드: 저장된 매치 열람, 공격포인트(골/어시/경기수) 트래킹</li>
-          <li>포메이션 보드: 체크한 선수만 보드에 표시 · 드래그로 수동 배치</li>
-          {isAdmin&&(<><li>선수 관리: 선수 생성/수정/삭제, 일괄 가져오기</li><li>매치 플래너: 팀 배정, 포메이션 설정, 저장/삭제</li><li>기록 입력: 경기별 골/어시 기록 입력/수정</li></>)}
-        </ul>
-      </Card>
-      <div className="mt-4 text-center text-[11px] text-stone-400">Goalify · v{import.meta.env.VITE_APP_VERSION} build({import.meta.env.VITE_APP_COMMIT})</div>
+      <div className="text-center text-[11px] text-stone-400">Goalify · v{import.meta.env.VITE_APP_VERSION} build({import.meta.env.VITE_APP_COMMIT})</div>
     </footer>
 
     <AdminLoginDialog isOpen={loginOpen} onClose={()=>setLoginOpen(false)} onSuccess={onAdminSuccess}/>
@@ -980,7 +973,7 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
   if(!isOpen)return null;
   
   return(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 p-4">
       <div className="relative w-full max-w-md rounded-2xl border border-stone-200 bg-white shadow-xl max-h-[90vh] overflow-y-auto">
         <button className="absolute right-3 top-3 rounded-md p-1 text-stone-500 hover:bg-stone-100" onClick={onClose} aria-label="닫기">
           <X size={18}/>
