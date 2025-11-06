@@ -11,10 +11,15 @@ try {
   console.warn('Git hash 조회 실패:', e)
 }
 
-export default defineConfig({
-  plugins: [react()],
-  define: {
-    'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version),
-    'import.meta.env.VITE_APP_COMMIT': JSON.stringify(commitHash),
-  },
+export default defineConfig(({ mode }) => {
+  return {
+    plugins: [react()],
+    define: {
+      'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version),
+      'import.meta.env.VITE_APP_COMMIT': JSON.stringify(commitHash),
+    },
+    // mode에 따라 다른 .env 파일 로드
+    envDir: './',
+    envPrefix: 'VITE_',
+  }
 })

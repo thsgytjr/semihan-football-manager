@@ -59,22 +59,6 @@ export default function AnalyticsPage({ visits, isAdmin }) {
           <VisitorStats visits={visits} />
         </div>
       </Card>
-
-      {/* 안내 */}
-      <Card className="bg-blue-50 border-blue-200">
-        <div className="flex gap-3 p-4">
-          <div className="text-2xl">💡</div>
-          <div className="flex-1">
-            <h4 className="text-sm font-semibold text-blue-900 mb-1">통계 정보</h4>
-            <ul className="text-xs text-blue-800 space-y-1">
-              <li>• 개발 모드(localhost)에서는 방문이 카운팅되지 않습니다</li>
-              <li>• 동일 세션 내 재방문은 1회로 카운팅됩니다</li>
-              <li>• 고유 방문자는 브라우저 기반으로 구분됩니다</li>
-              <li>• 모든 데이터는 실시간으로 업데이트됩니다</li>
-            </ul>
-          </div>
-        </div>
-      </Card>
     </div>
   )
 }
