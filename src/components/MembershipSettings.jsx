@@ -14,6 +14,7 @@ export default function MembershipSettings({
   const [memberships, setMemberships] = useState([])
   const [editingId, setEditingId] = useState(null)
   const [draft, setDraft] = useState(null)
+  const [useCustomColor, setUseCustomColor] = useState(false)
 
   useEffect(() => {
     // 커스텀이 있으면 그것을 사용, 없으면 기본값 사용
@@ -26,11 +27,12 @@ export default function MembershipSettings({
 
   const startAdd = () => {
     setEditingId('new')
+    setUseCustomColor(false)
     setDraft({
       id: `custom-${Date.now()}`,
       name: '',
       badge: '',
-      badgeColor: 'stone',
+      badgeColor: 'stone', // 기본은 프리셋
       color: 'stone',
       deletable: true,
     })
@@ -38,12 +40,15 @@ export default function MembershipSettings({
 
   const startEdit = (membership) => {
     setEditingId(membership.id)
+    // hex 색상이면 커스텀 모드
+    setUseCustomColor(membership.badgeColor?.startsWith('#'))
     setDraft({ ...membership })
   }
 
   const cancelEdit = () => {
     setEditingId(null)
     setDraft(null)
+    setUseCustomColor(false)
   }
 
   const saveEdit = async () => {
@@ -171,18 +176,54 @@ export default function MembershipSettings({
                       </div>
 
                       <div>
-                        <label className="block text-xs font-semibold text-stone-700 mb-1">배지 색상</label>
-                        <select
-                          value={draft.badgeColor || 'stone'}
-                          onChange={e => setDraft({ ...draft, badgeColor: e.target.value })}
-                          className="w-full border border-stone-300 rounded-md px-3 py-2 text-sm"
-                        >
-                          {BADGE_COLORS.map(color => (
-                            <option key={color.value} value={color.value}>
-                              {color.label}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-xs font-semibold text-stone-700">배지 색상</label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setUseCustomColor(!useCustomColor)
+                              if (!useCustomColor) {
+                                setDraft({ ...draft, badgeColor: '#78716c' })
+                              } else {
+                                setDraft({ ...draft, badgeColor: 'stone' })
+                              }
+                            }}
+                            className={`text-[10px] px-2 py-0.5 rounded transition-colors ${
+                              useCustomColor 
+                                ? 'bg-purple-100 text-purple-700 font-semibold'
+                                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                            }`}
+                          >
+                            {useCustomColor ? '✓ 커스텀' : '커스텀'}
+                          </button>
+                        </div>
+                        
+                        {useCustomColor ? (
+                          <>
+                            <input
+                              type="color"
+                              value={draft.badgeColor?.startsWith('#') ? draft.badgeColor : '#78716c'}
+                              onChange={e => setDraft({ ...draft, badgeColor: e.target.value })}
+                              className="w-full h-10 border border-stone-300 rounded-md cursor-pointer"
+                            />
+                            <p className="text-xs text-stone-500 mt-1">{draft.badgeColor || '#78716c'}</p>
+                          </>
+                        ) : (
+                          <>
+                            <select
+                              value={draft.badgeColor?.startsWith('#') ? 'stone' : (draft.badgeColor || 'stone')}
+                              onChange={e => setDraft({ ...draft, badgeColor: e.target.value })}
+                              className="w-full border border-stone-300 rounded-md px-3 py-2 text-sm"
+                            >
+                              {BADGE_COLORS.map(color => (
+                                <option key={color.value} value={color.value}>
+                                  {color.label}
+                                </option>
+                              ))}
+                            </select>
+                            <p className="text-xs text-stone-500 mt-1 invisible">placeholder</p>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -193,9 +234,18 @@ export default function MembershipSettings({
                         <span
                           className="inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold border"
                           style={{
-                            backgroundColor: getBadgeColorStyle(draft.badgeColor).bg,
-                            borderColor: getBadgeColorStyle(draft.badgeColor).border,
-                            color: getBadgeColorStyle(draft.badgeColor).text,
+                            backgroundColor: draft.badgeColor?.startsWith('#') 
+                              ? `${draft.badgeColor}33` // hex + 20% opacity
+                              : getBadgeColorStyle(draft.badgeColor).bg,
+                            borderColor: draft.badgeColor?.startsWith('#')
+                              ? draft.badgeColor
+                              : getBadgeColorStyle(draft.badgeColor).border,
+                            color: draft.badgeColor?.startsWith('#')
+                              ? ((parseInt(draft.badgeColor.substr(1, 2), 16) * 299 + 
+                                  parseInt(draft.badgeColor.substr(3, 2), 16) * 587 + 
+                                  parseInt(draft.badgeColor.substr(5, 2), 16) * 114) / 1000 > 128 
+                                  ? '#000' : '#fff')
+                              : getBadgeColorStyle(draft.badgeColor).text,
                           }}
                         >
                           {draft.badge}
@@ -300,18 +350,54 @@ export default function MembershipSettings({
                     </div>
 
                     <div>
-                      <label className="block text-xs font-semibold text-stone-700 mb-1">배지 색상</label>
-                      <select
-                        value={draft.badgeColor || 'stone'}
-                        onChange={e => setDraft({ ...draft, badgeColor: e.target.value })}
-                        className="w-full border border-stone-300 rounded-md px-3 py-2 text-sm"
-                      >
-                        {BADGE_COLORS.map(color => (
-                          <option key={color.value} value={color.value}>
-                            {color.label}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-stone-700">배지 색상</label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setUseCustomColor(!useCustomColor)
+                            if (!useCustomColor) {
+                              setDraft({ ...draft, badgeColor: '#78716c' })
+                            } else {
+                              setDraft({ ...draft, badgeColor: 'stone' })
+                            }
+                          }}
+                          className={`text-[10px] px-2 py-0.5 rounded transition-colors ${
+                            useCustomColor 
+                              ? 'bg-purple-100 text-purple-700 font-semibold'
+                              : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                          }`}
+                        >
+                          {useCustomColor ? '✓ 커스텀' : '커스텀'}
+                        </button>
+                      </div>
+                      
+                      {useCustomColor ? (
+                        <>
+                          <input
+                            type="color"
+                            value={draft.badgeColor?.startsWith('#') ? draft.badgeColor : '#78716c'}
+                            onChange={e => setDraft({ ...draft, badgeColor: e.target.value })}
+                            className="w-full h-10 border border-stone-300 rounded-md cursor-pointer"
+                          />
+                          <p className="text-xs text-stone-500 mt-1">{draft.badgeColor || '#78716c'}</p>
+                        </>
+                      ) : (
+                        <>
+                          <select
+                            value={draft.badgeColor?.startsWith('#') ? 'stone' : (draft.badgeColor || 'stone')}
+                            onChange={e => setDraft({ ...draft, badgeColor: e.target.value })}
+                            className="w-full border border-stone-300 rounded-md px-3 py-2 text-sm"
+                          >
+                            {BADGE_COLORS.map(color => (
+                              <option key={color.value} value={color.value}>
+                                {color.label}
+                              </option>
+                            ))}
+                          </select>
+                          <p className="text-xs text-stone-500 mt-1 invisible">placeholder</p>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -322,9 +408,18 @@ export default function MembershipSettings({
                       <span
                         className="inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold border"
                         style={{
-                          backgroundColor: getBadgeColorStyle(draft.badgeColor).bg,
-                          borderColor: getBadgeColorStyle(draft.badgeColor).border,
-                          color: getBadgeColorStyle(draft.badgeColor).text,
+                          backgroundColor: draft.badgeColor?.startsWith('#') 
+                            ? `${draft.badgeColor}33` // hex + 20% opacity
+                            : getBadgeColorStyle(draft.badgeColor).bg,
+                          borderColor: draft.badgeColor?.startsWith('#')
+                            ? draft.badgeColor
+                            : getBadgeColorStyle(draft.badgeColor).border,
+                          color: draft.badgeColor?.startsWith('#')
+                            ? ((parseInt(draft.badgeColor.substr(1, 2), 16) * 299 + 
+                                parseInt(draft.badgeColor.substr(3, 2), 16) * 587 + 
+                                parseInt(draft.badgeColor.substr(5, 2), 16) * 114) / 1000 > 128 
+                                ? '#000' : '#fff')
+                            : getBadgeColorStyle(draft.badgeColor).text,
                         }}
                       >
                         {draft.badge}

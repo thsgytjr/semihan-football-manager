@@ -35,10 +35,36 @@ export const BADGE_COLORS = [
   { value: 'stone', label: '회색', bg: 'rgb(245, 245, 244)', border: 'rgb(168, 162, 158)', text: 'rgb(68, 64, 60)' },
 ]
 
-// 배지 색상 가져오기
+// 배지 색상 가져오기 (hex 색상 지원)
 export function getBadgeColorStyle(colorValue) {
+  // hex 색상인 경우 (#로 시작)
+  if (colorValue && colorValue.startsWith('#')) {
+    // hex를 RGB로 변환
+    const hex = colorValue.replace('#', '')
+    const r = parseInt(hex.substr(0, 2), 16)
+    const g = parseInt(hex.substr(2, 2), 16)
+    const b = parseInt(hex.substr(4, 2), 16)
+    
+    // 밝기 계산 (0-255)
+    const brightness = (r * 299 + g * 587 + b * 114) / 1000
+    
+    // 밝기에 따라 텍스트 색상 결정
+    const textColor = brightness > 128 ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)'
+    
+    // 배경색을 약간 연하게
+    const bgColor = `rgba(${r}, ${g}, ${b}, 0.2)`
+    const borderColor = `rgb(${r}, ${g}, ${b})`
+    
+    return {
+      bg: bgColor,
+      border: borderColor,
+      text: textColor
+    }
+  }
+  
+  // 기본 색상 이름인 경우
   const color = BADGE_COLORS.find(c => c.value === colorValue)
-  if (!color) return BADGE_COLORS[0]
+  if (!color) return BADGE_COLORS[8] // stone
   return color
 }
 
