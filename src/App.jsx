@@ -6,7 +6,7 @@ import{saveMatchToDB,updateMatchInDB,deleteMatchFromDB,listMatchesFromDB,subscri
 import{getMembershipSettings,subscribeMembershipSettings}from"./services/membership.service"
 import{mkPlayer}from"./lib/players";import{notify}from"./components/Toast"
 import{filterExpiredMatches}from"./lib/upcomingMatch"
-import{getOrCreateVisitorId,getVisitorIP,parseUserAgent,shouldTrackVisit}from"./lib/visitorTracking"
+import{getOrCreateVisitorId,getVisitorIP,parseUserAgent,shouldTrackVisit,isPreviewMode}from"./lib/visitorTracking"
 import{signInAdmin,signOut,getSession,onAuthStateChange}from"./lib/auth"
 import{runMigrations}from"./lib/dbMigration"
 import ToastHub from"./components/Toast";import Card from"./components/Card"
@@ -32,6 +32,12 @@ export default function App(){
   const[tutorialEnabled,setTutorialEnabled]=useState(()=>getAppSettings().tutorialEnabled)
   const[featuresEnabled,setFeaturesEnabled]=useState(()=>getAppSettings().features||{})
   const{shouldShowTutorial,setShouldShowTutorial}=useAutoTutorial(isAdmin)
+  const[previewMode,setPreviewMode]=useState(false)
+
+  // 프리뷰 모드 확인
+  useEffect(()=>{
+    setPreviewMode(isPreviewMode())
+  },[])
 
   // Supabase Auth: 앱 시작 시 세션 확인
   useEffect(()=>{
@@ -545,12 +551,19 @@ export default function App(){
   return(
   <div className="min-h-screen bg-stone-100 text-stone-800 antialiased leading-relaxed w-full max-w-full overflow-x-auto">
     <ToastHub/>
+    {/* 프리뷰 모드 표시 배너 */}
+    {previewMode && (
+      <div className="bg-amber-500 text-white text-center py-1 px-4 text-xs font-medium sticky top-0 z-[201]">
+        🔍 프리뷰 모드 - 방문자 추적 비활성화됨
+      </div>
+    )}
     <header className="sticky top-0 z-[200] border-b border-stone-300 bg-white/90 backdrop-blur-md backdrop-saturate-150 will-change-transform">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 min-h-[60px] gap-2 sm:gap-3">
         {/* 앱 로고와 타이틀 - 표시만 (관리자만 설정 버튼으로 수정 가능) */}
         <div className="flex items-center gap-2 flex-shrink-0 relative z-10">
           <img src={logoUrl} alt="Goalify Logo" className="h-6 w-6 sm:h-7 sm:w-7 object-contain flex-shrink-0" width={28} height={28} decoding="async"/>
           <h1 className="text-sm sm:text-base font-semibold tracking-tight whitespace-nowrap">{appTitle}</h1>
+          {previewMode && <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">Preview</span>}
         </div>
         <nav className="flex gap-1 sm:gap-2 items-center min-w-0">
           <div className="flex gap-1 sm:gap-2 items-center overflow-x-auto scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0 relative z-0" style={{scrollbarWidth: 'none', msOverflowStyle: 'none'}}>

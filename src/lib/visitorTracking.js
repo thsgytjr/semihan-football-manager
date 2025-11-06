@@ -291,12 +291,54 @@ export function isDevelopmentEnvironment() {
 }
 
 /**
+ * 프리뷰/테스트 모드인지 확인
+ * @returns {boolean} 프리뷰 모드면 true
+ */
+export function isPreviewMode() {
+  try {
+    const url = new URL(window.location.href)
+    
+    // URL 파라미터 체크: ?preview=true, ?admin=true, ?dev=true 등
+    if (url.searchParams.get('preview') === 'true' ||
+        url.searchParams.get('admin') === 'true' ||
+        url.searchParams.get('dev') === 'true' ||
+        url.searchParams.get('notrack') === 'true') {
+      return true
+    }
+    
+    // 경로 체크: /dev, /preview, /admin-preview 등
+    const pathname = url.pathname.toLowerCase()
+    if (pathname.startsWith('/dev') || 
+        pathname.startsWith('/preview') ||
+        pathname.startsWith('/admin-preview')) {
+      return true
+    }
+    
+    // localStorage에 저장된 프리뷰 모드 체크 (한번 설정하면 계속 유지)
+    const previewMode = localStorage.getItem('sfm_preview_mode')
+    if (previewMode === 'true') {
+      return true
+    }
+    
+    return false
+  } catch (e) {
+    return false
+  }
+}
+
+/**
  * 방문을 추적해야 하는지 확인
  * @returns {boolean} 추적해야 하면 true
  */
 export function shouldTrackVisit() {
   // 개발 환경이면 추적하지 않음
   if (isDevelopmentEnvironment()) {
+    return false
+  }
+  
+  // 프리뷰/테스트 모드면 추적하지 않음
+  if (isPreviewMode()) {
+    console.log('[Tracking] Preview mode detected - tracking disabled')
     return false
   }
   
