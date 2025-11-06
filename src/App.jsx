@@ -1,12 +1,12 @@
 // src/App.jsx
 import React,{useEffect,useMemo,useState,useCallback}from"react"
 import{Home,Users,CalendarDays,ListChecks,ShieldCheck,Lock,Eye,EyeOff,AlertCircle,CheckCircle2,X,Settings,BookOpen,Shuffle}from"lucide-react"
-import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB,incrementVisits,logVisit,getVisitStats,USE_MATCHES_TABLE}from"./services/storage.service"
+import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB,incrementVisits,logVisit,getVisitStats,getTotalVisits,USE_MATCHES_TABLE,supabase}from"./services/storage.service"
 import{saveMatchToDB,updateMatchInDB,deleteMatchFromDB,listMatchesFromDB,subscribeMatches}from"./services/matches.service"
 import{getMembershipSettings,subscribeMembershipSettings}from"./services/membership.service"
 import{mkPlayer}from"./lib/players";import{notify}from"./components/Toast"
 import{filterExpiredMatches}from"./lib/upcomingMatch"
-import{getOrCreateVisitorId,getVisitorIP,parseUserAgent,shouldTrackVisit,isPreviewMode}from"./lib/visitorTracking"
+import{getOrCreateVisitorId,getVisitorIP,parseUserAgent,shouldTrackVisit,isPreviewMode,isDevelopmentEnvironment}from"./lib/visitorTracking"
 import{signInAdmin,signOut,getSession,onAuthStateChange}from"./lib/auth"
 import{runMigrations}from"./lib/dbMigration"
 import ToastHub from"./components/Toast";import Card from"./components/Card"
@@ -130,10 +130,13 @@ export default function App(){
         await saveDB(updatedShared).catch(console.error)
       }
       
+      // 총 방문자 수 조회 (visit_logs 테이블에서)
+      const totalVisits = await getTotalVisits()
+      
       setDb({
         players:playersFromDB,
         matches:matchesData,
-        visits:typeof shared.visits==="number"?shared.visits:0,
+        visits:totalVisits,
         upcomingMatches:activeUpcomingMatches,
         tagPresets:shared.tagPresets||[],
         membershipSettings:membershipSettings||[]
@@ -194,17 +197,38 @@ export default function App(){
       
       // USE_MATCHES_TABLE이 false일 때만 appdb의 matches 사용
       if (USE_MATCHES_TABLE) {
-        setDb(prev=>({...prev,visits:typeof next.visits==="number"?next.visits:(prev.visits||0),upcomingMatches:activeUpcomingMatches,tagPresets:next.tagPresets||prev.tagPresets||[]}))
+        setDb(prev=>({...prev,upcomingMatches:activeUpcomingMatches,tagPresets:next.tagPresets||prev.tagPresets||[]}))
       } else {
-        setDb(prev=>({...prev,matches:next.matches||prev.matches||[],visits:typeof next.visits==="number"?next.visits:(prev.visits||0),upcomingMatches:activeUpcomingMatches,tagPresets:next.tagPresets||prev.tagPresets||[]}))
+        setDb(prev=>({...prev,matches:next.matches||prev.matches||[],upcomingMatches:activeUpcomingMatches,tagPresets:next.tagPresets||prev.tagPresets||[]}))
       }
     })
+    
+    // visit_logs 변경 감지 및 총 방문자 수 업데이트
+    const visitLogsChannel = supabase
+      .channel('visit_logs_changes')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'visit_logs' },
+        async () => {
+          const totalVisits = await getTotalVisits()
+          setDb(prev => ({ ...prev, visits: totalVisits }))
+        }
+      )
+      .subscribe()
+    
     // 멤버십 설정 실시간 구독
     const offMembership=subscribeMembershipSettings(async()=>{
       const membershipSettings = await getMembershipSettings()
       setDb(prev=>({...prev,membershipSettings:membershipSettings||[]}))
     })
-    return()=>{mounted=false;offP?.();offMatches?.();offDB?.();offMembership?.()}
+    return()=>{
+      mounted=false
+      offP?.()
+      offMatches?.()
+      offDB?.()
+      offMembership?.()
+      try { supabase.removeChannel?.(visitLogsChannel) } catch {}
+    }
   },[])
 
   const players=db.players||[],matches=db.matches||[],visits=typeof db.visits==="number"?db.visits:0,upcomingMatches=db.upcomingMatches||[],membershipSettings=db.membershipSettings||[]

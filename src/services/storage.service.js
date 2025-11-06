@@ -245,6 +245,26 @@ export async function logVisit({ visitorId, ipAddress, userAgent, deviceType, br
   }
 }
 
+// 총 방문자 수 조회 (visit_logs 테이블에서 직접 카운트)
+export async function getTotalVisits() {
+  try {
+    const { count, error } = await supabase
+      .from('visit_logs')
+      .select('*', { count: 'exact', head: true })
+      .eq('room_id', ROOM_ID)
+
+    if (error) {
+      console.error('[getTotalVisits] error', error)
+      return 0
+    }
+
+    return count || 0
+  } catch (e) {
+    console.error('[getTotalVisits] failed', e)
+    return 0
+  }
+}
+
 // 방문 통계 조회
 export async function getVisitStats() {
   try {

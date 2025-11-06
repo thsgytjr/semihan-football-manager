@@ -269,7 +269,82 @@ export default function VisitorStats({ visits }) {
         </div>
       )}
 
-      {/* 최근 방문 기록 - DB에서만 확인 가능하도록 숨김 */}
+      {/* 최근 방문 기록 */}
+      <div className="rounded-lg border border-stone-200 p-3 bg-white">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs font-semibold text-stone-700">🕒 최근 방문 기록</div>
+          <div className="text-xs text-stone-500">
+            {currentPage} / {Math.ceil(logs.length / LOGS_PER_PAGE)} 페이지
+          </div>
+        </div>
+        
+        <div className="space-y-2 mb-3">
+          {logs.slice((currentPage - 1) * LOGS_PER_PAGE, currentPage * LOGS_PER_PAGE).map((log, idx) => {
+            const visitDate = new Date(log.visited_at)
+            const now = new Date()
+            const diffMs = now - visitDate
+            const diffMins = Math.floor(diffMs / 60000)
+            const diffHours = Math.floor(diffMs / 3600000)
+            const diffDays = Math.floor(diffMs / 86400000)
+            
+            let timeAgo = ''
+            if (diffMins < 1) timeAgo = '방금 전'
+            else if (diffMins < 60) timeAgo = `${diffMins}분 전`
+            else if (diffHours < 24) timeAgo = `${diffHours}시간 전`
+            else if (diffDays < 30) timeAgo = `${diffDays}일 전`
+            else timeAgo = visitDate.toLocaleDateString('ko-KR')
+
+            return (
+              <div key={log.id || idx} className="p-2 bg-stone-50 rounded text-xs border border-stone-100">
+                <div className="flex items-start justify-between mb-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium text-stone-900">
+                      {log.device_type || 'Unknown'}
+                    </span>
+                    {log.phone_model && (
+                      <span className="text-stone-500">({log.phone_model})</span>
+                    )}
+                  </div>
+                  <span className="text-stone-500 text-[10px]">{timeAgo}</span>
+                </div>
+                <div className="flex items-center gap-2 text-stone-600">
+                  <span>{log.browser || 'Unknown'}</span>
+                  <span>•</span>
+                  <span>{log.os || 'Unknown'}</span>
+                </div>
+                {log.ip_address && (
+                  <div className="text-stone-400 mt-1 text-[10px]">
+                    IP: {log.ip_address}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* 페이지네이션 */}
+        {logs.length > LOGS_PER_PAGE && (
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1 text-xs bg-stone-100 hover:bg-stone-200 disabled:bg-stone-50 disabled:text-stone-300 rounded"
+            >
+              이전
+            </button>
+            <span className="text-xs text-stone-600">
+              {currentPage} / {Math.ceil(logs.length / LOGS_PER_PAGE)}
+            </span>
+            <button
+              onClick={() => setCurrentPage(p => Math.min(Math.ceil(logs.length / LOGS_PER_PAGE), p + 1))}
+              disabled={currentPage >= Math.ceil(logs.length / LOGS_PER_PAGE)}
+              className="px-3 py-1 text-xs bg-stone-100 hover:bg-stone-200 disabled:bg-stone-50 disabled:text-stone-300 rounded"
+            >
+              다음
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

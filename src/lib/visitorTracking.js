@@ -299,10 +299,13 @@ export function isPreviewMode() {
     const url = new URL(window.location.href)
     
     // URL 파라미터 체크: ?preview=true, ?admin=true, ?dev=true 등
-    if (url.searchParams.get('preview') === 'true' ||
-        url.searchParams.get('admin') === 'true' ||
-        url.searchParams.get('dev') === 'true' ||
-        url.searchParams.get('notrack') === 'true') {
+    const hasPreviewParam = url.searchParams.has('preview') ||
+                           url.searchParams.has('admin') ||
+                           url.searchParams.has('dev') ||
+                           url.searchParams.has('notrack') ||
+                           url.searchParams.has('test')
+    
+    if (hasPreviewParam) {
       return true
     }
     
@@ -338,7 +341,6 @@ export function shouldTrackVisit() {
   
   // 프리뷰/테스트 모드면 추적하지 않음
   if (isPreviewMode()) {
-    console.log('[Tracking] Preview mode detected - tracking disabled')
     return false
   }
   
