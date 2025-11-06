@@ -765,16 +765,11 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
   const gridStyle = { gridTemplateColumns: `repeat(${teamCols}, minmax(0, 1fr))` }
 
   // ✅ 유튜브 항목 뽑기
-  const ytEntries = useMemo(()=>{
-    const entries = extractYouTubeEntries(m)
-    console.log('📺 extractYouTubeEntries - Match ID:', m.id, 'videos:', m.videos, 'entries:', entries)
-    return entries
-  }, [m])
+  const ytEntries = useMemo(()=>extractYouTubeEntries(m), [m])
 
   // ✅ 추가/삭제(배열은 문자열/객체 혼합 호환)
   const addVideo=(url, title)=>{
     const next = [...(m.videos||[]), title ? { url, title } : url]
-    console.log('🎬 addVideo - url:', url, 'title:', title, 'next:', next)
     onUpdateMatch?.(m.id,{ videos: next, youtubeUrl: m.youtubeUrl ?? null, youtubeTitle: m.youtubeTitle ?? null })
   }
   const removeVideoBySourceIndex=(sourceIndex)=>{
