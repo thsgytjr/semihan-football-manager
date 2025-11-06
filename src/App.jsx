@@ -32,12 +32,7 @@ export default function App(){
   const[tutorialEnabled,setTutorialEnabled]=useState(()=>getAppSettings().tutorialEnabled)
   const[featuresEnabled,setFeaturesEnabled]=useState(()=>getAppSettings().features||{})
   const{shouldShowTutorial,setShouldShowTutorial}=useAutoTutorial(isAdmin)
-  const[previewMode,setPreviewMode]=useState(false)
-
-  // 프리뷰 모드 확인
-  useEffect(()=>{
-    setPreviewMode(isPreviewMode())
-  },[])
+  const[previewMode,setPreviewMode]=useState(()=>isPreviewMode())
 
   // Supabase Auth: 앱 시작 시 세션 확인
   useEffect(()=>{
@@ -142,7 +137,7 @@ export default function App(){
         membershipSettings:membershipSettings||[]
       })
 
-      // 방문 추적 (개발 환경 제외)
+      // 방문 추적 (개발 환경 및 프리뷰 모드 제외)
       if(shouldTrackVisit()){
         try{
           sessionStorage?.setItem('visited','1')
@@ -154,8 +149,18 @@ export default function App(){
           const screenHeight = window?.screen?.height || null
           const { device, browser, os, phoneModel } = parseUserAgent(userAgent, screenWidth, screenHeight)
           
-          // IP 주소 조회 (비동기, 실패해도 계속 진행)
+          // 방문자 수 증가 (프리뷰 모드 재확인)
+          if(!isPreviewMode() && !isDevelopmentEnvironment()){
+            await incrementVisits()
+          }
+          
+          // IP 주소 조회 후 로그 저장 (비동기, 실패해도 계속 진행)
           getVisitorIP().then(async (ipAddress) => {
+            // 비동기 작업 완료 시점에 다시 한번 프리뷰 모드 체크
+            if(isPreviewMode() || isDevelopmentEnvironment()){
+              return // 프리뷰 모드거나 개발 환경이면 저장하지 않음
+            }
+            
             // 방문 로그 저장
             await logVisit({
               visitorId,
@@ -167,9 +172,6 @@ export default function App(){
               phoneModel
             })
           }).catch(console.error)
-          
-          // 총 방문자 수 증가
-          await incrementVisits()
         }catch(e){
           console.error('Visit tracking failed:', e)
           // sessionStorage 실패 시 localStorage로 폴백
