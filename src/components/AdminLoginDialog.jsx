@@ -9,17 +9,22 @@ export default function AdminLoginDialog({
   adminPass, // required: 실제 검증에 사용
 }) {
   const [pw, setPw] = useState("")
+  const [email, setEmail] = useState("")
   const [showPw, setShowPw] = useState(false)
   const [err, setErr] = useState("")
   const [caps, setCaps] = useState(false)
   const [loading, setLoading] = useState(false)
   const inputRef = useRef(null)
   
-  // localhost 개발 환경 확인
-  const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  // localhost 개발 환경 확인 (명시적 체크)
+  const isLocalhost = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' || 
+    window.location.hostname === '127.0.0.1'
+  )
 
   useEffect(() => {
     if (isOpen) {
+      setEmail("")
       setPw("")
       setErr("")
       setCaps(false)
@@ -44,7 +49,7 @@ export default function AdminLoginDialog({
     try {
       // localhost에서는 비밀번호 검증 안함
       if (isLocalhost) {
-        const success = await onSuccess("dev@localhost", "")
+        const success = await onSuccess(email || "dev@localhost", "")
         if (success) {
           setLoading(false)
         } else {
@@ -52,7 +57,13 @@ export default function AdminLoginDialog({
           setLoading(false)
         }
       } else {
-        // 실제 환경에서는 비밀번호 검증
+        // 실제 환경에서는 이메일과 비밀번호 검증
+        if (!email) {
+          setErr("이메일을 입력하세요.")
+          setLoading(false)
+          return
+        }
+        
         if (!pw) {
           setErr("비밀번호를 입력하세요.")
           setLoading(false)
@@ -60,7 +71,7 @@ export default function AdminLoginDialog({
         }
         
         if (pw && pw === adminPass) {
-          const success = await onSuccess("admin@app", pw)
+          const success = await onSuccess(email, pw)
           if (success) {
             setLoading(false)
           } else {
@@ -111,30 +122,47 @@ export default function AdminLoginDialog({
           
           {!isLocalhost && (
             <>
-              <label className="block text-xs font-medium text-stone-600">비밀번호</label>
-              <div className={`flex items-center rounded-lg border px-3 ${err ? "border-rose-300 bg-rose-50" : "border-stone-300 bg-white"}`}>
-                <Lock size={16} className="mr-2 shrink-0 text-stone-500" />
+              <div>
+                <label className="block text-xs font-medium text-stone-600 mb-1">이메일</label>
                 <input
-                  ref={inputRef}
-                  type={showPw ? "text" : "password"}
-                  value={pw}
-                  onChange={e => setPw(e.target.value)}
-                  onKeyUp={handleKey}
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
                   onKeyDown={handleKey}
-                  placeholder="Admin Password"
-                  className={`w-full py-2 text-sm outline-none placeholder:text-stone-400 bg-transparent ${err ? "text-rose-900" : "text-stone-900"}`}
+                  placeholder="admin@example.com"
+                  className={`w-full rounded-lg border px-3 py-2 text-sm outline-none bg-white ${err ? "border-rose-300" : "border-stone-300"}`}
                   autoCapitalize="off"
                   autoCorrect="off"
-                  autoComplete="current-password"
+                  autoComplete="email"
                 />
-                <button
-                  type="button"
-                  className="ml-2 rounded p-1 text-stone-500 hover:bg-stone-100"
-                  onClick={() => setShowPw(v => !v)}
-                  aria-label={showPw ? "비밀번호 숨기기" : "비밀번호 보기"}
-                >
-                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-stone-600 mb-1">비밀번호</label>
+                <div className={`flex items-center rounded-lg border px-3 ${err ? "border-rose-300 bg-rose-50" : "border-stone-300 bg-white"}`}>
+                  <Lock size={16} className="mr-2 shrink-0 text-stone-500" />
+                  <input
+                    ref={inputRef}
+                    type={showPw ? "text" : "password"}
+                    value={pw}
+                    onChange={e => setPw(e.target.value)}
+                    onKeyUp={handleKey}
+                    onKeyDown={handleKey}
+                    placeholder="비밀번호를 입력하세요"
+                    className={`w-full py-2 text-sm outline-none placeholder:text-stone-400 bg-transparent ${err ? "text-rose-900" : "text-stone-900"}`}
+                    autoCapitalize="off"
+                    autoCorrect="off"
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    className="ml-2 rounded p-1 text-stone-500 hover:bg-stone-100"
+                    onClick={() => setShowPw(v => !v)}
+                    aria-label={showPw ? "비밀번호 숨기기" : "비밀번호 보기"}
+                  >
+                    {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               </div>
 
               {caps && (
@@ -153,9 +181,9 @@ export default function AdminLoginDialog({
 
           <button
             onClick={submit}
-            disabled={loading || (!isLocalhost && !pw)}
+            disabled={loading || (!isLocalhost && (!email || !pw))}
             className={`mt-2 flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition ${
-              loading || (!isLocalhost && !pw)
+              loading || (!isLocalhost && (!email || !pw))
                 ? "cursor-not-allowed bg-stone-200 text-stone-500"
                 : "bg-emerald-600 text-white hover:bg-emerald-700"
             }`}

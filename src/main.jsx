@@ -35,18 +35,17 @@ async function enableMocking() {
 }
 
 async function startApp() {
-  // 1️⃣ Mock 환경이면 Prod 데이터 먼저 로드
+  // 1️⃣ 환경 판단
   const urlParams = new URLSearchParams(window.location.search)
   const mockDisabledParam = urlParams.has('mockDisabled') || urlParams.has('nomock')
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   const isMockMode = isLocalhost && !mockDisabledParam
   
-  // teamId 결정: URL 파라미터 > Vite mode > 기본값 (semihan)
-  const viteMode = import.meta.env.MODE || 'semihan'
-  const teamId = urlParams.get('team') || viteMode
-  
+  // 2️⃣ Mock 환경이면 Prod 데이터 먼저 로드
   if (isMockMode) {
     try {
+      const viteMode = import.meta.env.MODE || 'semihan'
+      const teamId = urlParams.get('team') || viteMode
       const { loadProdDataToMock } = await import('./mocks/data')
       await loadProdDataToMock(teamId)
     } catch (error) {
@@ -54,18 +53,27 @@ async function startApp() {
     }
   }
   
-  // 2️⃣ MSW 초기화
+  // 3️⃣ MSW 초기화
   await enableMocking()
   
-  // 3️⃣ 앱 렌더링
-  const { MockModeProvider } = await import('./context/MockModeContext')
-  ReactDOM.createRoot(document.getElementById('root')).render(
-    <React.StrictMode>
-      <MockModeProvider isMockMode={isMockMode}>
+  // 4️⃣ 앱 렌더링 (localhost일 때만 MockModeProvider 사용)
+  if (isMockMode) {
+    const { MockModeProvider } = await import('./context/MockModeContext')
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      <React.StrictMode>
+        <MockModeProvider isMockMode={true}>
+          <App />
+        </MockModeProvider>
+      </React.StrictMode>,
+    )
+  } else {
+    // Prod: 일반 앱 렌더링 (MockModeProvider 없음)
+    ReactDOM.createRoot(document.getElementById('root')).render(
+      <React.StrictMode>
         <App />
-      </MockModeProvider>
-    </React.StrictMode>,
-  )
+      </React.StrictMode>,
+    )
+  }
 }
 
 startApp()
