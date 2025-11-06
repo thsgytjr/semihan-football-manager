@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:semihan": "vite --mode semihan",
-    "dev:dksc": "vite --mode dksc",
+    "dev:s": "vite --mode semihan",
+    "dev:d": "vite --mode dksc",
     "build": "vite build",
-    "build:semihan": "vite build --mode semihan",
-    "build:dksc": "vite build --mode dksc",
+    "build:s": "vite build --mode semihan",
+    "build:d": "vite build --mode dksc",
     "lint": "eslint .",
     "preview": "vite preview"
   },
