@@ -6,7 +6,6 @@ export default function AdminLoginDialog({
   isOpen,
   onClose,
   onSuccess,
-  adminPass, // required: 실제 검증에 사용
 }) {
   const [pw, setPw] = useState("")
   const [email, setEmail] = useState("")
@@ -57,7 +56,7 @@ export default function AdminLoginDialog({
           setLoading(false)
         }
       } else {
-        // 실제 환경에서는 이메일과 비밀번호 검증
+        // 실제 환경에서는 Supabase Auth로 로그인
         if (!email) {
           setErr("이메일을 입력하세요.")
           setLoading(false)
@@ -70,16 +69,12 @@ export default function AdminLoginDialog({
           return
         }
         
-        if (pw && pw === adminPass) {
-          const success = await onSuccess(email, pw)
-          if (success) {
-            setLoading(false)
-          } else {
-            setErr("로그인에 실패했습니다.")
-            setLoading(false)
-          }
+        // Supabase Auth 직접 호출 (adminPass 비교 없이)
+        const success = await onSuccess(email, pw)
+        if (success) {
+          setLoading(false)
         } else {
-          setErr("비밀번호가 올바르지 않습니다.")
+          setErr("이메일 또는 비밀번호가 올바르지 않습니다.")
           setLoading(false)
         }
       }
