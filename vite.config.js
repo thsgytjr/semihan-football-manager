@@ -21,5 +21,7 @@ export default defineConfig(({ mode }) => {
     // mode에 따라 다른 .env 파일 로드
     envDir: './',
     envPrefix: 'VITE_',
+    // MSW Service Worker 파일이 올바르게 제공되도록 설정
+    publicDir: 'public',
   }
 })

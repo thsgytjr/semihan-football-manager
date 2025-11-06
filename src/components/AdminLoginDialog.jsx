@@ -14,6 +14,9 @@ export default function AdminLoginDialog({
   const [caps, setCaps] = useState(false)
   const [loading, setLoading] = useState(false)
   const inputRef = useRef(null)
+  
+  // localhost 개발 환경 확인
+  const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
 
   useEffect(() => {
     if (isOpen) {
@@ -21,9 +24,11 @@ export default function AdminLoginDialog({
       setErr("")
       setCaps(false)
       setLoading(false)
-      setTimeout(() => inputRef.current?.focus(), 50)
+      if (!isLocalhost) {
+        setTimeout(() => inputRef.current?.focus(), 50)
+      }
     }
-  }, [isOpen])
+  }, [isOpen, isLocalhost])
 
   function handleKey(e) {
     if (e.getModifierState?.("CapsLock")) setCaps(true)
@@ -31,18 +36,47 @@ export default function AdminLoginDialog({
     if (e.key === "Enter") submit()
   }
 
-  function submit() {
+  async function submit() {
     if (loading) return
     setLoading(true)
     setErr("")
-    setTimeout(() => {
-      if (pw && pw === adminPass) {
-        onSuccess?.()
+    
+    try {
+      // localhost에서는 비밀번호 검증 안함
+      if (isLocalhost) {
+        const success = await onSuccess("dev@localhost", "")
+        if (success) {
+          setLoading(false)
+        } else {
+          setErr("로그인에 실패했습니다.")
+          setLoading(false)
+        }
       } else {
-        setErr("비밀번호가 올바르지 않습니다.")
-        setLoading(false)
+        // 실제 환경에서는 비밀번호 검증
+        if (!pw) {
+          setErr("비밀번호를 입력하세요.")
+          setLoading(false)
+          return
+        }
+        
+        if (pw && pw === adminPass) {
+          const success = await onSuccess("admin@app", pw)
+          if (success) {
+            setLoading(false)
+          } else {
+            setErr("로그인에 실패했습니다.")
+            setLoading(false)
+          }
+        } else {
+          setErr("비밀번호가 올바르지 않습니다.")
+          setLoading(false)
+        }
       }
-    }, 250) // 살짝 딜레이로 UX 자연스럽게
+    } catch (error) {
+      console.error('Login error:', error)
+      setErr("로그인 중 오류가 발생했습니다.")
+      setLoading(false)
+    }
   }
 
   if (!isOpen) return null
@@ -69,49 +103,59 @@ export default function AdminLoginDialog({
 
         {/* 본문 */}
         <div className="space-y-3 px-5 py-4">
-          <label className="block text-xs font-medium text-stone-600">비밀번호</label>
-          <div className={`flex items-center rounded-lg border px-3 ${err ? "border-rose-300 bg-rose-50" : "border-stone-300 bg-white"}`}>
-            <Lock size={16} className="mr-2 shrink-0 text-stone-500" />
-            <input
-              ref={inputRef}
-              type={showPw ? "text" : "password"}
-              value={pw}
-              onChange={e => setPw(e.target.value)}
-              onKeyUp={handleKey}
-              onKeyDown={handleKey}
-              placeholder="Admin Password"
-              className={`w-full py-2 text-sm outline-none placeholder:text-stone-400 bg-transparent ${err ? "text-rose-900" : "text-stone-900"}`}
-              autoCapitalize="off"
-              autoCorrect="off"
-              autoComplete="current-password"
-            />
-            <button
-              type="button"
-              className="ml-2 rounded p-1 text-stone-500 hover:bg-stone-100"
-              onClick={() => setShowPw(v => !v)}
-              aria-label={showPw ? "비밀번호 숨기기" : "비밀번호 보기"}
-            >
-              {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-
-          {caps && (
-            <div className="flex items-center gap-2 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
-              <AlertCircle size={14} /> CapsLock이 켜져 있습니다.
+          {isLocalhost && (
+            <div className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 border border-blue-200">
+              🚧 개발 모드: 비밀번호 검증을 건너뜁니다.
             </div>
           )}
+          
+          {!isLocalhost && (
+            <>
+              <label className="block text-xs font-medium text-stone-600">비밀번호</label>
+              <div className={`flex items-center rounded-lg border px-3 ${err ? "border-rose-300 bg-rose-50" : "border-stone-300 bg-white"}`}>
+                <Lock size={16} className="mr-2 shrink-0 text-stone-500" />
+                <input
+                  ref={inputRef}
+                  type={showPw ? "text" : "password"}
+                  value={pw}
+                  onChange={e => setPw(e.target.value)}
+                  onKeyUp={handleKey}
+                  onKeyDown={handleKey}
+                  placeholder="Admin Password"
+                  className={`w-full py-2 text-sm outline-none placeholder:text-stone-400 bg-transparent ${err ? "text-rose-900" : "text-stone-900"}`}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  className="ml-2 rounded p-1 text-stone-500 hover:bg-stone-100"
+                  onClick={() => setShowPw(v => !v)}
+                  aria-label={showPw ? "비밀번호 숨기기" : "비밀번호 보기"}
+                >
+                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
 
-          {err && (
-            <div className="flex items-center gap-2 rounded-md bg-rose-50 px-2.5 py-1.5 text-xs text-rose-700">
-              <AlertCircle size={14} /> {err}
-            </div>
+              {caps && (
+                <div className="flex items-center gap-2 rounded-md bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
+                  <AlertCircle size={14} /> CapsLock이 켜져 있습니다.
+                </div>
+              )}
+
+              {err && (
+                <div className="flex items-center gap-2 rounded-md bg-rose-50 px-2.5 py-1.5 text-xs text-rose-700">
+                  <AlertCircle size={14} /> {err}
+                </div>
+              )}
+            </>
           )}
 
           <button
             onClick={submit}
-            disabled={loading || !pw}
+            disabled={loading || (!isLocalhost && !pw)}
             className={`mt-2 flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition ${
-              loading || !pw
+              loading || (!isLocalhost && !pw)
                 ? "cursor-not-allowed bg-stone-200 text-stone-500"
                 : "bg-emerald-600 text-white hover:bg-emerald-700"
             }`}
@@ -129,7 +173,7 @@ export default function AdminLoginDialog({
           </button>
 
           <p className="pt-1 text-center text-[11px] text-stone-400">
-            이 기기에서만 유지됩니다. (로컬 스토리지)
+            {isLocalhost ? "개발 모드: 비밀번호 없이 로그인됩니다." : "이 기기에서만 유지됩니다. (로컬 스토리지)"}
           </p>
         </div>
       </div>

@@ -1,6 +1,10 @@
 // src/lib/auth.js
 import { supabase } from './supabaseClient'
 
+// Mock 인증 상태 (개발 환경)
+let mockSession = null
+let mockAuthCallbacks = []
+
 /**
  * Admin 로그인
  * @param {string} email - 관리자 이메일
@@ -9,6 +13,27 @@ import { supabase } from './supabaseClient'
  */
 export async function signInAdmin(email, password) {
   try {
+    // localhost에서는 Mock 로그인
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      const mockUser = {
+        id: 'mock-admin-123',
+        email: email || 'admin@mock.local',
+        user_metadata: {}
+      }
+      
+      mockSession = {
+        user: mockUser,
+        access_token: 'mock-token-123'
+      }
+      
+      // 등록된 콜백 모두 호출
+      mockAuthCallbacks.forEach(cb => cb(mockSession))
+      
+      console.log('✅ Mock 어드민 로그인 성공:', mockUser.email)
+      return { user: mockUser, error: null }
+    }
+    
+    // 실제 Supabase 로그인
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
@@ -31,6 +56,15 @@ export async function signInAdmin(email, password) {
  */
 export async function signOut() {
   try {
+    // localhost에서는 Mock 로그아웃
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      mockSession = null
+      mockAuthCallbacks.forEach(cb => cb(null))
+      console.log('✅ Mock 로그아웃 성공')
+      return { error: null }
+    }
+    
+    // 실제 Supabase 로그아웃
     const { error } = await supabase.auth.signOut()
     if (error) {
       console.error('[Auth] Sign out error:', error.message)
@@ -49,6 +83,12 @@ export async function signOut() {
  */
 export async function getSession() {
   try {
+    // localhost에서는 Mock 세션
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return mockSession
+    }
+    
+    // 실제 Supabase 세션
     const { data, error } = await supabase.auth.getSession()
     if (error) {
       console.error('[Auth] Get session error:', error.message)
@@ -67,6 +107,12 @@ export async function getSession() {
  */
 export async function getCurrentUser() {
   try {
+    // localhost에서는 Mock 사용자
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return mockSession?.user || null
+    }
+    
+    // 실제 Supabase 사용자
     const { data: { user }, error } = await supabase.auth.getUser()
     if (error) {
       console.error('[Auth] Get user error:', error.message)
@@ -85,9 +131,22 @@ export async function getCurrentUser() {
  * @returns {Function} - 구독 해제 함수
  */
 export function onAuthStateChange(callback) {
+  // localhost에서는 Mock 이벤트
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    mockAuthCallbacks.push(callback)
+    // 초기 상태 전달
+    callback(mockSession)
+    // 구독 해제 함수
+    return () => {
+      mockAuthCallbacks = mockAuthCallbacks.filter(cb => cb !== callback)
+    }
+  }
+  
+  // 실제 Supabase 이벤트
   const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
     callback(session)
   })
   
   return () => subscription.unsubscribe()
 }
+

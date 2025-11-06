@@ -103,8 +103,13 @@ export async function loadDB() {
     .select('data')
     .eq('id', ROOM_ID)
     .single()
-  if (error || !data) return { players: [], matches: [], tagPresets: [], membershipSettings: [] }
-  return data.data
+  
+  if (error || !data) {
+    return { upcomingMatches: [], tagPresets: [] }
+  }
+  
+  const parsed = typeof data.data === 'string' ? JSON.parse(data.data) : data.data
+  return parsed || { upcomingMatches: [], tagPresets: [] }
 }
 
 export async function saveDB(db) {
