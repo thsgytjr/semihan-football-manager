@@ -3,7 +3,7 @@
 
 // User Agent 파싱
 export function parseUserAgent(ua) {
-  if (!ua) return { device: 'Unknown', browser: 'Unknown', os: 'Unknown' }
+  if (!ua) return { device: 'Unknown', browser: 'Unknown', os: 'Unknown', phoneModel: null }
 
   // Device Type
   let device = 'Desktop'
@@ -28,7 +28,71 @@ export function parseUserAgent(ua) {
   else if (/android/i.test(ua)) os = 'Android'
   else if (/ios|iphone|ipad/i.test(ua)) os = 'iOS'
 
-  return { device, browser, os }
+  // Phone Model 감지
+  let phoneModel = null
+  
+  if (device === 'Mobile' || device === 'Tablet') {
+    // iPhone 모델
+    if (/iphone/i.test(ua)) {
+      const match = ua.match(/iPhone\s*(\d+[,_]\d+)?/i)
+      if (match) {
+        phoneModel = 'iPhone'
+        // iPhone15,2 같은 식별자 추출
+        if (match[1]) {
+          phoneModel += ' (' + match[1].replace(/[,_]/g, ',') + ')'
+        }
+      } else {
+        phoneModel = 'iPhone'
+      }
+    }
+    // iPad 모델
+    else if (/ipad/i.test(ua)) {
+      const match = ua.match(/iPad\d+[,_]\d+/i)
+      phoneModel = match ? match[0] : 'iPad'
+    }
+    // Samsung Galaxy
+    else if (/SM-[A-Z0-9]+/i.test(ua)) {
+      const match = ua.match(/SM-[A-Z0-9]+/i)
+      phoneModel = 'Samsung ' + match[0]
+    }
+    // Google Pixel
+    else if (/Pixel/i.test(ua)) {
+      const match = ua.match(/Pixel\s*\d*\s*[a-zA-Z]*/i)
+      phoneModel = match ? match[0].trim() : 'Pixel'
+    }
+    // Xiaomi
+    else if (/Mi\s+[A-Z0-9]+|Redmi/i.test(ua)) {
+      const match = ua.match(/(Mi\s+[A-Z0-9]+|Redmi\s*[A-Z0-9\s]*)/i)
+      phoneModel = match ? 'Xiaomi ' + match[0].trim() : 'Xiaomi'
+    }
+    // Huawei
+    else if (/Huawei|HUAWEI|HW-/i.test(ua)) {
+      const match = ua.match(/(HW-[A-Z0-9]+|[A-Z]{3}-[A-Z0-9]+)/i)
+      phoneModel = match ? 'Huawei ' + match[0] : 'Huawei'
+    }
+    // LG
+    else if (/LG-[A-Z0-9]+/i.test(ua)) {
+      const match = ua.match(/LG-[A-Z0-9]+/i)
+      phoneModel = match ? match[0] : 'LG'
+    }
+    // OnePlus
+    else if (/OnePlus/i.test(ua)) {
+      const match = ua.match(/OnePlus\s*[A-Z0-9]+/i)
+      phoneModel = match ? match[0] : 'OnePlus'
+    }
+    // Generic Android
+    else if (/android/i.test(ua)) {
+      // Build 정보에서 모델명 추출 시도
+      const buildMatch = ua.match(/Build\/([A-Z0-9._-]+)/i)
+      if (buildMatch) {
+        phoneModel = 'Android Device (Build: ' + buildMatch[1] + ')'
+      } else {
+        phoneModel = 'Android Device'
+      }
+    }
+  }
+
+  return { device, browser, os, phoneModel }
 }
 
 // 고유 방문자 ID 생성/조회

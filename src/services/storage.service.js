@@ -218,7 +218,7 @@ export async function incrementVisits() {
 }
 
 // 방문 로그 저장
-export async function logVisit({ visitorId, ipAddress, userAgent, deviceType, browser, os }) {
+export async function logVisit({ visitorId, ipAddress, userAgent, deviceType, browser, os, phoneModel }) {
   try {
     const { error } = await supabase
       .from('visit_logs')
@@ -229,7 +229,8 @@ export async function logVisit({ visitorId, ipAddress, userAgent, deviceType, br
         user_agent: userAgent,
         device_type: deviceType,
         browser: browser,
-        os: os
+        os: os,
+        phone_model: phoneModel
       })
 
     if (error) {
