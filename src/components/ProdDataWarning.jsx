@@ -1,21 +1,21 @@
 import React from 'react'
+import { useMockMode } from '../context/MockModeContext'
 
 export default function ProdDataWarning() {
+  const isMockMode = useMockMode()
+  
+  // Mock 모드이면 배너 없음 (안전한 개발 환경이므로 표시 안 함)
+  if (isMockMode) {
+    return null
+  }
+  
   // localhost가 아니면 배너 없음 (프로덕션 배포)
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   if (!isLocalhost) {
     return null
   }
   
-  // ?nomock 파라미터 확인 (Mock 비활성화 = Prod DB 모드)
-  const urlParams = new URLSearchParams(window.location.search)
-  const isProdMode = urlParams.has('nomock') || urlParams.has('mockDisabled')
-  
-  // Prod DB 모드일 때만 경고 배너 표시
-  if (!isProdMode) {
-    return null
-  }
-  
+  // ?nomock 모드일 때만 경고 배너 표시
   return (
     <div className="fixed top-0 left-0 right-0 bg-red-600 text-white px-4 py-2 z-[9999] shadow-lg">
       <div className="max-w-7xl mx-auto flex items-center gap-3">

@@ -11,7 +11,13 @@ async function enableMocking() {
   const urlParams = new URLSearchParams(window.location.search)
   const mockDisabledParam = urlParams.has('mockDisabled') || urlParams.has('nomock')
   
+  console.log('🔍 MSW 초기화 시작...')
+  console.log('   Hostname:', window.location.hostname)
+  console.log('   isLocalhost:', isLocalhost)
+  console.log('   mockDisabled (URL param):', mockDisabledParam)
+  
   if (!isLocalhost || mockDisabledParam) {
+    console.log('⚠️ Mock API 비활성화 (Production 모드 또는 URL 파라미터)')
     return // production/preview에서는 실제 Supabase 사용
   }
 
@@ -35,45 +41,33 @@ async function enableMocking() {
 }
 
 async function startApp() {
-  // 1️⃣ 환경 판단
+  // 1️⃣ Mock 환경이면 Semihan 데이터 먼저 로드
   const urlParams = new URLSearchParams(window.location.search)
   const mockDisabledParam = urlParams.has('mockDisabled') || urlParams.has('nomock')
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   const isMockMode = isLocalhost && !mockDisabledParam
   
-  // 2️⃣ Mock 환경이면 Prod 데이터 먼저 로드
   if (isMockMode) {
     try {
-      const viteMode = import.meta.env.MODE || 'semihan'
-      const teamId = urlParams.get('team') || viteMode
-      const { loadProdDataToMock } = await import('./mocks/data')
-      await loadProdDataToMock(teamId)
+      const { loadSemihanDataToMock } = await import('./mocks/data')
+      await loadSemihanDataToMock()
     } catch (error) {
-      console.warn('Prod 데이터 로드 실패:', error)
+      console.warn('Semihan 데이터 로드 실패:', error)
     }
   }
   
-  // 3️⃣ MSW 초기화
+  // 2️⃣ MSW 초기화
   await enableMocking()
   
-  // 4️⃣ 앱 렌더링 (localhost일 때만 MockModeProvider 사용)
-  if (isMockMode) {
-    const { MockModeProvider } = await import('./context/MockModeContext')
-    ReactDOM.createRoot(document.getElementById('root')).render(
-      <React.StrictMode>
-        <MockModeProvider isMockMode={true}>
-          <App />
-        </MockModeProvider>
-      </React.StrictMode>,
-    )
-  } else {
-    // Prod: 일반 앱 렌더링 (MockModeProvider 없음)
-    ReactDOM.createRoot(document.getElementById('root')).render(
-      <React.StrictMode>
+  // 3️⃣ 앱 렌더링
+  const { MockModeProvider } = await import('./context/MockModeContext')
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <MockModeProvider isMockMode={isMockMode}>
         <App />
-      </React.StrictMode>,
-    )
-  }
+      </MockModeProvider>
+    </React.StrictMode>,
+  )
 }
 
 startApp()

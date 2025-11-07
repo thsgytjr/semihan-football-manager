@@ -7,7 +7,10 @@ import{getMembershipSettings,subscribeMembershipSettings}from"./services/members
 import{mkPlayer}from"./lib/players";import{notify}from"./components/Toast"
 import{filterExpiredMatches}from"./lib/upcomingMatch"
 import{getOrCreateVisitorId,getVisitorIP,parseUserAgent,shouldTrackVisit,isPreviewMode,isDevelopmentEnvironment}from"./lib/visitorTracking"
-import{signInAdmin,signOut,getSession,onAuthStateChange}from"./lib/auth"
+import{signInAdmin,signOut,getSession,onAuthStateChange,isDeveloperEmail}from"./lib/auth"
+
+// 개발자 이메일 설정
+const DEVELOPER_EMAIL = 'sonhyosuck@gmail.com'
 import{runMigrations}from"./lib/dbMigration"
 import ToastHub from"./components/Toast";import Card from"./components/Card"
 import AppTutorial,{TutorialButton,useAutoTutorial}from"./components/AppTutorial"
@@ -25,7 +28,7 @@ const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24
 
 export default function App(){
   const[tab,setTab]=useState("dashboard"),[db,setDb]=useState({players:[],matches:[],visits:0,upcomingMatches:[],tagPresets:[],membershipSettings:[]}),[selectedPlayerId,setSelectedPlayerId]=useState(null)
-  const[isAdmin,setIsAdmin]=useState(false),[loginOpen,setLoginOpen]=useState(false)
+  const[isAdmin,setIsAdmin]=useState(false),[isAnalyticsAdmin,setIsAnalyticsAdmin]=useState(false),[loginOpen,setLoginOpen]=useState(false)
   const[loading,setLoading]=useState(true)
   const[pageLoading,setPageLoading]=useState(false)
   const[appTitle,setAppTitle]=useState(()=>getAppSettings().appTitle)
@@ -41,23 +44,48 @@ export default function App(){
   useEffect(()=>{
     getSession().then(session=>{
       if(session?.user){
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        // 모든 로그인 사용자 = Admin 접근 가능
         setIsAdmin(true)
-        // 하위 호환성을 위해 localStorage도 설정 (optional)
         localStorage.setItem("isAdmin","1")
+        
+        // Analytics는 개발자 이메일만 또는 localhost
+        const isDevEmail = isLocalhost || isDeveloperEmail(session.user.email)
+        setIsAnalyticsAdmin(isDevEmail)
+        if(isDevEmail) {
+          localStorage.setItem("isAnalyticsAdmin","1")
+        } else {
+          localStorage.removeItem("isAnalyticsAdmin")
+        }
       }else{
         setIsAdmin(false)
+        setIsAnalyticsAdmin(false)
         localStorage.removeItem("isAdmin")
+        localStorage.removeItem("isAnalyticsAdmin")
       }
     })
 
     // 인증 상태 변경 리스너
     const unsubscribe = onAuthStateChange(session=>{
       if(session?.user){
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        // 모든 로그인 사용자 = Admin 접근 가능
         setIsAdmin(true)
         localStorage.setItem("isAdmin","1")
+        
+        // Analytics는 개발자 이메일만 또는 localhost
+        const isDevEmail = isLocalhost || isDeveloperEmail(session.user.email)
+        setIsAnalyticsAdmin(isDevEmail)
+        if(isDevEmail) {
+          localStorage.setItem("isAnalyticsAdmin","1")
+        } else {
+          localStorage.removeItem("isAnalyticsAdmin")
+        }
       }else{
         setIsAdmin(false)
+        setIsAnalyticsAdmin(false)
         localStorage.removeItem("isAdmin")
+        localStorage.removeItem("isAnalyticsAdmin")
       }
     })
 
@@ -271,8 +299,8 @@ export default function App(){
     { key: 'draft', icon: <Shuffle size={16}/>, label: '드래프트', show: isAdmin && featuresEnabled.draft },
     { key: 'formation', icon: <IconPitch size={16}/>, label: '포메이션 보드', show: featuresEnabled.formation },
     { key: 'stats', icon: <ListChecks size={16}/>, label: '기록 입력', show: isAdmin && featuresEnabled.stats },
-    { key: 'analytics', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, label: '방문자 분석', show: isAdmin && featuresEnabled.analytics }
-  ], [isAdmin, featuresEnabled]);
+    { key: 'analytics', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, label: '방문자 분석', show: isAnalyticsAdmin && featuresEnabled.analytics }
+  ], [isAdmin, isAnalyticsAdmin, featuresEnabled]);
 
   // ⬇️ 기존 기본값 생성 방식은 유지(필요시 다른 곳에서 사용)
   async function handleCreatePlayer(){if(!isAdmin)return notify("Admin만 가능합니다.");const p=mkPlayer("새 선수","MF");setDb(prev=>({...prev,players:[p,...(prev.players||[])]}));setSelectedPlayerId(p.id);notify("새 선수를 추가했습니다.");try{await upsertPlayer(p)}catch(e){console.error(e)}}
@@ -708,7 +736,7 @@ export default function App(){
               {tab==="draft"&&isAdmin&&featuresEnabled.draft&&(<DraftPage players={players} upcomingMatches={db.upcomingMatches} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>)}
               {tab==="formation"&&featuresEnabled.formation&&(<FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>)}
               {tab==="stats"&&isAdmin&&featuresEnabled.stats&&(<StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
-              {tab==="analytics"&&isAdmin&&featuresEnabled.analytics&&(<AnalyticsPage visits={visits} isAdmin={isAdmin}/>)}
+              {tab==="analytics"&&isAdmin&&featuresEnabled.analytics&&(<AnalyticsPage visits={visits} isAdmin={isAnalyticsAdmin}/>)}
             </>
           )}
         </div>

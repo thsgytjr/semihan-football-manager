@@ -77,10 +77,9 @@ export const mockAppDB = {
 }
 
 // Prod DB에서 데이터 로드 (Read-Only) + Mock으로 전환
-// teamId: 'semihan' | 'dksc' (URL 쿼리 파라미터 또는 환경에서 결정)
-export async function loadProdDataToMock(teamId = 'semihan') {
+export async function loadSemihanDataToMock() {
   try {
-    console.log(`📥 Prod DB에서 ${teamId.toUpperCase()} 데이터 로드 중... (서버 시작 시마다 최신 데이터 로드)`)
+    console.log('📥 Prod DB에서 Semihan 데이터 로드 중... (서버 시작 시마다 최신 데이터 로드)')
     
     // 항상 Prod에서 최신 데이터 로드 (서버 재시작할 때마다)
     const { supabase } = await import('../lib/supabaseClient')
@@ -117,44 +116,29 @@ export async function loadProdDataToMock(teamId = 'semihan') {
       console.log('ℹ️ 저장된 매치가 없습니다.')
     }
     
-    // 3️⃣ AppDB에서 설정 로드 (정확한 ID 형식: ${teamId}-lite-room-1)
-    console.log(`� AppDB (${teamId}) 조회 중...`)
+    // 3️⃣ AppDB에서 설정 로드
+    console.log('� AppDB (semihan) 조회 중...')
+    const { data: appdbRows, error: appdbError } = await supabase
+      .from('appdb')
+      .select('data')
+      .eq('id', 'semihan')
     
-    // AppDB의 실제 ID 형식: "semihan-lite-room-1", "dksc-lite-room-1" 등
-    const correctAppDbId = `${teamId}-lite-room-1`
-    
-    try {
-      const { data: appdbData, error: appdbError } = await supabase
-        .from('appdb')
-        .select('data')
-        .eq('id', correctAppDbId)
-        .single()
+    if (!appdbError && appdbRows && appdbRows.length > 0) {
+      const appdbData = appdbRows[0]
+      const parsedData = typeof appdbData.data === 'string' 
+        ? JSON.parse(appdbData.data) 
+        : appdbData.data
       
-      if (!appdbError && appdbData) {
-        console.log(`✅ AppDB 찾음 (ID: ${correctAppDbId})`)
-        
-        try {
-          const parsedData = typeof appdbData.data === 'string' 
-            ? JSON.parse(appdbData.data) 
-            : appdbData.data
-          
-          // upcomingMatches, tagPresets만 가져오기 (검증 기간 동안만)
-          if (parsedData?.upcomingMatches) {
-            mockAppDB[teamId].upcomingMatches = parsedData.upcomingMatches
-            console.log(`✅ ${parsedData.upcomingMatches.length}개의 예정된 매치 로드됨`)
-          }
-          if (parsedData?.tagPresets) {
-            mockAppDB[teamId].tagPresets = parsedData.tagPresets
-            console.log(`✅ ${parsedData.tagPresets.length}개의 태그 프리셋 로드됨`)
-          }
-        } catch (e) {
-          console.warn('⚠️ AppDB 파싱 실패:', e.message)
-        }
-      } else {
-        console.log('ℹ️ AppDB 데이터 없음 (정상 - 곧 retire 예정)')
+      // upcomingMatches, tagPresets만 가져오기 (검증 기간 동안만)
+      if (parsedData.upcomingMatches) {
+        mockAppDB.semihan.upcomingMatches = parsedData.upcomingMatches
       }
-    } catch (err) {
-      console.warn('⚠️ AppDB 조회 오류:', err.message)
+      if (parsedData.tagPresets) {
+        mockAppDB.semihan.tagPresets = parsedData.tagPresets
+      }
+      console.log('✅ AppDB 설정 로드됨 (upcomingMatches, tagPresets)')
+    } else {
+      console.log('ℹ️ AppDB 데이터 없음 (정상 - 곧 retire 예정)')
     }
     
     console.log('✨ Prod DB에서 데이터 로드 완료!')

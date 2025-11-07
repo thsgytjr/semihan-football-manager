@@ -150,3 +150,14 @@ export function onAuthStateChange(callback) {
   return () => subscription.unsubscribe()
 }
 
+/**
+ * 이메일이 개발자 이메일인지 확인 (방문자 분석 접근 제한용)
+ * @param {string} email - 확인할 이메일
+ * @returns {boolean}
+ */
+export function isDeveloperEmail(email) {
+  const devEmail = 'sonhyosuck@gmail.com'
+  if (!email) return false
+  return email.toLowerCase() === devEmail.toLowerCase()
+}
+
