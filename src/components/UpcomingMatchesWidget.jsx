@@ -27,9 +27,9 @@ export default function UpcomingMatchesWidget({
   
   // 팀 수에 따라 위젯 너비 동적 조정
   const getWidgetWidth = () => {
-    if (maxTeamCount <= 2) return 'min(300px, calc(100vw - 24px))'
-    if (maxTeamCount === 3) return 'min(420px, calc(100vw - 24px))'
-    return 'min(540px, calc(100vw - 24px))'
+    if (maxTeamCount <= 2) return 'min(300px, calc(100vw - 16px))'
+    if (maxTeamCount === 3) return 'min(420px, calc(100vw - 16px))'
+    return 'min(540px, calc(100vw - 16px))'
   }
   
   // 만료된 매치가 있으면 자동으로 삭제
@@ -63,7 +63,7 @@ export default function UpcomingMatchesWidget({
         zIndex: 50,
         width: isMinimized ? '48px' : getWidgetWidth(),
         height: isMinimized ? '48px' : 'auto',
-        maxWidth: isMinimized ? 'none' : '90vw',
+        maxWidth: isMinimized ? 'none' : 'calc(100vw - 16px)',
         backgroundColor: isMinimized ? '#1f2937' : 'white',
         borderRadius: isMinimized ? '50%' : '12px',
         boxShadow: isMinimized 
@@ -234,12 +234,12 @@ export default function UpcomingMatchesWidget({
       {!isMinimized && (
         <div 
           style={{
-            maxHeight: maxTeamCount > 2 ? '500px' : '384px',
+            maxHeight: maxTeamCount > 2 ? '600px' : '550px',
             overflowY: 'auto',
-            padding: '12px'
+            padding: '8px'
           }}
         >
-          <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+          <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
             {activeMatches.map(upcomingMatch => (
               <UpcomingMatchCard
                 key={upcomingMatch.id}

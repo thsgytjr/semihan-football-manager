@@ -454,39 +454,10 @@ export default function UpcomingMatchCard({
         })()}
       </div>
 
-      {/* 참가자 */}
-      {attendees.length > 0 && (
-        <div style={{marginTop: '6px', paddingTop: '6px', borderTop: '1px solid #f3f4f6'}}>
-          <div style={{fontSize: '10px', color: '#6b7280', marginBottom: '4px'}}>
-            {attendees.length}명 참가
-          </div>
-          <div style={{display: 'flex', flexWrap: 'wrap', gap: '4px'}}>
-            {attendees.slice(0, 4).map(player => (
-              <div 
-                key={player.id} 
-                style={{
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '4px', 
-                  borderRadius: '4px', 
-                  padding: '2px 6px',
-                  backgroundColor: '#f9fafb'
-                }}
-              >
-                <InitialAvatar 
-                  id={player.id} 
-                  name={player.name} 
-                  size={10}
-                  badges={player.membership === 'guest' ? ['G'] : []}
-                />
-                <span style={{fontSize: '10px', color: '#374151'}}>{player.name}</span>
-              </div>
-            ))}
-            {attendees.length > 4 && (
-              <span style={{fontSize: '12px', color: '#6b7280', padding: '2px 6px'}}>+{attendees.length - 4}</span>
-            )}
-          </div>
-        </div>
+      {/* 참가자 - 복권 추첨 애니메이션 */}
+      {/* 팀 보기 버튼이 없을 때만 표시 (드래프트 완료 전) */}
+      {attendees.length > 0 && !hasMatchingHistoricalMatch && (
+        <BouncingPlayersLottery attendees={attendees} />
       )}
       
       {/* 빈 상태 */}
@@ -928,6 +899,169 @@ function CaptainSelector({ attendees, currentCaptainIds = [], onUpdateCaptains, 
           💡 팀 배정 후 주장을 선택하세요
         </div>
       )}
+    </div>
+  )
+}
+
+// ✨ 복권 추첨 애니메이션 컴포넌트 (최적화 버전)
+function BouncingPlayersLottery({ attendees }) {
+  const ballsRef = React.useRef([])
+  const animationFrameRef = React.useRef(null)
+  const lastUpdateRef = React.useRef(0)
+  const [, forceUpdate] = React.useState({})
+  
+  React.useEffect(() => {
+    // 참가자들을 공으로 변환 (초기화)
+    ballsRef.current = attendees.map((player) => ({
+      id: player.id,
+      name: player.name,
+      membership: player.membership,
+      photo: player.photoUrl || null,
+      x: Math.random() * 60 + 20,
+      y: Math.random() * 40 + 30,
+      vx: (Math.random() - 0.5) * 4,
+      vy: (Math.random() - 0.5) * 4 - 2,
+    }))
+    
+    // 30fps로 제한 (60fps → 30fps로 성능 개선)
+    const animate = (timestamp) => {
+      if (timestamp - lastUpdateRef.current < 33) { // ~30fps
+        animationFrameRef.current = requestAnimationFrame(animate)
+        return
+      }
+      lastUpdateRef.current = timestamp
+      
+      // 물리 계산 (인라인으로 최적화)
+      ballsRef.current.forEach(ball => {
+        ball.x += ball.vx * 0.4
+        ball.y += ball.vy * 0.4
+        
+        // 원형 충돌 (간소화)
+        const dx = ball.x - 50
+        const dy = ball.y - 50
+        const dist = dx * dx + dy * dy
+        
+        if (dist > 2025) { // 45^2 = 2025
+          const d = Math.sqrt(dist)
+          const nx = dx / d
+          const ny = dy / d
+          ball.x = 50 + nx * 45
+          ball.y = 50 + ny * 45
+          ball.vx = (ball.vx - 2 * (ball.vx * nx + ball.vy * ny) * nx) * 0.8
+          ball.vy = (ball.vy - 2 * (ball.vx * nx + ball.vy * ny) * ny) * 0.8
+        }
+        
+        ball.vy += 0.12 // 중력
+        ball.vx *= 0.99
+        ball.vy *= 0.99
+        
+        // 최소 속도 유지
+        const speed = ball.vx * ball.vx + ball.vy * ball.vy
+        if (speed < 2.25) { // 1.5^2
+          const angle = Math.random() * 6.28
+          ball.vx = Math.cos(angle) * 2.5
+          ball.vy = Math.sin(angle) * 2.5 - 1.5
+        }
+      })
+      
+      forceUpdate({})
+      animationFrameRef.current = requestAnimationFrame(animate)
+    }
+    
+    animationFrameRef.current = requestAnimationFrame(animate)
+    
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current)
+      }
+    }
+  }, [attendees])
+  
+  return (
+    <div style={{
+      marginTop: '8px',
+      paddingTop: '8px',
+      borderTop: '1px solid #f3f4f6',
+    }}>
+      <div style={{
+        textAlign: 'center',
+        marginBottom: '8px',
+        fontSize: '11px',
+        fontWeight: '600',
+        color: '#d97706',
+        animation: 'lotteryBlink 1.5s ease-in-out infinite'
+      }}>
+        팀 매칭 확정중...({attendees.length}명)
+      </div>
+      
+      <div 
+        style={{
+          position: 'relative',
+          width: '100%',
+          height: '180px',
+          borderRadius: '12px',
+          background: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 50%, #fde68a 100%)',
+          border: '3px solid #f59e0b',
+          overflow: 'hidden',
+          boxShadow: '0 4px 16px rgba(245, 158, 11, 0.3), inset 0 2px 12px rgba(245, 158, 11, 0.15)'
+        }}
+      >
+        {ballsRef.current.map(ball => (
+          <div
+            key={ball.id}
+            style={{
+              position: 'absolute',
+              left: `${ball.x}%`,
+              top: `${ball.y}%`,
+              transform: 'translate(-50%, -50%)',
+              width: '36px',
+              height: '36px',
+              willChange: 'transform'
+            }}
+          >
+            {ball.photo ? (
+              <img
+                src={ball.photo}
+                alt=""
+                onError={(e) => {
+                  e.target.style.display = 'none'
+                  e.target.nextSibling.style.display = 'flex'
+                }}
+                style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  border: '2px solid white',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                  display: 'block'
+                }}
+              />
+            ) : null}
+            <div style={{
+              width: '36px',
+              height: '36px',
+              display: ball.photo ? 'none' : 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <InitialAvatar
+                id={ball.id}
+                name={ball.name}
+                size={20}
+                badges={ball.membership === 'guest' ? ['G'] : []}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      
+      <style>{`
+        @keyframes lotteryBlink {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
     </div>
   )
 }
