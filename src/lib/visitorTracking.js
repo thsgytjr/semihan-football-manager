@@ -149,9 +149,9 @@ export function parseUserAgent(ua, screenWidth = null, screenHeight = null) {
   let os = 'Unknown'
   if (/windows/i.test(ua)) os = 'Windows'
   else if (/mac os/i.test(ua)) os = 'macOS'
-  else if (/linux/i.test(ua)) os = 'Linux'
-  else if (/android/i.test(ua)) os = 'Android'
+  else if (/android/i.test(ua)) os = 'Android'  // ← Android를 Linux 앞에!
   else if (/ios|iphone|ipad/i.test(ua)) os = 'iOS'
+  else if (/linux/i.test(ua)) os = 'Linux'     // ← Linux는 나중에
 
   // Phone Model 감지
   let phoneModel = null
