@@ -8,24 +8,27 @@ export default function AdminLoginDialog({
   onSuccess,
   adminPass, // required: 실제 검증에 사용
 }) {
+  const [email, setEmail] = useState("")
   const [pw, setPw] = useState("")
   const [showPw, setShowPw] = useState(false)
   const [err, setErr] = useState("")
   const [caps, setCaps] = useState(false)
   const [loading, setLoading] = useState(false)
-  const inputRef = useRef(null)
+  const emailInputRef = useRef(null)
+  const pwInputRef = useRef(null)
   
   // localhost 개발 환경 확인
   const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
 
   useEffect(() => {
     if (isOpen) {
+      setEmail("")
       setPw("")
       setErr("")
       setCaps(false)
       setLoading(false)
       if (!isLocalhost) {
-        setTimeout(() => inputRef.current?.focus(), 50)
+        setTimeout(() => emailInputRef.current?.focus(), 50)
       }
     }
   }, [isOpen, isLocalhost])
@@ -52,23 +55,24 @@ export default function AdminLoginDialog({
           setLoading(false)
         }
       } else {
-        // 실제 환경에서는 비밀번호 검증
+        // 실제 환경에서는 이메일과 비밀번호 검증
+        if (!email) {
+          setErr("이메일을 입력하세요.")
+          setLoading(false)
+          return
+        }
+        
         if (!pw) {
           setErr("비밀번호를 입력하세요.")
           setLoading(false)
           return
         }
         
-        if (pw && pw === adminPass) {
-          const success = await onSuccess("admin@app", pw)
-          if (success) {
-            setLoading(false)
-          } else {
-            setErr("로그인에 실패했습니다.")
-            setLoading(false)
-          }
+        const success = await onSuccess(email, pw)
+        if (success) {
+          setLoading(false)
         } else {
-          setErr("비밀번호가 올바르지 않습니다.")
+          setErr("로그인에 실패했습니다.")
           setLoading(false)
         }
       }
@@ -111,18 +115,33 @@ export default function AdminLoginDialog({
           
           {!isLocalhost && (
             <>
-              <label className="block text-xs font-medium text-stone-600">비밀번호</label>
-              <div className={`flex items-center rounded-lg border px-3 ${err ? "border-rose-300 bg-rose-50" : "border-stone-300 bg-white"}`}>
+              <label className="block text-xs font-medium text-stone-600">이메일</label>
+              <div className={`flex items-center rounded-lg border px-3 ${err && err.includes('이메일') ? "border-rose-300 bg-rose-50" : "border-stone-300 bg-white"}`}>
+                <input
+                  ref={emailInputRef}
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="your-email@example.com"
+                  className={`w-full py-2 text-sm outline-none placeholder:text-stone-400 bg-transparent ${err && err.includes('이메일') ? "text-rose-900" : "text-stone-900"}`}
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  autoComplete="email"
+                />
+              </div>
+
+              <label className="block text-xs font-medium text-stone-600 mt-3">비밀번호</label>
+              <div className={`flex items-center rounded-lg border px-3 ${err && err.includes('비밀번호') || err.includes('실패') ? "border-rose-300 bg-rose-50" : "border-stone-300 bg-white"}`}>
                 <Lock size={16} className="mr-2 shrink-0 text-stone-500" />
                 <input
-                  ref={inputRef}
+                  ref={pwInputRef}
                   type={showPw ? "text" : "password"}
                   value={pw}
                   onChange={e => setPw(e.target.value)}
                   onKeyUp={handleKey}
                   onKeyDown={handleKey}
-                  placeholder="Admin Password"
-                  className={`w-full py-2 text-sm outline-none placeholder:text-stone-400 bg-transparent ${err ? "text-rose-900" : "text-stone-900"}`}
+                  placeholder="Password"
+                  className={`w-full py-2 text-sm outline-none placeholder:text-stone-400 bg-transparent ${err && err.includes('비밀번호') || err.includes('실패') ? "text-rose-900" : "text-stone-900"}`}
                   autoCapitalize="off"
                   autoCorrect="off"
                   autoComplete="current-password"
@@ -153,9 +172,9 @@ export default function AdminLoginDialog({
 
           <button
             onClick={submit}
-            disabled={loading || (!isLocalhost && !pw)}
+            disabled={loading || (!isLocalhost && (!email || !pw))}
             className={`mt-2 flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition ${
-              loading || (!isLocalhost && !pw)
+              loading || (!isLocalhost && (!email || !pw))
                 ? "cursor-not-allowed bg-stone-200 text-stone-500"
                 : "bg-emerald-600 text-white hover:bg-emerald-700"
             }`}
