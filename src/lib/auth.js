@@ -158,8 +158,7 @@ export function onAuthStateChange(callback) {
  */
 export function isDeveloperEmail(email) {
   const devEmails = [
-    'sonhyosuck@gmail.com',
-    'nedkim.j.m@gmail.com'
+    'sonhyosuck@gmail.com'
   ]
   if (!email) return false
   return devEmails.some(devEmail => email.toLowerCase() === devEmail.toLowerCase())
