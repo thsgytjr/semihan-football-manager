@@ -1389,16 +1389,16 @@ function PlayerRow({player,showOVR,isAdmin,teamIndex,isDraftMode,isCaptain,onRem
 
 /* … 나머지(DragGhost, kitForTeam, FullscreenModal 등) 기존 구현 유지 … */
 function kitForTeam(i){return[
-  {label:"화이트",headerClass:"bg-white text-stone-800 border-b border-stone-300"},
-  {label:"블랙",headerClass:"bg-stone-900 text-white border-b border-stone-900"},
-  {label:"블루",headerClass:"bg-blue-600 text-white border-b border-blue-700"},
-  {label:"레드",headerClass:"bg-red-600 text-white border-b border-red-700"},
-  {label:"그린",headerClass:"bg-emerald-600 text-white border-b border-emerald-700"},
-  {label:"퍼플",headerClass:"bg-violet-600 text-white border-b border-violet-700"},
-  {label:"오렌지",headerClass:"bg-orange-500 text-white border-b border-orange-600"},
-  {label:"티얼",headerClass:"bg-teal-600 text-white border-b border-teal-700"},
-  {label:"핑크",headerClass:"bg-pink-600 text-white border-b border-pink-700"},
-  {label:"옐로",headerClass:"bg-yellow-400 text-stone-900 border-b border-yellow-500"},
+  {label:"White",headerClass:"bg-white text-stone-800 border-b border-stone-300"},
+  {label:"Black",headerClass:"bg-stone-900 text-white border-b border-stone-900"},
+  {label:"Blue",headerClass:"bg-blue-600 text-white border-b border-blue-700"},
+  {label:"Red",headerClass:"bg-red-600 text-white border-b border-red-700"},
+  {label:"Green",headerClass:"bg-emerald-600 text-white border-b border-emerald-700"},
+  {label:"Purple",headerClass:"bg-violet-600 text-white border-b border-violet-700"},
+  {label:"Orange",headerClass:"bg-orange-500 text-white border-b border-orange-600"},
+  {label:"Teal",headerClass:"bg-teal-600 text-white border-b border-teal-700"},
+  {label:"Pink",headerClass:"bg-pink-600 text-white border-b border-pink-700"},
+  {label:"Yellow",headerClass:"bg-yellow-400 text-stone-900 border-b border-yellow-500"},
 ][i%10]}
 function DragGhost({player,showOVR,customMemberships=[]}){
   if(!player)return null
