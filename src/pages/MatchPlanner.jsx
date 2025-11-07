@@ -227,10 +227,13 @@ export default function MatchPlanner({
       selectionMode: 'manual'
     }
     
+    // datetime-local 형식(YYYY-MM-DDTHH:MM)을 ISO 8601로 변환
+    const dateISOFormatted = dateISO ? new Date(dateISO + ':00').toISOString() : new Date().toISOString()
+    
     const payload={
       ...mkMatch({
         id:crypto.randomUUID?.()||String(Date.now()),
-        dateISO,attendeeIds:ids,criterion:posAware?'pos-aware':criterion,players,
+        dateISO: dateISOFormatted,attendeeIds:ids,criterion:posAware?'pos-aware':criterion,players,
         teamCount:baseTeams.length,
         location:{preset:locationPreset,name:locationName,address:locationAddress},
         mode,snapshot,board:placedByTeam,formations,locked:true,videos:[],
@@ -257,8 +260,11 @@ export default function MatchPlanner({
     // 팀 구성 스냅샷 저장 (선수 ID 배열)
     const teamsSnapshot = previewTeams.map(team => team.map(p => p.id))
 
+    // datetime-local 형식(YYYY-MM-DDTHH:MM)을 ISO 8601로 변환
+    const dateISOFormatted = dateISO ? new Date(dateISO + ':00').toISOString() : new Date().toISOString()
+
     const upcomingMatch = createUpcomingMatch({
-      dateISO,
+      dateISO: dateISOFormatted,
       participantIds: assignedPlayerIds,
       location: {
         preset: locationPreset,

@@ -1,9 +1,10 @@
 // src/services/matches.service.js
 // Match 데이터를 Supabase에 저장/로드하는 서비스
-// Room 기반으로 동작 (user_id 대신 room_id 사용)
+// user_id (개인) 또는 room_id (팀) 기반으로 동작
 
 import { supabase } from './storage.service'
 import { TEAM_CONFIG } from '../lib/teamConfig'
+import { getCurrentUser } from '../lib/auth'
 import { logger } from '../lib/logger'
 
 const ROOM_ID = `${TEAM_CONFIG.shortName}-lite-room-1`
@@ -53,10 +54,19 @@ function toAppFormat(row) {
 
 // 앱 내부 필드명 → Supabase DB 컬럼명 변환
 // 주의: matches 테이블은 camelCase 컬럼명 사용
-function toDbFormat(match) {
-  return {
+function toDbFormat(match, userId = null) {
+  const payload = {
     id: match.id, // ID 보존 (마이그레이션 시 필수)
     room_id: ROOM_ID,
+  }
+  
+  // user_id 설정 (있으면 포함)
+  if (userId) {
+    payload.user_id = userId
+  }
+  
+  return {
+    ...payload,
     dateISO: match.dateISO ?? null,
     attendeeIds: match.attendeeIds ?? [],
     criterion: match.criterion ?? 'overall',
@@ -80,7 +90,10 @@ function toDbFormat(match) {
 
 export async function saveMatchToDB(match) {
   try {
-    const payload = toDbFormat(match)
+    const user = await getCurrentUser()
+    const userId = user?.id || null
+    
+    const payload = toDbFormat(match, userId)
     const { data, error } = await supabase
       .from('matches')
       .insert(payload)

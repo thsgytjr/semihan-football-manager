@@ -755,11 +755,19 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
       patch.selectionMode = 'draft'
       patch.draft = {
         ...(m.draft || {}),
-        captains: captainIds
+        captains: captainIds,
+        quarterScores: quarterScores // ✅ quarterScores도 draft에 저장
       }
     } else {
       patch.selectionMode = null
-      // draft 객체는 유지 (quarterScores 등이 있을 수 있음)
+      patch.quarterScores = quarterScores // ✅ quarterScores를 최상위로도 저장
+      // 기존 draft 데이터는 유지 (captains 등)
+      if (m.draft) {
+        patch.draft = {
+          ...m.draft,
+          quarterScores: quarterScores
+        }
+      }
     }
     
     onUpdateMatch?.(m.id, patch)

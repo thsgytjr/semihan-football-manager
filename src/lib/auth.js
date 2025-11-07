@@ -17,7 +17,7 @@ export async function signInAdmin(email, password) {
     // localhost에서는 Mock 로그인
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       const mockUser = {
-        id: 'mock-admin-123',
+        id: '00000000-0000-0000-0000-000000000001', // UUID 형식의 Mock ID
         email: email || 'admin@mock.local',
         user_metadata: {}
       }

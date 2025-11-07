@@ -566,9 +566,9 @@ export function hasValidGameData(m) {
   const qs = coerceQuarterScores(m)
   if (!Array.isArray(qs) || qs.length < 2) return false
   
-  // 최소 2쿼터 이상의 점수가 있는지 확인
+  // 최소 1쿼터 이상의 점수가 있는지 확인 (1쿼터만 입력해도 카운트)
   const maxQuarters = Math.max(...qs.map(team => Array.isArray(team) ? team.length : 0))
-  return maxQuarters >= 2
+  return maxQuarters >= 1
 }
 
 /**
