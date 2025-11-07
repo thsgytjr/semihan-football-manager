@@ -29,7 +29,8 @@ export const PLAYER_ORIGINS = PLAYER_GRADES
 export const migrateOriginToGrade = (oldValue) => {
   const mapping = {
     'pro': 'pro',           // 프로 → Pro
-    'amateur': 'semi-pro',  // 아마추어 → Semi-Pro
+    'semi-pro': 'semi-pro', // 고교선출 → Semi-Pro
+    'amateur': 'amateur',   // 지역리그 → Amateur (수정: 기존에는 semi-pro로 잘못 변환됨)
     'college': 'amateur',   // 대학팀 → Amateur
     'none': 'regular',      // 일반 → Regular
   }

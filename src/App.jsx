@@ -749,7 +749,7 @@ export default function App(){
     </footer>
 
     <AdminLoginDialog isOpen={loginOpen} onClose={()=>setLoginOpen(false)} onSuccess={onAdminSuccess}/>
-    <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle} tutorialEnabled={tutorialEnabled} onTutorialToggle={handleTutorialToggle} featuresEnabled={featuresEnabled} onFeatureToggle={handleFeatureToggle} isAdmin={isAdmin} visits={visits}/>
+    <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle} tutorialEnabled={tutorialEnabled} onTutorialToggle={handleTutorialToggle} featuresEnabled={featuresEnabled} onFeatureToggle={handleFeatureToggle} isAdmin={isAdmin} isAnalyticsAdmin={isAnalyticsAdmin} visits={visits}/>
     {tutorialEnabled && <AppTutorial isOpen={tutorialOpen} onClose={()=>setTutorialOpen(false)} isAdmin={isAdmin}/>}
   </div>)}
 const TabButton = React.memo(function TabButton({icon,label,active,onClick,loading}){return(<button onClick={onClick} disabled={loading} title={label} aria-label={label} className={`flex items-center gap-1.5 rounded-md px-2.5 py-2.5 sm:px-3 sm:py-3 text-sm transition-all duration-200 min-h-[42px] sm:min-h-[44px] touch-manipulation whitespace-nowrap ${active?"bg-emerald-500 text-white shadow-md":"text-stone-700 hover:bg-stone-200 active:bg-stone-300 active:scale-95"} ${loading?"opacity-75 cursor-wait":""}`} style={{touchAction: 'manipulation'}} aria-pressed={active}>{loading && active ? <svg className="w-4 h-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg> : <span className="w-4 h-4 flex-shrink-0">{icon}</span>}{active && <span className="text-xs font-semibold hidden sm:inline">{label}</span>}</button>)})
@@ -863,7 +863,7 @@ const PageSkeleton = React.memo(function PageSkeleton({ tab }) {
 })
 
 /* ── Settings Dialog ─────────────────── */
-function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,onTutorialToggle,featuresEnabled,onFeatureToggle,isAdmin,visits}){
+function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,onTutorialToggle,featuresEnabled,onFeatureToggle,isAdmin,isAnalyticsAdmin,visits}){
   const[newTitle,setNewTitle]=useState(appTitle)
   const[titleEditMode,setTitleEditMode]=useState(false)
   
@@ -978,7 +978,7 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
             </div>
           </div>
 
-          {/* 기능 활성화 설정 (Admin만) */}
+          {/* 기능 활성화 설정 (Admin만, 방문자분석 토글은 개발자만) */}
           {isAdmin && (
             <>
               <div className="border-t border-stone-200 pt-4 mt-2">
@@ -988,33 +988,43 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
                 </div>
               
               <div className="space-y-3">
-                {Object.entries(featureLabels).map(([key, label]) => (
-                  <div key={key} className="flex items-center justify-between py-2 px-3 rounded-lg bg-stone-50 hover:bg-stone-100 transition-colors">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-stone-700">{label}</span>
-                      {key === 'formation' && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">모두</span>
-                      )}
-                      {key !== 'formation' && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">Admin</span>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => onFeatureToggle(key, !featuresEnabled[key])}
-                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
-                        featuresEnabled[key] ? 'bg-emerald-600' : 'bg-stone-300'
-                      }`}
-                      role="switch"
-                      aria-checked={featuresEnabled[key]}
-                    >
-                      <span
-                        className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                          featuresEnabled[key] ? 'translate-x-5' : 'translate-x-1'
+                {Object.entries(featureLabels).map(([key, label]) => {
+                  // 방문자분석 토글은 개발자만 보이기
+                  if (key === 'analytics' && !isAnalyticsAdmin) {
+                    return null
+                  }
+                  
+                  return (
+                    <div key={key} className="flex items-center justify-between py-2 px-3 rounded-lg bg-stone-50 hover:bg-stone-100 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-stone-700">{label}</span>
+                        {key === 'formation' && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">모두</span>
+                        )}
+                        {key === 'analytics' && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">개발자</span>
+                        )}
+                        {key !== 'formation' && key !== 'analytics' && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">Admin</span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => onFeatureToggle(key, !featuresEnabled[key])}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+                          featuresEnabled[key] ? 'bg-emerald-600' : 'bg-stone-300'
                         }`}
-                      />
-                    </button>
-                  </div>
-                ))}
+                        role="switch"
+                        aria-checked={featuresEnabled[key]}
+                      >
+                        <span
+                          className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                            featuresEnabled[key] ? 'translate-x-5' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  )
+                })}
               </div>
 
               <div className="text-xs text-stone-500 bg-blue-50 rounded-lg p-3 border border-blue-200 mt-3">

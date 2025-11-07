@@ -126,13 +126,30 @@ export const handlers = [
 
   http.patch('*/rest/v1/matches*', async ({ request }) => {
     await delay(300)
+    const url = new URL(request.url)
     const body = await request.json()
-    const index = mockMatches.findIndex(m => m.id === body.id)
-    if (index !== -1) {
-      mockMatches[index] = { ...mockMatches[index], ...body }
-      saveMockData()
-      return HttpResponse.json(mockMatches[index])
+    
+    // 쿼리 파라미터에서 id 추출 (id=eq.xxx 형식)
+    const idParam = url.searchParams.get('id')
+    let matchId = null
+    
+    if (idParam) {
+      // "eq.570aaa31-..." 형식에서 실제 ID 추출
+      matchId = idParam.replace('eq.', '')
+    } else if (body.id) {
+      // Body에 id가 있으면 사용 (하위 호환성)
+      matchId = body.id
     }
+    
+    if (matchId) {
+      const index = mockMatches.findIndex(m => m.id === matchId)
+      if (index !== -1) {
+        mockMatches[index] = { ...mockMatches[index], ...body }
+        saveMockData()
+        return HttpResponse.json(mockMatches[index])
+      }
+    }
+    
     return HttpResponse.json({ error: 'Match not found' }, { status: 404 })
   }),
 

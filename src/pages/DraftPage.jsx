@@ -627,21 +627,26 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
       return
     }
 
-    // 팀 스냅샷 생성 (선수 ID 배열)
+    // 팀 스냅샷 생성 (선수 ID 배열) - 동적으로 모든 팀 포함
     const snapshot = [
       team1.map(p => p.id),
       team2.map(p => p.id)
-    ]
+      // TODO: 향후 3팀 이상 지원 시 추가 (team3, team4 등)
+    ].filter(team => team.length > 0) // 빈 팀 제외
+
+    // 주장 ID 배열 생성
+    const captainIds = [captain1?.id, captain2?.id].filter(Boolean)
 
     // 매치 업데이트
     onUpdateUpcomingMatch(selectedUpcomingMatchId, {
       snapshot,
-      captainIds: [captain1.id, captain2.id],
+      captainIds,
       isDraftComplete: true,
-      draftCompletedAt: new Date().toISOString()
+      draftCompletedAt: new Date().toISOString(),
+      teamCount: snapshot.length // 실제 팀 수 저장
     })
 
-    notify('예정된 매치에 드래프트 결과가 저장되었습니다!')
+    notify(`예정된 매치에 ${snapshot.length}팀 드래프트 결과가 저장되었습니다!`)
   }
 
   // 검색 필터링 - 참여 인원 선택 시

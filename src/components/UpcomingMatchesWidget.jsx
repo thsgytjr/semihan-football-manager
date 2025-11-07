@@ -18,6 +18,19 @@ export default function UpcomingMatchesWidget({
   // 실시간으로 만료된 매치들을 필터링
   const activeMatches = filterExpiredMatches(upcomingMatches)
   
+  // 최대 팀 수 계산 (가장 많은 팀을 가진 매치 기준)
+  const maxTeamCount = activeMatches.reduce((max, match) => {
+    const teamCount = match.teamCount || (match.snapshot?.length || 2)
+    return Math.max(max, teamCount)
+  }, 2)
+  
+  // 팀 수에 따라 위젯 너비 동적 조정
+  const getWidgetWidth = () => {
+    if (maxTeamCount <= 2) return 'min(300px, calc(100vw - 24px))'
+    if (maxTeamCount === 3) return 'min(420px, calc(100vw - 24px))'
+    return 'min(540px, calc(100vw - 24px))'
+  }
+  
   // 만료된 매치가 있으면 자동으로 삭제
   useEffect(() => {
     if (activeMatches.length !== upcomingMatches.length && upcomingMatches.length > 0) {
@@ -47,7 +60,7 @@ export default function UpcomingMatchesWidget({
         right: isMinimized ? '12px' : 'auto',
         left: isMinimized ? 'auto' : '50%',
         zIndex: 50,
-        width: isMinimized ? '48px' : 'min(300px, calc(100vw - 24px))',
+        width: isMinimized ? '48px' : getWidgetWidth(),
         height: isMinimized ? '48px' : 'auto',
         maxWidth: isMinimized ? 'none' : '90vw',
         backgroundColor: isMinimized ? '#1f2937' : 'white',
@@ -220,7 +233,7 @@ export default function UpcomingMatchesWidget({
       {!isMinimized && (
         <div 
           style={{
-            maxHeight: '384px',
+            maxHeight: maxTeamCount > 2 ? '500px' : '384px',
             overflowY: 'auto',
             padding: '12px'
           }}

@@ -744,7 +744,27 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
     const qs = (m?.draft?.quarterScores && Array.isArray(m.draft.quarterScores)) ? m.draft.quarterScores : (Array.isArray(m.scores) ? m.scores.map(v=>[v]) : null)
     setQuarterScores(qs || (initialSnap.length? initialSnap.map(()=>[]): null))
   }
-  const saveDraft=()=>{ onUpdateMatch?.(m.id,{snapshot:draftSnap,attendeeIds:draftSnap.flat()}); setDirty(false) }
+  const saveDraft=()=>{ 
+    const patch = {
+      snapshot: draftSnap,
+      attendeeIds: draftSnap.flat()
+    }
+    
+    // Draft 모드 저장
+    if (localDraftMode) {
+      patch.selectionMode = 'draft'
+      patch.draft = {
+        ...(m.draft || {}),
+        captains: captainIds
+      }
+    } else {
+      patch.selectionMode = null
+      // draft 객체는 유지 (quarterScores 등이 있을 수 있음)
+    }
+    
+    onUpdateMatch?.(m.id, patch)
+    setDirty(false)
+  }
 
   useEffect(()=>{ 
     setDraftSnap(initialSnap); 
@@ -969,12 +989,102 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
         {fees?._estimated && <span className="opacity-70"> (추정)</span>}
       </div>
 
+      {/* 실시간 골득실 현황판 (3팀 이상, 드래프트 모드, 편집 모드에서만 표시) */}
+      {isDraftMode && quarterScores && quarterScores.length >= 3 && !displayedQuarterScores && (
+        (() => {
+          const teamCount = quarterScores.length
+          const currentScores = quarterScores.map((_, teamIdx) => {
+            let bestDiff = -Infinity
+            let currentTotal = 0
+            const quarters = quarterScores[teamIdx] || []
+            
+            quarters.forEach((score, qi) => {
+              const qScores = quarterScores.map(t => Number(t[qi] || 0))
+              const myScore = Number(score || 0)
+              currentTotal += myScore
+              
+              const opponentScores = qScores.filter((_, idx) => idx !== teamIdx)
+              const avgOpponent = opponentScores.length > 0 
+                ? opponentScores.reduce((a, b) => a + b, 0) / opponentScores.length 
+                : 0
+              const goalDiff = myScore - avgOpponent
+              if (goalDiff > bestDiff) bestDiff = goalDiff
+            })
+            
+            return { bestDiff, total: currentTotal }
+          })
+          
+          const maxBestDiff = Math.max(...currentScores.map(s => s.bestDiff))
+          const leaders = currentScores.map((s, i) => s.bestDiff === maxBestDiff ? i : -1).filter(i => i >= 0)
+          
+          return (
+            <div className="mb-3 rounded-lg border-2 border-blue-300 bg-gradient-to-br from-blue-50 to-indigo-50 p-3 shadow-sm">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-500 text-white text-xs font-bold">
+                    🏆
+                  </div>
+                  <span className="text-xs font-bold text-blue-900">경기 결과</span>
+                </div>
+                <div className="text-[10px] text-blue-700 font-medium">
+                  {leaders.length > 1 ? '동률!' : `팀${leaders[0] + 1} 승리`}
+                </div>
+              </div>
+              
+              <div className="space-y-1.5">
+                {currentScores.map((score, ti) => {
+                  const isLeader = leaders.includes(ti)
+                  const bestDiff = score.bestDiff === -Infinity ? 0 : score.bestDiff
+                  
+                  return (
+                    <div 
+                      key={ti} 
+                      className={`flex items-center justify-between px-2.5 py-2 rounded-lg transition-all ${
+                        isLeader 
+                          ? 'bg-gradient-to-r from-amber-100 via-yellow-100 to-amber-100 border border-amber-300 shadow-sm' 
+                          : 'bg-white border border-blue-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm font-bold ${isLeader ? 'text-amber-900' : 'text-gray-700'}`}>
+                          팀 {ti + 1}
+                        </span>
+                        {isLeader && <span className="text-base">🏆</span>}
+                      </div>
+                      
+                      <div className="flex items-center gap-3">
+                        <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                          bestDiff > 0 ? 'bg-blue-100 text-blue-700' :
+                          bestDiff < 0 ? 'bg-red-100 text-red-700' :
+                          'bg-gray-100 text-gray-600'
+                        }`}>
+                          골득실 {bestDiff > 0 ? '+' : ''}{bestDiff.toFixed(1)}
+                        </span>
+                        <span className="text-xs text-gray-600">
+                          총 {score.total}골
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              
+              <div className="mt-2 text-[10px] text-blue-600 text-center">
+                💡 각 팀의 최고 골득실로 승자를 결정합니다
+              </div>
+            </div>
+          )
+        })()
+      )}
+
       {displayedQuarterScores && (
         (() => {
           const maxQ = Math.max(...displayedQuarterScores.map(a=>Array.isArray(a)?a.length:1))
           const teamTotals = displayedQuarterScores.map(a=>Array.isArray(a)?a.reduce((s,v)=>s+Number(v||0),0):Number(a||0))
           const maxTotal = Math.max(...teamTotals)
           const winners = teamTotals.map((t,i)=>t===maxTotal?i:-1).filter(i=>i>=0)
+          const teamCount = displayedQuarterScores.length
+          const isMultiTeam = teamCount >= 3 // 3팀 이상 여부
           
           // Calculate quarter wins for each team
           const allTeamQuarterWins = displayedQuarterScores.map((_, teamIdx) => {
@@ -987,6 +1097,30 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
             }).length
           })
           
+          // 3팀+: 각 팀의 최고 골득실 계산
+          const bestGoalDiffs = isMultiTeam ? displayedQuarterScores.map((_, teamIdx) => {
+            let bestDiff = -Infinity
+            for (let qi = 0; qi < maxQ; qi++) {
+              const scores = displayedQuarterScores.map(teamScores => 
+                Array.isArray(teamScores) ? (teamScores[qi] ?? 0) : (qi===0 ? (teamScores||0) : 0)
+              )
+              const myScore = scores[teamIdx]
+              const opponentScores = scores.filter((_, idx) => idx !== teamIdx)
+              const avgOpponent = opponentScores.length > 0 
+                ? opponentScores.reduce((a, b) => a + b, 0) / opponentScores.length 
+                : 0
+              const goalDiff = myScore - avgOpponent
+              if (goalDiff > bestDiff) bestDiff = goalDiff
+            }
+            return bestDiff
+          }) : []
+          
+          // 3팀+: 최고 골득실로 승자 결정
+          const maxBestDiff = isMultiTeam ? Math.max(...bestGoalDiffs) : 0
+          const bestDiffWinners = isMultiTeam 
+            ? bestGoalDiffs.map((diff, i) => diff === maxBestDiff ? i : -1).filter(i => i >= 0)
+            : []
+          
           return (
             <div className="mb-3 rounded border border-gray-200 bg-gray-50 p-3">
               <div className="flex items-center justify-between mb-3">
@@ -994,7 +1128,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                 <div className="text-[10px] text-gray-500">
                   <span className="inline-flex items-center gap-1">
                     <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    쿼터승리
+                    {isMultiTeam ? '최고 골득실' : '쿼터승리'}
                   </span>
                 </div>
               </div>
@@ -1008,7 +1142,8 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                       <span key={qi} className="w-6 text-center">Q{qi+1}</span>
                     ))}
                   </div>
-                  <span className="w-8 text-center">승리</span>
+                  {isMultiTeam && <span className="w-12 text-center">최고득실</span>}
+                  {!isMultiTeam && <span className="w-8 text-center">승리</span>}
                   <span className="w-8 text-right">합계</span>
                 </div>
               </div>
@@ -1016,8 +1151,11 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
               <div className="space-y-1">
                 {displayedQuarterScores.map((arr,ti)=>{
                   const teamTotal = teamTotals[ti]
-                  const isWinner = (winners.length===1 && winners[0]===ti)
+                  const isWinner = isMultiTeam 
+                    ? (bestDiffWinners.length === 1 && bestDiffWinners[0] === ti)
+                    : (winners.length === 1 && winners[0] === ti)
                   const quarterWins = allTeamQuarterWins[ti]
+                  const bestDiff = isMultiTeam ? bestGoalDiffs[ti] : 0
                   
                   // Calculate which quarters this team won
                   const wonQuarters = Array.from({length: maxQ}).map((_,qi) => {
@@ -1027,6 +1165,19 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                     const maxScore = Math.max(...scores)
                     return scores[ti] === maxScore && scores.filter(s => s === maxScore).length === 1
                   })
+                  
+                  // 각 쿼터의 골득실 계산 (3팀+용)
+                  const quarterGoalDiffs = isMultiTeam ? Array.from({length: maxQ}).map((_,qi) => {
+                    const scores = displayedQuarterScores.map(teamScores => 
+                      Array.isArray(teamScores) ? (teamScores[qi] ?? 0) : (qi===0 ? (teamScores||0) : 0)
+                    )
+                    const myScore = scores[ti]
+                    const opponentScores = scores.filter((_, idx) => idx !== ti)
+                    const avgOpponent = opponentScores.length > 0 
+                      ? opponentScores.reduce((a, b) => a + b, 0) / opponentScores.length 
+                      : 0
+                    return myScore - avgOpponent
+                  }) : []
                   
                   return (
                     <div key={ti} className={`flex items-center justify-between text-sm py-2 px-2 rounded ${isWinner ? 'bg-amber-100 font-medium' : 'bg-white'}`}>
@@ -1039,21 +1190,42 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                           {Array.from({length:maxQ}).map((_,qi)=>{
                             const v = Array.isArray(arr) ? (arr[qi] ?? 0) : (qi===0? (arr||0) : 0)
                             const wonThisQuarter = wonQuarters[qi]
+                            const qDiff = isMultiTeam ? quarterGoalDiffs[qi] : 0
+                            const isBestQuarter = isMultiTeam && Math.abs(qDiff - bestDiff) < 0.01
+                            
                             return (
                               <div key={qi} className="w-6 text-center text-xs text-gray-600 relative">
-                                <span className={wonThisQuarter ? 'font-semibold' : ''}>{v}</span>
-                                {wonThisQuarter && (
-                                  <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                <span className={wonThisQuarter || isBestQuarter ? 'font-semibold' : ''}>{v}</span>
+                                {isMultiTeam ? (
+                                  isBestQuarter && (
+                                    <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                                  )
+                                ) : (
+                                  wonThisQuarter && (
+                                    <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                  )
                                 )}
                               </div>
                             )
                           })}
                         </div>
-                        <div className="w-8 text-center">
-                          <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-semibold ${quarterWins > 0 ? 'bg-emerald-100 text-emerald-700' : 'text-gray-400'}`}>
-                            {quarterWins}
-                          </span>
-                        </div>
+                        {isMultiTeam ? (
+                          <div className="w-12 text-center">
+                            <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold ${
+                              bestDiff > 0 ? 'bg-blue-100 text-blue-700' : 
+                              bestDiff < 0 ? 'bg-red-100 text-red-700' : 
+                              'bg-gray-100 text-gray-500'
+                            }`}>
+                              {bestDiff > 0 ? '+' : ''}{bestDiff.toFixed(1)}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="w-8 text-center">
+                            <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-semibold ${quarterWins > 0 ? 'bg-emerald-100 text-emerald-700' : 'text-gray-400'}`}>
+                              {quarterWins}
+                            </span>
+                          </div>
+                        )}
                         <span className="font-semibold w-8 text-right">{teamTotal}</span>
                       </div>
                     </div>
@@ -1365,16 +1537,30 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
                 // save snapshot + draft info + draft mode
                 const patch = { 
                   snapshot: draftSnap, 
-                  attendeeIds: draftSnap.flat(), 
-                  draft: { ...(m.draft||{}), captains: captainIds, quarterScores }
+                  attendeeIds: draftSnap.flat()
                 }
+                
                 if (localDraftMode) {
+                  // 드래프트 모드: draft 객체에 모든 정보 저장
                   patch.selectionMode = 'draft'
+                  patch.draft = {
+                    ...(m.draft || {}),
+                    captains: captainIds,
+                    quarterScores: quarterScores
+                  }
                 } else {
+                  // 일반 모드: draft 필드 제거하지 않고 quarterScores만 최상위로
                   patch.selectionMode = null
-                  patch.draftMode = null
-                  patch.draft = null
+                  patch.quarterScores = quarterScores
+                  // 기존 draft 데이터는 유지 (captains 등)
+                  if (m.draft) {
+                    patch.draft = {
+                      ...m.draft,
+                      quarterScores: quarterScores
+                    }
+                  }
                 }
+                
                 onUpdateMatch?.(m.id, patch); setDirty(false)
               }}>저장하기</button>
             </div>

@@ -328,29 +328,31 @@ export default function UpcomingMatchCard({
           // captainIds 또는 captains 둘 중 하나라도 있으면 주장이 선택된 것으로 간주
           const captainIds = upcomingMatch.captainIds || []
           const captains = upcomingMatch.captains || []
+          const teamCount = upcomingMatch.teamCount || 2
           
           // captainIds가 있으면 players에서 찾아서 captain 객체 생성
           let captainObjects = []
           
           // captainIds 우선 사용
-          if (captainIds.length >= 2) {
+          if (captainIds.length >= teamCount) {
             captainObjects = captainIds
-              .slice(0, 2)
+              .slice(0, teamCount)
               .map(id => players.find(p => p.id === id))
               .filter(Boolean)
           } 
           // captainIds가 없으면 captains 배열 사용
-          else if (captains.length >= 2) {
-            captainObjects = captains
+          else if (captains.length >= teamCount) {
+            captainObjects = captains.slice(0, teamCount)
           }
           
-          // 주장이 2명 이상 선택된 경우
-          if (captainObjects.length >= 2) {
+          // 주장이 충분히 선택된 경우
+          if (captainObjects.length >= teamCount) {
             return (
               <CaptainVsDisplay 
                 captains={captainObjects}
                 players={players}
                 matches={matches}
+                teamCount={teamCount}
               />
             )
           }
@@ -530,7 +532,7 @@ export default function UpcomingMatchCard({
 }
 
 // 주장 대결 표시 컴포넌트
-function CaptainVsDisplay({ captains, players, matches = [] }) {
+function CaptainVsDisplay({ captains, players, matches = [], teamCount = 2 }) {
   // 개선된 주장 통계 데이터 계산
   const captainStats = useMemo(() => {
     const captainStatsRows = computeCaptainStatsRows(players, matches)
@@ -563,6 +565,66 @@ function CaptainVsDisplay({ captains, players, matches = [] }) {
     }
   }
 
+  // 3팀 이상일 때는 리스트 형태로 표시
+  if (teamCount > 2 || captains.length > 2) {
+    return (
+      <div style={{display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px', backgroundColor: '#f9fafb', borderRadius: '8px'}}>
+        <div style={{fontSize: '12px', fontWeight: '600', color: '#374151', textAlign: 'center', marginBottom: '4px'}}>
+          주장 전적 ({captains.length}팀)
+        </div>
+        <div style={{display: 'grid', gridTemplateColumns: `repeat(${Math.min(captains.length, 3)}, 1fr)`, gap: '8px'}}>
+          {captains.map((captain, idx) => {
+            const stats = getCaptainStats(captain.id)
+            return (
+              <div key={captain.id} style={{textAlign: 'center', padding: '8px', backgroundColor: 'white', borderRadius: '6px', border: '1px solid #e5e7eb'}}>
+                <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', marginBottom: '4px'}}>
+                  <InitialAvatar 
+                    id={captain.id} 
+                    name={captain.name} 
+                    size={28}
+                  />
+                  <span style={{fontSize: '11px', fontWeight: '700', color: '#1f2937'}}>팀{idx + 1}: {captain.name}</span>
+                </div>
+                
+                {/* 전적 */}
+                <div style={{fontSize: '9px', color: '#6b7280', marginBottom: '3px'}}>
+                  {stats.totalGames > 0 ? `${stats.wins}승 ${stats.draws}무 ${stats.losses}패` : '전적 없음'}
+                </div>
+                
+                {/* Recent Form */}
+                <div style={{display: 'flex', justifyContent: 'center', gap: '1px'}}>
+                  {Array.from({ length: 5 }, (_, i) => {
+                    const result = stats.last5[stats.last5.length - 5 + i]
+                    return (
+                      <span 
+                        key={i}
+                        style={{
+                          width: '12px',
+                          height: '12px',
+                          borderRadius: '2px',
+                          backgroundColor: result === 'W' ? '#10b981' : result === 'D' ? '#f59e0b' : result === 'L' ? '#ef4444' : '#e5e7eb',
+                          color: result ? 'white' : '#9ca3af',
+                          fontSize: '7px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: '700'
+                        }}
+                      >
+                        {result || '-'}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  // 2팀일 때는 기존 VS 형태로 표시
   const captain1Stats = getCaptainStats(captains[0].id)
   const captain2Stats = getCaptainStats(captains[1].id)
 
@@ -691,101 +753,90 @@ function CaptainVsDisplay({ captains, players, matches = [] }) {
 
 // 주장 선택 컴포넌트
 function CaptainSelector({ attendees, currentCaptainIds = [], onUpdateCaptains, upcomingMatch, players }) {
-  const [captain1, setCaptain1] = useState(currentCaptainIds[0] || '')
-  const [captain2, setCaptain2] = useState(currentCaptainIds[1] || '')
+  // 팀 수 확인 (snapshot 또는 teamCount 기반)
+  const teamCount = upcomingMatch.teamCount || (upcomingMatch.snapshot?.length || 2)
+  
+  // 각 팀의 주장 ID를 배열로 관리
+  const [captainIds, setCaptainIds] = useState(() => {
+    const initial = Array(teamCount).fill('')
+    currentCaptainIds.forEach((id, idx) => {
+      if (idx < teamCount) initial[idx] = id || ''
+    })
+    return initial
+  })
 
   // snapshot이 있으면 팀별로 선수 분류
-  const { team1Players, team2Players } = useMemo(() => {
-    if (!upcomingMatch.snapshot || upcomingMatch.snapshot.length < 2) {
-      // snapshot이 없으면 모든 참가자를 반으로 나눔 (임시)
-      return {
-        team1Players: attendees,
-        team2Players: attendees
-      }
+  const teamPlayers = useMemo(() => {
+    if (!upcomingMatch.snapshot || upcomingMatch.snapshot.length < teamCount) {
+      // snapshot이 없으면 모든 참가자를 모든 팀에서 선택 가능하게
+      return Array(teamCount).fill(attendees)
     }
 
     const playersByIds = new Map(players.map(p => [p.id, p]))
     
-    const team1Ids = upcomingMatch.snapshot[0] || []
-    const team2Ids = upcomingMatch.snapshot[1] || []
-    
-    return {
-      team1Players: team1Ids.map(id => playersByIds.get(id)).filter(Boolean),
-      team2Players: team2Ids.map(id => playersByIds.get(id)).filter(Boolean)
-    }
-  }, [upcomingMatch.snapshot, players, attendees])
+    return upcomingMatch.snapshot.map(teamIds => 
+      (teamIds || []).map(id => playersByIds.get(id)).filter(Boolean)
+    )
+  }, [upcomingMatch.snapshot, players, attendees, teamCount])
 
   const handleUpdate = () => {
-    if (captain1 && captain2 && captain1 !== captain2) {
-      // captainIds 배열로 전달
-      onUpdateCaptains([captain1, captain2])
+    // 모든 주장이 선택되었고 중복이 없는지 확인
+    const validCaptains = captainIds.filter(Boolean)
+    const uniqueCaptains = new Set(validCaptains)
+    
+    if (validCaptains.length === teamCount && uniqueCaptains.size === teamCount) {
+      onUpdateCaptains(captainIds)
     }
   }
 
+  const updateCaptain = (teamIndex, playerId) => {
+    const newCaptains = [...captainIds]
+    newCaptains[teamIndex] = playerId
+    setCaptainIds(newCaptains)
+  }
+
   // snapshot이 있는 경우 팀별 레이블 표시
-  const hasTeamData = upcomingMatch.snapshot && upcomingMatch.snapshot.length >= 2
+  const hasTeamData = upcomingMatch.snapshot && upcomingMatch.snapshot.length >= teamCount
 
   return (
     <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
       <div style={{fontSize: '12px', fontWeight: '600', color: '#374151', textAlign: 'center'}}>
-        주장 선택
+        주장 선택 ({teamCount}팀)
       </div>
-      <div style={{display: 'flex', gap: '8px'}}>
-        {/* 팀 1 주장 선택 */}
-        <div style={{flex: 1, display: 'flex', flexDirection: 'column', gap: '4px'}}>
-          {hasTeamData && (
-            <div style={{fontSize: '10px', color: '#6b7280', fontWeight: '500'}}>
-              팀 1 주장
-            </div>
-          )}
-          <select
-            value={captain1}
-            onChange={(e) => setCaptain1(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '4px 6px',
-              fontSize: '11px',
-              borderRadius: '4px',
-              border: '1px solid #d1d5db'
-            }}
-          >
-            <option value="">선택...</option>
-            {team1Players.map(player => (
-              <option key={player.id} value={player.id} disabled={player.id === captain2}>
-                {player.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* 팀 2 주장 선택 */}
-        <div style={{flex: 1, display: 'flex', flexDirection: 'column', gap: '4px'}}>
-          {hasTeamData && (
-            <div style={{fontSize: '10px', color: '#6b7280', fontWeight: '500'}}>
-              팀 2 주장
-            </div>
-          )}
-          <select
-            value={captain2}
-            onChange={(e) => setCaptain2(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '4px 6px',
-              fontSize: '11px',
-              borderRadius: '4px',
-              border: '1px solid #d1d5db'
-            }}
-          >
-            <option value="">선택...</option>
-            {team2Players.map(player => (
-              <option key={player.id} value={player.id} disabled={player.id === captain1}>
-                {player.name}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div style={{display: 'grid', gridTemplateColumns: `repeat(${Math.min(teamCount, 3)}, 1fr)`, gap: '8px'}}>
+        {Array.from({ length: teamCount }).map((_, teamIdx) => (
+          <div key={teamIdx} style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+            {hasTeamData && (
+              <div style={{fontSize: '10px', color: '#6b7280', fontWeight: '500'}}>
+                팀 {teamIdx + 1} 주장
+              </div>
+            )}
+            <select
+              value={captainIds[teamIdx]}
+              onChange={(e) => updateCaptain(teamIdx, e.target.value)}
+              style={{
+                width: '100%',
+                padding: '4px 6px',
+                fontSize: '11px',
+                borderRadius: '4px',
+                border: '1px solid #d1d5db'
+              }}
+            >
+              <option value="">선택...</option>
+              {(teamPlayers[teamIdx] || attendees).map(player => (
+                <option 
+                  key={player.id} 
+                  value={player.id} 
+                  disabled={captainIds.some((id, idx) => idx !== teamIdx && id === player.id)}
+                >
+                  {player.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        ))}
       </div>
-      {captain1 && captain2 && captain1 !== captain2 && (
+      {captainIds.filter(Boolean).length === teamCount && new Set(captainIds).size === teamCount && (
         <button
           onClick={handleUpdate}
           style={{
