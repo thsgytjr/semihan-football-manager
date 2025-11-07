@@ -8,7 +8,8 @@ export default function UpcomingMatchesWidget({
   matches = [],
   isAdmin = false,
   onDeleteUpcomingMatch,
-  onUpdateUpcomingMatch
+  onUpdateUpcomingMatch,
+  onShowTeams // 팀 보기 버튼 클릭 시 콜백
 }) {
   const [isMinimized, setIsMinimized] = useState(true)
   const [hasBounced, setHasBounced] = useState(false)
@@ -266,6 +267,7 @@ export default function UpcomingMatchesWidget({
                   // updatedMatch에 captainIds가 포함되어 있음
                   onUpdateUpcomingMatch?.(match.id, updatedMatch)
                 }}
+                onShowTeams={onShowTeams}
               />
             ))}
           </div>

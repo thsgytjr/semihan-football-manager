@@ -680,7 +680,7 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
 }
 
 /* ------------------------- 매치 카드 ------------------------- */
-function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, onDeleteMatch, onUpdateMatch, onUpdateVideos, showTeamOVRForAdmin, hideOVR, latestDraftId }){
+const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, onDeleteMatch, onUpdateMatch, onUpdateVideos, showTeamOVRForAdmin, hideOVR, latestDraftId, isHighlighted }, ref){
   const hydrated=useMemo(()=>hydrateMatch(m,players),[m,players])
   const initialSnap=useMemo(()=>normalizeSnapshot(m,hydrated.teams||[]),[m,hydrated.teams])
   const [draftSnap,setDraftSnap]=useState(initialSnap), [dirty,setDirty]=useState(false)
@@ -897,7 +897,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
   }, [m?.dateISO])
 
   return (
-  <li className="relative rounded-2xl border border-gray-100 bg-gradient-to-br from-white via-stone-50 to-stone-100 p-5 shadow-lg">
+  <li ref={ref} className={`relative rounded-2xl border border-gray-100 bg-gradient-to-br from-white via-stone-50 to-stone-100 p-5 shadow-lg ${isHighlighted ? 'match-highlight-pulse' : ''}`} style={isHighlighted ? { borderColor: '#3b82f6', borderWidth: '2px' } : {}}>
       {/* Status indicator based on match time and stats */}
       {matchStatus === 'live' && (
         <div className="absolute -top-3 -right-2 z-10 pointer-events-none">
@@ -1622,7 +1622,7 @@ function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, 
       </div>
     </li>
   )
-}
+})
 
 /* -------------------- 최신순 정렬 & 리스트 ------------------- */
 function _ts(m){
@@ -1641,8 +1641,10 @@ export default function SavedMatchesList({
   onDeleteMatch,
   onUpdateMatch,
   showTeamOVRForAdmin=false,
-  hideOVR=false
+  hideOVR=false,
+  highlightedMatchId=null // 하이라이트할 매치 ID
 }){
+  const highlightedMatchRef = useRef(null)
   const ordered = useMemo(()=>matches.slice().sort((a,b)=>_ts(b)-_ts(a)),[matches])
   // ✅ 가장 최신 draft 매치의 ID를 계산
   const latestDraftId = useMemo(()=>{
@@ -1651,12 +1653,26 @@ export default function SavedMatchesList({
     }
     return null
   }, [ordered])
+  
+  // ✅ 하이라이트된 매치가 있을 때 스크롤
+  useEffect(() => {
+    if (highlightedMatchId && highlightedMatchRef.current) {
+      // 약간의 지연을 주어서 DOM이 완전히 업데이트된 후 스크롤
+      setTimeout(() => {
+        highlightedMatchRef.current?.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        })
+      }, 100)
+    }
+  }, [highlightedMatchId])
   return (
     <>
       <ul className="grid gap-6">
         {ordered.map((m, idx) => (
           <React.Fragment key={m.id}>
             <MatchCard
+              ref={highlightedMatchId === m.id ? highlightedMatchRef : null}
               m={m}
               players={players}
               isAdmin={isAdmin}
@@ -1667,6 +1683,7 @@ export default function SavedMatchesList({
               showTeamOVRForAdmin={showTeamOVRForAdmin}
               hideOVR={hideOVR}
               latestDraftId={latestDraftId}
+              isHighlighted={m.id === highlightedMatchId}
             />
             {idx < ordered.length - 1 && (
               <li aria-hidden="true" className="mx-2 my-0 border-t border-dashed border-gray-200" />

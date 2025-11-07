@@ -169,7 +169,8 @@ export default function UpcomingMatchCard({
   onUpdateCaptains, 
   onStartDraft, 
   onCreateMatch, 
-  onDeleteMatch 
+  onDeleteMatch,
+  onShowTeams // 팀 보기 버튼 클릭 시 콜백
 }) {
   const {
     id,
@@ -345,15 +346,43 @@ export default function UpcomingMatchCard({
             captainObjects = captains.slice(0, teamCount)
           }
           
-          // 주장이 충분히 선택된 경우
+          // 주장이 충분히 선택된 경우 + 팀 배정 완료
+          const hasTeamData = upcomingMatch.snapshot && upcomingMatch.snapshot.length >= teamCount
+          
           if (captainObjects.length >= teamCount) {
             return (
-              <CaptainVsDisplay 
-                captains={captainObjects}
-                players={players}
-                matches={matches}
-                teamCount={teamCount}
-              />
+              <div>
+                <CaptainVsDisplay 
+                  captains={captainObjects}
+                  players={players}
+                  matches={matches}
+                  teamCount={teamCount}
+                />
+                {/* 팀 보기 버튼 - 드래프트 완료 시 표시 */}
+                {hasTeamData && isDraftComplete && (
+                  <button
+                    onClick={() => onShowTeams?.(upcomingMatch)}
+                    style={{
+                      width: '100%',
+                      marginTop: '8px',
+                      padding: '8px 12px',
+                      fontSize: '12px',
+                      fontWeight: '500',
+                      backgroundColor: '#10b981',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      transition: 'background-color 0.2s'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#059669'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#10b981'}
+                    title="매치 히스토리에서 해당 팀 보기"
+                  >
+                    팀 보기
+                  </button>
+                )}
+              </div>
             )
           }
           
