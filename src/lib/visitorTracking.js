@@ -130,10 +130,33 @@ const SAMSUNG_MODELS = {
 export function parseUserAgent(ua, screenWidth = null, screenHeight = null) {
   if (!ua) return { device: 'Unknown', browser: 'Unknown', os: 'Unknown', phoneModel: null }
 
-  // Device Type
+  // OS 먼저 파악 (더 정확함)
+  let os = 'Unknown'
+  if (/windows/i.test(ua)) os = 'Windows'
+  else if (/mac os/i.test(ua)) os = 'macOS'
+  else if (/android/i.test(ua)) os = 'Android'
+  else if (/ios|iphone|ipad/i.test(ua)) os = 'iOS'
+  else if (/linux/i.test(ua) && !/android/i.test(ua)) os = 'Linux' // Android는 Linux 기반이지만 Android로 분류
+  else if (/chromeos|cros/i.test(ua)) os = 'ChromeOS'
+
+  // Device Type (OS와 User Agent 패턴 조합으로 판정)
   let device = 'Desktop'
-  if (/mobile/i.test(ua)) device = 'Mobile'
-  else if (/tablet|ipad/i.test(ua)) device = 'Tablet'
+  
+  if (/mobile/i.test(ua)) {
+    device = 'Mobile'
+  } else if (/tablet|ipad/i.test(ua)) {
+    device = 'Tablet'
+  } else if (os === 'Android') {
+    // Android OS인데 mobile 패턴이 없으면 → Android 태블릿
+    device = 'Tablet'
+  } else if (os === 'iOS') {
+    // iOS 기기는 항상 mobile이거나 tablet
+    if (/ipad/i.test(ua)) {
+      device = 'Tablet'
+    } else {
+      device = 'Mobile'
+    }
+  }
 
   // Browser (우선순위 중요: 구체적인 것부터 체크)
   let browser = 'Unknown'
@@ -144,14 +167,6 @@ export function parseUserAgent(ua, screenWidth = null, screenHeight = null) {
   else if (/chrome/i.test(ua)) browser = 'Chrome'
   else if (/firefox/i.test(ua)) browser = 'Firefox'
   else if (/safari/i.test(ua)) browser = 'Safari' // 마지막에 체크
-
-  // OS
-  let os = 'Unknown'
-  if (/windows/i.test(ua)) os = 'Windows'
-  else if (/mac os/i.test(ua)) os = 'macOS'
-  else if (/android/i.test(ua)) os = 'Android'  // ← Android를 Linux 앞에!
-  else if (/ios|iphone|ipad/i.test(ua)) os = 'iOS'
-  else if (/linux/i.test(ua)) os = 'Linux'     // ← Linux는 나중에
 
   // Phone Model 감지
   let phoneModel = null
