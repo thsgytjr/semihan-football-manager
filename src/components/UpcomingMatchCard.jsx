@@ -457,7 +457,7 @@ export default function UpcomingMatchCard({
       {/* 참가자 - 복권 추첨 애니메이션 */}
       {/* 팀 보기 버튼이 없을 때만 표시 (드래프트 완료 전) */}
       {attendees.length > 0 && !hasMatchingHistoricalMatch && (
-        <BouncingPlayersLottery attendees={attendees} />
+        <BouncingPlayersLottery attendees={attendees} isDraftComplete={isDraftComplete} />
       )}
       
       {/* 빈 상태 */}
@@ -904,7 +904,7 @@ function CaptainSelector({ attendees, currentCaptainIds = [], onUpdateCaptains, 
 }
 
 // ✨ 복권 추첨 애니메이션 컴포넌트 (최적화 버전)
-function BouncingPlayersLottery({ attendees }) {
+function BouncingPlayersLottery({ attendees, isDraftComplete }) {
   const ballsRef = React.useRef([])
   const animationFrameRef = React.useRef(null)
   const lastUpdateRef = React.useRef(0)
@@ -991,7 +991,7 @@ function BouncingPlayersLottery({ attendees }) {
         color: '#d97706',
         animation: 'lotteryBlink 1.5s ease-in-out infinite'
       }}>
-        팀 매칭 확정중...({attendees.length}명)
+        {isDraftComplete ? '팀 매칭 확정중...' : '드래프트 추첨 대기중...'} ({attendees.length}명)
       </div>
       
       <div 
