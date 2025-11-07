@@ -10,6 +10,7 @@ import FormDots from '../components/ranking/FormDots'
 import UpcomingMatchesWidget from '../components/UpcomingMatchesWidget'
 import { toStr, extractDateKey } from '../lib/matchUtils'
 import { rankTone } from '../lib/rankingUtils'
+import { notify } from '../components/Toast'
 import { 
   computeAttackRows, 
   sortComparator, 
@@ -194,23 +195,6 @@ export default function Dashboard({
     const upcomingAttendeeCount = (upcomingMatch.attendeeIds?.length || upcomingMatch.participantIds?.length || 0)
     const upcomingDate = upcomingMatch.dateISO.slice(0, 10) // YYYY-MM-DD만 추출 (날짜만 비교)
     
-    console.log(`[팀 보기] 예정된 매치 검색:`, {
-      upcomingDate,
-      upcomingAttendeeCount,
-      upcomingMatch
-    })
-    
-    // 히스토리의 모든 매치 확인 (디버깅용)
-    console.log(`[팀 보기] 히스토리 매치 목록 (${matches.length}개):`, 
-      matches.map(m => ({
-        id: m.id,
-        dateISO: m.dateISO,
-        date: m.dateISO?.slice(0, 10),
-        attendeeCount: m.snapshot ? m.snapshot.flat().length : 0,
-        snapshotStructure: m.snapshot
-      }))
-    )
-    
     // 1순위: 같은 날짜 + 같은 참여인원 (정확한 일치)
     let matchingMatch = matches.find(m => {
       if (!m?.dateISO) return false
@@ -244,13 +228,11 @@ export default function Dashboard({
     }
 
     if (matchingMatch) {
-      console.log(`[팀 보기] ✅ 매치 찾음:`, matchingMatch)
       setHighlightedMatchId(matchingMatch.id)
       // 5초 후 하이라이트 제거
       setTimeout(() => setHighlightedMatchId(null), 5000)
     } else {
-      console.log(`[팀 보기] ❌ 매치를 찾을 수 없음`)
-      alert('⚠️ 매치 히스토리에서 해당하는 매치를 찾을 수 없습니다.\n콘솔을 확인하세요.')
+      notify('⚠️ 매치 히스토리에서 해당하는 매치를 찾을 수 없습니다.', 'error', 3000)
     }
   }
 

@@ -194,6 +194,48 @@ export default function UpcomingMatchCard({
   const dateDisplay = formatDateDisplay(dateISO)
   const locationDisplay = getLocationDisplayName(location)
   
+  // ✅ 매칭되는 매치가 있는지 확인
+  const hasMatchingHistoricalMatch = useMemo(() => {
+    if (!dateISO) return false
+    
+    const upcomingAttendeeCount = attendeeIds.length || participantIds.length || 0
+    const upcomingDate = dateISO.slice(0, 10)
+    
+    // 1순위: 같은 날짜 + 같은 참여인원
+    let found = matches.some(m => {
+      if (!m?.dateISO) return false
+      const historicalDate = m.dateISO.slice(0, 10)
+      const historicalAttendeeCount = m.snapshot ? m.snapshot.flat().length : 0
+      
+      return historicalDate === upcomingDate && 
+             Math.abs(historicalAttendeeCount - upcomingAttendeeCount) === 0
+    })
+    
+    if (found) return true
+    
+    // 2순위: 같은 날짜 + 비슷한 참여인원 (±1명)
+    found = matches.some(m => {
+      if (!m?.dateISO) return false
+      const historicalDate = m.dateISO.slice(0, 10)
+      const historicalAttendeeCount = m.snapshot ? m.snapshot.flat().length : 0
+      
+      return historicalDate === upcomingDate && 
+             Math.abs(historicalAttendeeCount - upcomingAttendeeCount) <= 1
+    })
+    
+    if (found) return true
+    
+    // 3순위: 같은 날짜만
+    found = matches.some(m => {
+      if (!m?.dateISO) return false
+      const historicalDate = m.dateISO.slice(0, 10)
+      
+      return historicalDate === upcomingDate
+    })
+    
+    return found
+  }, [dateISO, attendeeIds, participantIds, matches])
+  
   const handleStartDraft = () => {
     if (onStartDraft) {
       onStartDraft(upcomingMatch)
@@ -358,8 +400,8 @@ export default function UpcomingMatchCard({
                   matches={matches}
                   teamCount={teamCount}
                 />
-                {/* 팀 보기 버튼 - 드래프트 완료 시 표시 */}
-                {hasTeamData && isDraftComplete && (
+                {/* 팀 보기 버튼 - 드래프트 완료 + 매칭되는 매치가 있을 때만 표시 */}
+                {hasTeamData && isDraftComplete && hasMatchingHistoricalMatch && (
                   <button
                     onClick={() => onShowTeams?.(upcomingMatch)}
                     style={{
