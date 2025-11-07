@@ -3,6 +3,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { TEAM_CONFIG } from '../lib/teamConfig'
+import { logger } from '../lib/logger'
 
 // 마이그레이션 플래그: true면 Supabase matches 테이블 사용, false면 appdb JSON 사용
 export const USE_MATCHES_TABLE = true
@@ -11,7 +12,7 @@ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnon = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 if (!supabaseUrl || !supabaseAnon) {
-  console.warn('[storage.service] Supabase env가 비어 있습니다. Vercel 환경변수를 확인하세요.')
+  logger.warn('[storage.service] Supabase env가 비어 있습니다. Vercel 환경변수를 확인하세요.')
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnon)
@@ -83,7 +84,7 @@ export function subscribePlayers(callback) {
           const list = await listPlayers()
           callback(list)
         } catch (e) {
-          console.error('[subscribePlayers] reload failed', e)
+          logger.error('[subscribePlayers] reload failed', e)
         }
       }
     )
@@ -120,7 +121,7 @@ export async function saveDB(db) {
   }
   const { error } = await supabase.from('appdb').upsert(payload)
   if (error) {
-    console.error('[saveDB] upsert error', error)
+    logger.error('[saveDB] upsert error', error)
   }
 }
 
@@ -130,7 +131,7 @@ export async function loadTagPresets() {
     const db = await loadDB()
     return db.tagPresets || []
   } catch (e) {
-    console.error('[loadTagPresets] failed', e)
+    logger.error('[loadTagPresets] failed', e)
     return []
   }
 }
@@ -140,7 +141,7 @@ export async function saveTagPresets(tagPresets) {
     const db = await loadDB()
     await saveDB({ ...db, tagPresets })
   } catch (e) {
-    console.error('[saveTagPresets] failed', e)
+    logger.error('[saveTagPresets] failed', e)
   }
 }
 
@@ -150,7 +151,7 @@ export async function loadMembershipSettings() {
     const db = await loadDB()
     return db.membershipSettings || []
   } catch (e) {
-    console.error('[loadMembershipSettings] failed', e)
+    logger.error('[loadMembershipSettings] failed', e)
     return []
   }
 }
@@ -160,7 +161,7 @@ export async function saveMembershipSettings(membershipSettings) {
     const db = await loadDB()
     await saveDB({ ...db, membershipSettings })
   } catch (e) {
-    console.error('[saveMembershipSettings] failed', e)
+    logger.error('[saveMembershipSettings] failed', e)
   }
 }
 
@@ -211,13 +212,13 @@ export async function incrementVisits() {
       .eq('id', ROOM_ID)
 
     if (error) {
-      console.error('[incrementVisits] error', error)
+      logger.error('[incrementVisits] error', error)
       return currentVisits
     }
 
     return newVisits
   } catch (e) {
-    console.error('[incrementVisits] failed', e)
+    logger.error('[incrementVisits] failed', e)
     return 0
   }
 }
@@ -239,13 +240,13 @@ export async function logVisit({ visitorId, ipAddress, userAgent, deviceType, br
       })
 
     if (error) {
-      console.error('[logVisit] error', error)
+      logger.error('[logVisit] error', error)
       return false
     }
 
     return true
   } catch (e) {
-    console.error('[logVisit] failed', e)
+    logger.error('[logVisit] failed', e)
     return false
   }
 }
@@ -259,13 +260,13 @@ export async function getTotalVisits() {
       .eq('room_id', ROOM_ID)
 
     if (error) {
-      console.error('[getTotalVisits] error', error)
+      logger.error('[getTotalVisits] error', error)
       return 0
     }
 
     return count || 0
   } catch (e) {
-    console.error('[getTotalVisits] failed', e)
+    logger.error('[getTotalVisits] failed', e)
     return 0
   }
 }
@@ -280,13 +281,13 @@ export async function getVisitStats() {
       .order('visited_at', { ascending: false })
 
     if (error) {
-      console.error('[getVisitStats] error', error)
+      logger.error('[getVisitStats] error', error)
       return null
     }
 
     return data || []
   } catch (e) {
-    console.error('[getVisitStats] failed', e)
+    logger.error('[getVisitStats] failed', e)
     return null
   }
 }

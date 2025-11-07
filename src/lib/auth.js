@@ -1,5 +1,6 @@
 // src/lib/auth.js
 import { supabase } from './supabaseClient'
+import { logger } from './logger'
 
 // Mock 인증 상태 (개발 환경)
 let mockSession = null
@@ -29,7 +30,7 @@ export async function signInAdmin(email, password) {
       // 등록된 콜백 모두 호출
       mockAuthCallbacks.forEach(cb => cb(mockSession))
       
-      console.log('✅ Mock 어드민 로그인 성공:', mockUser.email)
+      logger.log('✅ Mock 어드민 로그인 성공:', mockUser.email)
       return { user: mockUser, error: null }
     }
     
@@ -40,13 +41,13 @@ export async function signInAdmin(email, password) {
     })
     
     if (error) {
-      console.error('[Auth] Sign in error:', error.message)
+      logger.error('[Auth] Sign in error:', error.message)
       return { user: null, error }
     }
     
     return { user: data.user, error: null }
   } catch (err) {
-    console.error('[Auth] Unexpected error:', err)
+    logger.error('[Auth] Unexpected error:', err)
     return { user: null, error: err }
   }
 }
@@ -60,19 +61,19 @@ export async function signOut() {
     if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
       mockSession = null
       mockAuthCallbacks.forEach(cb => cb(null))
-      console.log('✅ Mock 로그아웃 성공')
+      logger.log('✅ Mock 로그아웃 성공')
       return { error: null }
     }
     
     // 실제 Supabase 로그아웃
     const { error } = await supabase.auth.signOut()
     if (error) {
-      console.error('[Auth] Sign out error:', error.message)
+      logger.error('[Auth] Sign out error:', error.message)
       return { error }
     }
     return { error: null }
   } catch (err) {
-    console.error('[Auth] Unexpected error:', err)
+    logger.error('[Auth] Unexpected error:', err)
     return { error: err }
   }
 }
@@ -91,12 +92,12 @@ export async function getSession() {
     // 실제 Supabase 세션
     const { data, error } = await supabase.auth.getSession()
     if (error) {
-      console.error('[Auth] Get session error:', error.message)
+      logger.error('[Auth] Get session error:', error.message)
       return null
     }
     return data.session
   } catch (err) {
-    console.error('[Auth] Unexpected error:', err)
+    logger.error('[Auth] Unexpected error:', err)
     return null
   }
 }
@@ -115,12 +116,12 @@ export async function getCurrentUser() {
     // 실제 Supabase 사용자
     const { data: { user }, error } = await supabase.auth.getUser()
     if (error) {
-      console.error('[Auth] Get user error:', error.message)
+      logger.error('[Auth] Get user error:', error.message)
       return null
     }
     return user
   } catch (err) {
-    console.error('[Auth] Unexpected error:', err)
+    logger.error('[Auth] Unexpected error:', err)
     return null
   }
 }
@@ -156,8 +157,11 @@ export function onAuthStateChange(callback) {
  * @returns {boolean}
  */
 export function isDeveloperEmail(email) {
-  const devEmail = 'sonhyosuck@gmail.com'
+  const devEmails = [
+    'sonhyosuck@gmail.com',
+    'nedkim.j.m@gmail.com'
+  ]
   if (!email) return false
-  return email.toLowerCase() === devEmail.toLowerCase()
+  return devEmails.some(devEmail => email.toLowerCase() === devEmail.toLowerCase())
 }
 

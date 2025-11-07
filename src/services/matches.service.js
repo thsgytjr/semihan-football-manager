@@ -4,6 +4,7 @@
 
 import { supabase } from './storage.service'
 import { TEAM_CONFIG } from '../lib/teamConfig'
+import { logger } from '../lib/logger'
 
 const ROOM_ID = `${TEAM_CONFIG.shortName}-lite-room-1`
 
@@ -43,6 +44,7 @@ function toAppFormat(row) {
     stats: row.stats || {}, // 골/어시 기록
     draft: row.draft || {}, // Draft 데이터 (선수승점, 주장승점 등)
     teamColors: row.teamColors || row.team_colors || null, // 팀 색상 설정
+    fees: row.fees || null, // 📊 비용 정보 추가
     created_at: row.created_at,
     updated_at: row.updated_at,
   }
@@ -70,6 +72,7 @@ function toDbFormat(match) {
     stats: match.stats ?? {}, // 골/어시 기록
     draft: match.draft ?? {}, // Draft 데이터 (선수승점, 주장승점 등)
     teamColors: match.teamColors ?? null, // 팀 색상 설정
+    fees: match.fees ?? null, // 📊 비용 정보 추가
   }
 }
 
@@ -85,7 +88,7 @@ export async function saveMatchToDB(match) {
     if (error) throw error
     return toAppFormat(data)
   } catch (e) {
-    console.error('[saveMatchToDB] failed', e)
+    logger.error('[saveMatchToDB] failed', e)
     throw e
   }
 }
@@ -111,6 +114,7 @@ export async function updateMatchInDB(matchId, patch) {
     if ('stats' in patch) payload.stats = patch.stats // 골/어시 기록
     if ('draft' in patch) payload.draft = patch.draft // Draft 데이터
     if ('teamColors' in patch) payload.teamColors = patch.teamColors // 팀 색상 설정
+    if ('fees' in patch) payload.fees = patch.fees // 📊 비용 정보 추가
     
     payload.updated_at = new Date().toISOString()
 
@@ -125,7 +129,7 @@ export async function updateMatchInDB(matchId, patch) {
     if (error) throw error
     return toAppFormat(data)
   } catch (e) {
-    console.error('[updateMatchInDB] failed', e)
+    logger.error('[updateMatchInDB] failed', e)
     throw e
   }
 }
@@ -141,7 +145,7 @@ export async function deleteMatchFromDB(matchId) {
     if (error) throw error
     return true
   } catch (e) {
-    console.error('[deleteMatchFromDB] failed', e)
+    logger.error('[deleteMatchFromDB] failed', e)
     throw e
   }
 }
@@ -157,7 +161,7 @@ export async function listMatchesFromDB() {
     if (error) throw error
     return (data || []).map(toAppFormat)
   } catch (e) {
-    console.error('[listMatchesFromDB] failed', e)
+    logger.error('[listMatchesFromDB] failed', e)
     return []
   }
 }
@@ -179,7 +183,7 @@ export function subscribeMatches(callback) {
           const matches = await listMatchesFromDB()
           callback(matches)
         } catch (e) {
-          console.error('[subscribeMatches] reload failed', e)
+          logger.error('[subscribeMatches] reload failed', e)
         }
       }
     )

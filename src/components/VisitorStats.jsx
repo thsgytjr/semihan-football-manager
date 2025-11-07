@@ -1,6 +1,7 @@
 // src/components/VisitorStats.jsx
 import React, { useState, useEffect, useMemo } from 'react'
 import { getVisitStats } from '../services/storage.service'
+import { logger } from '../lib/logger'
 
 export default function VisitorStats({ visits }) {
   const [logs, setLogs] = useState([])
@@ -17,7 +18,7 @@ export default function VisitorStats({ visits }) {
       const data = await getVisitStats()
       setLogs(data || [])
     } catch (e) {
-      console.error('Failed to load visit stats:', e)
+      logger.error('Failed to load visit stats:', e)
     } finally {
       setLoading(false)
     }

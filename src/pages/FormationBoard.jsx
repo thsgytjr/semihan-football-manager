@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react"
 import Card from "../components/Card"
 import InitialAvatar from "../components/InitialAvatar"
 import FreePitch from "../components/pitch/FreePitch"
+import { logger } from "../lib/logger"
 
 /**
  * 새 기능 요약
@@ -119,7 +120,7 @@ export default function FormationBoard({
         setActiveMatchId(String(norm[0].id))
       }
     } catch (err) {
-      console.error(err)
+      logger.error(err)
       setLoadError("매치 목록을 불러오지 못했습니다.")
     } finally {
       setLoadingTeams(false)

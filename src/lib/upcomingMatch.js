@@ -1,5 +1,6 @@
 // src/lib/upcomingMatch.js
 // Upcoming Match 관리를 위한 유틸리티
+import { logger } from './logger'
 
 /**
  * Upcoming Match 생성
@@ -225,7 +226,7 @@ export function isMatchExpired(dateISO) {
     
     return now > expirationTime
   } catch (error) {
-    console.error('Error checking match expiration:', error)
+    logger.error('Error checking match expiration:', error)
     return false
   }
 }

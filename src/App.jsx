@@ -8,6 +8,7 @@ import{mkPlayer}from"./lib/players";import{notify}from"./components/Toast"
 import{filterExpiredMatches}from"./lib/upcomingMatch"
 import{getOrCreateVisitorId,getVisitorIP,parseUserAgent,shouldTrackVisit,isPreviewMode,isDevelopmentEnvironment}from"./lib/visitorTracking"
 import{signInAdmin,signOut,getSession,onAuthStateChange,isDeveloperEmail}from"./lib/auth"
+import{logger}from"./lib/logger"
 
 // 개발자 이메일 설정
 const DEVELOPER_EMAIL = 'sonhyosuck@gmail.com'
@@ -120,7 +121,7 @@ export default function App(){
           setFeaturesEnabled(settings.features)
         }
       }catch(e){
-        console.error('Failed to load app settings from server:', e)
+        logger.error('Failed to load app settings from server:', e)
       }
     })()
   },[])
@@ -138,10 +139,10 @@ export default function App(){
       // Matches 로드: USE_MATCHES_TABLE 플래그에 따라 분기
       let matchesData = []
       if (USE_MATCHES_TABLE) {
-        console.log('[App] Loading matches from Supabase matches table')
+        logger.log('[App] Loading matches from Supabase matches table')
         matchesData = await listMatchesFromDB()
       } else {
-        console.log('[App] Loading matches from appdb JSON')
+        logger.log('[App] Loading matches from appdb JSON')
         matchesData = shared.matches || []
       }
       
@@ -153,7 +154,7 @@ export default function App(){
       // 만료된 매치가 있었다면 DB에서도 제거
       if(activeUpcomingMatches.length !== (shared.upcomingMatches||[]).length) {
         const updatedShared = {...shared, upcomingMatches: activeUpcomingMatches}
-        await saveDB(updatedShared).catch(console.error)
+        await saveDB(updatedShared).catch(logger.error)
       }
       
       // 총 방문자 수 조회 (visit_logs 테이블에서)
@@ -202,9 +203,9 @@ export default function App(){
               os,
               phoneModel
             })
-          }).catch(console.error)
+          }).catch(logger.error)
         }catch(e){
-          console.error('Visit tracking failed:', e)
+          logger.error('Visit tracking failed:', e)
           // sessionStorage 실패 시 localStorage로 폴백
           try{
             const now = Date.now()
@@ -212,7 +213,7 @@ export default function App(){
           }catch{}
         }
       }
-    }catch(e){console.error("[App] initial load failed",e)}
+    }catch(e){logger.error("[App] initial load failed",e)}
     finally{if(mounted)setLoading(false)}
   })()
     const offP=subscribePlayers(list=>setDb(prev=>({...prev,players:list})))
@@ -220,7 +221,7 @@ export default function App(){
     // Matches 구독: USE_MATCHES_TABLE 플래그에 따라 분기
     let offMatches = () => {}
     if (USE_MATCHES_TABLE) {
-      console.log('[App] Subscribing to matches table')
+      logger.log('[App] Subscribing to matches table')
       offMatches = subscribeMatches(list=>setDb(prev=>({...prev,matches:list})))
     }
     
@@ -303,7 +304,7 @@ export default function App(){
   ], [isAdmin, isAnalyticsAdmin, featuresEnabled]);
 
   // ⬇️ 기존 기본값 생성 방식은 유지(필요시 다른 곳에서 사용)
-  async function handleCreatePlayer(){if(!isAdmin)return notify("Admin만 가능합니다.");const p=mkPlayer("새 선수","MF");setDb(prev=>({...prev,players:[p,...(prev.players||[])]}));setSelectedPlayerId(p.id);notify("새 선수를 추가했습니다.");try{await upsertPlayer(p)}catch(e){console.error(e)}}
+  async function handleCreatePlayer(){if(!isAdmin)return notify("Admin만 가능합니다.");const p=mkPlayer("새 선수","MF");setDb(prev=>({...prev,players:[p,...(prev.players||[])]}));setSelectedPlayerId(p.id);notify("새 선수를 추가했습니다.");try{await upsertPlayer(p)}catch(e){logger.error(e)}}
 
   // ✅ 모달에서 넘어온 patch를 그대로 저장(OVR=50 초기화 문제 해결)
   async function handleCreatePlayerFromModal(patch){
@@ -320,12 +321,12 @@ export default function App(){
     notify("새 선수가 추가되었어요.");
     // DB 반영
     try { await upsertPlayer(playerToSave); }
-    catch(e){ console.error(e); }
+    catch(e){ logger.error(e); }
   }
 
-  async function handleUpdatePlayer(next){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,players:(prev.players||[]).map(x=>x.id===next.id?next:x)}));try{await upsertPlayer(next)}catch(e){console.error(e)}}
-  async function handleDeletePlayer(id){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,players:(prev.players||[]).filter(p=>p.id!==id)}));if(selectedPlayerId===id)setSelectedPlayerId(null);try{await deletePlayer(id);notify("선수를 삭제했습니다.")}catch(e){console.error(e)}}
-  function handleImportPlayers(list){if(!isAdmin)return notify("Admin만 가능합니다.");const safe=Array.isArray(list)?list:[];setDb(prev=>({...prev,players:safe}));Promise.all(safe.map(upsertPlayer)).then(()=>notify("선수 목록을 가져왔습니다.")).catch(console.error);setSelectedPlayerId(null)}
+  async function handleUpdatePlayer(next){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,players:(prev.players||[]).map(x=>x.id===next.id?next:x)}));try{await upsertPlayer(next)}catch(e){logger.error(e)}}
+  async function handleDeletePlayer(id){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,players:(prev.players||[]).filter(p=>p.id!==id)}));if(selectedPlayerId===id)setSelectedPlayerId(null);try{await deletePlayer(id);notify("선수를 삭제했습니다.")}catch(e){logger.error(e)}}
+  function handleImportPlayers(list){if(!isAdmin)return notify("Admin만 가능합니다.");const safe=Array.isArray(list)?list:[];setDb(prev=>({...prev,players:safe}));Promise.all(safe.map(upsertPlayer)).then(()=>notify("선수 목록을 가져왔습니다.")).catch(logger.error);setSelectedPlayerId(null)}
   function handleResetPlayers(){if(!isAdmin)return notify("Admin만 가능합니다.");(async()=>{const fresh=await listPlayers();setDb(prev=>({...prev,players:fresh}));setSelectedPlayerId(null);notify("선수 목록을 리셋했습니다.")})()}
   async function handleSaveMatch(match){
     if(!isAdmin)return notify("Admin만 가능합니다.")
@@ -347,10 +348,10 @@ export default function App(){
       // 백업용으로 appdb에도 저장 (이중 저장)
       if (USE_MATCHES_TABLE) {
         const appdbMatches = await listMatchesFromDB()
-        saveDB({players:[],matches:appdbMatches,visits,upcomingMatches,tagPresets:db.tagPresets||[]}).catch(console.error)
+        saveDB({players:[],matches:appdbMatches,visits,upcomingMatches,tagPresets:db.tagPresets||[]}).catch(logger.error)
       }
     } catch(e) {
-      console.error('[handleSaveMatch] failed', e)
+      logger.error('[handleSaveMatch] failed', e)
       notify("매치 저장에 실패했습니다.")
     }
   }
@@ -376,10 +377,10 @@ export default function App(){
       // 백업용으로 appdb도 동기화 (이중 저장)
       if (USE_MATCHES_TABLE) {
         const appdbMatches = await listMatchesFromDB()
-        saveDB({players:[],matches:appdbMatches,visits,upcomingMatches,tagPresets:db.tagPresets||[]}).catch(console.error)
+        saveDB({players:[],matches:appdbMatches,visits,upcomingMatches,tagPresets:db.tagPresets||[]}).catch(logger.error)
       }
     } catch(e) {
-      console.error('[handleDeleteMatch] failed', e)
+      logger.error('[handleDeleteMatch] failed', e)
       notify("매치 삭제에 실패했습니다.")
     }
   }
@@ -405,10 +406,10 @@ export default function App(){
       // 백업용으로 appdb도 동기화 (이중 저장)
       if (USE_MATCHES_TABLE) {
         const appdbMatches = await listMatchesFromDB()
-        saveDB({players:[],matches:appdbMatches,visits,upcomingMatches,tagPresets:db.tagPresets||[]}).catch(console.error)
+        saveDB({players:[],matches:appdbMatches,visits,upcomingMatches,tagPresets:db.tagPresets||[]}).catch(logger.error)
       }
     } catch(e) {
-      console.error('[handleUpdateMatch] failed', e)
+      logger.error('[handleUpdateMatch] failed', e)
       notify("업데이트에 실패했습니다.")
     }
   }
@@ -440,7 +441,7 @@ export default function App(){
     
     // 업데이트된 선수들을 Supabase에 저장
     updatedPlayers.forEach(player=>{
-      upsertPlayer(player).catch(console.error);
+      upsertPlayer(player).catch(logger.error);
     });
     
     setDb(prev=>({...prev,tagPresets:next,players:updatedPlayers}));
@@ -464,7 +465,7 @@ export default function App(){
     
     // 업데이트된 선수들을 Supabase에 저장
     updatedPlayers.forEach(player=>{
-      upsertPlayer(player).catch(console.error);
+      upsertPlayer(player).catch(logger.error);
     });
     
     setDb(prev=>({...prev,tagPresets:next,players:updatedPlayers}));
@@ -489,7 +490,7 @@ export default function App(){
     const {user, error} = await signInAdmin(email, password)
     
     if(error){
-      console.error('[App] Login failed:', error.message)
+      logger.error('[App] Login failed:', error.message)
       return false // 실패 반환
     }
     

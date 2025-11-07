@@ -1,5 +1,6 @@
 // src/lib/photoUpload.js
 import { supabase } from './supabaseClient'
+import { logger } from './logger'
 
 const BUCKET_NAME = 'player-photos' // Supabase Storage 버킷 이름
 const MAX_RETRIES = 3 // 최대 재시도 횟수
@@ -187,7 +188,7 @@ export async function uploadPlayerPhoto(file, playerId, playerName = null, oldPh
           await deletePlayerPhoto(oldPhotoUrl)
         }
       } catch (deleteError) {
-        console.error('⚠️ 삭제 실패:', deleteError)
+        logger.error('⚠️ 삭제 실패:', deleteError)
       }
     }
     
@@ -251,11 +252,11 @@ export async function deletePlayerPhoto(photoUrl) {
       .remove([filePath])
     
     if (error) {
-      console.error('❌ 삭제 에러:', error)
+      logger.error('❌ 삭제 에러:', error)
       throw error
     }
   } catch (err) {
-    console.error('❌ deletePlayerPhoto 실패:', err)
+    logger.error('❌ deletePlayerPhoto 실패:', err)
     throw err
   }
 }

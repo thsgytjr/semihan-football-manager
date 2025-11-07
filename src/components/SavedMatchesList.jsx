@@ -4,6 +4,7 @@ import InitialAvatar from "./InitialAvatar"
 import { overall } from "../lib/players"
 import { hydrateMatch } from "../lib/match"
 import { formatMatchLabel } from "../lib/matchLabel"
+import { logger } from "../lib/logger"
 import draftIcon from "../assets/draft.png"
 import captainIcon from "../assets/Captain.PNG"
 
@@ -548,10 +549,19 @@ function deriveFeesFromSnapshot(m, players){
   const guestCount=Math.max(0, atts.length-memberCount)
 
   // 2) 매치에 명시적 fees가 있으면 우선 사용
-  if(m?.fees&&typeof m.fees.memberFee==="number"&&typeof m.fees.guestFee==="number"){
-    const total = typeof m.fees.total === 'number' ? m.fees.total 
-                  : (memberCount*m.fees.memberFee + guestCount*m.fees.guestFee)
-    return { total, memberFee:m.fees.memberFee, guestFee:m.fees.guestFee, memberCount, guestCount, _estimated:false }
+  // MatchPlanner에서 저장할 때 fees가 포함되어 있음
+  if(m?.fees){
+    // memberFee와 guestFee가 모두 있으면 바로 반환
+    if(typeof m.fees.memberFee==="number"&&typeof m.fees.guestFee==="number"){
+      const total = typeof m.fees.total === 'number' ? m.fees.total 
+                    : (memberCount*m.fees.memberFee + guestCount*m.fees.guestFee)
+      return { total, memberFee:m.fees.memberFee, guestFee:m.fees.guestFee, memberCount, guestCount, _estimated:false }
+    }
+    // total만 있으면 그것으로 계산
+    if(typeof m.fees.total === 'number' && m.fees.total > 0){
+      const { memberFee, guestFee } = calcFees({ total: m.fees.total, memberCount, guestCount })
+      return { total: m.fees.total, memberFee, guestFee, memberCount, guestCount, _estimated:false }
+    }
   }
 
   // 3) 장소 프리셋별 총액(Indoor=220, Coppell=330)

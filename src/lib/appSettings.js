@@ -2,6 +2,7 @@
 // 앱 설정 관리 (Supabase 기반으로 전환)
 
 import { supabase } from './supabaseClient'
+import { logger } from './logger'
 
 const SETTINGS_KEY = 'app_settings'
 const SUPABASE_SETTINGS_KEY = 'app_settings'
@@ -38,7 +39,7 @@ export async function loadAppSettingsFromServer() {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
     return settings
   } catch (err) {
-    console.error('Failed to load settings from server:', err)
+    logger.error('Failed to load settings from server:', err)
     return getAppSettings() // 로컬 폴백
   }
 }
@@ -62,7 +63,7 @@ export async function saveAppSettingsToServer(settings) {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
     return true
   } catch (err) {
-    console.error('Failed to save settings to server:', err)
+    logger.error('Failed to save settings to server:', err)
     // 서버 저장 실패시 로컬에만 저장
     return saveAppSettings(settings)
   }
@@ -77,7 +78,7 @@ export function getAppSettings() {
       return { ...DEFAULT_SETTINGS, ...settings }
     }
   } catch (err) {
-    console.error('Failed to load app settings:', err)
+    logger.error('Failed to load app settings:', err)
   }
   return DEFAULT_SETTINGS
 }
@@ -88,7 +89,7 @@ export function saveAppSettings(settings) {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
     return true
   } catch (err) {
-    console.error('Failed to save app settings:', err)
+    logger.error('Failed to save app settings:', err)
     return false
   }
 }

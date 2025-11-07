@@ -1,6 +1,7 @@
 // src/components/AdminLoginDialog.jsx
 import React, { useEffect, useRef, useState } from "react"
 import { Lock, Eye, EyeOff, ShieldCheck, AlertCircle, CheckCircle2, X } from "lucide-react"
+import { logger } from "../lib/logger"
 
 export default function AdminLoginDialog({
   isOpen,
@@ -77,7 +78,7 @@ export default function AdminLoginDialog({
         }
       }
     } catch (error) {
-      console.error('Login error:', error)
+      logger.error('Login error:', error)
       setErr("로그인 중 오류가 발생했습니다.")
       setLoading(false)
     }

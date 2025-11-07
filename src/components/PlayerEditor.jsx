@@ -7,6 +7,7 @@ import { overall } from '../lib/players'
 import { toRadarData } from '../lib/stats'
 import { uploadPlayerPhoto, deletePlayerPhoto } from '../lib/photoUpload'
 import { randomAvatarDataUrl } from '../utils/avatar'
+import { logger } from '../lib/logger'
 import VerifiedBadge from './VerifiedBadge'
 import InitialAvatar from './InitialAvatar'
 import Select from './Select'
@@ -39,7 +40,7 @@ export default function PlayerEditor({ player, onChange, onDelete }){
       set('photoUrl', publicUrl)
       notify('사진이 업로드되었습니다.')
     } catch(err) {
-      console.error(err)
+      logger.error(err)
       notify(err.message || '사진 업로드에 실패했습니다.', 'error')
     } finally {
       setUploading(false)
@@ -63,7 +64,7 @@ export default function PlayerEditor({ player, onChange, onDelete }){
       try {
         await deletePlayerPhoto(p.photoUrl)
       } catch(err) {
-        console.error('Failed to delete old photo:', err)
+        logger.error('Failed to delete old photo:', err)
       }
     }
     

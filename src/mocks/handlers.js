@@ -1,5 +1,6 @@
 import { http, HttpResponse, delay } from 'msw'
 import { mockPlayers, mockMatches, mockVisitLogs, mockAppDB } from './data'
+import { logger } from '../lib/logger'
 
 // Mock 인증 상태
 let mockAuthSession = null
@@ -14,7 +15,7 @@ function saveMockData() {
     }
     sessionStorage.setItem('mock_data', JSON.stringify(data))
   } catch (e) {
-    console.warn('⚠️ SessionStorage 저장 실패:', e.message)
+    logger.warn('⚠️ SessionStorage 저장 실패:', e.message)
   }
 }
 
@@ -230,7 +231,7 @@ export const handlers = [
       const body = await request.json()
       let id = body.id
       
-      console.log('[MSW] appdb POST:', { id, keys: Object.keys(body) })
+      logger.log('[MSW] appdb POST:', { id, keys: Object.keys(body) })
       
       // ID로 해당 데이터 찾기
       let key = id
@@ -250,10 +251,10 @@ export const handlers = [
         return HttpResponse.json({ id, data: responseData }, { status: 201 })
       }
       
-      console.warn('[MSW] appdb POST failed: Invalid ID', id, 'Available:', Object.keys(mockAppDB))
+      logger.warn('[MSW] appdb POST failed: Invalid ID', id, 'Available:', Object.keys(mockAppDB))
       return HttpResponse.json({ error: 'Invalid appdb ID' }, { status: 400 })
     } catch (error) {
-      console.error('[MSW] appdb POST error:', error)
+      logger.error('[MSW] appdb POST error:', error)
       return HttpResponse.json({ error: error.message }, { status: 400 })
     }
   }),

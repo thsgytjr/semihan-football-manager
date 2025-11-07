@@ -5,6 +5,7 @@ import Card from'../components/Card'
 import{mkMatch,decideMode,splitKTeams,hydrateMatch}from'../lib/match'
 import{overall,isUnknownPlayer}from'../lib/players'
 import{notify}from'../components/Toast'
+import{logger}from'../lib/logger'
 import PositionChips from'../components/PositionChips'
 import{DndContext,DragOverlay,pointerWithin,PointerSensor,TouchSensor,useSensor,useSensors,useDroppable}from'@dnd-kit/core'
 import{SortableContext,useSortable,verticalListSortingStrategy}from'@dnd-kit/sortable'
@@ -463,7 +464,7 @@ export default function MatchPlanner({
     
     // 인원수 차이가 2명 이상이면 경고 (디버깅용)
     if (maxCount - minCount > 1) {
-      console.warn('AI 배정: 팀 인원수 불균형 감지', teamStats.map(s => s.count))
+      logger.warn('AI 배정: 팀 인원수 불균형 감지', teamStats.map(s => s.count))
     }
     
     return teams

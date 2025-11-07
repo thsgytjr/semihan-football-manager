@@ -1,5 +1,6 @@
 // src/services/membership.service.js
 import { supabase } from '../lib/supabaseClient'
+import { logger } from '../lib/logger'
 
 /**
  * 모든 멤버십 설정 가져오기
@@ -12,7 +13,7 @@ export async function getMembershipSettings() {
       .order('sort_order', { ascending: true })
 
     if (error) {
-      console.error('❌ 멤버십 설정 조회 실패:', error)
+      logger.error('❌ 멤버십 설정 조회 실패:', error)
       return []
     }
 
@@ -30,7 +31,7 @@ export async function getMembershipSettings() {
 
     return mappedData
   } catch (err) {
-    console.error('❌ 멤버십 설정 조회 오류:', err)
+    logger.error('❌ 멤버십 설정 조회 오류:', err)
     return []
   }
 }
@@ -47,7 +48,7 @@ export async function addMembershipSetting(membership) {
       .single()
 
     if (error) {
-      console.error('❌ 멤버십 추가 실패:', error)
+      logger.error('❌ 멤버십 추가 실패:', error)
       throw error
     }
 
@@ -63,7 +64,7 @@ export async function addMembershipSetting(membership) {
       updatedAt: data.updated_at
     }
   } catch (err) {
-    console.error('❌ 멤버십 추가 오류:', err)
+    logger.error('❌ 멤버십 추가 오류:', err)
     throw err
   }
 }
@@ -81,7 +82,7 @@ export async function updateMembershipSetting(id, updates) {
       .single()
 
     if (error) {
-      console.error('❌ 멤버십 수정 실패:', error)
+      logger.error('❌ 멤버십 수정 실패:', error)
       throw error
     }
 
@@ -97,7 +98,7 @@ export async function updateMembershipSetting(id, updates) {
       updatedAt: data.updated_at
     }
   } catch (err) {
-    console.error('❌ 멤버십 수정 오류:', err)
+    logger.error('❌ 멤버십 수정 오류:', err)
     throw err
   }
 }
@@ -113,13 +114,13 @@ export async function deleteMembershipSetting(id) {
       .eq('id', id)
 
     if (error) {
-      console.error('❌ 멤버십 삭제 실패:', error)
+      logger.error('❌ 멤버십 삭제 실패:', error)
       throw error
     }
 
     return true
   } catch (err) {
-    console.error('❌ 멤버십 삭제 오류:', err)
+    logger.error('❌ 멤버십 삭제 오류:', err)
     throw err
   }
 }

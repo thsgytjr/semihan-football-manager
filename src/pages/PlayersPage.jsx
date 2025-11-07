@@ -3,6 +3,7 @@ import React, { useMemo, useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { notify } from "../components/Toast"
 import { overall, isUnknownPlayer } from "../lib/players"
+import { logger } from "../lib/logger"
 import { 
   STAT_KEYS, 
   PLAYER_ORIGINS, 
@@ -210,7 +211,7 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
       
       notify('✅ 사진이 업로드되었습니다.', 'success', 2000)
     } catch(err) {
-      console.error('❌ 업로드 에러:', err)
+      logger.error('❌ 업로드 에러:', err)
       notify(`❌ ${err.message || '사진 업로드에 실패했습니다.'}`, 'error', 5000)
     } finally {
       setUploading(false)
@@ -234,7 +235,7 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
       try {
         await deletePlayerPhoto(draft.photoUrl)
       } catch(err) {
-        console.error('Failed to delete old photo:', err)
+        logger.error('Failed to delete old photo:', err)
       }
     }
     
@@ -273,7 +274,7 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
         try {
           await deletePlayerPhoto(cleanOldPhotoUrl)
         } catch (error) {
-          console.error('❌ 삭제 실패:', error)
+          logger.error('❌ 삭제 실패:', error)
         }
       }
     }

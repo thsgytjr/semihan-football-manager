@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import MatchPlanner from '../pages/MatchPlanner'
 import { saveMatch, updateMatch, deleteMatch, listMatches } from '../lib/matches.service'
+import { logger } from '../lib/logger'
 
 // props: players 배열을 부모에서 내려주면 됩니다.
 export default function MatchPlannerContainer({ players, isAdmin }) {
@@ -12,7 +13,7 @@ export default function MatchPlannerContainer({ players, isAdmin }) {
         const rows = await listMatches()
         setMatches(rows)
       } catch (e) {
-        console.error('[listMatches]', e)
+        logger.error('[listMatches]', e)
       }
     })()
   }, [])
@@ -23,7 +24,7 @@ export default function MatchPlannerContainer({ players, isAdmin }) {
       const row = await saveMatch(matchObj)
       setMatches(prev => [row, ...prev])
     } catch (e) {
-      console.error('[saveMatch]', e)
+      logger.error('[saveMatch]', e)
       alert(`저장 실패: ${e.message || e}`)
     }
   }
@@ -33,7 +34,7 @@ export default function MatchPlannerContainer({ players, isAdmin }) {
       const row = await updateMatch(id, patch)
       setMatches(prev => prev.map(m => m.id === id ? row : m))
     } catch (e) {
-      console.error('[updateMatch]', e)
+      logger.error('[updateMatch]', e)
       alert(`업데이트 실패: ${e.message || e}`)
     }
   }
@@ -44,7 +45,7 @@ export default function MatchPlannerContainer({ players, isAdmin }) {
       await deleteMatch(id)
       setMatches(prev => prev.filter(m => m.id !== id))
     } catch (e) {
-      console.error('[deleteMatch]', e)
+      logger.error('[deleteMatch]', e)
       alert(`삭제 실패: ${e.message || e}`)
     }
   }
