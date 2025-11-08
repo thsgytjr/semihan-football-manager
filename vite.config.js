@@ -14,7 +14,8 @@ try {
 export default defineConfig(({ mode }) => {
   // 환경 변수 로드
   const env = loadEnv(mode, process.cwd(), '')
-  const teamName = env.VITE_TEAM_NAME || 'Football Manager'
+  const teamName = env.VITE_TEAM_NAME || 'Goalify'
+  const description = env.VITE_APP_DESCRIPTION || "Plan. Play. Win."
   
   return {
     plugins: [
@@ -27,6 +28,8 @@ export default defineConfig(({ mode }) => {
             .replace(/<title>.*?<\/title>/, `<title>${teamName}</title>`)
             .replace(/id="og-title" content=".*?"/, `id="og-title" content="${teamName}"`)
             .replace(/id="twitter-title" content=".*?"/, `id="twitter-title" content="${teamName}"`)
+            .replace(/id="og-description" content=".*?"/, `id="og-description" content="${description}"`)
+            .replace(/id="twitter-description" content=".*?"/, `id="twitter-description" content="${description}"`)
         }
       }
     ],
