@@ -165,8 +165,12 @@ export default function MatchPlanner({
       setManualTeams(newTeams)
       latestTeamsRef.current = newTeams
     }
-    // 팀 수 변경 시 주장 정보 초기화
-    setCaptainIds([])
+    // 팀 수 변경 시 주장 정보 조정 (기존 주장 유지, 새 팀은 null 추가)
+    setCaptainIds(prev => {
+      if (prev.length === teams) return prev
+      const newCaptains = Array.from({length: teams}, (_, i) => prev[i] || null)
+      return newCaptains
+    })
     
     // Adjust teamColors array length to match team count (preserve existing colors, fill with null for new teams)
     setTeamColors(prev => {
@@ -207,7 +211,24 @@ export default function MatchPlanner({
 
   function save(){
     if(!isAdmin){notify('Admin만 가능합니다.');return}
-    const baseTeams=(latestTeamsRef.current&&latestTeamsRef.current.length)?latestTeamsRef.current:previewTeams
+    let baseTeams=(latestTeamsRef.current&&latestTeamsRef.current.length)?latestTeamsRef.current:previewTeams
+    
+    // 주장을 각 팀의 맨 앞으로 정렬
+    baseTeams = baseTeams.map((team, teamIdx) => {
+      const capId = captainIds[teamIdx]
+      if (!capId || !team || team.length === 0) return team
+      
+      // 주장을 찾아서 맨 앞으로 이동
+      const capIdStr = String(capId)
+      const captainIndex = team.findIndex(p => String(p.id) === capIdStr)
+      if (captainIndex <= 0) return team // 이미 첫번째거나 없으면 그대로
+      
+      const newTeam = [...team]
+      const captain = newTeam.splice(captainIndex, 1)[0]
+      newTeam.unshift(captain)
+      return newTeam
+    })
+    
     const snapshot=baseTeams.map(team=>team.map(p=>p.id))
     const ids=snapshot.flat()
     const objs=players.filter(p=>ids.includes(p.id))
@@ -217,14 +238,15 @@ export default function MatchPlanner({
     const draftFields = isDraftMode ? {
       selectionMode: 'draft',
       draftMode: true,
-      draft: true,
-      captainIds: captainIds.slice(), // 현재 선택된 주장 ID들 저장
-      // 주장이 선택되어 있다면 추가
-      ...(baseTeams.length === 2 && {
-        captains: [] // 나중에 주장 선택 기능에서 설정
-      })
+      draft: {
+        captains: captainIds.slice() // 주장 정보는 draft 객체에 저장
+      }
     } : {
-      selectionMode: 'manual'
+      selectionMode: 'manual',
+      // 일반 모드에서도 주장 정보 저장
+      draft: {
+        captains: captainIds.slice()
+      }
     }
     
     // datetime-local 형식(YYYY-MM-DDTHH:MM)을 ISO 8601로 변환
@@ -1054,7 +1076,7 @@ export default function MatchPlanner({
       })()}
 
       <Card title="저장된 매치" right={<div className="text-xs text-gray-500"><span className="font-medium">GK 평균 제외</span></div>}>
-        <SavedMatchesList matches={matches} players={players} isAdmin={isAdmin} enableLoadToPlanner={true} onLoadToPlanner={loadSavedIntoPlanner} onDeleteMatch={onDeleteMatch} onUpdateMatch={onUpdateMatch} showTeamOVRForAdmin={true} hideOVR={true}/>
+        <SavedMatchesList matches={matches} players={players} isAdmin={isAdmin} enableLoadToPlanner={true} onLoadToPlanner={loadSavedIntoPlanner} onDeleteMatch={onDeleteMatch} onUpdateMatch={onUpdateMatch} showTeamOVRForAdmin={true} hideOVR={true} customMemberships={customMemberships}/>
       </Card>
     </div>
 
@@ -1358,27 +1380,26 @@ function PlayerRow({player,showOVR,isAdmin,teamIndex,isDraftMode,isCaptain,onRem
       {/* Admin 버튼들 */}
       {isAdmin && (
         <span className="flex items-center gap-1 shrink-0">
-          {isDraftMode && (
-            <button
-              className={`border-0 w-5 h-5 flex items-center justify-center p-0 transition-all ${
-                isCaptain 
-                  ? 'opacity-100 scale-110 ring-2 ring-yellow-400 ring-offset-1 rounded-full' 
-                  : 'bg-transparent hover:opacity-80 hover:scale-110'
-              }`}
-              title={isCaptain ? "주장 해제" : "이 선수를 주장으로 지정"}
-              onClick={(e)=>{
-                e.stopPropagation();
-                onSetCaptain&&onSetCaptain(player.id,teamIndex)
-              }}
-              aria-label={isCaptain ? "주장 해제" : "주장 지정"}
-            >
-              <img 
-                src={captainIcon} 
-                alt="주장" 
-                className={`w-full h-full object-contain ${isCaptain ? 'brightness-110' : ''}`} 
-              />
-            </button>
-          )}
+          {/* 주장 지정 버튼 - 드래프트 모드 여부와 무관하게 표시 */}
+          <button
+            className={`border-0 w-5 h-5 flex items-center justify-center p-0 transition-all ${
+              isCaptain 
+                ? 'opacity-100 scale-110 ring-2 ring-yellow-400 ring-offset-1 rounded-full' 
+                : 'bg-transparent hover:opacity-80 hover:scale-110'
+            }`}
+            title={isCaptain ? "주장 해제" : "이 선수를 주장으로 지정"}
+            onClick={(e)=>{
+              e.stopPropagation();
+              onSetCaptain&&onSetCaptain(player.id,teamIndex)
+            }}
+            aria-label={isCaptain ? "주장 해제" : "주장 지정"}
+          >
+            <img 
+              src={captainIcon} 
+              alt="주장" 
+              className={`w-full h-full object-contain ${isCaptain ? 'brightness-110' : ''}`} 
+            />
+          </button>
           <button
             className="rounded-full border border-gray-300 bg-white w-5 h-5 flex items-center justify-center text-gray-700 hover:bg-gray-100 p-0"
             title="이 팀에서 제외"

@@ -339,6 +339,7 @@ export default function Dashboard({
               onUpdateMatch={onUpdateMatch}
               hideOVR={true}
               highlightedMatchId={highlightedMatchId}
+              customMemberships={customMemberships}
             />
           </div>
         </ErrorBoundary>

@@ -5,6 +5,7 @@ import { overall } from "../lib/players"
 import { hydrateMatch } from "../lib/match"
 import { formatMatchLabel } from "../lib/matchLabel"
 import { logger } from "../lib/logger"
+import { getMembershipBadge } from "../lib/membershipConfig"
 import draftIcon from "../assets/draft.png"
 import captainIcon from "../assets/Captain.PNG"
 
@@ -614,7 +615,7 @@ function VideoAdder({ onAdd }){
 }
 
 /* 빠른 출석 편집(드래프트만 수정) */
-function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
+function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMemberships }){
   const [teamIdx,setTeamIdx]=useState(0),[q,setQ]=useState(""),[open,setOpen]=useState(false),[hi,setHi]=useState(-1)
   const wrapRef=useRef(null), listRef=useRef(null)
   const cands=useMemo(()=>notInMatchPlayers(players,snapshot),[players,snapshot])
@@ -662,14 +663,27 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
             value={q} onChange={e=>{setQ(e.target.value); setOpen(true); setHi(-1)}} onFocus={()=>setOpen(true)} onKeyDown={onKey}/>
           {open&&list.length>0&&(
             <div ref={listRef} className="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-md border border-gray-200 bg-white shadow-lg" role="listbox" aria-label="가용 선수 목록">
-              {list.map((p,idx)=>(
-                <button key={p.id} type="button" data-idx={idx}
-                  className={`flex w-full items-center gap-2 px-2 py-1.5 text-sm hover:bg-gray-50 ${idx===hi?"bg-gray-100":""}`}
-                  onMouseEnter={()=>setHi(idx)} onMouseDown={e=>e.preventDefault()} onClick={()=>add(p)}>
-                  <InitialAvatar id={p.id} name={p.name} size={28} photoUrl={p.photoUrl} badges={(() => { const mem=String(p.membership||"").trim().toLowerCase(); return (mem==='member'||mem.includes('정회원'))?[]:['G'] })()} /><span className="truncate">{p.name}</span>
-                  {(p.position||p.pos)==="GK"&&<span className="ml-auto text-[11px] text-gray-400">GK</span>}
-                </button>
-              ))}
+              {list.map((p,idx)=>{
+                const membershipBadgeInfo = getMembershipBadge(p.membership, customMemberships || [])
+                const badges = membershipBadgeInfo?.badge ? [membershipBadgeInfo.badge] : []
+                return (
+                  <button key={p.id} type="button" data-idx={idx}
+                    className={`flex w-full items-center gap-2 px-2 py-1.5 text-sm hover:bg-gray-50 ${idx===hi?"bg-gray-100":""}`}
+                    onMouseEnter={()=>setHi(idx)} onMouseDown={e=>e.preventDefault()} onClick={()=>add(p)}>
+                    <InitialAvatar 
+                      id={p.id} 
+                      name={p.name} 
+                      size={28} 
+                      photoUrl={p.photoUrl} 
+                      badges={badges}
+                      customMemberships={customMemberships || []}
+                      badgeInfo={membershipBadgeInfo}
+                    />
+                    <span className="truncate">{p.name}</span>
+                    {(p.position||p.pos)==="GK"&&<span className="ml-auto text-[11px] text-gray-400">GK</span>}
+                  </button>
+                )
+              })}
             </div>
           )}
         </div>
@@ -680,7 +694,7 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange }){
 }
 
 /* ------------------------- 매치 카드 ------------------------- */
-const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, onDeleteMatch, onUpdateMatch, onUpdateVideos, showTeamOVRForAdmin, hideOVR, latestDraftId, isHighlighted }, ref){
+const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, onDeleteMatch, onUpdateMatch, onUpdateVideos, showTeamOVRForAdmin, hideOVR, latestDraftId, isHighlighted, customMemberships }, ref){
   const hydrated=useMemo(()=>hydrateMatch(m,players),[m,players])
   const initialSnap=useMemo(()=>normalizeSnapshot(m,hydrated.teams||[]),[m,hydrated.teams])
   const [draftSnap,setDraftSnap]=useState(initialSnap), [dirty,setDirty]=useState(false)
@@ -688,12 +702,12 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
   const [quarterScores, setQuarterScores] = useState(null)
   const [localDraftMode, setLocalDraftMode] = useState(() => {
     // Check if it's actually a draft match by looking at selectionMode or actual draft data
+    // 주장(captains)만 있는 것은 드래프트가 아님 - quarterScores가 있어야 드래프트
     if (m.selectionMode === 'draft' || m?.draftMode) return true
-    // Check if draft object has actual data (not just empty object)
+    // Check if draft object has actual quarterScores data
     if (m?.draft) {
       const hasDraftData = (
-        (m.draft.quarterScores && m.draft.quarterScores.length > 0) ||
-        (m.draft.captains && Object.keys(m.draft.captains).length > 0)
+        (m.draft.quarterScores && m.draft.quarterScores.length > 0)
       )
       return hasDraftData
     }
@@ -724,13 +738,12 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
   const resetDraft=()=>{ 
     setDraftSnap(initialSnap)
     setDirty(false)
-    // Reset draft mode state - check for actual draft data
+    // Reset draft mode state - check for actual draft data (quarterScores만 체크, captains는 일반 매치에도 있을 수 있음)
     if (m.selectionMode === 'draft' || m?.draftMode) {
       setLocalDraftMode(true)
     } else if (m?.draft) {
       const hasDraftData = (
-        (m.draft.quarterScores && m.draft.quarterScores.length > 0) ||
-        (m.draft.captains && Object.keys(m.draft.captains).length > 0)
+        (m.draft.quarterScores && m.draft.quarterScores.length > 0)
       )
       setLocalDraftMode(hasDraftData)
     } else {
@@ -756,17 +769,15 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
       patch.draft = {
         ...(m.draft || {}),
         captains: captainIds,
-        quarterScores: quarterScores // ✅ quarterScores도 draft에 저장
+        quarterScores: quarterScores
       }
     } else {
-      patch.selectionMode = null
-      patch.quarterScores = quarterScores // ✅ quarterScores를 최상위로도 저장
-      // 기존 draft 데이터는 유지 (captains 등)
-      if (m.draft) {
-        patch.draft = {
-          ...m.draft,
-          quarterScores: quarterScores
-        }
+      // 일반 모드: selectionMode를 명시적으로 'manual'로 설정
+      patch.selectionMode = 'manual'
+      patch.draft = {
+        ...(m.draft || {}),
+        captains: captainIds, // 주장 정보는 일반 모드에서도 저장
+        quarterScores: [] // quarterScores 초기화
       }
     }
     
@@ -777,13 +788,12 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
   useEffect(()=>{ 
     setDraftSnap(initialSnap); 
     setDirty(false); 
-    // Check for actual draft mode
+    // Check for actual draft mode (quarterScores만 체크, captains는 제외)
     if (m.selectionMode === 'draft' || m?.draftMode) {
       setLocalDraftMode(true)
     } else if (m?.draft) {
       const hasDraftData = (
-        (m.draft.quarterScores && m.draft.quarterScores.length > 0) ||
-        (m.draft.captains && Object.keys(m.draft.captains).length > 0)
+        (m.draft.quarterScores && m.draft.quarterScores.length > 0)
       )
       setLocalDraftMode(hasDraftData)
     } else {
@@ -1085,7 +1095,8 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
         })()
       )}
 
-      {displayedQuarterScores && (
+      {/* 저장된 쿼터 점수 표시 (드래프트 모드일 때만) */}
+      {isDraftMode && displayedQuarterScores && (
         (() => {
           const maxQ = Math.max(...displayedQuarterScores.map(a=>Array.isArray(a)?a.length:1))
           const teamTotals = displayedQuarterScores.map(a=>Array.isArray(a)?a.reduce((s,v)=>s+Number(v||0),0):Number(a||0))
@@ -1245,34 +1256,119 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
         })()
       )}
 
-      {/* 골/어시 토글과 표기 설명을 한 줄에 */}
-      <div className="mb-1 flex items-center justify-between">
+      {/* 골/어시 토글과 배지 범례 */}
+      <div className="mb-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        {/* 왼쪽: G/A 표시 슬라이드 토글 */}
         <div className="flex items-center gap-2">
-          {/* G/A 표시 슬라이드 토글 */}
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-600 font-medium">골/어시</span>
-            <button
-              onClick={() => setShowGA(prev => !prev)}
-              className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 ${
-                showGA ? 'bg-emerald-500' : 'bg-gray-300'
+          <span className="text-[10px] text-gray-600 font-medium">골/어시</span>
+          <button
+            onClick={() => setShowGA(prev => !prev)}
+            className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-1 ${
+              showGA ? 'bg-emerald-500' : 'bg-gray-300'
+            }`}
+            title={showGA ? "골/어시 숨기기" : "골/어시 표시"}
+            role="switch"
+            aria-checked={showGA}
+          >
+            <span
+              className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                showGA ? 'translate-x-3.5' : 'translate-x-0.5'
               }`}
-              title={showGA ? "골/어시 숨기기" : "골/어시 표시"}
-              role="switch"
-              aria-checked={showGA}
-            >
-              <span
-                className={`inline-block h-3 w-3 transform rounded-full bg-white shadow-sm transition-transform duration-200 ${
-                  showGA ? 'translate-x-3.5' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
-          </div>
+            />
+          </button>
         </div>
         
-        <div className="flex items-center gap-2 text-[10px] text-gray-600 whitespace-nowrap">
-          <span className="inline-flex items-center gap-1"><CaptainBadge /> <span>주장</span></span>
-          <span className="mx-1 text-gray-400">·</span>
-          <span className="inline-flex items-center gap-1"><GuestBadge /> <span>게스트</span></span>
+        {/* 오른쪽: 배지 범례 (이 매치에서 실제 사용된 배지만 표시) */}
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-gray-600">
+          {(() => {
+            // 이 매치의 모든 선수들의 멤버십 수집
+            const allPlayers = draftTeams.flat()
+            
+            // 주장이 있는지 확인
+            const hasCaptain = captainIds && captainIds.some(id => id)
+            
+            // 사용된 배지 정보 수집 (중복 제거)
+            const usedBadgesMap = new Map() // badge -> { membership, badgeInfo }
+            
+            if (customMemberships && customMemberships.length > 0) {
+              // 모든 선수의 배지 정보 수집
+              allPlayers.forEach(p => {
+                const badgeInfo = getMembershipBadge(p.membership, customMemberships)
+                if (badgeInfo && badgeInfo.badge) {
+                  // 같은 배지는 한 번만 저장
+                  if (!usedBadgesMap.has(badgeInfo.badge)) {
+                    // 해당 배지의 멤버십 찾기
+                    const membership = customMemberships.find(m => 
+                      getMembershipBadge(m.name, customMemberships)?.badge === badgeInfo.badge
+                    )
+                    if (membership) {
+                      usedBadgesMap.set(badgeInfo.badge, { membership, badgeInfo })
+                    }
+                  }
+                }
+              })
+            } else {
+              // 기본 멤버십 체크 (게스트)
+              const hasGuest = allPlayers.some(p => {
+                const mem = String(p.membership || '').trim().toLowerCase()
+                return !(mem === 'member' || mem.includes('정회원'))
+              })
+              
+              if (hasGuest) {
+                usedBadgesMap.set('G', { isDefaultGuest: true })
+              }
+            }
+            
+            // 배지가 하나도 없으면 아무것도 표시하지 않음
+            if (!hasCaptain && usedBadgesMap.size === 0) return null
+            
+            return (
+              <>
+                {hasCaptain && (
+                  <span className="inline-flex items-center gap-1">
+                    <CaptainBadge /> <span>주장</span>
+                  </span>
+                )}
+                
+                {Array.from(usedBadgesMap.values()).map((item, idx) => {
+                  if (item.isDefaultGuest) {
+                    return (
+                      <React.Fragment key="default-guest">
+                        <span className="mx-1 text-gray-400">·</span>
+                        <span className="inline-flex items-center gap-1">
+                          <GuestBadge /> <span>게스트</span>
+                        </span>
+                      </React.Fragment>
+                    )
+                  }
+                  
+                  const { membership, badgeInfo } = item
+                  return (
+                    <React.Fragment key={membership.id || idx}>
+                      <span className="mx-1 text-gray-400">·</span>
+                      <span className="inline-flex items-center gap-1">
+                        <span
+                          className="inline-flex items-center justify-center rounded-full border shadow-sm"
+                          style={{
+                            width: '18px',
+                            height: '18px',
+                            fontSize: '9px',
+                            lineHeight: 1,
+                            backgroundColor: badgeInfo.colorStyle?.bg,
+                            borderColor: badgeInfo.colorStyle?.border,
+                            color: badgeInfo.colorStyle?.text
+                          }}
+                        >
+                          {badgeInfo.badge}
+                        </span>
+                        <span>{membership.name}</span>
+                      </span>
+                    </React.Fragment>
+                  )
+                })}
+              </>
+            )
+          })()}
         </div>
       </div>
 
@@ -1281,7 +1377,8 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
           const kit=kitForTeam(i), nonGK=list.filter(p=>(p.position||p.pos)!=="GK")
           const sum=nonGK.reduce((a,p)=>a+(p.ovr??overall(p)),0), avg=nonGK.length?Math.round(sum/nonGK.length):0
           const capId=(captainIds&&captainIds[i])?String(captainIds[i]):null
-          const listOrdered=(isDraftMode&&capId)?[...list].sort((a,b)=>{
+          // 주장이 있으면 항상 제일 위로 정렬 (드래프트 모드 여부와 무관)
+          const listOrdered=capId?[...list].sort((a,b)=>{
             const aid=String(a.id),bid=String(b.id)
             if(aid===capId && bid!==capId) return -1
             if(bid===capId && aid!==capId) return 1
@@ -1330,21 +1427,30 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               <ul className="divide-y divide-gray-100 relative z-10">
                 {isWinner && isDraftMode && m?.id===latestDraftId && <Confetti />}
                 {listOrdered.map(p=>{
-                  const member=isMember(p.membership)
                   const rec = gaByPlayer[toStr(p.id)] || { goals: 0, assists: 0 }
+                  const isCaptain = captainIds && captainIds[i] === String(p.id)
+                  
+                  // 멤버십 뱃지 계산
+                  const membershipBadgeInfo = getMembershipBadge(p.membership, customMemberships || [])
+                  const badges = [
+                    ...(isCaptain ? ['C'] : []),
+                    ...(membershipBadgeInfo?.badge ? [membershipBadgeInfo.badge] : []),
+                  ]
+                  
                   return (
                     <li key={p.id} className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
                       {/* Left block: avatar (with badges) | name | stats */}
                       <div className={`grid items-center gap-2 min-w-0 flex-1 ${showGA ? 'grid-cols-[auto_1fr_auto]' : 'grid-cols-[auto_1fr]'}`}>
                         <div className="shrink-0">
-                          {(() => {
-                            const isCaptain = isDraftMode && captainIds[i] === String(p.id)
-                            const badges = [
-                              ...(isCaptain ? ['C'] : []),
-                              ...(!member ? ['G'] : []),
-                            ]
-                            return <InitialAvatar id={p.id} name={p.name} size={32} photoUrl={p.photoUrl} badges={badges} />
-                          })()}
+                          <InitialAvatar 
+                            id={p.id} 
+                            name={p.name} 
+                            size={32} 
+                            photoUrl={p.photoUrl} 
+                            badges={badges}
+                            customMemberships={customMemberships || []}
+                            badgeInfo={membershipBadgeInfo}
+                          />
                         </div>
                         <div className="min-w-0 truncate font-medium">
                           {p.name}
@@ -1373,20 +1479,19 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       <span className="flex items-center gap-2 shrink-0">
                         {isAdmin&&(
                           <div className="flex items-center gap-2">
-                            {isDraftMode && (
-                              <button
-                                className={`border-0 bg-transparent w-6 h-6 flex items-center justify-center hover:opacity-80 p-0 transition-all ${
-                                  captainIds[i] === String(p.id) 
-                                    ? 'ring-2 ring-yellow-400 rounded-full scale-110 brightness-110' 
-                                    : ''
-                                }`}
-                                title={captainIds[i] === String(p.id) ? "주장으로 지정됨" : "이 선수를 주장으로 지정"}
-                                onClick={()=>setCaptain(i, p.id)}
-                                aria-label="주장 지정"
-                              >
-                                <img src={captainIcon} alt="주장" className="w-full h-full object-contain" />
-                              </button>
-                            )}
+                            {/* 주장 지정 버튼 - 드래프트 모드 여부와 무관하게 표시 */}
+                            <button
+                              className={`border-0 bg-transparent w-6 h-6 flex items-center justify-center hover:opacity-80 p-0 transition-all ${
+                                captainIds && captainIds[i] === String(p.id) 
+                                  ? 'ring-2 ring-yellow-400 rounded-full scale-110 brightness-110' 
+                                  : ''
+                              }`}
+                              title={captainIds && captainIds[i] === String(p.id) ? "주장으로 지정됨" : "이 선수를 주장으로 지정"}
+                              onClick={()=>setCaptain(i, p.id)}
+                              aria-label="주장 지정"
+                            >
+                              <img src={captainIcon} alt="주장" className="w-full h-full object-contain" />
+                            </button>
                             <button
                               className="rounded-full border border-gray-300 bg-white w-6 h-6 flex items-center justify-center text-gray-700 hover:bg-gray-100 p-0"
                               title="이 팀에서 제외 (저장 전 초안)"
@@ -1576,7 +1681,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
         )
       })()}
 
-      {isAdmin&&<QuickAttendanceEditor players={players} snapshot={draftSnap} onDraftChange={setSnap}/>}
+      {isAdmin&&<QuickAttendanceEditor players={players} snapshot={draftSnap} onDraftChange={setSnap} customMemberships={customMemberships}/>}
       {isAdmin&&dirty&&(
         <div className="mt-3 flex items-center justify-end gap-2">
           <button className="rounded border border-gray-300 bg-white px-3 py-1.5 text-sm" onClick={resetDraft} title="변경사항 취소">취소</button>
@@ -1642,7 +1747,8 @@ export default function SavedMatchesList({
   onUpdateMatch,
   showTeamOVRForAdmin=false,
   hideOVR=false,
-  highlightedMatchId=null // 하이라이트할 매치 ID
+  highlightedMatchId=null, // 하이라이트할 매치 ID
+  customMemberships=[] // 커스텀 멤버십 설정
 }){
   const highlightedMatchRef = useRef(null)
   const ordered = useMemo(()=>matches.slice().sort((a,b)=>_ts(b)-_ts(a)),[matches])
@@ -1684,6 +1790,7 @@ export default function SavedMatchesList({
               hideOVR={hideOVR}
               latestDraftId={latestDraftId}
               isHighlighted={m.id === highlightedMatchId}
+              customMemberships={customMemberships}
             />
             {idx < ordered.length - 1 && (
               <li aria-hidden="true" className="mx-2 my-0 border-t border-dashed border-gray-200" />
