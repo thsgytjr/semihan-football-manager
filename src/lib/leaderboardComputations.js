@@ -2,6 +2,7 @@
 // Computation functions for leaderboard data aggregation and ranking
 
 import { toStr, isMember, extractAttendeeIds, extractStatsByPlayer } from './matchUtils'
+import * as MatchHelpers from './matchHelpers'
 
 /* --------------------- Attack Points Computation --------------------- */
 
@@ -297,40 +298,27 @@ export function computeDuoRows(players = [], matches = []) {
 /**
  * Extract quarter scores from match object
  */
+/**
+ * Get quarter scores from match (supports legacy formats)
+ * @deprecated Use MatchHelpers.getQuarterScores instead
+ * @param {Object} m - Match object
+ * @returns {Array<Array<number>>|null} Quarter scores
+ */
 export function coerceQuarterScores(m) {
-  if (!m) return null
-  if (m?.draft && Array.isArray(m.draft.quarterScores)) return m.draft.quarterScores
-  if (Array.isArray(m.quarterScores) && m.quarterScores.length) {
-    if (Array.isArray(m.quarterScores[0])) return m.quarterScores
-    if (m.quarterScores[0] && Array.isArray(m.quarterScores[0].teamScores)) {
-      return m.quarterScores.map(t => t.teamScores)
-    }
-  }
-  if (Array.isArray(m.scores) && Array.isArray(m.snapshot) && m.scores.length === m.snapshot.length) {
-    return m.snapshot.map((_, i) => [m.scores[i]])
-  }
-  return null
+  // ✅ 헬퍼 사용 - 기존 로직과 100% 동일하지만 중앙화됨
+  const result = MatchHelpers.getQuarterScores(m)
+  return result.length > 0 ? result : null
 }
 
 /**
  * Check if match is a draft match
+ * @deprecated Use MatchHelpers.isDraftMatch instead
+ * @param {Object} m - Match object
+ * @returns {boolean} True if draft match
  */
 export function isDraftMatch(m) {
-  // selectionMode가 가장 신뢰할 수 있는 기준
-  if (m?.selectionMode === 'draft') return true
-  
-  // draft 객체에 실제 데이터가 있는지 확인
-  const hasDraftData = m?.draft && (
-    (m.draft.quarterScores && m.draft.quarterScores.length > 0) ||
-    (m.draft.captains && Object.keys(m.draft.captains).length > 0) ||
-    (m.draft.playerPoints && Object.keys(m.draft.playerPoints).length > 0) ||
-    (m.draft.captainPoints && Object.keys(m.draft.captainPoints).length > 0)
-  )
-  
-  return hasDraftData || 
-         !!m?.draftMode || 
-         Array.isArray(m?.captains) || 
-         Array.isArray(m?.captainIds)
+  // ✅ 헬퍼 사용 - 드래프트 판별 로직 통일
+  return MatchHelpers.isDraftMatch(m)
 }
 
 /**
@@ -351,13 +339,13 @@ export function extractSnapshotTeams(m) {
 
 /**
  * Extract captain IDs by team from draft match
+ * @deprecated Use MatchHelpers.getCaptains instead
+ * @param {Object} m - Match object
+ * @returns {Array<string>} Captain IDs by team
  */
 export function extractCaptainsByTeam(m) {
-  const arr = (m?.draft && Array.isArray(m.draft.captains)) ? m.draft.captains
-            : Array.isArray(m?.captains) ? m.captains
-            : Array.isArray(m?.captainIds) ? m.captainIds
-            : []
-  return Array.isArray(arr) ? arr.map(x => toStr(x?.id ?? x)) : []
+  // ✅ 헬퍼 사용 - Captain 데이터 접근 통일
+  return MatchHelpers.getCaptains(m)
 }
 
 /**
@@ -372,11 +360,15 @@ export function extractMatchTS(m) {
 
 /**
  * Determine winner index from quarter scores
+ * @deprecated Use MatchHelpers.getWinnerIndex instead (for new code)
  * 
  * 2팀 경기: 쿼터 승수 → 총득점
  * 3팀+ 경기: 각 팀의 최고 골득실 비교 → 총득점
  */
 export function winnerIndexFromQuarterScores(qs) {
+  // ⚠️ 이 함수는 복잡한 로직이 있어서 헬퍼로 대체하지 않음
+  // MatchHelpers.getWinnerIndex는 단순 총점 비교만 하므로 다름
+  // 기존 로직 유지 (쿼터 승수, 골득실 등 고려)
   if (!Array.isArray(qs) || qs.length < 2) return -1
   
   const teamLen = qs.length

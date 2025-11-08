@@ -17,6 +17,7 @@ import{seededShuffle}from'../utils/random'
 import SavedMatchesList from'../components/SavedMatchesList'
 import { createUpcomingMatch, filterExpiredMatches } from '../lib/upcomingMatch'
 import { calculateAIPower } from '../lib/aiPower'
+import * as MatchHelpers from '../lib/matchHelpers'
 import captainIcon from '../assets/Captain.PNG'
 import { getMembershipBadge } from '../lib/membershipConfig'
 import { getTagColorClass } from '../lib/constants'
@@ -514,7 +515,39 @@ export default function MatchPlanner({
     notify('AI 배정 이전 상태로 되돌렸습니다 ↩️')
   }
 
-  function loadSavedIntoPlanner(match){if(!match)return;skipAutoResetRef.current=true;const h=hydrateMatch(match,players),ts=h.teams||[];if(ts.length===0){notify('불러올 팀 구성이 없습니다.');return}const ids=ts.flat().map(p=>p.id);setTeamCount(ts.length);if(match.criterion)setCriterion(match.criterion);if(match.location){setLocationName(match.location.name||'');setLocationAddress(match.location.address||'')}if(match.dateISO)setDateISO(match.dateISO.slice(0,16));if(match.fees?.total)setCustomBaseCost(match.fees.total);setShuffleSeed(0);setManualTeams(ts);latestTeamsRef.current=ts;setShowAIPower(false);const baseFormations=Array.isArray(match.formations)&&match.formations.length===ts.length?match.formations.slice():ts.map(list=>recommendFormation({count:list.length,mode:match.mode||'11v11',positions:countPositions(list)}));setFormations(baseFormations);const baseBoard=Array.isArray(match.board)&&match.board.length===ts.length?match.board.map(a=>Array.isArray(a)?a.slice():[]):ts.map((list,i)=>assignToFormation({players:list,formation:baseFormations[i]||'4-3-3'}));setPlacedByTeam(baseBoard);if(match.selectionMode==='draft'){setIsDraftMode(true);if(Array.isArray(match.captainIds)){setCaptainIds(match.captainIds)}}else{setIsDraftMode(false);setCaptainIds([])};if(match.teamColors&&Array.isArray(match.teamColors)&&match.teamColors.length===ts.length){setTeamColors(match.teamColors)};notify('저장된 매치를 팀배정에 불러왔습니다 ✅')}
+  function loadSavedIntoPlanner(match){
+    if(!match)return
+    skipAutoResetRef.current=true
+    const h=hydrateMatch(match,players),ts=h.teams||[]
+    if(ts.length===0){notify('불러올 팀 구성이 없습니다.');return}
+    const ids=ts.flat().map(p=>p.id)
+    setTeamCount(ts.length)
+    if(match.criterion)setCriterion(match.criterion)
+    if(match.location){setLocationName(match.location.name||'');setLocationAddress(match.location.address||'')}
+    if(match.dateISO)setDateISO(match.dateISO.slice(0,16))
+    if(match.fees?.total)setCustomBaseCost(match.fees.total)
+    setShuffleSeed(0)
+    setManualTeams(ts)
+    latestTeamsRef.current=ts
+    setShowAIPower(false)
+    const baseFormations=Array.isArray(match.formations)&&match.formations.length===ts.length?match.formations.slice():ts.map(list=>recommendFormation({count:list.length,mode:match.mode||'11v11',positions:countPositions(list)}))
+    setFormations(baseFormations)
+    const baseBoard=Array.isArray(match.board)&&match.board.length===ts.length?match.board.map(a=>Array.isArray(a)?a.slice():[]):ts.map((list,i)=>assignToFormation({players:list,formation:baseFormations[i]||'4-3-3'}))
+    setPlacedByTeam(baseBoard)
+    
+    // ✅ 헬퍼 사용 - 드래프트 모드 및 주장 로드
+    if(MatchHelpers.isDraftMatch(match)){
+      setIsDraftMode(true)
+      const caps = MatchHelpers.getCaptains(match)
+      if(caps.length > 0) setCaptainIds(caps)
+    }else{
+      setIsDraftMode(false)
+      setCaptainIds([])
+    }
+    
+    if(match.teamColors&&Array.isArray(match.teamColors)&&match.teamColors.length===ts.length){setTeamColors(match.teamColors)}
+    notify('저장된 매치를 팀배정에 불러왔습니다 ✅')
+  }
 
   function loadUpcomingMatchIntoPlanner(upcomingMatch) {
     if (!upcomingMatch) return

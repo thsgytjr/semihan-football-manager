@@ -400,8 +400,8 @@ export default function UpcomingMatchCard({
                   matches={matches}
                   teamCount={teamCount}
                 />
-                {/* 팀 보기 버튼 - 드래프트 완료 + 매칭되는 매치가 있을 때만 표시 */}
-                {hasTeamData && isDraftComplete && hasMatchingHistoricalMatch && (
+                {/* 팀 보기 버튼 - 매칭되는 매치가 있을 때 표시 (드래프트 여부 무관) */}
+                {hasMatchingHistoricalMatch && (
                   <button
                     onClick={() => onShowTeams?.(upcomingMatch)}
                     style={{
@@ -991,7 +991,7 @@ function BouncingPlayersLottery({ attendees, isDraftComplete }) {
         color: '#d97706',
         animation: 'lotteryBlink 1.5s ease-in-out infinite'
       }}>
-        {isDraftComplete ? '팀 매칭 확정중...' : '드래프트 추첨 대기중...'} ({attendees.length}명)
+        {isDraftComplete ? '팀 매칭 확정중...' : '팀 추첨 대기중...'} ({attendees.length}명)
       </div>
       
       <div 

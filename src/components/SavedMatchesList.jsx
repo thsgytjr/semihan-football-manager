@@ -6,6 +6,7 @@ import { hydrateMatch } from "../lib/match"
 import { formatMatchLabel } from "../lib/matchLabel"
 import { logger } from "../lib/logger"
 import { getMembershipBadge } from "../lib/membershipConfig"
+import * as MatchHelpers from "../lib/matchHelpers"
 import draftIcon from "../assets/draft.png"
 import captainIcon from "../assets/Captain.PNG"
 
@@ -701,17 +702,8 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
   const [captainIds, setCaptainIds] = useState([])
   const [quarterScores, setQuarterScores] = useState(null)
   const [localDraftMode, setLocalDraftMode] = useState(() => {
-    // Check if it's actually a draft match by looking at selectionMode or actual draft data
-    // 주장(captains)만 있는 것은 드래프트가 아님 - quarterScores가 있어야 드래프트
-    if (m.selectionMode === 'draft' || m?.draftMode) return true
-    // Check if draft object has actual quarterScores data
-    if (m?.draft) {
-      const hasDraftData = (
-        (m.draft.quarterScores && m.draft.quarterScores.length > 0)
-      )
-      return hasDraftData
-    }
-    return false
+    // ✅ 헬퍼 사용 - 드래프트 판별 로직 통일
+    return MatchHelpers.isDraftMatch(m)
   })
   const byId=useMemo(()=>new Map(players.map(p=>[String(p.id),p])),[players])
   const draftTeams=useMemo(()=>draftSnap.map(ids=>ids.map(id=>byId.get(String(id))).filter(Boolean)),[draftSnap,byId])
@@ -738,24 +730,17 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
   const resetDraft=()=>{ 
     setDraftSnap(initialSnap)
     setDirty(false)
-    // Reset draft mode state - check for actual draft data (quarterScores만 체크, captains는 일반 매치에도 있을 수 있음)
-    if (m.selectionMode === 'draft' || m?.draftMode) {
-      setLocalDraftMode(true)
-    } else if (m?.draft) {
-      const hasDraftData = (
-        (m.draft.quarterScores && m.draft.quarterScores.length > 0)
-      )
-      setLocalDraftMode(hasDraftData)
-    } else {
-      setLocalDraftMode(false)
-    }
-    // Reset captains to initial state
-    const caps = (m?.draft?.captains && Array.isArray(m.draft.captains)) ? m.draft.captains.map(String) : (Array.isArray(m.captains)?m.captains.map(String):(Array.isArray(m.captainIds)?m.captainIds.map(String):[]))
+    // ✅ 헬퍼 사용 - 드래프트 판별 로직 통일
+    setLocalDraftMode(MatchHelpers.isDraftMatch(m))
+    
+    // Reset captains to initial state - ✅ 헬퍼 사용
+    const caps = MatchHelpers.getCaptains(m)
     if(caps && caps.length) setCaptainIds(caps)
     else setCaptainIds(initialSnap.map(team=>team[0]?String(team[0]):null))
-    // Reset quarter scores to initial state
-    const qs = (m?.draft?.quarterScores && Array.isArray(m.draft.quarterScores)) ? m.draft.quarterScores : (Array.isArray(m.scores) ? m.scores.map(v=>[v]) : null)
-    setQuarterScores(qs || (initialSnap.length? initialSnap.map(()=>[]): null))
+    
+    // Reset quarter scores to initial state - ✅ 헬퍼 사용
+    const qs = MatchHelpers.getQuarterScores(m)
+    setQuarterScores(qs.length > 0 ? qs : (initialSnap.length? initialSnap.map(()=>[]): null))
   }
   const saveDraft=()=>{ 
     const patch = {
@@ -788,25 +773,18 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
   useEffect(()=>{ 
     setDraftSnap(initialSnap); 
     setDirty(false); 
-    // Check for actual draft mode (quarterScores만 체크, captains는 제외)
-    if (m.selectionMode === 'draft' || m?.draftMode) {
-      setLocalDraftMode(true)
-    } else if (m?.draft) {
-      const hasDraftData = (
-        (m.draft.quarterScores && m.draft.quarterScores.length > 0)
-      )
-      setLocalDraftMode(hasDraftData)
-    } else {
-      setLocalDraftMode(false)
-    }
+    // ✅ 헬퍼 사용 - 드래프트 판별 로직 통일
+    setLocalDraftMode(MatchHelpers.isDraftMatch(m))
   }, [m.id, initialSnap.join('|')])
+  
   useEffect(()=>{
-    // initialize captains and quarter scores from m.draft or fallback
-    const caps = (m?.draft?.captains && Array.isArray(m.draft.captains)) ? m.draft.captains.map(String) : (Array.isArray(m.captains)?m.captains.map(String):(Array.isArray(m.captainIds)?m.captainIds.map(String):[]))
+    // ✅ 헬퍼 사용 - Captain/QuarterScore 초기화
+    const caps = MatchHelpers.getCaptains(m)
     if(caps && caps.length) setCaptainIds(caps)
     else setCaptainIds(initialSnap.map(team=>team[0]?String(team[0]):null))
-    const qs = (m?.draft?.quarterScores && Array.isArray(m.draft.quarterScores)) ? m.draft.quarterScores : (Array.isArray(m.scores) ? m.scores.map(v=>[v]) : null)
-    setQuarterScores(qs || (initialSnap.length? initialSnap.map(()=>[]): null))
+    
+    const qs = MatchHelpers.getQuarterScores(m)
+    setQuarterScores(qs.length > 0 ? qs : (initialSnap.length? initialSnap.map(()=>[]): null))
   }, [m.id, initialSnap.join('|')])
 
   const teamCols = Math.max(1, Math.min(4, draftTeams.length))
