@@ -3,6 +3,26 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { getVisitStats } from '../services/storage.service'
 import { logger } from '../lib/logger'
 
+// iPhone 모델 정규화 함수
+function normalizePhoneModel(phoneModel) {
+  if (!phoneModel) return null
+  
+  // iPhone 패턴 감지
+  if (/iPhone/i.test(phoneModel)) {
+    // iOS 버전 제거
+    let normalized = phoneModel.replace(/\s*iOS\s*[\d.]+/, '').trim()
+    
+    // 해상도 기반 모델 정규화
+    if (normalized.includes('402x874')) {
+      normalized = 'iPhone'
+    }
+    
+    return normalized
+  }
+  
+  return phoneModel
+}
+
 export default function VisitorStats({ visits }) {
   const [logs, setLogs] = useState([])
   const [loading, setLoading] = useState(true)
@@ -16,7 +36,12 @@ export default function VisitorStats({ visits }) {
   async function loadStats() {
     try {
       const data = await getVisitStats()
-      setLogs(data || [])
+      // 로드된 데이터의 phone_model을 정규화
+      const normalizedData = (data || []).map(log => ({
+        ...log,
+        phone_model: normalizePhoneModel(log.phone_model)
+      }))
+      setLogs(normalizedData)
     } catch (e) {
       logger.error('Failed to load visit stats:', e)
     } finally {
@@ -75,7 +100,7 @@ export default function VisitorStats({ visits }) {
       osCounts[os] = (osCounts[os] || 0) + 1
     })
 
-    // 핸드폰 모델
+    // 핸드폰 모델 (이미 정규화됨)
     const phoneModelCounts = {}
     logs.forEach(l => {
       if (l.phone_model) {

@@ -182,16 +182,12 @@ export function parseUserAgent(ua, screenWidth = null, screenHeight = null) {
       } else if (screenWidth && screenHeight) {
         // 최신 iOS는 식별자가 없으므로 화면 해상도로 추정
         const screenKey = `${screenWidth}x${screenHeight}`
-        phoneModel = IPHONE_SCREEN_MODELS[screenKey] || `iPhone (${screenWidth}x${screenHeight})`
-        
-        // iOS 버전 추출
-        const iosMatch = ua.match(/OS (\d+)[._](\d+)/i)
-        if (iosMatch) {
-          phoneModel += ` iOS ${iosMatch[1]}.${iosMatch[2]}`
-        }
+        phoneModel = IPHONE_SCREEN_MODELS[screenKey] || `iPhone`
       } else {
         phoneModel = 'iPhone'
       }
+      // iOS 버전 제거 - 모델만 유지하도록 정규화
+      phoneModel = phoneModel.replace(/\s*iOS\s*[\d.]+/, '')
     }
     // iPad 모델
     else if (/ipad/i.test(ua)) {
