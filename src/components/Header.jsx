@@ -7,7 +7,7 @@ export default function Header({ tab, setTab }){
     <header className="sticky top-0 z-[200] border-b border-gray-200 bg-white/70 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
-          <div className="h-7 w-7 rounded bg-emerald-500" />
+          <img src="/GoalifyLogo.png?v=1" alt="Logo" className="h-7 w-7 rounded object-cover" />
           <h1 className="text-lg font-semibold">Semihan Soccer Lite</h1>
         </div>
         <nav className="flex gap-1">

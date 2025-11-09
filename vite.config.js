@@ -20,17 +20,37 @@ try {
 export default defineConfig(({ mode }) => {
   // 환경 변수 로드
   const env = loadEnv(mode, process.cwd(), '')
-  const teamName = env.VITE_TEAM_NAME
-  const description = env.VITE_APP_DESCRIPTION
-  const appUrl = env.VITE_APP_URL
   
-  // 필수 환경 변수 체크
+  // Vercel 배포 환경에서는 VERCEL_GIT_COMMIT_MESSAGE로 팀 판별
+  let teamName = env.VITE_TEAM_NAME
+  let description = env.VITE_APP_DESCRIPTION
+  let appUrl = env.VITE_APP_URL
+  
+  // CI/CD 환경에서 환경 변수가 없으면 경고만 출력
+  if (!teamName && process.env.CI) {
+    console.warn('⚠️ VITE_TEAM_NAME not set, using fallback')
+    teamName = 'Goalify'
+  }
+  
+  if (!description && process.env.CI) {
+    console.warn('⚠️ VITE_APP_DESCRIPTION not set, using fallback')
+    description = 'Plan. Play. Win.'
+  }
+  
+  if (!appUrl && process.env.CI) {
+    console.warn('⚠️ VITE_APP_URL not set, using fallback')
+    appUrl = 'https://semihan-football-manager.vercel.app'
+  }
+  
+  // 로컬 개발 환경에서는 필수
   if (!teamName || !description || !appUrl) {
-    console.error('❌ Required environment variables missing:')
-    if (!teamName) console.error('  - VITE_TEAM_NAME')
-    if (!description) console.error('  - VITE_APP_DESCRIPTION')
-    if (!appUrl) console.error('  - VITE_APP_URL')
-    throw new Error('Missing required environment variables')
+    if (!process.env.CI) {
+      console.error('❌ Required environment variables missing:')
+      if (!teamName) console.error('  - VITE_TEAM_NAME')
+      if (!description) console.error('  - VITE_APP_DESCRIPTION')
+      if (!appUrl) console.error('  - VITE_APP_URL')
+      throw new Error('Missing required environment variables')
+    }
   }
   
   const imageUrl = `${appUrl}/GoalifyLogo.png`
