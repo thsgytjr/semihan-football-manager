@@ -1,17 +1,21 @@
-# ⚽ Football Manager
+# ⚽ Goalify (Football Manager Platform)
 
-풋살 팀 관리 플랫폼 - 선수 관리, 경기 기록, 통계 분석, 드래프트 모드
+멀티 테넌트 아마추어/교회 풋살 동호회 관리 플랫폼 – 선수 관리 · 매치 기록 · 리더보드 · Draft 모드 · 예정 매치 · 회비 분배 · 브랜딩.
 
-## 🎯 주요 기능
+## 🎯 핵심 기능 개요
 
-- **선수 관리**: 선수 등록, 능력치 관리, 사진 업로드
-- **경기 기록**: 경기 결과 입력, 골/어시스트 기록
-- **통계 분석**: 개인/팀 통계, 리더보드, 순위 변동
-- **드래프트 모드**: 주장 선정, 선수 선택, 자동 팀 밸런싱
-- **예정 매치**: 다가오는 경기 관리
-- **Analytics**: 방문자 통계, OS/브라우저 분석
+- 선수 관리: CRUD, 능력치(OVR), 멤버십/태그, 프로필 이미지
+- 매치 플래너: 예정 매치 생성 → Draft 진행 → 공식 매치 저장 흐름
+- Draft 모드: 주장 지정, 팀 구성, 쿼터 점수/승패 집계, 드래프트 전용 리더보드
+- 리더보드: 공격 포인트(골+어시) · 듀오(Assist→Goal) · 드래프트 승점 · 주장 승점 · 드래프트 공격 포인트
+- 예정 매치(Upcoming): 실시간 참가자/팀 수/드래프트 상태 노출
+- AI 팀 배정: 포지션/능력치/과거 성과 기반 고급 균형 알고리즘
+- 회비 계산: 멤버/게스트 자동 단가 산출 (게스트 할증 + 0.5단위 반올림)
+- 커스텀 팀 색상: 프리셋 + HEX 입력으로 헤더/팀카드 스타일
+- 브랜딩/미리보기: OG/Twitter 메타 자동 주입 (팀별 제목/설명/이미지)
+- Analytics: 방문자/OS/브라우저/세션 추적
 
-## 🚀 빠른 시작
+## 🚀 빠른 시작 (Local)
 
 ### 로컬 개발
 ```bash
@@ -25,96 +29,77 @@ npm run dev
 npm run build
 ```
 
-### 환경변수 설정
-`.env.local` 파일 생성:
+### 환경변수 설정 (`.env.local`)
+필수 값 누락 시 빌드가 기본 안전값으로 진행되지만 브랜딩/미리보기 품질 저하 가능.
 ```bash
 VITE_TEAM_NAME="팀 이름"
 VITE_TEAM_SHORT_NAME="team-short"
 VITE_TEAM_PRIMARY_COLOR="#10b981"
 
-VITE_SUPABASE_URL=your-supabase-url
-VITE_SUPABASE_ANON_KEY=your-supabase-key
+VITE_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+VITE_SUPABASE_ANON_KEY=public-anon-key
+
+# 선택/권장 (브랜딩 & 미리보기)
+VITE_APP_DESCRIPTION="Plan. Play. Win. | TEAM 소개 문구"
+VITE_APP_URL="https://your-team.vercel.app"  # 절대 URL (OG 이미지 경로 기준)
 ```
 
-## 📦 새 팀 배포
+## 📦 새 팀 (Multi-tenant) 배포 요약
+1. Supabase 새 프로젝트 → SQL 스키마 적용 (TIMESTAMPTZ / JSONB `location`).
+2. Vercel 새 프로젝트 → 동일 레포 연결 후 환경변수 입력.
+3. 첫 선수/매치 데이터 생성 → 리더보드 정상 동작 확인.
 
-이 플랫폼은 **멀티 테넌트** 구조로, 여러 팀이 독립적으로 사용할 수 있습니다.
-
-### 빠른 배포 (3단계)
-
-1. **Supabase 프로젝트 생성**
-   - https://supabase.com 에서 새 프로젝트 생성
-   - SQL 스키마 실행 (DEPLOYMENT_GUIDE.md 참고)
-
-2. **Vercel에 배포**
-   - 이 레포지토리를 Vercel에 Import
-   - 환경변수 입력 (팀 정보 + Supabase Keys)
-
-3. **완료!**
-   - `your-team.vercel.app`에서 바로 사용 가능
-
-**자세한 가이드**: [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)
+상세 문서: `docs/DEPLOYMENT_GUIDE.md`, 전체 아키텍처: `docs/GOALIFY_OVERVIEW.md`
 
 ## 🏗️ 기술 스택
+React 19 · Vite · Tailwind · Supabase(PostgreSQL/Storage/Auth) · Vercel · Recharts · dnd-kit
 
-- **Frontend**: React 19, Vite
-- **Styling**: Tailwind CSS
-- **Database**: Supabase (PostgreSQL)
-- **Storage**: Supabase Storage
-- **Auth**: Supabase Auth
-- **Deployment**: Vercel
-- **Charts**: Recharts
-- **Drag & Drop**: dnd-kit
-
-## 📂 프로젝트 구조
-
+## 📂 구조 (요약)
 ```
 src/
-├── components/     # 재사용 컴포넌트
-├── pages/          # 페이지 컴포넌트
-├── lib/            # 유틸리티, 로직
-│   ├── teamConfig.js       # 팀별 설정
-│   ├── supabaseClient.js   # Supabase 클라이언트
-│   ├── storage.js          # 로컬스토리지
-│   └── ...
-├── services/       # API 서비스
-└── utils/          # 헬퍼 함수
+   components/        UI 컴포넌트 (리더보드, 매치 카드 등)
+   pages/             라우트 페이지 (Dashboard, MatchPlanner 등)
+   lib/               도메인 로직 (leaderboardComputations, matchHelpers, formation...)
+   services/          Supabase CRUD 래퍼 (matches.service 등)
+   utils/             범용 유틸 (random, avatar 등)
 ```
 
-## 🎨 팀 커스터마이징
+## 🎨 커스터마이징 (브랜딩)
+- 환경변수 기반: 팀 이름/짧은 이름/대표 색상/설명/URL.
+- OG/Twitter 메타 자동 삽입 (배포 시점).
+- 팀별 로고: `public/GoalifyLogo.png` 존재 시 자동 사용, 없으면 파비콘.
+- 팀 색상: Planner UI에서 팀별 커스텀 컬러 저장 → `teamColors`.
 
-각 팀은 다음을 커스터마이즈할 수 있습니다:
+## 📊 핵심 데이터 개념 (요약)
+| 엔티티 | 설명 | 예시 필드 |
+|--------|------|-----------|
+| Player | 능력치/태그/멤버십 | id, name, stats, membership, tags[], positions[] |
+| UpcomingMatch | 확정 전 팀/참가자 상태 | id, dateISO, participantIds, teamCount, captainIds, snapshot |
+| Match | 공식 저장 매치 (리더보드 반영) | id, dateISO, attendeeIds, snapshot, stats, quarterScores, draft |
+| Fees | 회비 계산 결과 | total, memberFee, guestFee, guestSurcharge |
+| Leaderboard Rows | 계산된 통계 행 | attackRows, duoRows, draftWinsRows |
 
-- 팀 이름 및 로고
-- 테마 색상
-- 기능 활성화/비활성화
-- 독립적인 데이터베이스
+## 🔐 보안 & 격리 개요
+- 각 팀은 별도 Supabase 프로젝트 → 완전 데이터 격리.
+- `room_id` 스코프 필드로 내부 멀티 테넌트 분리.
+- RLS 정책 적용 권장 (문서화 예정).
+- 공개 리더보드 데이터만 노출, 관리자 기능은 보호.
 
-환경변수로 간단하게 설정 가능합니다.
-
-## 📊 데이터 구조
-
-- **Players**: 선수 정보, 능력치, 멤버십
-- **Matches**: 경기 결과, 출전 선수, 통계
-- **Upcoming Matches**: 예정된 경기, 참가자
-- **Visit Logs**: 방문자 추적 (Analytics용)
-
-## 🔐 보안
-
-- Row Level Security (RLS) 지원
-- 팀별 데이터 완전 격리
-- Supabase Auth 통합
-- 개발 환경 방문 추적 제외
+## 📘 추가 문서
+- 전체 시스템: `docs/GOALIFY_OVERVIEW.md`
+- 배포 상세: `docs/DEPLOYMENT_GUIDE.md`
+- 마이그레이션: `docs/MIGRATION_QUICK_START.md`
+- Membership 커스텀: `docs/MEMBERSHIP_CUSTOMIZATION.md`
 
 ## 📝 라이선스
-
 MIT License
 
-## 🤝 기여
-
-Issues와 Pull Requests를 환영합니다!
+## 🤝 기여 & 문의
+Issue/PR 환영. 기능 확장 제안은 Issue 템플릿 사용 권장.
 
 ## 📞 문의
-
 문제가 있으면 GitHub Issues에 올려주세요.
+
+---
+> 더 깊은 개념/알고리즘/로드맵은 `docs/GOALIFY_OVERVIEW.md` 참고.
 

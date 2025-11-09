@@ -15,16 +15,18 @@ import FreePitch from'../components/pitch/FreePitch'
 import{assignToFormation,recommendFormation,countPositions}from'../lib/formation'
 import{seededShuffle}from'../utils/random'
 import SavedMatchesList from'../components/SavedMatchesList'
-import { createUpcomingMatch, filterExpiredMatches } from '../lib/upcomingMatch'
+import { createUpcomingMatch, filterExpiredMatches, getNextSaturday630 } from '../lib/upcomingMatch'
 import { calculateAIPower } from '../lib/aiPower'
 import * as MatchHelpers from '../lib/matchHelpers'
 import captainIcon from '../assets/Captain.PNG'
 import { getMembershipBadge } from '../lib/membershipConfig'
-import { getTagColorClass } from '../lib/constants'
+import { getTagColorClass, migratePositionToPositions, getPositionCategory } from '../lib/constants'
+import { toStr, isMember } from '../lib/matchUtils'
+import { calcFees } from '../lib/fees'
+import { getTextColor } from '../utils/color'
 
 /* ───────── 공통 유틸 ───────── */
-const S=(v)=>v==null?'':String(v)
-const isMember=(m)=>{const s=S(m).trim().toLowerCase();return s==='member'||s.includes('정회원')}
+const S = toStr
 
 // 커스텀 멤버십 기반 배지 가져오기
 const getBadgesWithCustom=(membership,isCaptain=false,customMemberships=[])=>{
@@ -35,61 +37,27 @@ const getBadgesWithCustom=(membership,isCaptain=false,customMemberships=[])=>{
 /* ─────────────────────────────────────── */
 
 /* ───────── 공통 요금 유틸 ───────── */
-function calcFees({ total, memberCount, guestCount, guestSurcharge = 2 }) {
-  total = Math.max(0, Number(total) || 0);
-  const surcharge = Math.max(0, Number(guestSurcharge) || 0);
-  const count = memberCount + guestCount;
-  if (total <= 0 || count === 0) return { total, memberFee: 0, guestFee: 0 };
-
-  // 게스트는 멤버 + surcharge
-  // memberFee + surcharge = guestFee
-  // total = memberFee * memberCount + guestFee * guestCount
-  //      = memberFee * memberCount + (memberFee + surcharge) * guestCount
-  //      = memberFee * (memberCount + guestCount) + surcharge * guestCount
-  //      = memberFee * count + surcharge * guestCount
-  // => memberFee = (total - surcharge * guestCount) / count
-  let memberFee = (total - surcharge * guestCount) / count;
-  // 0.5 단위로 반올림
-  memberFee = Math.round(memberFee * 2) / 2;
-  let guestFee = memberFee + surcharge;
-  // 실제 합계가 total과 다를 수 있으니, total도 재계산해서 반환
-  const sum = memberFee * memberCount + guestFee * guestCount;
-  return { total, memberFee, guestFee, sum };
-}
-
-const nextSaturday0630Local=()=>{const n=new Date(),d=new Date(n),dow=n.getDay();let add=(6-dow+7)%7;if(add===0){const t=new Date(n);t.setHours(6,30,0,0);if(n>t)add=7}d.setDate(n.getDate()+add);d.setHours(6,30,0,0);const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0'),H=String(d.getHours()).padStart(2,'0'),M=String(d.getMinutes()).padStart(2,'0');return`${y}-${m}-${dd}T${H}:${M}`}
+// moved to ../lib/fees
 const POS_ORDER=['GK','DF','MF','FW','OTHER']
 
 // 멀티 포지션 지원: positions 배열 또는 레거시 position 필드
-const positionGroupOf=p=>{
-  // positions 배열 사용 - 우선순위: DF > MF > FW > GK
-  if (p.positions && Array.isArray(p.positions) && p.positions.length > 0) {
-    const categories = p.positions.map(pos => {
-      const upperPos = pos.toUpperCase()
-      if (upperPos === 'GK') return 'GK'
-      if (['CB','LB','RB','LWB','RWB','SW'].includes(upperPos)) return 'DF'
-      if (['CDM','CM','CAM','LM','RM'].includes(upperPos)) return 'MF'
-      if (['ST','CF','LW','RW'].includes(upperPos)) return 'FW'
-      return null
-    }).filter(Boolean)
-    
-    // 우선순위로 반환 (DF > MF > FW > GK)
-    if (categories.includes('DF')) return 'DF'
-    if (categories.includes('MF')) return 'MF'
-    if (categories.includes('FW')) return 'FW'
-    if (categories.includes('GK')) return 'GK'
+const positionGroupOf = (p) => {
+  const positions = migratePositionToPositions(p)
+  if (positions && positions.length > 0) {
+    const cats = positions.map(getPositionCategory).filter(Boolean)
+    // 우선순위: DF > MF > FW > GK (기존 동작 유지)
+    if (cats.includes('DF')) return 'DF'
+    if (cats.includes('MF')) return 'MF'
+    if (cats.includes('FW')) return 'FW'
+    if (cats.includes('GK')) return 'GK'
   }
-  
-  // 레거시 position 필드
-  const raw=String(p.position||p.pos||'').toUpperCase()
-  if(raw==='GK'||raw.includes('GK'))return'GK'
-  const df=['DF','CB','LB','RB','LWB','RWB','CBR','CBL','SW']
-  const mf=['MF','CM','DM','AM','LM','RM','CDM','CAM','RDM','LDM','RCM','LCM']
-  const fw=['FW','ST','CF','LW','RW','RF','LF']
-  if(df.some(k=>raw.includes(k)))return'DF'
-  if(mf.some(k=>raw.includes(k)))return'MF'
-  if(fw.some(k=>raw.includes(k)))return'FW'
-  return'OTHER'
+  // 레거시 문자열 대비
+  const raw = String(p.position || p.pos || '').toUpperCase()
+  if (raw === 'GK' || raw.includes('GK')) return 'GK'
+  if (/CB|LB|RB|LWB|RWB|SW|DF/.test(raw)) return 'DF'
+  if (/CDM|CM|CAM|LM|RM|MF|DM|AM/.test(raw)) return 'MF'
+  if (/ST|CF|LW|RW|RF|LF|FW/.test(raw)) return 'FW'
+  return 'OTHER'
 }
 
 const posIndex=p=>POS_ORDER.indexOf(positionGroupOf(p))
@@ -114,7 +82,7 @@ export default function MatchPlanner({
   membershipSettings = []
 }){
   const customMemberships = membershipSettings.length > 0 ? membershipSettings : []
-  const[dateISO,setDateISO]=useState(()=>nextSaturday0630Local()),[attendeeIds,setAttendeeIds]=useState([]),[criterion,setCriterion]=useState('overall'),[shuffleSeed,setShuffleSeed]=useState(0)
+  const[dateISO,setDateISO]=useState(()=>getNextSaturday630()),[attendeeIds,setAttendeeIds]=useState([]),[criterion,setCriterion]=useState('overall'),[shuffleSeed,setShuffleSeed]=useState(0)
   const[locationPreset,setLocationPreset]=useState(''),[locationName,setLocationName]=useState(''),[locationAddress,setLocationAddress]=useState('')
   const[customBaseCost,setCustomBaseCost]=useState(0),[guestSurcharge,setGuestSurcharge]=useState(2),[teamCount,setTeamCount]=useState(2)
   const[manualTeams,setManualTeams]=useState(null),[activePlayerId,setActivePlayerId]=useState(null),[activeFromTeam,setActiveFromTeam]=useState(null)
@@ -201,7 +169,7 @@ export default function MatchPlanner({
     const list = Array.isArray(attendees) ? attendees : []
     const m = list.filter(p => isMember(p.membership)).length
     const g = Math.max(0, list.length - m)
-  return calcFees({ total: Math.max(0, parseFloat(baseCostValue) || 0), memberCount: m, guestCount: g, guestSurcharge: guestSurcharge || 2 })
+    return calcFees({ total: Math.max(0, parseFloat(baseCostValue) || 0), memberCount: m, guestCount: g, guestSurcharge: guestSurcharge || 2 })
   }
 
   // ✅ 지도 링크 계산 (프리셋 + Other URL)
@@ -1159,15 +1127,7 @@ function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraft
     { bg: '#facc15', label: 'Yellow' },
   ]
   
-  // Calculate text color based on background brightness
-  const getTextColor = (bgHex) => {
-    const hex = bgHex.replace('#', '')
-    const r = parseInt(hex.substr(0, 2), 16)
-    const g = parseInt(hex.substr(2, 2), 16)
-    const b = parseInt(hex.substr(4, 2), 16)
-    const brightness = (r * 299 + g * 587 + b * 114) / 1000
-    return brightness > 155 ? '#000000' : '#ffffff'
-  }
+  // text color calc moved to utils/color
   
   // Apply preset color
   const applyPresetColor = (preset) => {

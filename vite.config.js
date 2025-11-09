@@ -42,15 +42,12 @@ export default defineConfig(({ mode }) => {
     appUrl = 'https://semihan-football-manager.vercel.app'
   }
   
-  // 로컬 개발 환경에서는 필수
-  if (!teamName || !description || !appUrl) {
-    if (!process.env.CI) {
-      console.error('❌ Required environment variables missing:')
-      if (!teamName) console.error('  - VITE_TEAM_NAME')
-      if (!description) console.error('  - VITE_APP_DESCRIPTION')
-      if (!appUrl) console.error('  - VITE_APP_URL')
-      throw new Error('Missing required environment variables')
-    }
+  // 로컬 개발에서는 미지정 시 안전한 기본값을 사용하여 개발 편의성 확보
+  if (!teamName && !process.env.CI) teamName = 'Goalify'
+  if (!description && !process.env.CI) description = 'Plan. Play. Win.'
+  if (!appUrl && !process.env.CI) {
+    console.warn('⚠️ VITE_APP_URL not set (local dev), using http://localhost:5173')
+    appUrl = 'http://localhost:5173'
   }
   
   const imageUrl = `${appUrl}/GoalifyLogo.png`

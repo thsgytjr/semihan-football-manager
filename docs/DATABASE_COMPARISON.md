@@ -2,8 +2,9 @@
 
 ## 📋 개요
 
-- **Semihan DB**: `src/lib/matches.service.js` 사용, `user_id` 기반
-- **DKSC DB**: `src/services/matches.service.js` 사용, `room_id` 기반
+- 과거: Semihan은 `src/lib/matches.service.js`(user_id 기반), DKSC는 `src/services/matches.service.js`(room_id 기반)
+- 현재: 코드 기준 정석은 `src/services/matches.service.js`이며, `src/lib/matches.service.js`는 동일 API를 재출력하는 호환(shim)
+- 권장: 모든 프로젝트 DB에 `room_id` 컬럼 추가 후 ROOM 스코프로 통일 (예: `${TEAM_SHORT}-lite-room-1`)
 
 ---
 
@@ -120,15 +121,10 @@ Semihan DB도 DKSC와 동일하게 만들려면:
 2. `user_id` 컬럼은 그대로 유지 (room_id 대신)
 3. 나머지 컬럼들은 DKSC와 동일하게 추가
 
-### 코드 통합 (선택사항)
-현재는 두 개의 서비스 파일이 있지만, 하나로 통합 가능:
-- `src/lib/matches.service.js` (Semihan)
-- `src/services/matches.service.js` (DKSC)
-
-통합하려면:
-1. DKSC의 `toAppFormat` fallback 로직을 Semihan에도 적용
-2. `user_id` vs `room_id`를 환경 변수로 구분
-3. 하나의 서비스 파일로 통합
+### 코드 통합 (적용됨)
+현재 정석 서비스는 `src/services/matches.service.js` 하나이며,
+`src/lib/matches.service.js`는 동일 API 이름으로 재출력(shim)하여 기존 import도 안전하게 동작합니다.
+DB 스코프는 `room_id` 사용을 권장하며, Semihan DB에는 `scripts/semihan-add-roomid.sql`로 추가할 수 있습니다.
 
 ---
 

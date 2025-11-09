@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import MatchPlanner from '../pages/MatchPlanner'
-import { saveMatch, updateMatch, deleteMatch, listMatches } from '../lib/matches.service'
+import { saveMatchToDB, updateMatchInDB, deleteMatchFromDB, listMatchesFromDB } from '../services/matches.service'
 import { logger } from '../lib/logger'
 
 // props: players 배열을 부모에서 내려주면 됩니다.
@@ -10,7 +10,7 @@ export default function MatchPlannerContainer({ players, isAdmin }) {
   useEffect(() => {
     (async () => {
       try {
-        const rows = await listMatches()
+        const rows = await listMatchesFromDB()
         setMatches(rows)
       } catch (e) {
         logger.error('[listMatches]', e)
@@ -21,7 +21,7 @@ export default function MatchPlannerContainer({ players, isAdmin }) {
   const onSaveMatch = async (matchObj) => {
     if(!isAdmin){ alert('Admin만 가능합니다.'); return }
     try {
-      const row = await saveMatch(matchObj)
+      const row = await saveMatchToDB(matchObj)
       setMatches(prev => [row, ...prev])
     } catch (e) {
       logger.error('[saveMatch]', e)
@@ -31,7 +31,7 @@ export default function MatchPlannerContainer({ players, isAdmin }) {
 
   const onUpdateMatch = async (id, patch) => {
     try {
-      const row = await updateMatch(id, patch)
+      const row = await updateMatchInDB(id, patch)
       setMatches(prev => prev.map(m => m.id === id ? row : m))
     } catch (e) {
       logger.error('[updateMatch]', e)
@@ -42,7 +42,7 @@ export default function MatchPlannerContainer({ players, isAdmin }) {
   const onDeleteMatch = async (id) => {
     if(!isAdmin){ alert('Admin만 가능합니다.'); return }
     try {
-      await deleteMatch(id)
+      await deleteMatchFromDB(id)
       setMatches(prev => prev.filter(m => m.id !== id))
     } catch (e) {
       logger.error('[deleteMatch]', e)
