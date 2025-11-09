@@ -230,26 +230,23 @@ export function computeDuoRows(players = [], matches = []) {
   
   evts = evts.filter(e => idToPlayer.has(toStr(e.pid)))
   
-  const typePri = (t) => (t === 'goal' ? 0 : 1)
-  evts.sort((a, b) => {
-    if (a.ts !== b.ts) return a.ts - b.ts
-    if (typePri(a.type) !== typePri(b.type)) return typePri(a.type) - typePri(b.type)
-    return a.rawIdx - b.rawIdx
-  })
-  
-  const unmatchedGoals = []
+  // Only count explicit links from event metadata (no automatic time-based pairing)
+  // - goal.raw.assistedBy: assistId -> goal.pid
+  // - assist.raw.linkedToGoal: assist.pid -> goalId
   const duoCount = new Map()
-  
   for (const e of evts) {
+    const myPid = toStr(e.pid)
     if (e.type === 'goal') {
-      unmatchedGoals.push(e)
-    } else if (e.type === 'assist') {
-      while (unmatchedGoals.length > 0) {
-        const g = unmatchedGoals.pop()
-        if (toStr(g.pid) === toStr(e.pid)) continue
-        const key = `${toStr(e.pid)}|${toStr(g.pid)}`
+      const aid = toStr(e?.raw?.assistedBy)
+      if (aid && idToPlayer.has(aid) && aid !== myPid) {
+        const key = `${aid}|${myPid}`
         duoCount.set(key, (duoCount.get(key) || 0) + 1)
-        break
+      }
+    } else if (e.type === 'assist') {
+      const gid = toStr(e?.raw?.linkedToGoal)
+      if (gid && idToPlayer.has(gid) && gid !== myPid) {
+        const key = `${myPid}|${gid}`
+        duoCount.set(key, (duoCount.get(key) || 0) + 1)
       }
     }
   }

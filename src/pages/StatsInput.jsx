@@ -7,15 +7,15 @@ import { formatMatchLabel } from '../lib/matchLabel'
 
 const toStr = (v) => (v === null || v === undefined) ? '' : String(v)
 
-/* ======== 날짜 파싱 유틸 ======== */
+/* ======== Utility Functions ======== */
 function asTime(v) {
   if (!v) return NaN
   if (typeof v === 'number') return Number.isFinite(v) ? v : NaN
-  const t = Date.parse(v) // ISO 등 표준 문자열 우선
+  const t = Date.parse(v)
   return Number.isNaN(t) ? NaN : t
 }
+
 function getMatchTime(m) {
-  // 우선순위: dateISO → date → created_at
   const candidates = [m?.dateISO, m?.date, m?.created_at]
   for (const c of candidates) {
     const t = asTime(c)
@@ -24,7 +24,6 @@ function getMatchTime(m) {
   return 0
 }
 
-/* ======== 공용 유틸 ======== */
 function extractAttendeeIds(m) {
   const candidates = [m?.snapshot, m?.attendeeIds, m?.attendees, m?.participants, m?.roster].filter(Boolean)
   let raw = []
@@ -44,21 +43,23 @@ function extractStatsByPlayer(m) {
   const out = {}
   if (!src) return out
 
-  // If src is an object mapping playerId -> { goals, assists } or -> { events: [...] }
   if (!Array.isArray(src) && typeof src === 'object') {
     for (const [k, v] of Object.entries(src)) {
       const pid = toStr(k)
       if (!pid) continue
-      // normalize: v may be number counts or object
       const goals = Number(v?.goals || v?.G || 0)
       const assists = Number(v?.assists || v?.A || 0)
-      const events = Array.isArray(v?.events) ? (v.events.map(e=>({ type: e.type || e.event || (e?.isAssist? 'assist':'goal'), date: e.dateISO || e.date || e.ts || e.time || e?.dateISO }))).filter(Boolean) : []
+      const events = Array.isArray(v?.events) ? v.events.map(e => ({
+        type: e.type || e.event || (e?.isAssist ? 'assist' : 'goal'),
+        date: e.dateISO || e.date || e.ts || e.time,
+        assistedBy: e.assistedBy,
+        linkedToGoal: e.linkedToGoal
+      })).filter(Boolean) : []
       out[pid] = { goals, assists, events }
     }
     return out
   }
 
-  // If src is an array of event records: { playerId, type/goal/assist, date }
   if (Array.isArray(src)) {
     for (const rec of src) {
       const pid = toStr(rec?.playerId ?? rec?.id ?? rec?.user_id ?? rec?.uid ?? rec?.player)
@@ -74,17 +75,6 @@ function extractStatsByPlayer(m) {
       } else if (isAssist) {
         out[pid].assists = (out[pid].assists || 0) + Number(rec?.assists || 1)
         out[pid].events.push({ type: 'assist', date: date || null })
-      } else {
-        // fallback: if record has numeric goals/assists properties
-        const g = Number(rec?.goals || 0), a = Number(rec?.assists || 0)
-        if (g) {
-          out[pid].goals = (out[pid].goals || 0) + g
-          for (let i = 0; i < g; i++) out[pid].events.push({ type: 'goal', date: date || null })
-        }
-        if (a) {
-          out[pid].assists = (out[pid].assists || 0) + a
-          for (let i = 0; i < a; i++) out[pid].events.push({ type: 'assist', date: date || null })
-        }
       }
     }
     return out
@@ -93,15 +83,13 @@ function extractStatsByPlayer(m) {
   return out
 }
 
-/* ======== 컴포넌트 ======== */
+/* ======== Main Component ======== */
 export default function StatsInput({ players = [], matches = [], onUpdateMatch, isAdmin }) {
-  // 1) 최신순 정렬: dateISO(→date→created_at) 내림차순
   const sortedMatches = useMemo(() => {
     const arr = Array.isArray(matches) ? [...matches] : []
     return arr.sort((a, b) => getMatchTime(b) - getMatchTime(a))
   }, [matches])
 
-  // 2) 항상 "가장 최근"을 기본 선택
   const [editingMatchId, setEditingMatchId] = useState('')
   useEffect(() => {
     const latestId = toStr(sortedMatches?.[0]?.id || '')
@@ -113,7 +101,6 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     [sortedMatches, editingMatchId]
   )
 
-  // 3) 패널 드래프트
   const [draft, setDraft] = useState({})
   useEffect(() => {
     if (!editingMatch) { setDraft({}); return }
@@ -123,57 +110,33 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     for (const p of players) {
       if (!ids.has(toStr(p.id))) continue
       const rec = src?.[toStr(p.id)] || {}
-      // normalize key to string to avoid mismatches with panelIds which are strings
-      next[toStr(p.id)] = { goals: Number(rec.goals || 0), assists: Number(rec.assists || 0), events: Array.isArray(rec.events)? rec.events.slice() : [] }
+      next[toStr(p.id)] = {
+        goals: Number(rec.goals || 0),
+        assists: Number(rec.assists || 0),
+        events: Array.isArray(rec.events) ? rec.events.slice() : []
+      }
     }
     setDraft(next)
   }, [editingMatch, players])
 
-  const setVal = (pid, key, v) =>
-    setDraft(prev => {
-      const k = toStr(pid)
-      const now = new Date().toISOString()
-      const prevRec = prev?.[k] || { goals: 0, assists: 0, events: [] }
-      const prevVal = Number(prevRec[key] || 0)
-      const nextVal = Math.max(0, Number(v || 0))
-      const diff = nextVal - prevVal
-      const next = { ...(prev || {}) }
-      const rec = { goals: prevRec.goals || 0, assists: prevRec.assists || 0, events: Array.isArray(prevRec.events)? prevRec.events.slice() : [] }
-      if (diff > 0) {
-        // add timestamped events for increments
-        for (let i=0;i<diff;i++) rec.events.push({ type: key === 'goals' ? 'goal' : 'assist', date: now })
-      } else if (diff < 0) {
-        // remove latest events of this type when decrementing
-        let toRemove = -diff
-        for (let i = rec.events.length - 1; i >= 0 && toRemove > 0; i--) {
-          if (rec.events[i].type === (key === 'goals' ? 'goal' : 'assist')) {
-            rec.events.splice(i, 1); toRemove--
-          }
-        }
-      }
-      rec[key] = nextVal
-      next[k] = rec
-      return next
-    })
-
-  // Bulk paste states: raw text and status message
   const [bulkText, setBulkText] = useState('')
   const [bulkMsg, setBulkMsg] = useState('')
-
-  const [q, setQ] = useState('')
-  const [teamIdx, setTeamIdx] = useState('all')
-  const [panelIds, setPanelIds] = useState([])
   const [showSaved, setShowSaved] = useState(false)
 
-  // Helpers: parse date string like "10/04/2025 9:15AM" (tries D/M/Y or M/D/Y based on heuristics)
+  const save = () => {
+    if (!editingMatch) return
+    onUpdateMatch?.(editingMatch.id, { stats: draft })
+    setShowSaved(true)
+    setTimeout(() => setShowSaved(false), 1200)
+  }
+
+  // Bulk parsing functions (simplified from original)
   function parseLooseDate(s) {
     if (!s) return null
     const t = s.trim()
-    // Try ISO directly
     const iso = Date.parse(t)
     if (!Number.isNaN(iso)) return new Date(iso)
 
-    // Split date and time
     const parts = t.split(/\s+/)
     const datePart = parts[0]
     const timePart = parts.slice(1).join(' ') || ''
@@ -182,11 +145,9 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     if (datePieces.length !== 3) return null
     let a = Number(datePieces[0]), b = Number(datePieces[1]), y = Number(datePieces[2])
     if (y < 100) y += 2000
-    // Heuristic: if first piece > 12, treat as day-first (DD/MM/YYYY)
     let day, month
     if (a > 12) { day = a; month = b } else { month = a; day = b }
 
-    // parse time like 9:15AM or 21:05
     let hour = 0, minute = 0
     const tm = timePart.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM|am|pm)?/)
     if (tm) {
@@ -209,12 +170,10 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
 
   function weekKeyOfDate(d) {
     if (!d) return null
-    // use Monday-start week key: YYYY-Wnn
     const date = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-    const day = (date.getDay() + 6) % 7 // Mon=0..Sun=6
+    const day = (date.getDay() + 6) % 7
     const monday = new Date(date)
     monday.setDate(date.getDate() - day)
-    // normalize to yyyy-mm-dd
     const y = monday.getFullYear()
     const m = String(monday.getMonth() + 1).padStart(2, '0')
     const dd = String(monday.getDate()).padStart(2, '0')
@@ -230,15 +189,33 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     return `${y}-${m}-${dd}`
   }
 
-  // Parse bulk text lines into { date:Date, type:'goal'|'assist', name }
-  // Strict format checker: [date]goal[name] or [date]assist[name] or [date]goal:assist[scorer assister]
   function isStrictLine(line) {
     if (!line) return false
     return /^\s*\[[^\]]+\]\s*(?:goal|assist|goal\s*:\s*assist)\s*\[[^\]]+\]\s*$/i.test(line)
   }
+
+  // Smart name normalization: removes content in parentheses
+  function normalizePlayerName(name) {
+    if (!name) return ''
+    // Remove content in parentheses: 알렉스(Alejandro Gomez) -> 알렉스
+    return String(name).replace(/\s*\([^)]*\)/g, '').trim()
+  }
+
   function parseBulkLines(text) {
     const lines = String(text || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean)
     const out = []
+    const attendeeIds = new Set(extractAttendeeIds(editingMatch))
+    const roster = players.filter(p => attendeeIds.has(toStr(p.id)))
+    
+    // Build name mapping with normalized names
+    const nameMap = new Map()
+    roster.forEach(p => {
+      const fullName = String((p.name || '').trim())
+      const normalized = normalizePlayerName(fullName)
+      nameMap.set(fullName, p) // exact match
+      nameMap.set(normalized, p) // normalized match
+    })
+
     for (const line of lines) {
       if (!isStrictLine(line)) return []
       const bracketMatches = Array.from(line.matchAll(/\[([^\]]+)\]/g)).map(m => m[1])
@@ -246,95 +223,89 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       const namesField = bracketMatches[bracketMatches.length - 1]
       const betweenMatch = line.replace(/\[([^\]]+)\]/g, '¤').split('¤')[1] || ''
       const hasBoth = /goal\s*:\s*assist/i.test(betweenMatch)
-      let type = null
       const dt = parseLooseDate(dateStr)
       if (!dt) return []
+
       if (hasBoth) {
-        // Smart split: try to match two player names from the roster
-        const nameList = rosterNamesForBulkMatch()
         const raw = String(namesField || '').trim()
-        const tokens = raw.split(/\s+/).filter(Boolean)
         
-        let found = null, foundSplits = []
-        
-        // 먼저 전체 텍스트가 한 명의 선수 이름인지 확인 (어시스트 없는 골)
-        if (nameList.has(raw)) {
+        // Try exact match first
+        if (nameMap.has(raw)) {
           out.push({ date: dt, type: 'goals', name: raw })
           continue
         }
-        
-        // Try all possible splits (두 명의 선수 이름으로 분리)
+
+        // Try normalized match
+        const normalizedRaw = normalizePlayerName(raw)
+        if (nameMap.has(normalizedRaw)) {
+          out.push({ date: dt, type: 'goals', name: normalizedRaw })
+          continue
+        }
+
+        // Try splitting into two names
+        const tokens = raw.split(/\s+/).filter(Boolean)
+        let foundSplits = []
         for (let i = 1; i < tokens.length; ++i) {
           const left = tokens.slice(0, i).join(' ')
           const right = tokens.slice(i).join(' ')
-          if (nameList.has(left) && nameList.has(right)) {
-            foundSplits.push([left, right])
+          const leftNorm = normalizePlayerName(left)
+          const rightNorm = normalizePlayerName(right)
+          
+          const leftMatch = nameMap.has(left) || nameMap.has(leftNorm)
+          const rightMatch = nameMap.has(right) || nameMap.has(rightNorm)
+          
+          if (leftMatch && rightMatch) {
+            const leftName = nameMap.has(left) ? left : leftNorm
+            const rightName = nameMap.has(right) ? right : rightNorm
+            foundSplits.push([leftName, rightName])
           }
         }
         if (foundSplits.length === 1) {
-          found = foundSplits[0]
-        } else if (foundSplits.length > 1) {
-          // ambiguous, handled in applyBulkToDraft
-          found = { ambiguous: true, splits: foundSplits }
-        }
-        if (found && !found.ambiguous) {
-          out.push({ date: dt, type: 'goals', name: found[0] })
-          out.push({ date: dt, type: 'assists', name: found[1] })
-        } else if (found && found.ambiguous) {
-          out.push({ date: dt, type: 'ambiguous', splits: found.splits, raw })
+          out.push({ date: dt, type: 'goals', name: foundSplits[0][0] })
+          out.push({ date: dt, type: 'assists', name: foundSplits[0][1] })
         } else {
-          // No valid split found - treat as error
-          out.push({ date: dt, type: 'ambiguous', splits: [], raw })
+          out.push({ date: dt, type: 'ambiguous', splits: foundSplits, raw })
         }
       } else {
-        if (!type) {
-          if (/\bgoal\b/i.test(betweenMatch)) type = 'goals'
-          else if (/\bassist\b/i.test(betweenMatch)) type = 'assists'
-        }
+        let type = null
+        if (/\bgoal\b/i.test(betweenMatch)) type = 'goals'
+        else if (/\bassist\b/i.test(betweenMatch)) type = 'assists'
         if (!type || !namesField) return []
-        out.push({ date: dt, type, name: String(namesField).trim() })
+        
+        const inputName = String(namesField).trim()
+        const normalized = normalizePlayerName(inputName)
+        const finalName = nameMap.has(inputName) ? inputName : (nameMap.has(normalized) ? normalized : inputName)
+        
+        out.push({ date: dt, type, name: finalName })
       }
     }
     return out
-  // Helper: get all player names in lowercased set for matching
-  function rosterNamesForBulkMatch() {
-    // Use the current roster (from the memoized roster)
-    if (Array.isArray(roster) && roster.length > 0) {
-      return new Set(roster.map(p => String((p.name || '').trim())))
-    }
-    // fallback: empty set
-    return new Set()
-  }
   }
 
-  // Apply bulk text to draft. Do NOT auto-save. Require all lines to belong to same week and a saved match must exist for that week.
   async function applyBulkToDraft() {
     setBulkMsg('')
     if (!bulkText.trim()) { setBulkMsg('붙여넣을 데이터가 비어 있습니다.'); return }
-    // Quick strict validation: every non-empty line must match the required pattern
+    
     const rawLines = String(bulkText || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean)
     const bad = rawLines.filter(l => !isStrictLine(l))
     if (bad.length > 0) {
-      setBulkMsg('모든 줄이 [date]goal[name] 또는 [date]assist[name] 형식이어야 합니다. 오류 예시: ' + (bad.slice(0,3).join('; ')))
+      setBulkMsg('모든 줄이 [date]goal[name] 또는 [date]assist[name] 형식이어야 합니다. 오류 예시: ' + (bad.slice(0, 3).join('; ')))
       return
     }
 
     const parsed = parseBulkLines(bulkText)
     if (parsed.length === 0) { setBulkMsg('파싱된 항목이 없습니다. 형식을 확인해 주세요.'); return }
 
-    // Check for ambiguous splits
     const ambiguous = parsed.filter(p => p.type === 'ambiguous')
     if (ambiguous.length > 0) {
-      setBulkMsg('이름 구분이 모호한 줄이 있습니다: ' + ambiguous.map(a => `[${a.raw}]`).join(', ') + ' · 선수명 조합이 2가지 이상이거나, 둘 다 없는 경우입니다. 각 이름을 명확히 입력해 주세요.');
+      setBulkMsg('이름 구분이 모호한 줄이 있습니다: ' + ambiguous.map(a => `[${a.raw}]`).join(', '))
       return
     }
 
-    // group by week key
     const weekKeys = Array.from(new Set(parsed.map(p => weekKeyOfDate(p.date))))
     if (weekKeys.length !== 1) { setBulkMsg('여러 주의 데이터가 포함되어 있습니다. 한 번에 하나의 주만 처리하세요.'); return }
     const wk = weekKeys[0]
 
-    // find saved match that falls into same week
     const matchForWeek = sortedMatches.find(m => {
       const mt = getMatchTime(m)
       if (!mt) return false
@@ -344,48 +315,52 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     if (!matchForWeek) { setBulkMsg('해당 주에 저장된 매치를 찾을 수 없습니다.'); return }
 
     if (editingMatchId && toStr(editingMatchId) !== toStr(matchForWeek.id)) {
-      setBulkMsg('현재 선택된 매치와 붙여넣은 데이터의 날짜(주)가 일치하지 않습니다. 먼저 해당 주의 매치를 선택하거나, 선택을 비운 후 다시 시도하세요.')
+      setBulkMsg('현재 선택된 매치와 붙여넣은 데이터의 날짜(주)가 일치하지 않습니다.')
       return
     }
 
     if (!editingMatchId) setEditingMatchId(toStr(matchForWeek.id))
 
-    // determine selected match full-day key (YYYY-MM-DD)
     const selectedMatchObj = (editingMatch && toStr(editingMatch.id) === toStr(editingMatchId)) ? editingMatch : matchForWeek
     const selectedDateKey = dayKeyOfDate(new Date(getMatchTime(selectedMatchObj)))
 
-    // If a match is explicitly selected, abort the operation when any parsed line's day differs
-    // from the selected match's day. This prevents partial application.
     if (editingMatchId) {
       const mismatched = parsed.filter(item => dayKeyOfDate(item.date) !== selectedDateKey)
       if (mismatched.length > 0) {
         const names = Array.from(new Set(mismatched.map(x => x.name))).slice(0, 10)
-        setBulkMsg(`선택된 매치 날짜와 일치하지 않는 항목이 있습니다: ${names.join(', ')}. 모든 항목의 날짜가 선택된 매치와 동일해야 합니다.`)
+        setBulkMsg(`선택된 매치 날짜와 일치하지 않는 항목이 있습니다: ${names.join(', ')}`)
         return
       }
     }
 
-    // build name->player map
-    const nameMap = new Map(players.map(p => [String((p.name||'').trim()).toLowerCase(), p]))
+    const nameMap = new Map(players.map(p => {
+      const fullName = String((p.name || '').trim())
+      const normalized = normalizePlayerName(fullName)
+      return [normalized.toLowerCase(), p]
+    }))
 
-    // accumulate deltas from parsed lines (all lines match the selected date at this point)
-    // store counts and events
-    const deltas = new Map() // pid -> {goals,assists, events: [{type,date}]}
+    const deltas = new Map()
     const unmatched = []
     for (const item of parsed) {
-      const key = String((item.name || '').trim()).toLowerCase()
+      const inputName = String((item.name || '').trim())
+      const normalized = normalizePlayerName(inputName)
+      const key = normalized.toLowerCase()
       const player = nameMap.get(key)
       if (!player) { unmatched.push(item.name); continue }
       const pid = player.id
       const cur = deltas.get(pid) || { goals: 0, assists: 0, events: [] }
-      if (item.type === 'goals' || item.type === 'goal') { cur.goals = (cur.goals || 0) + 1; cur.events.push({ type: 'goal', date: item.date.toISOString() }) }
-      else if (item.type === 'assists' || item.type === 'assist') { cur.assists = (cur.assists || 0) + 1; cur.events.push({ type: 'assist', date: item.date.toISOString() }) }
+      if (item.type === 'goals' || item.type === 'goal') {
+        cur.goals = (cur.goals || 0) + 1
+        cur.events.push({ type: 'goal', date: item.date.toISOString() })
+      } else if (item.type === 'assists' || item.type === 'assist') {
+        cur.assists = (cur.assists || 0) + 1
+        cur.events.push({ type: 'assist', date: item.date.toISOString() })
+      }
       deltas.set(pid, cur)
     }
 
-    // If any parsed name does not match a known player, abort the whole bulk apply.
     if (unmatched.length > 0) {
-      setBulkMsg('일치하지 않는 선수명이 있습니다: ' + Array.from(new Set(unmatched)).slice(0,10).join(', '))
+      setBulkMsg('일치하지 않는 선수명이 있습니다: ' + Array.from(new Set(unmatched)).slice(0, 10).join(', '))
       return
     }
 
@@ -394,20 +369,15 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       return
     }
 
-    // apply deltas to current draft (for the matched match)
     setDraft(prev => {
       const next = { ...(prev || {}) }
       for (const [pid, delta] of deltas.entries()) {
         const k = toStr(pid)
         const now = next[k] || { goals: 0, assists: 0, events: [] }
         const events = Array.isArray(now.events) ? now.events.slice() : []
-        
-        // 중복 이벤트 체크를 위한 Set (type + date 조합)
-        const existingEventKeys = new Set(
-          events.map(e => `${e.type}:${e.date}`)
-        )
-        
-        // append parsed events (중복 제거)
+
+        const existingEventKeys = new Set(events.map(e => `${e.type}:${e.date}`))
+
         for (const e of (delta.events || [])) {
           const eventKey = `${e.type}:${e.date}`
           if (!existingEventKeys.has(eventKey)) {
@@ -415,26 +385,21 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
             existingEventKeys.add(eventKey)
           }
         }
-        
-        // 이벤트 기반으로 골/어시스트 재계산
+
         const goalCount = events.filter(e => e.type === 'goal').length
         const assistCount = events.filter(e => e.type === 'assist').length
-        
+
         next[k] = { goals: goalCount, assists: assistCount, events }
       }
       return next
     })
 
-    // 자동으로 편집 패널(panelIds)에 반영 (저장하지 않음)
-    setPanelIds(prev => {
-      const nextSet = new Set(Array.isArray(prev) ? prev.map(String) : [])
-      for (const pid of deltas.keys()) nextSet.add(toStr(pid))
-      return Array.from(nextSet)
-    })
+    const playerNames = Array.from(deltas.keys()).map(pid => {
+      const p = players.find(x => toStr(x.id) === toStr(pid))
+      return p ? p.name : ''
+    }).filter(Boolean).slice(0, 5)
 
-    let parts = [`초안에 적용되었습니다: ${deltas.size}명 업데이트`]
-    if (unmatched.length) parts.push(`이름 불일치: ${unmatched.slice(0,5).join(', ')}`)
-    setBulkMsg(parts.join(' · '))
+    setBulkMsg(`✅ 초안에 적용 완료: ${deltas.size}명 (${playerNames.join(', ')}${deltas.size > 5 ? ' 외' : ''}) - 아래 "💾 저장하기" 버튼을 눌러주세요!`)
   }
 
   const teams = useMemo(() => {
@@ -443,29 +408,37 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     return hydrated.teams || []
   }, [editingMatch, players])
 
-  const roster = useMemo(() => {
-    if (!editingMatch) return []
-    const ids = new Set(extractAttendeeIds(editingMatch))
-    let pool = players.filter(p => ids.has(toStr(p.id)))
-    if (teamIdx !== 'all' && teams[teamIdx]) {
-      const tset = new Set((teams[teamIdx] || []).map(p => toStr(p.id)))
-      pool = pool.filter(p => tset.has(toStr(p.id)))
-    }
-    const needle = q.trim().toLowerCase()
-    if (needle) pool = pool.filter(p => (p.name||'').toLowerCase().includes(needle))
+  // Generate dynamic placeholder examples based on roster
+  const bulkPlaceholder = useMemo(() => {
+    if (!editingMatch) return "예시:\n[11/08/2025 9:07AM]goal:assist[득점자 도움자]\n[11/08/2025 9:16AM]goal[득점자]\n[11/08/2025 8:05AM]assist[도움자]"
     
-    // Filter out players already in the panel
-    const panelSet = new Set(panelIds.map(toStr))
-    pool = pool.filter(p => !panelSet.has(toStr(p.id)))
-    
-    return pool.sort((a,b)=>a.name.localeCompare(b.name))
-  }, [players, editingMatch, teams, teamIdx, q, panelIds])
+    const attendeeIds = new Set(extractAttendeeIds(editingMatch))
+    const roster = players.filter(p => attendeeIds.has(toStr(p.id)))
+    if (roster.length === 0) return "예시:\n[11/08/2025 9:07AM]goal:assist[득점자 도움자]\n[11/08/2025 9:16AM]goal[득점자]\n[11/08/2025 8:05AM]assist[도움자]"
 
-  const save = () => {
-    if (!editingMatch) return
-    onUpdateMatch?.(editingMatch.id, { stats: draft })
-    setShowSaved(true); setTimeout(()=>setShowSaved(false), 1200)
-  }
+    // Find examples: one with parentheses (complex), one without (simple)
+    const withParens = roster.find(p => /\([^)]+\)/.test(p.name))
+    const withoutParens = roster.find(p => !/\([^)]+\)/.test(p.name) && p.name.length > 2)
+    const anyPlayer = roster[0]
+
+    const matchTime = editingMatch.date ? new Date(editingMatch.date) : new Date()
+    const dateStr = `${matchTime.getMonth() + 1}/${matchTime.getDate()}/${matchTime.getFullYear()}`
+
+    const examples = []
+    if (withoutParens && roster.length > 1) {
+      const assister = roster.find(p => toStr(p.id) !== toStr(withoutParens.id)) || anyPlayer
+      examples.push(`[${dateStr} 9:07AM]goal:assist[${withoutParens.name} ${assister.name}]`)
+    }
+    if (withParens) {
+      examples.push(`[${dateStr} 9:16AM]goal[${withParens.name}]`)
+    }
+    if (roster.length > 2) {
+      const third = roster[2] || anyPlayer
+      examples.push(`[${dateStr} 8:05AM]assist[${third.name}]`)
+    }
+
+    return examples.length > 0 ? `예시:\n${examples.join('\n')}` : "예시:\n[11/08/2025 9:07AM]goal:assist[득점자 도움자]"
+  }, [editingMatch, players])
 
   if (!isAdmin) {
     return (
@@ -482,107 +455,84 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
           <div className="text-sm text-gray-500">저장된 매치가 없습니다.</div>
         ) : (
           <>
-            <div className="mb-3 w-full">
-              <div className="w-full grid gap-3 md:grid-cols-2 md:items-start">
-                {/* Left: match selector, pills, search */}
-                <div className="space-y-2">
-                  <select
-                    key={sortedMatches.map(m=>toStr(m.id)).join('|')}
-                    value={toStr(editingMatchId)}
-                    onChange={(e)=>{
-                      setPanelIds([])
-                      setQ('')
-                      setTeamIdx('all')
-                      setEditingMatchId(toStr(e.target.value))
-                    }}
-                    className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm"
+            {/* Match Selector */}
+            <div className="mb-4">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">📅 경기 선택</label>
+              <select
+                key={sortedMatches.map(m => toStr(m.id)).join('|')}
+                value={toStr(editingMatchId)}
+                onChange={(e) => {
+                  setEditingMatchId(toStr(e.target.value))
+                }}
+                className="w-full rounded-lg border-2 border-gray-300 bg-white px-4 py-3 text-sm font-medium shadow-sm hover:border-blue-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+              >
+                {sortedMatches.map(m => {
+                  const count = extractAttendeeIds(m).length
+                  const label =
+                    (typeof formatMatchLabel === 'function'
+                      ? formatMatchLabel(m, { withDate: true, withCount: true, count })
+                      : (m.label || m.title || m.name || `Match ${toStr(m.id)}`))
+                  return (
+                    <option key={toStr(m.id)} value={toStr(m.id)}>{label}</option>
+                  )
+                })}
+              </select>
+            </div>
+
+            {/* Bulk Input Section */}
+            <div className="mb-4 p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg border-2 border-amber-200">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">📋</span>
+                <label className="text-sm font-bold text-gray-800">Bulk 입력 (빠른 입력)</label>
+              </div>
+              <textarea
+                value={bulkText}
+                onChange={e => setBulkText(e.target.value)}
+                placeholder={bulkPlaceholder}
+                className="w-full h-32 rounded-lg border-2 border-amber-300 bg-white px-3 py-2 text-sm resize-vertical font-mono focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all"
+              />
+              <div className="mt-2 space-y-2">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={applyBulkToDraft}
+                    className="rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-md hover:shadow-lg transition-all"
                   >
-                    {sortedMatches.map(m => {
-                      const count = extractAttendeeIds(m).length
-                      const label =
-                        (typeof formatMatchLabel === 'function'
-                          ? formatMatchLabel(m, { withDate: true, withCount: true, count })
-                          : (m.label || m.title || m.name || `Match ${toStr(m.id)}`))
-                      return (
-                        <option key={toStr(m.id)} value={toStr(m.id)}>{label}</option>
-                      )
-                    })}
-                  </select>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Pill active={teamIdx==='all'} onClick={()=>setTeamIdx('all')}>전체팀</Pill>
-                    {teams.map((_,i)=>(<Pill key={i} active={teamIdx===i} onClick={()=>setTeamIdx(i)}>팀 {i+1}</Pill>))}
-                  </div>
-
-                  <input
-                    value={q}
-                    onChange={e=>setQ(e.target.value)}
-                    placeholder="선수 검색 (이름)"
-                    className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm"
-                  />
+                    ✨ 초안에 적용하기
+                  </button>
+                  <button
+                    onClick={() => { setBulkText(''); setBulkMsg('') }}
+                    className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-3 py-2 text-sm font-medium transition-colors"
+                  >
+                    지우기
+                  </button>
                 </div>
-
-                {/* Right: bulk textarea and actions */}
-                <div className="space-y-2">
-                  <label className="text-xs text-gray-500 block">Bulk 입력 (예: [10/04/2025 9:15AM]goal[홍길동] · [10/04/2025 9:15AM]assist[홍길동] · [10/04/2025 9:15AM]goal:assist[홍길동 고길동])</label>
-                  <textarea value={bulkText} onChange={e=>setBulkText(e.target.value)} placeholder="각 줄마다 [날짜]goal[이름] 또는 [날짜]assist[이름] 또는 [날짜]goal:assist[득점자 도움자] 형식으로 입력하세요." className="w-full h-28 md:h-36 rounded border border-gray-300 bg-white px-3 py-2 text-sm resize-vertical" />
-                  <div className="flex items-center gap-2">
-                    <button onClick={applyBulkToDraft} className="rounded bg-amber-500 px-3 py-1 text-xs text-white">파싱하여 초안에 적용</button>
-                    <button onClick={()=>{setBulkText(''); setBulkMsg('')}} className="rounded border px-2 py-1 text-xs">지우기</button>
-                    {bulkMsg && <div className="text-xs text-gray-600 ml-2 break-words">{bulkMsg}</div>}
+                {bulkMsg && (
+                  <div className={`text-sm px-3 py-2 rounded-lg border-2 ${
+                    bulkMsg.includes('✅') 
+                      ? 'bg-green-50 border-green-300 text-green-800' 
+                      : 'bg-red-50 border-red-300 text-red-800'
+                  }`}>
+                    {bulkMsg}
                   </div>
+                )}
+                <div className="text-xs text-gray-600 bg-white/60 rounded px-2 py-1">
+                  💡 <strong>[날짜]goal:assist[득점자 도움자]</strong> 형식으로 입력하면 듀오가 자동 연결됩니다
+                  <br />
+                  💡 적용 후 아래 <strong>수동 입력</strong> 섹션에서 확인하고 <strong className="text-green-700">💾 저장하기</strong> 버튼을 눌러주세요
                 </div>
               </div>
             </div>
 
-            <div className="mb-2">
-              <ul className="max-h-56 overflow-auto rounded-lg border-2 border-gray-200 bg-white shadow-sm">
-                {roster.map(p => (
-                  <li key={toStr(p.id)} className="flex items-center justify-between px-2 sm:px-3 py-2 hover:bg-blue-50 transition-colors">
-                    <div className="flex items-center gap-2">
-                      <InitialAvatar id={p.id} name={p.name} size={20} badges={(() => { const s=toStr(p.membership).toLowerCase(); return (s==='member'||s.includes('정회원'))?[]:['G'] })()} photoUrl={p.photoUrl} />
-                      <span className="text-xs sm:text-sm font-medium">{p.name}</span>
-                      <span className="text-[10px] sm:text-xs text-gray-500">{p.position||p.pos||'-'}</span>
-                    </div>
-                    <button
-                      onClick={()=>{
-                        // When adding to panel, preserve existing draft stats if present; otherwise initialize to zero
-                        setDraft(prev=>{
-                          const next = { ...(prev||{}) }
-                          const k = toStr(p.id)
-                          if (!next[k]) {
-                            next[k] = { goals: 0, assists: 0, events: [] }
-                          }
-                          return next
-                        })
-                        setPanelIds(prev => {
-                          const sval = toStr(p.id)
-                          return (Array.isArray(prev) && prev.includes(sval)) ? prev : [...(Array.isArray(prev)?prev:[]), sval]
-                        })
-                      }}
-                      className="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs text-white font-semibold shadow-md transition-all hover:shadow-lg"
-                    >
-                      패널에 추가
-                    </button>
-                  </li>
-                ))}
-                {roster.length===0 && (
-                  <li className="px-2 sm:px-3 py-3 text-xs sm:text-sm text-gray-500 text-center">일치하는 선수가 없습니다.</li>
-                )}
-              </ul>
-            </div>
-
-            <EditorPanel
+            {/* Quick Stats Editor */}
+            <QuickStatsEditor
               players={players}
-              panelIds={panelIds}
-              setPanelIds={setPanelIds}
+              editingMatch={editingMatch}
+              teams={teams}
               draft={draft}
               setDraft={setDraft}
-              setVal={setVal}
               onSave={save}
+              showSaved={showSaved}
             />
-
-            {showSaved && <div className="mt-2 text-right text-xs text-emerald-700">✅ 저장되었습니다</div>}
           </>
         )}
       </Card>
@@ -590,10 +540,443 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
   )
 }
 
-function GoalAssistLinkingPanel({ players, draft, setDraft }) {
-  // Extract all goals and assists from draft
+/* ======== Quick Stats Editor Component ======== */
+function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSave, showSaved }) {
+  const [showLinkPanel, setShowLinkPanel] = useState(false)
+  const [addingGoalFor, setAddingGoalFor] = useState(null) // { playerId, teamIdx }
+  const [addingAssistFor, setAddingAssistFor] = useState(null) // { playerId, teamIdx }
+
+  if (!editingMatch) return null
+
+  const attendeeIds = new Set(extractAttendeeIds(editingMatch))
+
+  // Group by team
+  const teamRosters = teams.map((team, idx) => ({
+    idx,
+    name: `팀 ${idx + 1}`,
+    players: team.filter(p => attendeeIds.has(toStr(p.id)))
+  }))
+
+  const addGoal = (playerId, teamIdx) => {
+    // Show assist selection for same team
+    setAddingGoalFor({ playerId, teamIdx })
+  }
+
+  const addGoalWithAssist = (playerId, assisterId) => {
+    const now = new Date().toISOString()
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const k = toStr(playerId)
+      const rec = next[k] || { goals: 0, assists: 0, events: [] }
+      rec.goals = (rec.goals || 0) + 1
+      const goalEvent = { type: 'goal', date: now }
+      if (assisterId) {
+        goalEvent.assistedBy = toStr(assisterId)
+      }
+      rec.events.push(goalEvent)
+      next[k] = rec
+
+      // Add assist event if selected
+      if (assisterId) {
+        const ak = toStr(assisterId)
+        const arec = next[ak] || { goals: 0, assists: 0, events: [] }
+        arec.assists = (arec.assists || 0) + 1
+        arec.events.push({ type: 'assist', date: now, linkedToGoal: toStr(playerId) })
+        next[ak] = arec
+      }
+
+      return next
+    })
+    setAddingGoalFor(null)
+  }
+
+  const addAssist = (playerId, teamIdx) => {
+    // Show goal selection for same team
+    setAddingAssistFor({ playerId, teamIdx })
+  }
+
+  const addAssistForGoal = (assisterId, goalPlayerId) => {
+    const now = new Date().toISOString()
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const ak = toStr(assisterId)
+      const arec = next[ak] || { goals: 0, assists: 0, events: [] }
+      arec.assists = (arec.assists || 0) + 1
+      const assistEvent = { type: 'assist', date: now }
+      if (goalPlayerId) {
+        assistEvent.linkedToGoal = toStr(goalPlayerId)
+      }
+      arec.events.push(assistEvent)
+      next[ak] = arec
+
+      // Add goal event if selected
+      if (goalPlayerId) {
+        const gk = toStr(goalPlayerId)
+        const grec = next[gk] || { goals: 0, assists: 0, events: [] }
+        grec.goals = (grec.goals || 0) + 1
+        grec.events.push({ type: 'goal', date: now, assistedBy: toStr(assisterId) })
+        next[gk] = grec
+      }
+
+      return next
+    })
+    setAddingAssistFor(null)
+  }
+
+  const removeGoal = (playerId) => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const k = toStr(playerId)
+      const rec = next[k]
+      if (!rec) return next
+
+      // Find the most recent goal event and its linked assist
+      for (let i = rec.events.length - 1; i >= 0; i--) {
+        if (rec.events[i].type === 'goal') {
+          const goalEvent = rec.events[i]
+          const assistPlayerId = goalEvent.assistedBy
+          const assistIdx = goalEvent.assistedByIdx
+
+          // Remove the goal event
+          rec.events.splice(i, 1)
+          rec.goals = Math.max(0, (rec.goals || 0) - 1)
+
+          // If this goal was linked to an assist, also remove that assist
+          if (assistPlayerId !== undefined) {
+            const assistRec = next[toStr(assistPlayerId)]
+            if (assistRec && assistRec.events) {
+              // Find and remove the linked assist event
+              if (assistIdx !== undefined && assistRec.events[assistIdx]) {
+                // If we have the exact index, use it
+                if (assistRec.events[assistIdx].type === 'assist' && 
+                    toStr(assistRec.events[assistIdx].linkedToGoal) === k) {
+                  assistRec.events.splice(assistIdx, 1)
+                  assistRec.assists = Math.max(0, (assistRec.assists || 0) - 1)
+                }
+              } else {
+                // Otherwise find the assist linked to this goal
+                for (let j = assistRec.events.length - 1; j >= 0; j--) {
+                  if (assistRec.events[j].type === 'assist' && 
+                      toStr(assistRec.events[j].linkedToGoal) === k) {
+                    assistRec.events.splice(j, 1)
+                    assistRec.assists = Math.max(0, (assistRec.assists || 0) - 1)
+                    break
+                  }
+                }
+              }
+            }
+          }
+          break
+        }
+      }
+      next[k] = rec
+      return next
+    })
+  }
+
+  const removeAssist = (playerId) => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const k = toStr(playerId)
+      const rec = next[k]
+      if (!rec) return next
+
+      // Find the most recent assist event and its linked goal
+      for (let i = rec.events.length - 1; i >= 0; i--) {
+        if (rec.events[i].type === 'assist') {
+          const assistEvent = rec.events[i]
+          const goalPlayerId = assistEvent.linkedToGoal
+          const goalIdx = assistEvent.linkedToGoalIdx
+
+          // Remove the assist event
+          rec.events.splice(i, 1)
+          rec.assists = Math.max(0, (rec.assists || 0) - 1)
+
+          // If this assist was linked to a goal, also remove that goal
+          if (goalPlayerId !== undefined) {
+            const goalRec = next[toStr(goalPlayerId)]
+            if (goalRec && goalRec.events) {
+              // Find and remove the linked goal event
+              if (goalIdx !== undefined && goalRec.events[goalIdx]) {
+                // If we have the exact index, use it
+                if (goalRec.events[goalIdx].type === 'goal' && 
+                    toStr(goalRec.events[goalIdx].assistedBy) === k) {
+                  goalRec.events.splice(goalIdx, 1)
+                  goalRec.goals = Math.max(0, (goalRec.goals || 0) - 1)
+                }
+              } else {
+                // Otherwise find the goal linked to this assist
+                for (let j = goalRec.events.length - 1; j >= 0; j--) {
+                  if (goalRec.events[j].type === 'goal' && 
+                      toStr(goalRec.events[j].assistedBy) === k) {
+                    goalRec.events.splice(j, 1)
+                    goalRec.goals = Math.max(0, (goalRec.goals || 0) - 1)
+                    break
+                  }
+                }
+              }
+            }
+          }
+          break
+        }
+      }
+      next[k] = rec
+      return next
+    })
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header with Save Button */}
+      <div className="flex items-center justify-between">
+        <div className="text-base font-bold text-gray-800">⚽ 수동 입력</div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              if (confirm('모든 골/어시스트 기록을 초기화하시겠습니까?')) {
+                setDraft({})
+              }
+            }}
+            className="rounded-lg border-2 border-red-300 bg-red-50 hover:bg-red-100 px-3 py-2 text-sm font-semibold text-red-700 transition-all"
+          >
+            🗑️ 모두 초기화
+          </button>
+          <button
+            onClick={() => setShowLinkPanel(!showLinkPanel)}
+            className="rounded-lg border-2 border-blue-400 bg-blue-50 hover:bg-blue-100 px-3 py-2 text-sm font-semibold text-blue-700 transition-all"
+          >
+            {showLinkPanel ? '🔗 연결 관리 닫기' : '🔗 연결 수정'}
+          </button>
+          <button
+            onClick={onSave}
+            className="rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 px-5 py-2 text-sm font-bold text-white shadow-md hover:shadow-lg transition-all"
+          >
+            💾 저장하기
+          </button>
+        </div>
+      </div>
+
+      {showSaved && (
+        <div className="bg-green-50 border-2 border-green-300 rounded-lg px-4 py-2 text-sm text-green-800 font-medium">
+          ✅ 저장되었습니다
+        </div>
+      )}
+
+      {/* Link Management Panel */}
+      {showLinkPanel && (
+        <GoalAssistLinkingPanel 
+          players={players} 
+          draft={draft} 
+          setDraft={setDraft}
+          teams={teamRosters}
+        />
+      )}
+
+      {/* Goal/Assist Adding Modal */}
+      {addingGoalFor && (
+        <div className="border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 to-green-50 rounded-lg px-4 py-3">
+          <div className="mb-2 text-sm font-semibold text-gray-800">
+            ⚽ {players.find(p => toStr(p.id) === toStr(addingGoalFor.playerId))?.name}의 골 추가
+          </div>
+          <div className="mb-2 text-xs text-gray-600">어시스트한 선수를 선택하세요:</div>
+          <div className="space-y-3">
+            {teamRosters.map((team, teamIdx) => {
+              const teamPlayers = team.players.filter(p => toStr(p.id) !== toStr(addingGoalFor.playerId))
+              if (teamPlayers.length === 0) return null
+              
+              return (
+                <div key={teamIdx}>
+                  <div className="text-[10px] font-bold text-gray-500 mb-1.5">{team.name}</div>
+                  <div className="flex flex-wrap gap-2">
+                    {teamPlayers.map(p => {
+                      const rec = draft[toStr(p.id)] || { goals: 0, assists: 0 }
+                      return (
+                        <button
+                          key={toStr(p.id)}
+                          onClick={() => addGoalWithAssist(addingGoalFor.playerId, p.id)}
+                          className="rounded-lg border-2 border-blue-500 bg-white hover:bg-blue-50 px-3 py-1.5 text-xs font-medium transition-colors"
+                        >
+                          {p.name} <span className="ml-1 text-gray-500">(A: {rec.assists})</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+            <div className="flex gap-2 pt-2 border-t border-emerald-200">
+              <button
+                onClick={() => addGoalWithAssist(addingGoalFor.playerId, null)}
+                className="rounded-lg bg-gradient-to-r from-emerald-600 to-green-700 hover:from-emerald-700 hover:to-green-800 px-3 py-1.5 text-xs text-white font-semibold shadow-sm transition-all"
+              >
+                어시스트 없이 추가
+              </button>
+              <button
+                onClick={() => setAddingGoalFor(null)}
+                className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-3 py-1.5 text-xs font-medium transition-colors"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {addingAssistFor && (
+        <div className="border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-yellow-50 rounded-lg px-4 py-3">
+          <div className="mb-2 text-sm font-semibold text-gray-800">
+            👉 {players.find(p => toStr(p.id) === toStr(addingAssistFor.playerId))?.name}의 어시스트 추가
+          </div>
+          <div className="mb-2 text-xs text-gray-600">골을 넣은 선수를 선택하세요:</div>
+          <div className="space-y-3">
+            {teamRosters.map((team, teamIdx) => {
+              const teamPlayers = team.players.filter(p => toStr(p.id) !== toStr(addingAssistFor.playerId))
+              if (teamPlayers.length === 0) return null
+              
+              return (
+                <div key={teamIdx}>
+                  <div className="text-[10px] font-bold text-gray-500 mb-1.5">{team.name}</div>
+                  <div className="flex flex-wrap gap-2">
+                    {teamPlayers.map(p => {
+                      const rec = draft[toStr(p.id)] || { goals: 0, assists: 0 }
+                      return (
+                        <button
+                          key={toStr(p.id)}
+                          onClick={() => addAssistForGoal(addingAssistFor.playerId, p.id)}
+                          className="rounded-lg border-2 border-emerald-500 bg-white hover:bg-emerald-50 px-3 py-1.5 text-xs font-medium transition-colors"
+                        >
+                          {p.name} <span className="ml-1 text-gray-500">(G: {rec.goals})</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+            <div className="flex gap-2 pt-2 border-t border-amber-200">
+              <button
+                onClick={() => addAssistForGoal(addingAssistFor.playerId, null)}
+                className="rounded-lg bg-gradient-to-r from-amber-600 to-yellow-700 hover:from-amber-700 hover:to-yellow-800 px-3 py-1.5 text-xs text-white font-semibold shadow-sm transition-all"
+              >
+                골 없이 추가
+              </button>
+              <button
+                onClick={() => setAddingAssistFor(null)}
+                className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-3 py-1.5 text-xs font-medium transition-colors"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stats Grid */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {teamRosters.map(team => (
+          <div key={team.idx} className="bg-white rounded-lg border-2 border-gray-200 shadow-sm overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2 text-white font-bold text-sm">
+              {team.name}
+            </div>
+            <div className="divide-y divide-gray-100">
+              {team.players.map(p => {
+                const rec = draft[toStr(p.id)] || { goals: 0, assists: 0 }
+                const hasStats = (rec.goals > 0 || rec.assists > 0)
+
+                return (
+                  <div key={toStr(p.id)} className={`px-3 py-3 transition-colors ${hasStats ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      {/* Player Info */}
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <InitialAvatar
+                          id={p.id}
+                          name={p.name}
+                          size={32}
+                          badges={(() => {
+                            const s = toStr(p.membership).toLowerCase();
+                            return (s === 'member' || s.includes('정회원')) ? [] : ['G']
+                          })()}
+                          photoUrl={p.photoUrl}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-sm text-gray-800 truncate">{p.name}</div>
+                          <div className="text-xs text-gray-500">{p.position || p.pos || '-'}</div>
+                        </div>
+                      </div>
+
+                      {/* Goal Counter */}
+                      <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-2 py-1">
+                        <button
+                          onClick={() => removeGoal(p.id)}
+                          disabled={!rec.goals || rec.goals <= 0}
+                          className="w-7 h-7 rounded bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-sm transition-all"
+                        >
+                          −
+                        </button>
+                        <div className="flex items-center gap-1 px-1.5">
+                          <span className="text-xs font-bold text-gray-600">⚽</span>
+                          <span className="w-6 text-center font-bold text-sm tabular-nums">{rec.goals || 0}</span>
+                        </div>
+                        <button
+                          onClick={() => addGoal(p.id, team.idx)}
+                          className="w-7 h-7 rounded bg-emerald-500 hover:bg-emerald-600 border border-emerald-600 flex items-center justify-center text-white font-bold text-sm transition-all shadow-sm"
+                        >
+                          +
+                        </button>
+                      </div>
+
+                      {/* Assist Counter */}
+                      <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-2 py-1">
+                        <button
+                          onClick={() => removeAssist(p.id)}
+                          disabled={!rec.assists || rec.assists <= 0}
+                          className="w-7 h-7 rounded bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-sm transition-all"
+                        >
+                          −
+                        </button>
+                        <div className="flex items-center gap-1 px-1.5">
+                          <span className="text-xs font-bold text-gray-600">👉</span>
+                          <span className="w-6 text-center font-bold text-sm tabular-nums">{rec.assists || 0}</span>
+                        </div>
+                        <button
+                          onClick={() => addAssist(p.id, team.idx)}
+                          className="w-7 h-7 rounded bg-amber-500 hover:bg-amber-600 border border-amber-600 flex items-center justify-center text-white font-bold text-sm transition-all shadow-sm"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+
+        {teamRosters.length === 0 && (
+          <div className="col-span-2 text-center py-8 text-gray-500 text-sm">
+            팀 정보가 없습니다
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/* ======== Goal/Assist Linking Panel Component ======== */
+function GoalAssistLinkingPanel({ players, draft, setDraft, teams }) {
   const [selectedGoal, setSelectedGoal] = useState(null)
   const [selectedAssist, setSelectedAssist] = useState(null)
+
+  // Helper to find team of a player
+  const getPlayerTeam = (playerId) => {
+    for (let teamIdx = 0; teamIdx < teams.length; teamIdx++) {
+      if (teams[teamIdx].players.some(p => toStr(p.id) === toStr(playerId))) {
+        return teamIdx
+      }
+    }
+    return null
+  }
 
   const allGoals = useMemo(() => {
     const goals = []
@@ -606,6 +989,7 @@ function GoalAssistLinkingPanel({ players, draft, setDraft }) {
           goals.push({
             playerId: pid,
             playerName: player.name,
+            teamIdx: getPlayerTeam(pid),
             eventIdx: idx,
             date: evt.date,
             assistedBy: evt.assistedBy || null,
@@ -615,7 +999,7 @@ function GoalAssistLinkingPanel({ players, draft, setDraft }) {
       })
     }
     return goals.sort((a, b) => new Date(b.date) - new Date(a.date))
-  }, [draft, players])
+  }, [draft, players, teams])
 
   const allAssists = useMemo(() => {
     const assists = []
@@ -628,6 +1012,7 @@ function GoalAssistLinkingPanel({ players, draft, setDraft }) {
           assists.push({
             playerId: pid,
             playerName: player.name,
+            teamIdx: getPlayerTeam(pid),
             eventIdx: idx,
             date: evt.date,
             linkedToGoal: evt.linkedToGoal || null,
@@ -637,31 +1022,42 @@ function GoalAssistLinkingPanel({ players, draft, setDraft }) {
       })
     }
     return assists.sort((a, b) => new Date(b.date) - new Date(a.date))
-  }, [draft, players])
+  }, [draft, players, teams])
+
+  // Filter assists/goals based on selection (exclude self only)
+  const visibleGoals = selectedAssist
+    ? allGoals.filter(g => g.playerId !== selectedAssist.playerId)
+    : allGoals
+
+  const visibleAssists = selectedGoal
+    ? allAssists.filter(a => a.playerId !== selectedGoal.playerId)
+    : allAssists
 
   const linkGoalToAssist = () => {
     if (!selectedGoal || !selectedAssist) return
+    if (selectedGoal.playerId === selectedAssist.playerId) {
+      alert('자기 자신에게 어시스트할 수 없습니다')
+      return
+    }
 
     setDraft(prev => {
-      const next = JSON.parse(JSON.stringify(prev)) // deep copy
-      
-      // Update goal with assistedBy
+      const next = JSON.parse(JSON.stringify(prev))
+
       const goalRec = next[selectedGoal.playerId]
       if (goalRec && goalRec.events && goalRec.events[selectedGoal.eventIdx]) {
         goalRec.events[selectedGoal.eventIdx].assistedBy = selectedAssist.playerId
         goalRec.events[selectedGoal.eventIdx].assistedByIdx = selectedAssist.eventIdx
       }
-      
-      // Update assist with linkedToGoal
+
       const assistRec = next[selectedAssist.playerId]
       if (assistRec && assistRec.events && assistRec.events[selectedAssist.eventIdx]) {
         assistRec.events[selectedAssist.eventIdx].linkedToGoal = selectedGoal.playerId
         assistRec.events[selectedAssist.eventIdx].linkedToGoalIdx = selectedGoal.eventIdx
       }
-      
+
       return next
     })
-    
+
     setSelectedGoal(null)
     setSelectedAssist(null)
   }
@@ -669,17 +1065,15 @@ function GoalAssistLinkingPanel({ players, draft, setDraft }) {
   const unlinkGoal = (goal) => {
     setDraft(prev => {
       const next = JSON.parse(JSON.stringify(prev))
-      
+
       const goalRec = next[goal.playerId]
       if (goalRec && goalRec.events && goalRec.events[goal.eventIdx]) {
         const assistPlayerId = goalRec.events[goal.eventIdx].assistedBy
         const assistIdx = goalRec.events[goal.eventIdx].assistedByIdx
-        
-        // Remove link from goal
+
         delete goalRec.events[goal.eventIdx].assistedBy
         delete goalRec.events[goal.eventIdx].assistedByIdx
-        
-        // Remove link from assist if it exists
+
         if (assistPlayerId !== undefined && assistIdx !== undefined) {
           const assistRec = next[assistPlayerId]
           if (assistRec && assistRec.events && assistRec.events[assistIdx]) {
@@ -688,46 +1082,67 @@ function GoalAssistLinkingPanel({ players, draft, setDraft }) {
           }
         }
       }
-      
+
       return next
     })
   }
 
   return (
-    <div className="border-b bg-blue-50 px-3 py-3">
-      <div className="mb-2 text-sm font-semibold text-blue-900">골-어시스트 수동 연결</div>
+    <div className="border-2 border-blue-200 bg-blue-50 px-4 py-4 rounded-lg">
+      <div className="mb-3 flex items-center justify-between">
+        <div className="text-sm font-semibold text-blue-900">골-어시스트 연결 (듀오 순위표 반영)</div>
+        <div className="text-xs text-gray-600">
+          {selectedGoal && selectedAssist ? (
+            <span className="text-green-700 font-medium">
+              {selectedAssist.playerName} → {selectedGoal.playerName} 연결 준비됨
+            </span>
+          ) : (
+            <span>골 1개와 어시스트 1개를 선택하세요</span>
+          )}
+        </div>
+      </div>
+
       <div className="grid gap-3 md:grid-cols-2">
         {/* Goals List */}
         <div>
-          <div className="mb-2 text-xs font-semibold text-gray-700">골 목록</div>
-          <div className="max-h-60 overflow-auto rounded border border-gray-300 bg-white">
-            {allGoals.length === 0 ? (
+          <div className="mb-2 text-xs font-semibold text-gray-700">
+            ⚽ 골 목록
+            {selectedAssist && (
+              <span className="ml-2 text-blue-600 font-normal">
+                ({selectedAssist.playerName} 제외)
+              </span>
+            )}
+          </div>
+          <div className="max-h-60 overflow-auto rounded border-2 border-gray-300 bg-white">
+            {visibleGoals.length === 0 ? (
               <div className="p-3 text-center text-xs text-gray-500">골이 없습니다</div>
             ) : (
               <ul className="divide-y divide-gray-100">
-                {allGoals.map(goal => {
+                {visibleGoals.map(goal => {
                   const isSelected = selectedGoal?.uniqueKey === goal.uniqueKey
                   const assistedByPlayer = goal.assistedBy ? players.find(p => toStr(p.id) === toStr(goal.assistedBy)) : null
-                  
+
                   return (
                     <li
                       key={goal.uniqueKey}
                       onClick={() => setSelectedGoal(isSelected ? null : goal)}
-                      className={`cursor-pointer px-2 py-2 text-xs hover:bg-blue-50 ${isSelected ? 'bg-blue-100 border-l-2 border-blue-500' : ''}`}
+                      className={`cursor-pointer px-2 py-2 text-xs transition-colors ${isSelected
+                        ? 'bg-emerald-100 border-l-4 border-emerald-600'
+                        : 'hover:bg-blue-50'
+                        }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="font-medium">{goal.playerName}</div>
-                          <div className="text-gray-500">{new Date(goal.date).toLocaleString('ko-KR')}</div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-gray-800">{goal.playerName}</div>
                           {assistedByPlayer && (
-                            <div className="mt-1 flex items-center gap-1 text-emerald-700">
-                              <span>🔗 어시: {assistedByPlayer.name}</span>
+                            <div className="mt-1 flex items-center gap-1 text-blue-700 bg-blue-50 rounded px-1.5 py-0.5 w-fit">
+                              <span className="text-[10px] font-medium">🔗 {assistedByPlayer.name}</span>
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   unlinkGoal(goal)
                                 }}
-                                className="ml-1 text-red-600 hover:text-red-800"
+                                className="text-red-600 hover:text-red-800 font-bold"
                                 title="연결 해제"
                               >
                                 ✕
@@ -735,6 +1150,9 @@ function GoalAssistLinkingPanel({ players, draft, setDraft }) {
                             </div>
                           )}
                         </div>
+                        {isSelected && (
+                          <div className="text-emerald-600 font-bold">✓</div>
+                        )}
                       </div>
                     </li>
                   )
@@ -746,32 +1164,44 @@ function GoalAssistLinkingPanel({ players, draft, setDraft }) {
 
         {/* Assists List */}
         <div>
-          <div className="mb-2 text-xs font-semibold text-gray-700">어시스트 목록</div>
-          <div className="max-h-60 overflow-auto rounded border border-gray-300 bg-white">
-            {allAssists.length === 0 ? (
+          <div className="mb-2 text-xs font-semibold text-gray-700">
+            👉 어시스트 목록
+            {selectedGoal && (
+              <span className="ml-2 text-emerald-600 font-normal">
+                ({selectedGoal.playerName} 제외)
+              </span>
+            )}
+          </div>
+          <div className="max-h-60 overflow-auto rounded border-2 border-gray-300 bg-white">
+            {visibleAssists.length === 0 ? (
               <div className="p-3 text-center text-xs text-gray-500">어시스트가 없습니다</div>
             ) : (
               <ul className="divide-y divide-gray-100">
-                {allAssists.map(assist => {
+                {visibleAssists.map(assist => {
                   const isSelected = selectedAssist?.uniqueKey === assist.uniqueKey
                   const linkedToPlayer = assist.linkedToGoal ? players.find(p => toStr(p.id) === toStr(assist.linkedToGoal)) : null
-                  
+
                   return (
                     <li
                       key={assist.uniqueKey}
                       onClick={() => setSelectedAssist(isSelected ? null : assist)}
-                      className={`cursor-pointer px-2 py-2 text-xs hover:bg-blue-50 ${isSelected ? 'bg-blue-100 border-l-2 border-blue-500' : ''}`}
+                      className={`cursor-pointer px-2 py-2 text-xs transition-colors ${isSelected
+                        ? 'bg-amber-100 border-l-4 border-amber-600'
+                        : 'hover:bg-blue-50'
+                        }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex-1">
-                          <div className="font-medium">{assist.playerName}</div>
-                          <div className="text-gray-500">{new Date(assist.date).toLocaleString('ko-KR')}</div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-gray-800">{assist.playerName}</div>
                           {linkedToPlayer && (
-                            <div className="mt-1 text-emerald-700">
-                              🔗 골: {linkedToPlayer.name}
+                            <div className="mt-1 text-blue-700 bg-blue-50 rounded px-1.5 py-0.5 w-fit">
+                              <span className="text-[10px] font-medium">🔗 {linkedToPlayer.name}</span>
                             </div>
                           )}
                         </div>
+                        {isSelected && (
+                          <div className="text-amber-600 font-bold">✓</div>
+                        )}
                       </div>
                     </li>
                   )
@@ -787,13 +1217,12 @@ function GoalAssistLinkingPanel({ players, draft, setDraft }) {
         <button
           onClick={linkGoalToAssist}
           disabled={!selectedGoal || !selectedAssist}
-          className={`rounded px-4 py-2 text-sm font-medium text-white ${
-            selectedGoal && selectedAssist
-              ? 'bg-blue-600 hover:bg-blue-700'
-              : 'bg-gray-300 cursor-not-allowed'
-          }`}
+          className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all ${selectedGoal && selectedAssist
+            ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-md hover:shadow-lg'
+            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            }`}
         >
-          선택한 골과 어시스트 연결
+          🔗 듀오 연결하기
         </button>
         {(selectedGoal || selectedAssist) && (
           <button
@@ -801,284 +1230,20 @@ function GoalAssistLinkingPanel({ players, draft, setDraft }) {
               setSelectedGoal(null)
               setSelectedAssist(null)
             }}
-            className="rounded border px-3 py-2 text-sm"
+            className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-3 py-2 text-sm font-medium transition-colors"
           >
             선택 취소
           </button>
         )}
-        {selectedGoal && (
-          <span className="text-xs text-gray-600">골: {selectedGoal.playerName}</span>
-        )}
-        {selectedAssist && (
-          <span className="text-xs text-gray-600">어시: {selectedAssist.playerName}</span>
-        )}
       </div>
-    </div>
-  )
-}
 
-function EditorPanel({ players, panelIds, setPanelIds, draft, setDraft, setVal, onSave }){
-  const [showLinkingPanel, setShowLinkingPanel] = useState(false)
-  const [addingGoalFor, setAddingGoalFor] = useState(null)
-  const [addingAssistFor, setAddingAssistFor] = useState(null)
-
-  const addGoalWithAssist = (scorerId, assisterId) => {
-    const now = new Date().toISOString()
-    setDraft(prev => {
-      const next = JSON.parse(JSON.stringify(prev))
-      
-      // Add goal event
-      const scorerRec = next[toStr(scorerId)] || { goals: 0, assists: 0, events: [] }
-      const goalEvent = { type: 'goal', date: now }
-      if (assisterId) {
-        goalEvent.assistedBy = toStr(assisterId)
-      }
-      scorerRec.events.push(goalEvent)
-      scorerRec.goals = (scorerRec.goals || 0) + 1
-      next[toStr(scorerId)] = scorerRec
-      
-      // Add assist event if assister is selected
-      if (assisterId) {
-        const assisterRec = next[toStr(assisterId)] || { goals: 0, assists: 0, events: [] }
-        const assistEvent = { type: 'assist', date: now, linkedToGoal: toStr(scorerId) }
-        assisterRec.events.push(assistEvent)
-        assisterRec.assists = (assisterRec.assists || 0) + 1
-        next[toStr(assisterId)] = assisterRec
-      }
-      
-      return next
-    })
-    setAddingGoalFor(null)
-  }
-
-  const addAssistForGoal = (assisterId, scorerId) => {
-    const now = new Date().toISOString()
-    setDraft(prev => {
-      const next = JSON.parse(JSON.stringify(prev))
-      
-      // Add assist event
-      const assisterRec = next[toStr(assisterId)] || { goals: 0, assists: 0, events: [] }
-      const assistEvent = { type: 'assist', date: now }
-      if (scorerId) {
-        assistEvent.linkedToGoal = toStr(scorerId)
-      }
-      assisterRec.events.push(assistEvent)
-      assisterRec.assists = (assisterRec.assists || 0) + 1
-      next[toStr(assisterId)] = assisterRec
-      
-      // Add goal event if scorer is selected
-      if (scorerId) {
-        const scorerRec = next[toStr(scorerId)] || { goals: 0, assists: 0, events: [] }
-        const goalEvent = { type: 'goal', date: now, assistedBy: toStr(assisterId) }
-        scorerRec.events.push(goalEvent)
-        scorerRec.goals = (scorerRec.goals || 0) + 1
-        next[toStr(scorerId)] = scorerRec
-      }
-      
-      return next
-    })
-    setAddingAssistFor(null)
-  }
-
-  return (
-    <div className="rounded-lg border-2 border-blue-100 bg-gradient-to-br from-blue-50 to-white shadow-sm">
-      <div className="flex items-center justify-between px-2 sm:px-3 py-2 text-xs border-b border-blue-100">
-        <div className="text-sm sm:text-base font-semibold text-gray-800">편집 패널 · {panelIds.length}명</div>
-        <div className="flex items-center gap-1 sm:gap-2">
-          <button 
-            onClick={()=>setShowLinkingPanel(!showLinkingPanel)} 
-            className="rounded-lg border-2 border-blue-400 bg-blue-500 hover:bg-blue-600 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs text-white font-medium shadow-sm transition-all"
-          >
-            {showLinkingPanel ? '연결 닫기' : '골-어시 연결'}
-          </button>
-          <button 
-            onClick={()=>{
-              // Reset goals/assists for players currently in the panel, then clear the panel.
-              setDraft(prev=>{
-                const next = { ...prev }
-                for (const pid of panelIds) {
-                  next[toStr(pid)] = { goals: 0, assists: 0, events: [] }
-                }
-                return next
-              })
-              setPanelIds([])
-            }} 
-            className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-medium transition-colors"
-          >
-            전체 제거
-          </button>
-          <button 
-            onClick={onSave} 
-            className="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs text-white font-semibold shadow-md transition-all hover:shadow-lg"
-          >
-            저장하기
-          </button>
-        </div>
+      <div className="mt-2 text-[10px] text-gray-600 bg-white rounded px-2 py-1">
+        💡 <strong>Bulk 입력 시 자동 연결:</strong> [날짜]goal:assist[득점자 도움자] 형식은 자동으로 듀오 연결됩니다.
+        <br />
+        💡 <strong>수동 연결:</strong> 골과 어시스트를 각각 클릭하여 선택 후 "듀오 연결하기" 버튼을 누르세요.
+        <br />
+        💡 <strong>연결 해제:</strong> 연결된 골 옆의 ✕ 버튼을 클릭하여 연결을 해제할 수 있습니다.
       </div>
-      
-      {showLinkingPanel && (
-        <GoalAssistLinkingPanel players={players} draft={draft} setDraft={setDraft} />
-      )}
-
-      {/* Goal/Assist Adding Modal */}
-      {addingGoalFor && (
-        <div className="border-b border-green-200 bg-gradient-to-br from-green-50 to-white px-2 sm:px-3 py-2 sm:py-3">
-          <div className="mb-2 text-xs sm:text-sm font-semibold text-gray-800">
-            {players.find(p => toStr(p.id) === toStr(addingGoalFor))?.name}의 골 추가
-          </div>
-          <div className="mb-2 text-[10px] sm:text-xs text-gray-600">어시스트한 선수를 선택하세요 (선택사항):</div>
-          <div className="flex flex-wrap gap-1 sm:gap-2">
-            {panelIds.filter(pid => toStr(pid) !== toStr(addingGoalFor)).map(pid => {
-              const p = players.find(pp => toStr(pp.id) === toStr(pid))
-              const rec = draft[toStr(pid)] || { goals: 0, assists: 0, events: [] }
-              if (!p) return null
-              return (
-                <button
-                  key={pid}
-                  onClick={() => addGoalWithAssist(addingGoalFor, pid)}
-                  className="rounded-lg border-2 border-green-600 bg-white hover:bg-green-50 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-medium transition-colors"
-                >
-                  {p.name} <span className="ml-1 text-gray-500">(A: {rec.assists})</span>
-                </button>
-              )
-            })}
-            <button
-              onClick={() => addGoalWithAssist(addingGoalFor, null)}
-              className="rounded-lg bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs text-white font-semibold shadow-md transition-all"
-            >
-              어시스트 없이 추가
-            </button>
-            <button
-              onClick={() => setAddingGoalFor(null)}
-              className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-medium transition-colors"
-            >
-              취소
-            </button>
-          </div>
-        </div>
-      )}
-
-      {addingAssistFor && (
-        <div className="border-b border-blue-200 bg-gradient-to-br from-blue-50 to-white px-2 sm:px-3 py-2 sm:py-3">
-          <div className="mb-2 text-xs sm:text-sm font-semibold text-gray-800">
-            {players.find(p => toStr(p.id) === toStr(addingAssistFor))?.name}의 어시스트 추가
-          </div>
-          <div className="mb-2 text-[10px] sm:text-xs text-gray-600">골을 넣은 선수를 선택하세요 (선택사항):</div>
-          <div className="flex flex-wrap gap-1 sm:gap-2">
-            {panelIds.filter(pid => toStr(pid) !== toStr(addingAssistFor)).map(pid => {
-              const p = players.find(pp => toStr(pp.id) === toStr(pid))
-              const rec = draft[toStr(pid)] || { goals: 0, assists: 0, events: [] }
-              if (!p) return null
-              return (
-                <button
-                  key={pid}
-                  onClick={() => addAssistForGoal(addingAssistFor, pid)}
-                  className="rounded-lg border-2 border-blue-600 bg-white hover:bg-blue-50 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-medium transition-colors"
-                >
-                  {p.name} <span className="ml-1 text-gray-500">(G: {rec.goals})</span>
-                </button>
-              )
-            })}
-            <button
-              onClick={() => addAssistForGoal(addingAssistFor, null)}
-              className="rounded-lg bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs text-white font-semibold shadow-md transition-all"
-            >
-              골 없이 추가
-            </button>
-            <button
-              onClick={() => setAddingAssistFor(null)}
-              className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-medium transition-colors"
-            >
-              취소
-            </button>
-          </div>
-        </div>
-      )}
-
-      <ul className="divide-y divide-gray-100">
-        {panelIds.map(pid => {
-          const p = players.find(pp => toStr(pp.id)===toStr(pid))
-          const rec = draft[toStr(pid)] || { goals:0, assists:0, events:[] }
-          if (!p) return null
-          return (
-            <li key={toStr(pid)} className="flex items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2 bg-white">
-              <InitialAvatar id={p.id} name={p.name} size={22} badges={(() => { const s=toStr(p.membership).toLowerCase(); return (s==='member'||s.includes('정회원'))?[]:['G'] })()} photoUrl={p.photoUrl} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-xs sm:text-sm font-medium">
-                  {p.name} <span className="ml-1 text-[10px] sm:text-xs text-gray-500">{p.position||p.pos||'-'}</span>
-                </div>
-              </div>
-
-              <LinkedCounter
-                label="G"
-                value={rec.goals}
-                onAdd={() => setAddingGoalFor(p.id)}
-                onDec={()=>setVal(p.id,'goals',Math.max(0,(rec.goals||0)-1))}
-              />
-              <LinkedCounter
-                label="A"
-                value={rec.assists}
-                onAdd={() => setAddingAssistFor(p.id)}
-                onDec={()=>setVal(p.id,'assists',Math.max(0,(rec.assists||0)-1))}
-              />
-
-              <button 
-                onClick={()=>{
-                  // Only remove from panel, keep draft data intact
-                  setPanelIds(prev=>prev.filter(id=>id!==toStr(pid)))
-                }}
-                className="ml-1 rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-2 py-1 text-[10px] sm:text-xs font-medium transition-colors"
-              >
-                제거
-              </button>
-            </li>
-          )
-        })}
-        {panelIds.length===0 && (
-          <li className="px-2 sm:px-3 py-4 sm:py-6 text-center text-xs sm:text-sm text-gray-500">
-            아직 선택된 선수가 없습니다. 위에서 검색 후 "패널에 추가"를 눌러주세요.
-          </li>
-        )}
-      </ul>
-    </div>
-  )
-}function Pill({ children, active, onClick }){
-  return (
-    <button onClick={onClick}
-      className={`rounded-lg px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-semibold shadow-sm transition-all ${
-        active
-          ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white border-2 border-blue-700' 
-          : 'bg-white text-gray-700 border-2 border-gray-300 hover:bg-gray-50'
-      }`}>
-      {children}
-    </button>
-  )
-}
-
-function LinkedCounter({ label, value, onAdd, onDec }){
-  const labelColor = label === 'G' ? 'from-emerald-500 to-emerald-600' : 'from-amber-500 to-amber-600'
-  
-  return (
-    <div className="flex items-center gap-0.5 sm:gap-1 bg-gray-50 rounded-lg p-1 sm:p-1.5 border border-gray-200">
-      <button 
-        onClick={onDec} 
-        aria-label={`${label} 감소`} 
-        disabled={value <= 0}
-        className="rounded-md bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-gray-600 hover:text-red-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 disabled:hover:text-gray-600 font-bold shadow-sm text-xs sm:text-base"
-      >
-        −
-      </button>
-      <div className="flex items-center gap-0.5 sm:gap-1 px-0.5 sm:px-1">
-        <span className={`inline-flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full bg-gradient-to-br ${labelColor} text-[10px] sm:text-xs font-bold text-white shadow-md`}>{label}</span>
-        <span className="w-5 sm:w-6 text-center tabular-nums font-bold text-xs sm:text-sm text-gray-800">{value}</span>
-      </div>
-      <button 
-        onClick={onAdd} 
-        aria-label={`${label} 추가`} 
-        className="rounded-md bg-blue-500 hover:bg-blue-600 border border-blue-600 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-white transition-all font-bold shadow-sm text-xs sm:text-base"
-      >
-        +
-      </button>
     </div>
   )
 }
