@@ -784,9 +784,20 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
               const teamPlayers = team.players.filter(p => toStr(p.id) !== toStr(addingGoalFor.playerId))
               if (teamPlayers.length === 0) return null
               
+              const isSameTeam = teamIdx === addingGoalFor.teamIdx
+              
               return (
-                <div key={teamIdx}>
-                  <div className="text-[10px] font-bold text-gray-500 mb-1.5">{team.name}</div>
+                <div key={teamIdx} className={isSameTeam ? 'order-first' : ''}>
+                  <div className={`text-[10px] font-bold mb-1.5 flex items-center gap-1.5 ${
+                    isSameTeam ? 'text-blue-700' : 'text-gray-500'
+                  }`}>
+                    {team.name}
+                    {isSameTeam && (
+                      <span className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[9px] font-bold">
+                        ⭐ 같은 팀
+                      </span>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {teamPlayers.map(p => {
                       const rec = draft[toStr(p.id)] || { goals: 0, assists: 0 }
@@ -794,7 +805,11 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
                         <button
                           key={toStr(p.id)}
                           onClick={() => addGoalWithAssist(addingGoalFor.playerId, p.id)}
-                          className="rounded-lg border-2 border-blue-500 bg-white hover:bg-blue-50 px-3 py-1.5 text-xs font-medium transition-colors"
+                          className={`rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-colors ${
+                            isSameTeam
+                              ? 'border-blue-500 bg-white hover:bg-blue-50 shadow-sm'
+                              : 'border-gray-400 bg-white hover:bg-gray-50 opacity-75 hover:opacity-100'
+                          }`}
                         >
                           {p.name} <span className="ml-1 text-gray-500">(A: {rec.assists})</span>
                         </button>
@@ -833,9 +848,20 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
               const teamPlayers = team.players.filter(p => toStr(p.id) !== toStr(addingAssistFor.playerId))
               if (teamPlayers.length === 0) return null
               
+              const isSameTeam = teamIdx === addingAssistFor.teamIdx
+              
               return (
-                <div key={teamIdx}>
-                  <div className="text-[10px] font-bold text-gray-500 mb-1.5">{team.name}</div>
+                <div key={teamIdx} className={isSameTeam ? 'order-first' : ''}>
+                  <div className={`text-[10px] font-bold mb-1.5 flex items-center gap-1.5 ${
+                    isSameTeam ? 'text-blue-700' : 'text-gray-500'
+                  }`}>
+                    {team.name}
+                    {isSameTeam && (
+                      <span className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[9px] font-bold">
+                        ⭐ 같은 팀
+                      </span>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     {teamPlayers.map(p => {
                       const rec = draft[toStr(p.id)] || { goals: 0, assists: 0 }
@@ -843,7 +869,11 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
                         <button
                           key={toStr(p.id)}
                           onClick={() => addAssistForGoal(addingAssistFor.playerId, p.id)}
-                          className="rounded-lg border-2 border-emerald-500 bg-white hover:bg-emerald-50 px-3 py-1.5 text-xs font-medium transition-colors"
+                          className={`rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-colors ${
+                            isSameTeam
+                              ? 'border-emerald-500 bg-white hover:bg-emerald-50 shadow-sm'
+                              : 'border-gray-400 bg-white hover:bg-gray-50 opacity-75 hover:opacity-100'
+                          }`}
                         >
                           {p.name} <span className="ml-1 text-gray-500">(G: {rec.goals})</span>
                         </button>
