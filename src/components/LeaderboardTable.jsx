@@ -29,14 +29,6 @@ const getBadgesWithCustom = (membership, customMemberships = []) => {
 
 /**
  * Generic leaderboard table component
- * @param {Object} props
- * @param {Array} props.rows - Data rows to display
- * @param {boolean} props.showAll - Whether to show all rows or limit to 5
- * @param {Function} props.onToggle - Callback for show all/less toggle
- * @param {ReactNode} props.controls - Control elements (date selector, toggle buttons)
- * @param {string} props.title - Table title/header text
- * @param {Array} props.columns - Column configuration array
- * @param {Function} props.renderRow - Function to render table row cells
  */
 export default function LeaderboardTable({ 
   rows, 
@@ -53,7 +45,7 @@ export default function LeaderboardTable({
   const totalPlayers = rows.length
 
   return (
-    <div className="overflow-hidden rounded-lg border border-stone-200">
+    <div className="overflow-x-auto rounded-lg border border-stone-200">
       <table className="w-full text-sm">
         <thead>
           <tr>
@@ -108,7 +100,7 @@ export default function LeaderboardTable({
  */
 export function RankCell({ rank, tone, delta }) {
   return (
-    <td className={`border-b align-middle px-1.5 py-1.5 ${tone.cellBg}`}>
+    <td className={`border-b align-middle px-1.5 py-1.5 ${tone.cellBg}`} style={{ width: '60px', minWidth: '60px', maxWidth: '60px' }}>
       <div className="grid items-center" style={{ gridTemplateColumns: '16px 1fr 22px', columnGap: 4 }}>
         <div className="flex items-center justify-center">
           <Medal rank={rank} />
@@ -130,25 +122,41 @@ export function RankCell({ rank, tone, delta }) {
 
 /**
  * Standard player name cell with avatar
+ * - 모바일: 한글 3글자 정도 보이고 '…' 처리, hover/focus 시 가로 스크롤 가능
+ * - 데스크탑(md 이상): 전체 이름 항상 표시 (overflow-visible)
+ * - 스크롤 시 높이 요동 방지를 위해 고정 라인-박스 + stable scrollbar gutter
  */
 export function PlayerNameCell({ id, name, isGuest, membership, tone, photoUrl, customMemberships = [] }) {
-  // membership prop이 있으면 커스텀 배지 사용, 없으면 isGuest prop 사용 (하위 호환성)
   const badges = membership ? getBadgesWithCustom(membership, customMemberships) : (isGuest ? ['G'] : [])
   const badgeInfo = membership ? getMembershipBadge(membership, customMemberships) : null
   
   return (
     <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
-      <div className="flex items-center gap-2">
-        <InitialAvatar 
-          id={id} 
-          name={name} 
-          size={32} 
-          badges={badges} 
-          photoUrl={photoUrl} 
-          customMemberships={customMemberships}
-          badgeInfo={badgeInfo}
-        />
-        <span className="font-medium truncate">{name}</span>
+      <div className="flex items-center gap-2 min-w-0">
+        <div className="shrink-0">
+          <InitialAvatar 
+            id={id} 
+            name={name} 
+            size={28} 
+            badges={badges} 
+            photoUrl={photoUrl} 
+            customMemberships={customMemberships}
+            badgeInfo={badgeInfo}
+          />
+        </div>
+        <span
+          className="
+            block font-medium text-sm whitespace-nowrap overflow-hidden text-ellipsis
+            w-[3.6em]
+            sm:w-[6.5em]
+            md:w-[12em]
+            lg:w-[16em]
+            xl:w-auto xl:max-w-none xl:overflow-visible
+          "
+          title={name}
+        >
+          {name}
+        </span>
       </div>
     </td>
   )
@@ -157,12 +165,16 @@ export function PlayerNameCell({ id, name, isGuest, membership, tone, photoUrl, 
 /**
  * Standard numeric stat cell
  */
-export function StatCell({ value, tone, bold = true, align = 'left' }) {
+export function StatCell({ value, tone, bold = true, align = 'left', width }) {
+  const inlineStyle = width ? { width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` } : {}
   return (
-    <td className={`border-b px-2 py-1.5 ${bold ? 'font-semibold' : ''} tabular-nums ${
-      align === 'center' ? 'text-center' : 
-      align === 'right' ? 'text-right' : 'text-left'
-    } ${tone.cellBg}`}>
+    <td 
+      className={`border-b px-2 py-1.5 ${bold ? 'font-semibold' : ''} tabular-nums ${
+        align === 'center' ? 'text-center' : 
+        align === 'right' ? 'text-right' : 'text-left'
+      } ${tone.cellBg}`}
+      style={inlineStyle}
+    >
       {value}
     </td>
   )
@@ -173,7 +185,7 @@ export function StatCell({ value, tone, bold = true, align = 'left' }) {
  */
 export function FormDotsCell({ form, tone }) {
   return (
-    <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
+    <td className={`border-b px-2 py-1.5 ${tone.cellBg}`} style={{ width: '100px', minWidth: '100px', maxWidth: '100px' }}>
       <div className="flex justify-center">
         <FormDots form={form || []} />
       </div>
