@@ -230,43 +230,23 @@ export function computeDuoRows(players = [], matches = []) {
   
   evts = evts.filter(e => idToPlayer.has(toStr(e.pid)))
   
-  // Only count explicit links from event metadata
-  // Use a Set to track already counted pairs to avoid double-counting
+  // Only count from goal events with assistedBy
+  // Ignore assist events with linkedToGoal to prevent double counting
   const duoCount = new Map()
-  const countedPairs = new Set() // Track "matchId:goalIdx:assistIdx" to prevent duplicates
   
   for (const e of evts) {
     const myPid = toStr(e.pid)
-    let assistId = null
-    let goalId = null
     
+    // Only count from goal events
     if (e.type === 'goal') {
       const aid = toStr(e?.raw?.assistedBy)
       if (aid && idToPlayer.has(aid) && aid !== myPid) {
-        assistId = aid
-        goalId = myPid
-      }
-    } else if (e.type === 'assist') {
-      const gid = toStr(e?.raw?.linkedToGoal)
-      if (gid && idToPlayer.has(gid) && gid !== myPid) {
-        assistId = myPid
-        goalId = gid
-      }
-    }
-    
-    // Only count if we have a valid pair
-    if (assistId && goalId) {
-      const key = `${assistId}|${goalId}`
-      const pairKey = `${e.rawIdx}:${assistId}:${goalId}` // Use rawIdx to identify unique event
-      
-      // Skip if this exact pair was already counted from the reverse link
-      if (!countedPairs.has(pairKey)) {
+        const key = `${aid}|${myPid}`
         duoCount.set(key, (duoCount.get(key) || 0) + 1)
-        countedPairs.add(pairKey)
-        // Also mark the reverse to prevent double counting
-        countedPairs.add(`${e.rawIdx}:${goalId}:${assistId}`)
       }
     }
+    // Completely ignore assist events with linkedToGoal
+    // (they're just metadata for the UI, not for counting)
   }
   
   const rows = []
