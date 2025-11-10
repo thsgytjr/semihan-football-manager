@@ -24,6 +24,7 @@ import { getTagColorClass, migratePositionToPositions, getPositionCategory } fro
 import { toStr, isMember } from '../lib/matchUtils'
 import { calcFees } from '../lib/fees'
 import { getTextColor } from '../utils/color'
+import DateTimePicker from '../components/DateTimePicker'
 
 /* ───────── 공통 유틸 ───────── */
 const S = toStr
@@ -83,6 +84,8 @@ export default function MatchPlanner({
 }){
   const customMemberships = membershipSettings.length > 0 ? membershipSettings : []
   const[dateISO,setDateISO]=useState(()=>getNextSaturday630()),[attendeeIds,setAttendeeIds]=useState([]),[criterion,setCriterion]=useState('overall'),[shuffleSeed,setShuffleSeed]=useState(0)
+  const[enablePitchFee,setEnablePitchFee]=useState(true) // 구장비 사용 여부 토글
+  const[dateError,setDateError]=useState(null) // 과거 날짜 오류 메시지
   const[locationPreset,setLocationPreset]=useState(''),[locationName,setLocationName]=useState(''),[locationAddress,setLocationAddress]=useState('')
   const[customBaseCost,setCustomBaseCost]=useState(0),[guestSurcharge,setGuestSurcharge]=useState(2),[teamCount,setTeamCount]=useState(2)
   const[manualTeams,setManualTeams]=useState(null),[activePlayerId,setActivePlayerId]=useState(null),[activeFromTeam,setActiveFromTeam]=useState(null)
@@ -178,8 +181,20 @@ export default function MatchPlanner({
     return null
   },[locationAddress])
 
+  const isPastDate = useMemo(()=>{
+    if(!dateISO) return false
+    try {
+      // dateISO 형식: YYYY-MM-DDTHH:MM
+      const dt = new Date(dateISO + (dateISO.length===16?':00':''))
+      return dt.getTime() < Date.now() - 60_000
+    } catch (e) { return false }
+  },[dateISO])
+
+  useEffect(()=>{ setDateError(isPastDate ? '과거 시점은 저장할 수 없습니다.' : null) },[isPastDate])
+
   function save(){
     if(!isAdmin){notify('Admin만 가능합니다.');return}
+    if(isPastDate){ notify('❌ 과거 날짜/시간입니다. 수정 후 다시 시도하세요.'); return }
     let baseTeams=(latestTeamsRef.current&&latestTeamsRef.current.length)?latestTeamsRef.current:previewTeams
     
     // 주장을 각 팀의 맨 앞으로 정렬
@@ -201,7 +216,7 @@ export default function MatchPlanner({
     const snapshot=baseTeams.map(team=>team.map(p=>p.id))
     const ids=snapshot.flat()
     const objs=players.filter(p=>ids.includes(p.id))
-    const fees=computeFeesAtSave({baseCostValue:baseCost,attendees:objs,guestSurcharge})
+  const fees= enablePitchFee ? computeFeesAtSave({baseCostValue:baseCost,attendees:objs,guestSurcharge}) : null
     
     // 드래프트 모드일 때 추가 필드들
     const draftFields = isDraftMode ? {
@@ -219,7 +234,7 @@ export default function MatchPlanner({
     }
     
     // datetime-local 형식(YYYY-MM-DDTHH:MM)을 ISO 8601로 변환
-    const dateISOFormatted = dateISO ? new Date(dateISO + ':00').toISOString() : new Date().toISOString()
+  const dateISOFormatted = dateISO ? new Date(dateISO + ':00').toISOString() : new Date().toISOString()
     
     const payload={
       ...mkMatch({
@@ -230,7 +245,7 @@ export default function MatchPlanner({
         mode,snapshot,board:placedByTeam,formations,locked:true,videos:[],
         ...draftFields
       }),
-      fees,
+      ...(enablePitchFee && fees ? { fees } : { feesDisabled:true }),
       // Only include teamColors if at least one team has a custom color
       ...(teamColors && teamColors.length > 0 && teamColors.some(c => c !== null && c !== undefined) ? { teamColors } : {})
     }
@@ -240,6 +255,7 @@ export default function MatchPlanner({
   function saveAsUpcomingMatch(){
     if(!isAdmin){notify('Admin만 가능합니다.');return}
     if(!onSaveUpcomingMatch){notify('예정 매치 저장 기능이 없습니다.');return}
+    if(isPastDate){ notify('❌ 과거 날짜/시간입니다. 수정 후 다시 시도하세요.'); return }
     
     // 실제로 팀에 배정된 선수들의 ID 목록 가져오기
     const assignedPlayerIds = previewTeams.flat().map(p => p.id)
@@ -252,7 +268,7 @@ export default function MatchPlanner({
     const teamsSnapshot = previewTeams.map(team => team.map(p => p.id))
 
     // datetime-local 형식(YYYY-MM-DDTHH:MM)을 ISO 8601로 변환
-    const dateISOFormatted = dateISO ? new Date(dateISO + ':00').toISOString() : new Date().toISOString()
+  const dateISOFormatted = dateISO ? new Date(dateISO + ':00').toISOString() : new Date().toISOString()
 
     const upcomingMatch = createUpcomingMatch({
       dateISO: dateISOFormatted,
@@ -262,7 +278,8 @@ export default function MatchPlanner({
         name: locationName,
         address: locationAddress
       },
-      totalCost: baseCost,
+      totalCost: enablePitchFee ? baseCost : 0,
+      feesDisabled: !enablePitchFee,
       isDraftMode,
       mode: decideMode(assignedPlayerIds.length).mode,
       teamCount: teams, // 팀 수 저장
@@ -637,7 +654,16 @@ export default function MatchPlanner({
   <div className="grid gap-4 lg:grid-cols:[minmax(0,1fr)_600px]">
     <Card title="매치 설정">
       <div className="grid gap-4">
-        <Row label="날짜/시간"><input type="datetime-local" value={dateISO} onChange={e=>setDateISO(e.target.value)} className="w-full rounded border border-gray-300 bg-white px-3 py-2"/></Row>
+        <Row label="날짜/시간">
+          <DateTimePicker
+            value={dateISO}
+            onChange={setDateISO}
+            isPast={isPastDate}
+            error={dateError}
+            label={null}
+            className="w-full"
+          />
+        </Row>
         <Row label="장소">
           <div className="grid gap-2">
             <select 
@@ -681,7 +707,17 @@ export default function MatchPlanner({
               </div>
             )}
             
+            {/* Pitch fee toggle */}
+            <div className="flex items-center gap-3 mt-2">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input type="checkbox" checked={enablePitchFee} onChange={()=>setEnablePitchFee(v=>!v)} />
+                구장비 사용
+              </label>
+              {!enablePitchFee && <span className="text-xs text-gray-500">(비용 계산 비활성화됨)</span>}
+            </div>
+
             {/* Cost input */}
+            {enablePitchFee && (
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-gray-600">총 구장비:</label>
@@ -708,19 +744,22 @@ export default function MatchPlanner({
                 />
               </div>
             </div>
+            )}
 
             {/* 비용 안내 */}
-            <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              <div><b>예상 구장비</b>: ${baseCost}</div>
-              <div className="mt-1">
-                배정된 선수: {previewTeams.flat().length}명 
-                {previewTeams.flat().length > 0 && (
-                  <span className="ml-2">
-                    (정회원: ${liveFees.memberFee}/인 · 게스트: ${liveFees.guestFee}/인 +${guestSurcharge})
-                  </span>
-                )}
+            {enablePitchFee && (
+              <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                <div><b>예상 구장비</b>: ${baseCost}</div>
+                <div className="mt-1">
+                  배정된 선수: {previewTeams.flat().length}명 
+                  {previewTeams.flat().length > 0 && (
+                    <span className="ml-2">
+                      (정회원: ${liveFees.memberFee}/인 · 게스트: ${liveFees.guestFee}/인 +${guestSurcharge})
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* 지도 링크 프리뷰 */}
             {mapLink && (
@@ -954,8 +993,8 @@ export default function MatchPlanner({
         <div className="flex flex-wrap gap-2">
           {isAdmin&&(
             <div className="flex items-center gap-2">
-              <button onClick={saveAsUpcomingMatch} className="rounded bg-blue-500 px-4 py-2 text-white font-semibold hover:bg-blue-600">예정 매치로 저장</button>
-              <button onClick={save} className="rounded bg-emerald-500 px-4 py-2 text-white font-semibold hover:bg-emerald-600">매치 저장</button>
+              <button onClick={saveAsUpcomingMatch} disabled={!!dateError} className={`rounded px-4 py-2 text-white font-semibold ${dateError?'bg-blue-300 cursor-not-allowed':'bg-blue-500 hover:bg-blue-600'}`}>예정 매치로 저장</button>
+              <button onClick={save} disabled={!!dateError} className={`rounded px-4 py-2 text-white font-semibold ${dateError?'bg-emerald-300 cursor-not-allowed':'bg-emerald-500 hover:bg-emerald-600'}`}>매치 저장</button>
             </div>
           )}
         </div>

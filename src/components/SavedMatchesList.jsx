@@ -975,14 +975,19 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
       </div>
 
       <div className="mb-2 text-xs text-gray-600">
-        {m.teamCount}팀 ·💰총액 ${fees?.total??0}
-        {typeof fees?.memberFee==="number"&&(
-          <> · 정회원 ${fees.memberFee}/인</>
-        )}
-        {fees?.guestCount>0&&typeof fees?.guestFee==="number"&&(
-          <> · 게스트 ${fees.guestFee}/인</>
-        )}
-        {fees?._estimated && <span className="opacity-70"> (추정)</span>}
+        {/* 요금 표시: 구장비 미사용 매치(feesDisabled) 또는 total 0이면 숨김 */}
+        {!(m.feesDisabled || (fees?.total ?? 0) === 0) ? (
+          <>
+            {m.teamCount}팀 ·💰총액 ${fees?.total??0}
+            {typeof fees?.memberFee==="number" && (
+              <> · 정회원 ${fees.memberFee}/인</>
+            )}
+            {fees?.guestCount>0 && typeof fees?.guestFee==="number" && (
+              <> · 게스트 ${fees.guestFee}/인</>
+            )}
+            {fees?._estimated && <span className="opacity-70"> (추정)</span>}
+          </>
+        ) : null}
       </div>
 
       {/* 실시간 골득실 현황판 (3팀 이상, 드래프트 모드, 편집 모드에서만 표시) */}
