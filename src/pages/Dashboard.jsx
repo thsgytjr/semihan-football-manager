@@ -690,8 +690,8 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
   const headerBtnCls = "inline-flex items-center gap-1 hover:underline cursor-pointer select-none"
 
   return (
-    <div className="overflow-hidden rounded-lg border border-stone-200">
-      <table className="w-full text-sm">
+    <div className="overflow-x-auto rounded-lg border border-stone-200 scrollbar-hide">
+      <table className="w-full text-sm" style={{ minWidth: '100%' }}>
         <thead>
           <tr>
             <th colSpan={6} className="border-b px-2 py-2">
@@ -754,33 +754,25 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
                   </div>
                 </td>
 
-                {/* 이름 셀: 3.6em 고정폭 + ellipsis + hover/focus 시 가로 스크롤 */}
+                {/* 이름 셀: 고정폭 + 가로 스크롤 */}
                 <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="shrink-0">
+                  <div className="flex items-center gap-1.5 min-w-0 w-[88px] sm:w-[140px] lg:w-auto lg:max-w-[250px]">
+                    <div className="flex-shrink-0">
                       <InitialAvatar 
                         id={r.id || r.name} 
                         name={r.name} 
-                        size={32} 
+                        size={26} 
                         badges={getBadgesWithCustom(r.membership, customMemberships)}
                         photoUrl={r.photoUrl}
                         customMemberships={customMemberships}
                         badgeInfo={getMembershipBadge(r.membership, customMemberships)}
                       />
                     </div>
-                    <span
-                      className="
-                        block font-medium whitespace-nowrap overflow-hidden text-ellipsis
-                        w-[3.6em]
-                        sm:w-[6.5em]
-                        md:w-[12em]
-                        lg:w-[16em]
-                        xl:w-auto xl:max-w-none xl:overflow-visible
-                      "
-                      title={r.name}
-                    >
-                      {r.name}
-                    </span>
+                    <div className="min-w-0 flex-1 overflow-x-auto scrollbar-hide">
+                      <span className="font-medium text-sm whitespace-nowrap" title={r.name}>
+                        {r.name}
+                      </span>
+                    </div>
                   </div>
                 </td>
 
