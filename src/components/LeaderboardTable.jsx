@@ -138,7 +138,7 @@ export function PlayerNameCell({ id, name, isGuest, membership, tone, photoUrl, 
           <InitialAvatar 
             id={id} 
             name={name} 
-            size={26} 
+            size={32} 
             badges={badges} 
             photoUrl={photoUrl} 
             customMemberships={customMemberships}

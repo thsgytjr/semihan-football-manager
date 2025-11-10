@@ -1355,6 +1355,10 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
           const kit=kitForTeam(i), nonGK=list.filter(p=>(p.position||p.pos)!=="GK")
           const sum=nonGK.reduce((a,p)=>a+(p.ovr??overall(p)),0), avg=nonGK.length?Math.round(sum/nonGK.length):0
           const capId=(captainIds&&captainIds[i])?String(captainIds[i]):null
+          
+          // Avatar size: 기본 32px, 4팀 이상일 때는 아바타 숨김
+          const avatarSize = 32
+          
           // 주장이 있으면 항상 제일 위로 정렬 (드래프트 모드 여부와 무관)
           const listOrdered=capId?[...list].sort((a,b)=>{
             const aid=String(a.id),bid=String(b.id)
@@ -1418,22 +1422,52 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   return (
                     <li key={p.id} className="flex items-center justify-between gap-2 px-3 py-1.5 text-sm">
                       {/* Left block: avatar (with badges) | name | stats */}
-                      <div className={`grid items-center gap-2 min-w-0 flex-1 ${showGA ? 'grid-cols-[auto_1fr_auto]' : 'grid-cols-[auto_1fr]'}`}>
-                        <div className="shrink-0">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        {/* 아바타: 모바일에서 3팀 이상일 때만 숨김, 데스크탑/태블릿은 항상 표시 */}
+                        <div className={`shrink-0 ${teamCols >= 3 ? 'hidden sm:block' : ''}`}>
                           <InitialAvatar 
                             id={p.id} 
                             name={p.name} 
-                            size={32} 
+                            size={avatarSize} 
                             photoUrl={p.photoUrl} 
                             badges={badges}
                             customMemberships={customMemberships || []}
                             badgeInfo={membershipBadgeInfo}
                           />
                         </div>
-                        <div className="min-w-0 truncate font-medium">
-                          {p.name}
-                          {(p.position||p.pos)==="GK"&&<em className="ml-1 text-xs font-normal text-gray-400">(GK)</em>}
+                        {/* 이름 */}
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <div className="min-w-0 flex-1 overflow-x-auto scrollbar-hide">
+                            <span className="font-medium whitespace-nowrap flex items-center gap-1.5" title={p.name}>
+                              {/* 모바일에서 3팀 이상일 때 주장 배지만 이름 앞에 표시 */}
+                              {teamCols >= 3 && isCaptain && (
+                                <span className="inline-flex items-center gap-0.5 shrink-0 sm:hidden">
+                                  <CaptainBadge />
+                                </span>
+                              )}
+                              <span>
+                                {p.name}
+                                {(p.position||p.pos)==="GK"&&<em className="ml-1 text-xs font-normal text-gray-400">(GK)</em>}
+                              </span>
+                            </span>
+                          </div>
                         </div>
+                        {showGA && (
+                          <div className="flex items-center gap-2 shrink-0">
+                            {rec.goals>0 && (
+                              <div className="relative inline-flex items-center justify-center" title="골">
+                                <span role="img" aria-label="goals" className="text-2xl leading-none">⚽</span>
+                                <span className="absolute right-0 bottom-0 flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full bg-black text-[10px] font-bold text-white shadow-sm">{rec.goals}</span>
+                              </div>
+                            )}
+                            {rec.assists>0 && (
+                              <div className="relative inline-flex items-center justify-center" title="어시스트">
+                                <span role="img" aria-label="assists" className="text-2xl leading-none">🎯</span>
+                                <span className="absolute right-0 bottom-0 flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full bg-black text-[10px] font-bold text-white shadow-sm">{rec.assists}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
                         {/* Stats: Goals / Assists (조건부 표시) */}
                         {showGA && (
                           <div className="flex items-center gap-2 justify-self-end">

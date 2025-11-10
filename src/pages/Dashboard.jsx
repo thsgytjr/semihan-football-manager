@@ -761,7 +761,7 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
                       <InitialAvatar 
                         id={r.id || r.name} 
                         name={r.name} 
-                        size={26} 
+                        size={32} 
                         badges={getBadgesWithCustom(r.membership, customMemberships)}
                         photoUrl={r.photoUrl}
                         customMemberships={customMemberships}
