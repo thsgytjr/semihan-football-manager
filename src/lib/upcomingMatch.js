@@ -32,7 +32,7 @@ export function createUpcomingMatch(input = {}) {
   return {
     id: id || crypto.randomUUID?.() || `upcoming_${Date.now()}`,
     type: 'upcoming', // 기존 매치와 구분하기 위한 타입
-    dateISO,
+    dateISO: normalizeDateISO(dateISO),
     location: {
       preset: location?.preset || 'other',
       name: location?.name || '',
@@ -57,6 +57,29 @@ export function createUpcomingMatch(input = {}) {
     formations: formations || [], // 포메이션 정보
     board: [] // 포메이션 보드 배치 정보
   }
+}
+
+// 날짜 포맷 정규화: 허용
+// 1) YYYY-MM-DDTHH:MM
+// 2) ISO 8601 (Z 포함)
+// 그 외는 null 반환
+export function normalizeDateISO(v){
+  if(!v||typeof v!=='string') return ''
+  const localPattern=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
+  if(localPattern.test(v)) return v.slice(0,16)
+  // ISO 전체 형태면 로컬 부분(앞 16자)만 추출
+  try{
+    const d=new Date(v)
+    if(!isNaN(d.getTime())){
+      const y=d.getFullYear()
+      const m=String(d.getMonth()+1).padStart(2,'0')
+      const day=String(d.getDate()).padStart(2,'0')
+      const hh=String(d.getHours()).padStart(2,'0')
+      const mm=String(d.getMinutes()).padStart(2,'0')
+      return `${y}-${m}-${day}T${hh}:${mm}`
+    }
+  }catch{}
+  return v.slice(0,16)
 }
 
 /**
@@ -238,6 +261,10 @@ export function isMatchExpired(dateISO) {
  */
 export function filterExpiredMatches(upcomingMatches) {
   if (!Array.isArray(upcomingMatches)) return []
-  
-  return upcomingMatches.filter(match => !isMatchExpired(match.dateISO))
+  // 입력 목록 전체 정규화 후 만료 필터
+  const normalized = upcomingMatches.map(m=>({
+    ...m,
+    dateISO: normalizeDateISO(m?.dateISO||'')
+  }))
+  return normalized.filter(match => !isMatchExpired(match.dateISO))
 }

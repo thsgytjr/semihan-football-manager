@@ -5,7 +5,7 @@ import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subs
 import{saveMatchToDB,updateMatchInDB,deleteMatchFromDB,listMatchesFromDB,subscribeMatches}from"./services/matches.service"
 import{getMembershipSettings,subscribeMembershipSettings}from"./services/membership.service"
 import{mkPlayer}from"./lib/players";import{notify}from"./components/Toast"
-import{filterExpiredMatches}from"./lib/upcomingMatch"
+import{filterExpiredMatches, normalizeDateISO}from"./lib/upcomingMatch"
 import{getOrCreateVisitorId,getVisitorIP,parseUserAgent,shouldTrackVisit,isPreviewMode,isDevelopmentEnvironment}from"./lib/visitorTracking"
 import{signInAdmin,signOut,getSession,onAuthStateChange,isDeveloperEmail}from"./lib/auth"
 import{logger}from"./lib/logger"
@@ -445,9 +445,41 @@ export default function App(){
     }
   }
   
-  function handleSaveUpcomingMatch(upcomingMatch){if(!isAdmin)return notify("Admin만 가능합니다.");const next=[...(db.upcomingMatches||[]),upcomingMatch];setDb(prev=>({...prev,upcomingMatches:next}));saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:db.tagPresets||[]})}
-  function handleDeleteUpcomingMatch(id){if(!isAdmin)return notify("Admin만 가능합니다.");const next=(db.upcomingMatches||[]).filter(m=>m.id!==id);setDb(prev=>({...prev,upcomingMatches:next}));saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:db.tagPresets||[]})}
-  function handleUpdateUpcomingMatch(id,patch,silent=false){const next=(db.upcomingMatches||[]).map(m=>m.id===id?{...m,...patch}:m);setDb(prev=>({...prev,upcomingMatches:next}));saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:db.tagPresets||[]});if(!silent)notify("예정된 매치가 업데이트되었습니다.")}
+  function handleSaveUpcomingMatch(upcomingMatch){
+    if(!isAdmin)return notify("Admin만 가능합니다.");
+    const normalized={...upcomingMatch,dateISO:normalizeDateISO(upcomingMatch.dateISO)}
+    const next=[...(db.upcomingMatches||[]),normalized]
+    setDb(prev=>({...prev,upcomingMatches:next}))
+    saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:db.tagPresets||[]})
+  }
+  function handleDeleteUpcomingMatch(id){
+    if(!isAdmin)return notify("Admin만 가능합니다.");
+    const target=(db.upcomingMatches||[]).find(m=>m.id===id)
+    const next=(db.upcomingMatches||[]).filter(m=>m.id!==id)
+    setDb(prev=>({...prev,upcomingMatches:next}))
+    saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:db.tagPresets||[]})
+    if(target) console.info('[UpcomingMatch] Deleted', {id:target.id,dateISO:target.dateISO,participantCount:(target.participantIds||target.attendeeIds||[]).length})
+  }
+  function handleUpdateUpcomingMatch(id,patch,silent=false){
+    if(!isAdmin)return notify("Admin만 가능합니다.");
+    const before=(db.upcomingMatches||[]).find(m=>m.id===id)
+    const patched={...patch}
+    if('dateISO' in patched){ patched.dateISO=normalizeDateISO(patched.dateISO) }
+    const next=(db.upcomingMatches||[]).map(m=>m.id===id?{...m,...patched}:m)
+    setDb(prev=>({...prev,upcomingMatches:next}))
+    saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:db.tagPresets||[]})
+    if(before){
+      const after=next.find(m=>m.id===id)
+      const diffParticipants=(before.participantIds||before.attendeeIds||[]).length - (after.participantIds||after.attendeeIds||[]).length
+      if(diffParticipants>0){
+        console.warn('[UpcomingMatch] Participant count decreased', {id, before: (before.participantIds||before.attendeeIds||[]).length, after: (after.participantIds||after.attendeeIds||[]).length})
+      }
+      if(before.dateISO!==after.dateISO){
+        console.warn('[UpcomingMatch] dateISO changed', {id, before: before.dateISO, after: after.dateISO})
+      }
+    }
+    if(!silent)notify("예정된 매치가 업데이트되었습니다.")
+  }
 
   // 태그 프리셋 관리
   function handleSaveTagPresets(tagPresets){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,tagPresets}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets,membershipSettings:db.membershipSettings||[]});notify("태그 프리셋이 저장되었습니다.")}

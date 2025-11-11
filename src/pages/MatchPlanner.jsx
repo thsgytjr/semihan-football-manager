@@ -103,6 +103,7 @@ export default function MatchPlanner({
   const[showAIPowerChip,setShowAIPowerChip]=useState(false)
   const[isAILoading,setIsAILoading]=useState(false) // AI 배정 로딩 상태
   const[linkedUpcomingMatchId,setLinkedUpcomingMatchId]=useState(null) // 현재 편집 중인 예정 매치 ID
+  const[upcomingDirty,setUpcomingDirty]=useState(false) // 불러온 예정 매치 편집 후 변경 여부 표시
   const[activeSortMode,setActiveSortMode]=useState(null) // 현재 활성화된 정렬 모드: 'name' | 'position' | 'ovr' | 'aipower' | null
   const[aiDistributedTeams,setAiDistributedTeams]=useState(null) // AI 배정 이전 상태 (Revert용)
   const[teamColors,setTeamColors]=useState([]) // Team colors: [{bg, text, border, label}, ...] - empty array means use default kit colors
@@ -303,33 +304,17 @@ export default function MatchPlanner({
 
     onSaveUpcomingMatch(upcomingMatch)
     setLinkedUpcomingMatchId(upcomingMatch.id) // 저장 후 자동 연결
+  setLiveSyncUpcoming(false) // 새로 저장한 후엔 freeze (자동 변형 방지)
     notify(`${isDraftMode ? '드래프트 ' : ''}예정 매치로 저장되었습니다 ✅`)
   }
 
   // 주장 또는 팀 구성 변경 시 연결된 예정 매치 자동 업데이트
+  // 불러온 예정 매치 변경 감지 (자동 저장 없음 → dirty 플래그만)
   useEffect(() => {
-    if (!linkedUpcomingMatchId || !onUpdateUpcomingMatch) return
-    
-    const linkedMatch = upcomingMatches.find(m => m.id === linkedUpcomingMatchId)
-    if (!linkedMatch) return
-
-    // 팀 구성 스냅샷
-    const teamsSnapshot = previewTeams.map(team => team.map(p => p.id))
-    const assignedPlayerIds = previewTeams.flat().map(p => p.id)
-
-    // 변경사항 자동 업데이트 (알림 없이 - silent mode)
-    const updates = {
-      snapshot: teamsSnapshot,
-      participantIds: assignedPlayerIds,
-      captainIds: captainIds,
-      formations: formations,
-      teamCount: teams,
-      // Only include teamColors if at least one team has a custom color
-      ...(teamColors && teamColors.length > 0 && teamColors.some(c => c !== null && c !== undefined) ? { teamColors } : {})
-    }
-
-    onUpdateUpcomingMatch(linkedUpcomingMatchId, updates, true) // silent=true
-  }, [captainIds, previewTeams, formations, teamColors]) // 주장, 팀 구성, 포메이션, 팀 색상 변경 시 자동 업데이트
+    if(!linkedUpcomingMatchId) return
+    if(dirtyGuardRef.current>0){ dirtyGuardRef.current--; return }
+    setUpcomingDirty(true)
+  }, [previewTeams, captainIds, formations, teamColors, dateISO, locationName, locationAddress, isDraftMode, baseCost, enablePitchFee])
 
   // Drag and drop handlers
   const sensors=useSensors(useSensor(PointerSensor,{activationConstraint:{distance:4}}),useSensor(TouchSensor,{activationConstraint:{delay:120,tolerance:6}}))
@@ -584,6 +569,8 @@ export default function MatchPlanner({
     notify('저장된 매치를 팀배정에 불러왔습니다 ✅')
   }
 
+  const dirtyGuardRef = useRef(0)
+
   function loadUpcomingMatchIntoPlanner(upcomingMatch) {
     if (!upcomingMatch) return
     skipAutoResetRef.current = true
@@ -595,8 +582,11 @@ export default function MatchPlanner({
       return
     }
 
-    // 예정된 매치 ID 연결 (자동 업데이트를 위해)
+    // 예정된 매치 ID 연결 (보수적 모드: 자동 저장 없음)
     setLinkedUpcomingMatchId(upcomingMatch.id)
+    // 초기 로드 변경 감지 스킵 (2회)
+    dirtyGuardRef.current = 2
+    setUpcomingDirty(false)
 
     // Load basic match data
     if (upcomingMatch.dateISO) setDateISO(upcomingMatch.dateISO.slice(0, 16))
@@ -1107,6 +1097,41 @@ export default function MatchPlanner({
             <div className="flex flex-col gap-2">
               <div className="flex items-center gap-2">
                 <button onClick={saveAsUpcomingMatch} disabled={isPastDate} className={`rounded px-4 py-2 text-white font-semibold ${isPastDate?'bg-blue-300 cursor-not-allowed':'bg-blue-500 hover:bg-blue-600'}`}>예정 매치로 저장</button>
+                {linkedUpcomingMatchId && upcomingDirty && (
+                  <button
+                    onClick={()=>{
+                      // 수동 저장 동작 - 모든 필드 포함 (날짜, 장소, Draft 모드 등)
+                      const teamsSnapshot = previewTeams.map(team => team.map(p => p.id))
+                      const assignedPlayerIds = previewTeams.flat().map(p => p.id)
+                      
+                      // 날짜 문자열은 로컬 형식 그대로 저장
+                      const dateISOFormatted = dateISO && dateISO.length >= 16 ? dateISO.slice(0,16) : getNextSaturday630()
+                      
+                      const updates = {
+                        dateISO: dateISOFormatted,
+                        snapshot: teamsSnapshot,
+                        participantIds: assignedPlayerIds,
+                        captainIds: captainIds,
+                        formations: formations,
+                        teamCount: teams,
+                        isDraftMode: isDraftMode,
+                        location: {
+                          preset: locationPreset,
+                          name: locationName,
+                          address: locationAddress
+                        },
+                        totalCost: enablePitchFee ? baseCost : 0,
+                        feesDisabled: !enablePitchFee,
+                        ...(teamColors && teamColors.length > 0 && teamColors.some(c => c !== null && c !== undefined) ? { teamColors } : {})
+                      }
+                      onUpdateUpcomingMatch(linkedUpcomingMatchId, updates, false)
+                      setUpcomingDirty(false)
+                      notify('불러온 예정 매치에 변경사항을 저장했습니다 💾')
+                    }}
+                    className="rounded px-4 py-2 text-white font-semibold bg-indigo-500 hover:bg-indigo-600"
+                    title="변경사항 저장"
+                  >불러온 예정 매치 저장</button>
+                )}
                 <button onClick={save} className="rounded px-4 py-2 text-white font-semibold bg-emerald-500 hover:bg-emerald-600">매치 저장</button>
               </div>
               {isPastDate && (
