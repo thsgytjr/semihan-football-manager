@@ -31,6 +31,20 @@ export function extractDateKey(m) {
 }
 
 /**
+ * Extract season (year) from match object
+ * Returns YYYY format (e.g., "2025")
+ */
+export function extractSeason(m) {
+  const cand = m?.dateISO ?? m?.dateIso ?? m?.dateiso ?? m?.date ?? m?.dateStr ?? null
+  if (!cand) return null
+  let d
+  if (typeof cand === 'number') d = new Date(cand)
+  else d = new Date(String(cand))
+  if (Number.isNaN(d.getTime())) return null
+  return String(d.getFullYear())
+}
+
+/**
  * Extract attendee/participant IDs from match object
  */
 export function extractAttendeeIds(m) {

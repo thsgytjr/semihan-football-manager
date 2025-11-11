@@ -3,6 +3,7 @@ import React,{useEffect,useMemo,useRef,useState}from'react'
 import ReactDOM from'react-dom'
 import Card from'../components/Card'
 import{mkMatch,decideMode,splitKTeams,hydrateMatch}from'../lib/match'
+import { extractSeason } from '../lib/matchUtils'
 // ...other imports...
 
 // 포지션 고려 팀 분배 함수 (splitKTeamsPosAware)
@@ -107,6 +108,25 @@ export default function MatchPlanner({
   const[activeSortMode,setActiveSortMode]=useState(null) // 현재 활성화된 정렬 모드: 'name' | 'position' | 'ovr' | 'aipower' | null
   const[aiDistributedTeams,setAiDistributedTeams]=useState(null) // AI 배정 이전 상태 (Revert용)
   const[teamColors,setTeamColors]=useState([]) // Team colors: [{bg, text, border, label}, ...] - empty array means use default kit colors
+  
+  // 시즌 필터 상태
+  const [selectedSeason, setSelectedSeason] = useState('all')
+  
+  // 시즌 옵션 생성
+  const seasonOptions = useMemo(() => {
+    const seasons = new Set()
+    for (const m of matches) {
+      const season = extractSeason(m)
+      if (season) seasons.add(season)
+    }
+    return ['all', ...Array.from(seasons).sort().reverse()]
+  }, [matches])
+  
+  // 시즌별 필터링된 매치
+  const seasonFilteredMatches = useMemo(() => {
+    if (selectedSeason === 'all') return matches
+    return matches.filter(m => extractSeason(m) === selectedSeason)
+  }, [matches, selectedSeason])
   
   // Extract unique locations from saved matches (by name only, no duplicates)
   const locationOptions = useMemo(() => {
@@ -1259,8 +1279,28 @@ export default function MatchPlanner({
         ) : null
       })()}
 
-      <Card title="저장된 매치" right={<div className="text-xs text-gray-500"><span className="font-medium">GK 평균 제외</span></div>}>
-        <SavedMatchesList matches={matches} players={players} isAdmin={isAdmin} enableLoadToPlanner={true} onLoadToPlanner={loadSavedIntoPlanner} onDeleteMatch={onDeleteMatch} onUpdateMatch={onUpdateMatch} showTeamOVRForAdmin={true} hideOVR={true} customMemberships={customMemberships}/>
+      <Card 
+        title="저장된 매치"
+        right={
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedSeason}
+              onChange={(e) => setSelectedSeason(e.target.value)}
+              className="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-semibold shadow-sm hover:border-blue-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition-all"
+            >
+              {seasonOptions.map(v => (
+                <option key={v} value={v}>
+                  {v === 'all' ? '🏆 전체 시즌' : `${v}년`}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-gray-500">
+              <span className="font-medium">GK 평균 제외</span>
+            </span>
+          </div>
+        }
+      >
+        <SavedMatchesList matches={seasonFilteredMatches} players={players} isAdmin={isAdmin} enableLoadToPlanner={true} onLoadToPlanner={loadSavedIntoPlanner} onDeleteMatch={onDeleteMatch} onUpdateMatch={onUpdateMatch} showTeamOVRForAdmin={true} hideOVR={true} customMemberships={customMemberships}/>
       </Card>
     </div>
 

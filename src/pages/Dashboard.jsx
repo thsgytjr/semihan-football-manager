@@ -8,9 +8,10 @@ import LeaderboardTable, { RankCell, PlayerNameCell, StatCell, FormDotsCell } fr
 import Medal from '../components/ranking/Medal'
 import FormDots from '../components/ranking/FormDots'
 import UpcomingMatchesWidget from '../components/UpcomingMatchesWidget'
-import { toStr, extractDateKey } from '../lib/matchUtils'
+import { toStr, extractDateKey, extractSeason } from '../lib/matchUtils'
 import { rankTone } from '../lib/rankingUtils'
 import { notify } from '../components/Toast'
+import Select from '../components/Select'
 import { 
   computeAttackRows, 
   sortComparator, 
@@ -77,19 +78,46 @@ export default function Dashboard({
   membershipSettings = []
 }) {
   const customMemberships = membershipSettings.length > 0 ? membershipSettings : []
+  
+  // 시즌 필터 상태 (리더보드/히스토리 분리)
+  const [leaderboardSeason, setLeaderboardSeason] = useState('all')
+  const [historySeason, setHistorySeason] = useState('all')
+  
+  // 시즌 옵션 생성 (년도별)
+  const seasonOptions = useMemo(() => {
+    const seasons = new Set()
+    for (const m of matches) {
+      const season = extractSeason(m)
+      if (season) seasons.add(season)
+    }
+    return ['all', ...Array.from(seasons).sort().reverse()]
+  }, [matches])
+  
+  // 시즌별 필터링 (리더보드용)
+  const leaderboardSeasonFilteredMatches = useMemo(() => {
+    if (leaderboardSeason === 'all') return matches
+    return matches.filter(m => extractSeason(m) === leaderboardSeason)
+  }, [matches, leaderboardSeason])
+
+  // 시즌별 필터링 (히스토리용)
+  const historySeasonFilteredMatches = useMemo(() => {
+    if (historySeason === 'all') return matches
+    return matches.filter(m => extractSeason(m) === historySeason)
+  }, [matches, historySeason])
+  
   const [apDateKey, setApDateKey] = useState('all')
   const dateOptions = useMemo(() => {
     const set = new Set()
-    for (const m of matches) {
+    for (const m of leaderboardSeasonFilteredMatches) {
       const k = extractDateKey(m)
       if (k) set.add(k)
     }
     return ['all', ...Array.from(set).sort().reverse()]
-  }, [matches])
+  }, [leaderboardSeasonFilteredMatches])
 
   const filteredMatches = useMemo(
-    () => apDateKey === 'all' ? matches : matches.filter(m => extractDateKey(m) === apDateKey),
-    [matches, apDateKey]
+    () => apDateKey === 'all' ? leaderboardSeasonFilteredMatches : leaderboardSeasonFilteredMatches.filter(m => extractDateKey(m) === apDateKey),
+    [leaderboardSeasonFilteredMatches, apDateKey]
   )
 
   const baseRows = useMemo(() => computeAttackRows(players, filteredMatches), [players, filteredMatches])
@@ -231,7 +259,19 @@ export default function Dashboard({
       />
 
       {/* 리더보드 */}
-      <Card title="리더보드">
+      <Card 
+        title="리더보드"
+        right={
+          <div className="flex items-center gap-2 min-w-[140px]">
+            <Select
+              value={leaderboardSeason}
+              onChange={(val) => { setLeaderboardSeason(val); setApDateKey('all') }}
+              options={seasonOptions.map(v => ({ value: v, label: v === 'all' ? '전체 시즌' : `${v}년` }))}
+              className="w-[150px]"
+            />
+          </div>
+        }
+      >
         {/* 상단: 1차 탭 (종합 | Draft) + 2차 탭 (조건부) */}
         <PrimarySecondaryTabs
           primary={primaryTab}
@@ -309,11 +349,23 @@ export default function Dashboard({
       </Card>
 
       {/* 매치 히스토리 (OVR 표시 숨김) */}
-      <Card title="매치 히스토리">
+      <Card 
+        title="매치 히스토리"
+        right={
+          <div className="flex items-center gap-2 min-w-[140px]">
+            <Select
+              value={historySeason}
+              onChange={(val) => setHistorySeason(val)}
+              options={seasonOptions.map(v => ({ value: v, label: v === 'all' ? '전체 시즌' : `${v}년` }))}
+              className="w-[150px]"
+            />
+          </div>
+        }
+      >
         <ErrorBoundary fallback={<div className="text-sm text-stone-500">목록을 불러오는 중 문제가 발생했어요.</div>}>
           <div className="saved-matches-no-ovr text-[13px] leading-tight">
             <SavedMatchesList
-              matches={matches}
+              matches={historySeasonFilteredMatches}
               players={players}
               isAdmin={isAdmin}
               onUpdateMatch={onUpdateMatch}
@@ -526,19 +578,16 @@ function DraftAttackTable({ rows, showAll, onToggle, controls, apDateKey, initia
 /* ----------------------- 컨트롤 (좌측 정렬) ---------------------- */
 function ControlsLeft({ apDateKey, setApDateKey, dateOptions = [], showAll, setShowAll }) {
   return (
-    <div className="flex items-center gap-2">
-      <select
-        value={apDateKey}
-        onChange={(e) => setApDateKey(e.target.value)}
-        className="rounded border border-stone-300 bg-white px-2.5 py-1.5 text-sm"
-        title="토탈 또는 날짜별 보기"
-      >
-        {dateOptions.map(v => (
-          <option key={v} value={v}>
-            {v === 'all' ? '모든 매치' : v}
-          </option>
-        ))}
-      </select>
+    <div className="flex items-center gap-2 flex-wrap">
+      {/* 날짜 선택 - 앱 커스텀 드롭다운 */}
+      <div className="min-w-[140px]">
+        <Select
+          value={apDateKey}
+          onChange={(val)=>setApDateKey(val)}
+          options={dateOptions.map(v => ({ value: v, label: v === 'all' ? '📋 모든 날짜' : v }))}
+          className="w-[160px]"
+        />
+      </div>
       <button
         onClick={() => setShowAll(s => !s)}
         className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50"
