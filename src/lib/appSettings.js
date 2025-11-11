@@ -17,6 +17,7 @@ const DEFAULT_SETTINGS = {
     draft: true,        // 드래프트
     formation: true,    // 포메이션 보드
     stats: true,        // 기록 입력
+      accounting: true,   // 회계
     analytics: true     // 방문자 분석
   }
 }

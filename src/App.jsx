@@ -1,7 +1,8 @@
 // src/App.jsx
 import React,{useEffect,useMemo,useState,useCallback}from"react"
-import{Home,Users,CalendarDays,ListChecks,ShieldCheck,Lock,Eye,EyeOff,AlertCircle,CheckCircle2,X,Settings,BookOpen,Shuffle}from"lucide-react"
-import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB,incrementVisits,logVisit,getVisitStats,getTotalVisits,USE_MATCHES_TABLE,supabase}from"./services/storage.service"
+import{Home,Users,CalendarDays,ListChecks,ShieldCheck,Lock,Eye,EyeOff,AlertCircle,CheckCircle2,X,Settings,BookOpen,Shuffle,DollarSign}from"lucide-react"
+import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB,incrementVisits,logVisit,getVisitStats,getTotalVisits,USE_MATCHES_TABLE}from"./services/storage.service"
+import { supabase } from './lib/supabaseClient'
 import{saveMatchToDB,updateMatchInDB,deleteMatchFromDB,listMatchesFromDB,subscribeMatches}from"./services/matches.service"
 import{getMembershipSettings,subscribeMembershipSettings}from"./services/membership.service"
 import{mkPlayer}from"./lib/players";import{notify}from"./components/Toast"
@@ -22,6 +23,7 @@ import Dashboard from"./pages/Dashboard";import PlayersPage from"./pages/Players
 import MatchPlanner from"./pages/MatchPlanner";import StatsInput from"./pages/StatsInput"
 import FormationBoard from"./pages/FormationBoard";import DraftPage from"./pages/DraftPage"
 import AnalyticsPage from"./pages/AnalyticsPage"
+import AccountingPage from"./pages/AccountingPage"
 import logoUrl from"./assets/GoalifyLogo.png"
 import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEnabled,updateFeatureEnabled}from"./lib/appSettings"
 
@@ -331,6 +333,7 @@ export default function App(){
     { key: 'draft', icon: <Shuffle size={16}/>, label: '드래프트', show: isAdmin && featuresEnabled.draft },
     { key: 'formation', icon: <IconPitch size={16}/>, label: '포메이션 보드', show: featuresEnabled.formation },
     { key: 'stats', icon: <ListChecks size={16}/>, label: '기록 입력', show: isAdmin && featuresEnabled.stats },
+  { key: 'accounting', icon: <DollarSign size={16}/>, label: '회계', show: isAdmin && (featuresEnabled.accounting ?? true) },
     { key: 'analytics', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, label: '방문자 분석', show: isAnalyticsAdmin && featuresEnabled.analytics }
   ], [isAdmin, isAnalyticsAdmin, featuresEnabled]);
 
@@ -838,6 +841,7 @@ export default function App(){
               {tab==="draft"&&isAdmin&&featuresEnabled.draft&&(<DraftPage players={players} upcomingMatches={db.upcomingMatches} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>)}
               {tab==="formation"&&featuresEnabled.formation&&(<FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>)}
               {tab==="stats"&&isAdmin&&featuresEnabled.stats&&(<StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
+                {tab==="accounting"&&isAdmin&&featuresEnabled.accounting&&(<AccountingPage players={players} matches={matches} upcomingMatches={db.upcomingMatches} isAdmin={isAdmin}/>)}
               {tab==="analytics"&&isAdmin&&featuresEnabled.analytics&&(<AnalyticsPage visits={visits} isAdmin={isAnalyticsAdmin}/>)}
             </>
           )}
@@ -993,6 +997,7 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
     draft: '드래프트',
     formation: '포메이션 보드',
     stats: '기록 입력',
+    accounting: '회계',
     analytics: '방문자 분석'
   }
   
@@ -1101,6 +1106,9 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
                         <span className="text-sm text-stone-700">{label}</span>
                         {key === 'formation' && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">모두</span>
+                        )}
+                        {key === 'accounting' && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-pink-100 text-pink-700 font-medium">Admin</span>
                         )}
                         {key === 'analytics' && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">개발자</span>

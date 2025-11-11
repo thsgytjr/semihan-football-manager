@@ -1,7 +1,7 @@
 {
   "name": "semihan-football-manager",
   "private": true,
-  "version": "5.8.3",
+  "version": "5.9.0",
   "type": "module",
   "scripts": {
     "dev": "vite",

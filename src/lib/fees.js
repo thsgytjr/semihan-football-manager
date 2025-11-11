@@ -27,5 +27,9 @@ export function feesFromPlayers({ total, players, guestSurcharge = 2 }) {
 // Lightweight membership check reused across code
 export function isMember(mem) {
   const s = String(mem || '').trim().toLowerCase()
-  return s === 'member' || s.includes('정회원')
+  if (!s) return false
+  // Korean labels / English both
+  if (s.includes('정회원') || s.includes('member')) return true
+  // treat associate as member? keep false for now
+  return false
 }

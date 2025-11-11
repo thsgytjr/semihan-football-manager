@@ -2,7 +2,7 @@
 // Match 데이터를 Supabase에 저장/로드하는 서비스
 // user_id (개인) 또는 room_id (팀) 기반으로 동작
 
-import { supabase } from './storage.service'
+import { supabase } from '../lib/supabaseClient'
 import { TEAM_CONFIG } from '../lib/teamConfig'
 import { getCurrentUser } from '../lib/auth'
 import { logger } from '../lib/logger'

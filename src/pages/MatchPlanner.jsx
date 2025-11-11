@@ -63,7 +63,8 @@ import captainIcon from '../assets/Captain.PNG'
 import { getMembershipBadge } from '../lib/membershipConfig'
 import { getTagColorClass, migratePositionToPositions, getPositionCategory, getPrimaryCategory } from '../lib/constants'
 import { toStr, isMember } from '../lib/matchUtils'
-import { calcFees } from '../lib/fees'
+import { calcFees, isMember as isMemberFee } from '../lib/fees'
+import { upsertMatchPayment } from '../lib/accounting'
 import { getTextColor } from '../utils/color'
 import DateTimePicker from '../components/DateTimePicker'
 import Select from '../components/Select'
@@ -301,6 +302,7 @@ export default function MatchPlanner({
     // 날짜 문자열은 로컬 형식 그대로 저장 (타임존 변환으로 시간이 바뀌는 문제 방지)
   const dateISOFormatted = dateISO && dateISO.length >= 16 ? dateISO.slice(0,16) : getNextSaturday630()
 
+    const fees = enablePitchFee ? computeFeesAtSave({ baseCostValue: baseCost, attendees: assignedPlayerIds.map(id => players.find(p=>p.id===id)).filter(Boolean), guestSurcharge }) : null
     const upcomingMatch = createUpcomingMatch({
       dateISO: dateISOFormatted,
       participantIds: assignedPlayerIds,
@@ -310,6 +312,7 @@ export default function MatchPlanner({
         address: locationAddress
       },
       totalCost: enablePitchFee ? baseCost : 0,
+      ...(enablePitchFee && fees ? { fees: { ...fees } } : {}),
       feesDisabled: !enablePitchFee,
       isDraftMode,
       mode: decideMode(assignedPlayerIds.length).mode,
@@ -326,6 +329,25 @@ export default function MatchPlanner({
     setLinkedUpcomingMatchId(upcomingMatch.id) // 저장 후 자동 연결
   // live-sync 기능 제거: 수동 저장만 허용하여 자동 변형 방지
     notify(`${isDraftMode ? '드래프트 ' : ''}예정 매치로 저장되었습니다 ✅`)
+
+    // 매치별 구장비 예상 금액을 match_payments에 반영 (멤버/게스트 구분)
+    if (enablePitchFee && fees) {
+      const memberFee = fees.memberFee || 0
+      const guestFee = fees.guestFee || (memberFee + (fees.guestSurcharge || 2))
+      const playerMap = new Map(players.map(p => [p.id, p]))
+      Promise.all(
+        assignedPlayerIds.map(pid => {
+          const p = playerMap.get(pid)
+          const expected = isMemberFee(p?.membership) ? memberFee : guestFee
+          return upsertMatchPayment({
+            matchId: upcomingMatch.id,
+            playerId: pid,
+            expectedAmount: expected,
+            paymentStatus: 'pending'
+          })
+        })
+      ).catch(()=>{})
+    }
   }
 
   // 주장 또는 팀 구성 변경 시 연결된 예정 매치 자동 업데이트
@@ -1127,6 +1149,8 @@ export default function MatchPlanner({
                       // 날짜 문자열은 로컬 형식 그대로 저장
                       const dateISOFormatted = dateISO && dateISO.length >= 16 ? dateISO.slice(0,16) : getNextSaturday630()
                       
+                      const attendeeObjs = previewTeams.flat().map(p => p)
+                      const fees = enablePitchFee ? computeFeesAtSave({ baseCostValue: baseCost, attendees: attendeeObjs, guestSurcharge }) : null
                       const updates = {
                         dateISO: dateISOFormatted,
                         snapshot: teamsSnapshot,
@@ -1141,12 +1165,32 @@ export default function MatchPlanner({
                           address: locationAddress
                         },
                         totalCost: enablePitchFee ? baseCost : 0,
+                        ...(enablePitchFee && fees ? { fees: { ...fees } } : {}),
                         feesDisabled: !enablePitchFee,
                         ...(teamColors && teamColors.length > 0 && teamColors.some(c => c !== null && c !== undefined) ? { teamColors } : {})
                       }
                       onUpdateUpcomingMatch(linkedUpcomingMatchId, updates, false)
                       setUpcomingDirty(false)
                       notify('불러온 예정 매치에 변경사항을 저장했습니다 💾')
+
+                      // match_payments 업데이트 (예상 금액 반영)
+                      if (enablePitchFee && fees) {
+                        const memberFee = fees.memberFee || 0
+                        const guestFee = fees.guestFee || (memberFee + (fees.guestSurcharge || 2))
+                        const playerMap = new Map(players.map(p => [p.id, p]))
+                        Promise.all(
+                          assignedPlayerIds.map(pid => {
+                            const p = playerMap.get(pid)
+                            const expected = isMemberFee(p?.membership) ? memberFee : guestFee
+                            return upsertMatchPayment({
+                              matchId: linkedUpcomingMatchId,
+                              playerId: pid,
+                              expectedAmount: expected,
+                              paymentStatus: 'pending'
+                            })
+                          })
+                        ).catch(()=>{})
+                      }
                     }}
                     className="rounded px-4 py-2 text-white font-semibold bg-indigo-500 hover:bg-indigo-600"
                     title="변경사항 저장"

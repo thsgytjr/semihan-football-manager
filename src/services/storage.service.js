@@ -1,21 +1,14 @@
 // src/services/storage.service.js
 // Supabase 클라이언트 + 선수 CRUD + 앱 전체 JSON(appdb) + 실시간 구독
 
-import { createClient } from '@supabase/supabase-js'
 import { TEAM_CONFIG } from '../lib/teamConfig'
 import { logger } from '../lib/logger'
+import { supabase } from '../lib/supabaseClient'
 
 // 마이그레이션 플래그: true면 Supabase matches 테이블 사용, false면 appdb JSON 사용
 export const USE_MATCHES_TABLE = true
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnon = import.meta.env.VITE_SUPABASE_ANON_KEY
-
-if (!supabaseUrl || !supabaseAnon) {
-  logger.warn('[storage.service] Supabase env가 비어 있습니다. Vercel 환경변수를 확인하세요.')
-}
-
-export const supabase = createClient(supabaseUrl, supabaseAnon)
+// supabase client is provided by lib/supabaseClient (single instance)
 
 // 방(룸) 개념 — 같은 ROOM_ID를 쓰는 모든 사용자가 같은 데이터 공유
 // 팀별로 자동으로 다른 room ID 사용 (semihan-lite-room-1, dksc-lite-room-1 등)
