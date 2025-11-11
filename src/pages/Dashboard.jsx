@@ -584,7 +584,7 @@ function ControlsLeft({ apDateKey, setApDateKey, dateOptions = [], showAll, setS
         <Select
           value={apDateKey}
           onChange={(val)=>setApDateKey(val)}
-          options={dateOptions.map(v => ({ value: v, label: v === 'all' ? '📋 모든 날짜' : v }))}
+          options={dateOptions.map(v => ({ value: v, label: v === 'all' ? '모든 날짜' : v }))}
           className="w-[160px]"
         />
       </div>
