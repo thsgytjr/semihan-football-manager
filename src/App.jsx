@@ -523,8 +523,8 @@ export default function App(){
   }
 
   // 태그 프리셋 관리
-  function handleSaveTagPresets(tagPresets){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,tagPresets}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets,membershipSettings:db.membershipSettings||[]});notify("태그 프리셋이 저장되었습니다.")}
-  function handleAddTagPreset(preset){if(!isAdmin)return notify("Admin만 가능합니다.");const next=[...(db.tagPresets||[]),preset];setDb(prev=>({...prev,tagPresets:next}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets:next,membershipSettings:db.membershipSettings||[]})}
+  function handleSaveTagPresets(tagPresets){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,tagPresets}));saveDB({players:db.players||[],matches,visits,upcomingMatches,tagPresets,membershipSettings:db.membershipSettings||[]});notify("태그 프리셋이 저장되었습니다.")}
+  function handleAddTagPreset(preset){if(!isAdmin)return notify("Admin만 가능합니다.");const next=[...(db.tagPresets||[]),preset];setDb(prev=>({...prev,tagPresets:next}));saveDB({players:db.players||[],matches,visits,upcomingMatches,tagPresets:next,membershipSettings:db.membershipSettings||[]})}
   function handleUpdateTagPreset(index,updatedPreset){
     if(!isAdmin)return notify("Admin만 가능합니다.");
     const oldPreset=(db.tagPresets||[])[index];
@@ -549,7 +549,7 @@ export default function App(){
     });
     
     setDb(prev=>({...prev,tagPresets:next,players:updatedPlayers}));
-    saveDB({players:[],matches,visits,upcomingMatches,tagPresets:next,membershipSettings:db.membershipSettings||[]});
+    saveDB({players:updatedPlayers,matches,visits,upcomingMatches,tagPresets:next,membershipSettings:db.membershipSettings||[]});
     notify("태그 프리셋이 업데이트되었습니다.");
   }
   function handleDeleteTagPreset(index){
@@ -573,13 +573,13 @@ export default function App(){
     });
     
     setDb(prev=>({...prev,tagPresets:next,players:updatedPlayers}));
-    saveDB({players:[],matches,visits,upcomingMatches,tagPresets:next,membershipSettings:db.membershipSettings||[]});
+    saveDB({players:updatedPlayers,matches,visits,upcomingMatches,tagPresets:next,membershipSettings:db.membershipSettings||[]});
     notify("태그 프리셋이 삭제되었습니다.");
   }
 
 
   // 멤버십 설정 관리
-  function handleSaveMembershipSettings(membershipSettings){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,membershipSettings}));saveDB({players:[],matches,visits,upcomingMatches,tagPresets:db.tagPresets||[],membershipSettings});notify("멤버십 설정이 저장되었습니다.")}
+  function handleSaveMembershipSettings(membershipSettings){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,membershipSettings}));saveDB({players:db.players||[],matches,visits,upcomingMatches,tagPresets:db.tagPresets||[],membershipSettings});notify("멤버십 설정이 저장되었습니다.")}
 
   // Supabase Auth: 로그아웃
   async function adminLogout(){
