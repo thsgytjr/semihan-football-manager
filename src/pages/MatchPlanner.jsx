@@ -3,6 +3,45 @@ import React,{useEffect,useMemo,useRef,useState}from'react'
 import ReactDOM from'react-dom'
 import Card from'../components/Card'
 import{mkMatch,decideMode,splitKTeams,hydrateMatch}from'../lib/match'
+// ...other imports...
+
+// 포지션 고려 팀 분배 함수 (splitKTeamsPosAware)
+function splitKTeamsPosAware(players = [], k = 2, shuffleSeed = 0) {
+  // 포지션별로 그룹화
+  const grouped = { GK: [], DF: [], MF: [], FW: [], OTHER: [] };
+  for (const p of players) {
+    const positions = p.positions || (p.position ? [p.position] : [p.pos]);
+    let cat = 'OTHER';
+    if (positions.some(pos => /GK/i.test(pos))) cat = 'GK';
+    else if (positions.some(pos => /DF|CB|LB|RB|DF|WB|RWB|LWB/i.test(pos))) cat = 'DF';
+    else if (positions.some(pos => /MF|CAM|CDM|CM|LM|RM/i.test(pos))) cat = 'MF';
+    else if (positions.some(pos => /FW|ST|CF|LW|RW/i.test(pos))) cat = 'FW';
+    grouped[cat].push(p);
+  }
+  // 각 포지션 그룹을 셔플
+  const shuffled = {};
+  Object.keys(grouped).forEach(cat => {
+    shuffled[cat] = grouped[cat].slice();
+    if (shuffleSeed) {
+      for (let i = shuffled[cat].length - 1; i > 0; i--) {
+        var j = (shuffleSeed + i) % shuffled[cat].length;
+        var temp = shuffled[cat][i];
+        shuffled[cat][i] = shuffled[cat][j];
+        shuffled[cat][j] = temp;
+      }
+    }
+  });
+  // 팀별로 균등하게 분배
+  const teams = Array.from({ length: k }, () => []);
+  let idx = 0;
+  for (const cat of ['GK', 'DF', 'MF', 'FW', 'OTHER']) {
+    for (const p of shuffled[cat]) {
+      teams[idx % k].push(p);
+      idx++;
+    }
+  }
+  return { teams };
+}
 import{overall,isUnknownPlayer}from'../lib/players'
 import{notify}from'../components/Toast'
 import{logger}from'../lib/logger'
@@ -11,6 +50,7 @@ import{DndContext,DragOverlay,pointerWithin,PointerSensor,TouchSensor,useSensor,
 import{SortableContext,useSortable,verticalListSortingStrategy}from'@dnd-kit/sortable'
 import{CSS}from'@dnd-kit/utilities'
 import InitialAvatar from'../components/InitialAvatar'
+import { getBadgesWithCustom } from '../lib/matchUtils'
 import FreePitch from'../components/pitch/FreePitch'
 import{assignToFormation,recommendFormation,countPositions}from'../lib/formation'
 import{seededShuffle}from'../utils/random'
@@ -20,54 +60,15 @@ import { calculateAIPower } from '../lib/aiPower'
 import * as MatchHelpers from '../lib/matchHelpers'
 import captainIcon from '../assets/Captain.PNG'
 import { getMembershipBadge } from '../lib/membershipConfig'
-import { getTagColorClass, migratePositionToPositions, getPositionCategory } from '../lib/constants'
+import { getTagColorClass, migratePositionToPositions, getPositionCategory, getPrimaryCategory } from '../lib/constants'
 import { toStr, isMember } from '../lib/matchUtils'
 import { calcFees } from '../lib/fees'
 import { getTextColor } from '../utils/color'
 import DateTimePicker from '../components/DateTimePicker'
+import Select from '../components/Select'
 
 /* ───────── 공통 유틸 ───────── */
 const S = toStr
-
-// 커스텀 멤버십 기반 배지 가져오기
-const getBadgesWithCustom=(membership,isCaptain=false,customMemberships=[])=>{
-  if(isCaptain)return['C']
-  const badgeInfo = getMembershipBadge(membership, customMemberships)
-  return badgeInfo ? [badgeInfo.badge] : []
-}
-/* ─────────────────────────────────────── */
-
-/* ───────── 공통 요금 유틸 ───────── */
-// moved to ../lib/fees
-const POS_ORDER=['GK','DF','MF','FW','OTHER']
-
-// 멀티 포지션 지원: positions 배열 또는 레거시 position 필드
-const positionGroupOf = (p) => {
-  const positions = migratePositionToPositions(p)
-  if (positions && positions.length > 0) {
-    const cats = positions.map(getPositionCategory).filter(Boolean)
-    // 우선순위: DF > MF > FW > GK (기존 동작 유지)
-    if (cats.includes('DF')) return 'DF'
-    if (cats.includes('MF')) return 'MF'
-    if (cats.includes('FW')) return 'FW'
-    if (cats.includes('GK')) return 'GK'
-  }
-  // 레거시 문자열 대비
-  const raw = String(p.position || p.pos || '').toUpperCase()
-  if (raw === 'GK' || raw.includes('GK')) return 'GK'
-  if (/CB|LB|RB|LWB|RWB|SW|DF/.test(raw)) return 'DF'
-  if (/CDM|CM|CAM|LM|RM|MF|DM|AM/.test(raw)) return 'MF'
-  if (/ST|CF|LW|RW|RF|LF|FW/.test(raw)) return 'FW'
-  return 'OTHER'
-}
-
-const posIndex=p=>POS_ORDER.indexOf(positionGroupOf(p))
-const sortByOVRDescWithSeed=(list,seed=0)=>seededShuffle(list.slice(),seed||0x9e3779b1).sort((a,b)=>{
-  const ovrA=isUnknownPlayer(a)?0:(b.ovr??overall(b))
-  const ovrB=isUnknownPlayer(b)?0:(b.ovr??overall(b))
-  return ovrB-ovrA
-})
-function splitKTeamsPosAware(players,k,seed=0){const teams=Array.from({length:k},()=>[]),meta=Array.from({length:k},()=>({nonGkOVR:0,counts:{GK:0,DF:0,MF:0,FW:0,OTHER:0}})),gs={GK:players.filter(p=>positionGroupOf(p)==='GK'),DF:players.filter(p=>positionGroupOf(p)==='DF'),MF:players.filter(p=>positionGroupOf(p)==='MF'),FW:players.filter(p=>positionGroupOf(p)==='FW'),OTHER:players.filter(p=>positionGroupOf(p)==='OTHER')};for(const key of Object.keys(gs))gs[key]=sortByOVRDescWithSeed(gs[key],seed+key.length);const place=key=>{const list=gs[key];let dir=1;while(list.length){const ordered=[...Array(k).keys()].sort((i,j)=>{const ci=meta[i].counts[key],cj=meta[j].counts[key];return ci!==cj?ci-cj:meta[i].nonGkOVR-meta[j].nonGkOVR}),pick=dir===1?ordered:ordered.slice().reverse();for(const ti of pick){if(!list.length)break;const p=list.shift();teams[ti].push(p);meta[ti].counts[key]++;if(key!=='GK'&&!isUnknownPlayer(p))meta[ti].nonGkOVR+=(p.ovr??overall(p))}dir*=-1}};['DF','MF','FW','GK','OTHER'].forEach(place);return{teams}}
 
 export default function MatchPlanner({
   players,
@@ -96,6 +97,10 @@ export default function MatchPlanner({
   const[captainIds,setCaptainIds]=useState([]) // 각 팀의 주장 ID 배열 [team0CaptainId, team1CaptainId, ...]
   const[previousTeams,setPreviousTeams]=useState(null) // Revert를 위한 이전 팀 상태 저장
   const[showAIPower,setShowAIPower]=useState(false) // AI 파워 점수 표시 여부
+  // 표기 토글: 포지션칩, Overall, AI 파워칩
+  const[showPositions,setShowPositions]=useState(true)
+  const[showOverallChip,setShowOverallChip]=useState(!!isAdmin)
+  const[showAIPowerChip,setShowAIPowerChip]=useState(false)
   const[isAILoading,setIsAILoading]=useState(false) // AI 배정 로딩 상태
   const[linkedUpcomingMatchId,setLinkedUpcomingMatchId]=useState(null) // 현재 편집 중인 예정 매치 ID
   const[activeSortMode,setActiveSortMode]=useState(null) // 현재 활성화된 정렬 모드: 'name' | 'position' | 'ovr' | 'aipower' | null
@@ -156,6 +161,12 @@ export default function MatchPlanner({
   const baseCost=useMemo(()=>Math.max(0, parseFloat(customBaseCost)||0),[customBaseCost])
 
   const previewTeams=useMemo(()=>{let base=manualTeams??autoSplit.teams;if(!manualTeams&&shuffleSeed)base=base.map(list=>seededShuffle(list,shuffleSeed+list.length));return base},[manualTeams,autoSplit.teams,shuffleSeed]);useEffect(()=>{latestTeamsRef.current=previewTeams},[previewTeams])
+
+  // 아직 어떤 팀에도 배정되지 않은 선수 목록 (컴팩트 추가용)
+  const availablePlayers = useMemo(() => {
+    const assigned = new Set(previewTeams.flat().map(p => String(p.id)))
+    return players.filter(p => !assigned.has(String(p.id)))
+  }, [players, previewTeams])
 
   // ✅ 라이브 프리뷰 요금 (팀에 배정된 선수 기준으로 계산)
   const liveFees=useMemo(()=>{
@@ -359,6 +370,46 @@ export default function MatchPlanner({
       return newCaptains
     })
   }
+
+  // 컴팩트 입력에서 팀에 선수 추가
+  const handleAddPlayerToTeam = (playerId, teamIndex) => {
+    const player = players.find(p => String(p.id) === String(playerId))
+    if (!player) return
+    const base = manualTeams ?? previewTeams
+    const next = base.map((team, idx) => {
+      if (idx !== teamIndex) return team
+      // 중복 방지
+      if (team.some(p => String(p.id) === String(playerId))) return team
+      return [...team, player]
+    })
+    setManualTeams(next)
+    latestTeamsRef.current = next
+    setShowAIPower(false)
+    setActiveSortMode(null)
+    const playerName = player.name || '선수'
+    notify(`${playerName}을(를) 팀 ${teamIndex + 1}에 추가했습니다 ✅`)
+  }
+
+  // 여러 명을 한 번에 팀에 추가 (노티는 호출측에서 처리)
+  const handleAddManyPlayersToTeam = (playerIds, teamIndex) => {
+    if (!Array.isArray(playerIds) || playerIds.length === 0) return
+    const idSet = new Set(playerIds.map(id => String(id)))
+    const playerMap = new Map(players.map(p => [String(p.id), p]))
+    const toAdd = Array.from(idSet).map(id => playerMap.get(id)).filter(Boolean)
+    if (toAdd.length === 0) return
+    const base = manualTeams ?? previewTeams
+    const next = base.map((team, idx) => {
+      if (idx !== teamIndex) return team
+      const existing = new Set(team.map(p => String(p.id)))
+      const merged = [...team]
+      toAdd.forEach(p => { if (!existing.has(String(p.id))) merged.push(p) })
+      return merged
+    })
+    setManualTeams(next)
+    latestTeamsRef.current = next
+    setShowAIPower(false)
+    setActiveSortMode(null)
+  }
   
   // AI 자동 배정 (포지션 밸런스 + 평균 + 인원수 균등)
   const handleAIDistribute = () => {
@@ -407,7 +458,7 @@ export default function MatchPlanner({
     const playersWithPower = players.map(p => ({
       ...p,
       power: calculateAIPower(p, matches),
-      position: positionGroupOf(p)
+      position: getPrimaryCategory(p.positions || [])
     }))
     
     // 2. 포지션별로 그룹화 후 파워순 정렬 (고정된 순서)
@@ -653,137 +704,163 @@ export default function MatchPlanner({
   <div className="grid gap-4 lg:grid-cols:[minmax(0,1fr)_600px]">
     <Card title="매치 설정">
       <div className="grid gap-4">
-        <Row label="날짜/시간">
-          <DateTimePicker
-            value={dateISO}
-            onChange={setDateISO}
-            label={null}
-            className="w-full"
-          />
-        </Row>
-        <Row label="장소">
-          <div className="grid gap-2">
-            <select 
-              className="w-full rounded border border-gray-300 bg-white px-3 py-2 text-sm" 
-              value={locationName} 
-              onChange={e=>{
-                const selected = locationOptions.find(loc => loc.name === e.target.value)
-                if (selected) {
-                  setLocationName(selected.name)
-                  setLocationAddress(selected.address || '')
-                  setCustomBaseCost(selected.cost || 0)
-                } else if (e.target.value === 'other') {
-                  setLocationName('')
-                  setLocationAddress('')
-                  setCustomBaseCost(0)
-                }
-              }}
-            >
-              <option value="">장소 선택...</option>
-              {locationOptions.map((loc, idx) => (
-                <option key={idx} value={loc.name}>{loc.name}</option>
-              ))}
-              <option value="other">+ 새 장소 추가</option>
-            </select>
-
-            {/* Custom location input */}
-            {(!locationName || !locationOptions.find(loc => loc.name === locationName)) && (
-              <div className="grid gap-2 sm:grid-cols-2">
-                <input 
-                  className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" 
-                  placeholder="장소 이름" 
-                  value={locationName} 
-                  onChange={e=>setLocationName(e.target.value)}
-                />
-                <input 
-                  className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" 
-                  placeholder="주소 (URL 또는 일반주소)" 
-                  value={locationAddress} 
-                  onChange={e=>setLocationAddress(e.target.value)}
-                />
+        {/* 컴팩트 매치 설정 바 - 스타일 개선 */}
+        <div className="rounded-xl border border-gray-200 bg-gradient-to-r from-blue-50 to-emerald-50 p-3 shadow-sm">
+          <div className="grid gap-3 sm:grid-cols-4 items-stretch">
+            {/* 날짜/시간 */}
+            <div className="rounded-lg bg-white border border-gray-200 p-2 flex flex-col gap-1 shadow-xs">
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-600 font-semibold">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3M3 11h18M5 19h14a2 2 0 002-2V7H3v10a2 2 0 002 2z"/></svg>
+                날짜/시간
               </div>
-            )}
-            
-            {/* Pitch fee toggle */}
-            <div className="flex items-center gap-3 mt-2">
-              <span className="text-sm font-medium text-gray-700">구장비</span>
+              <DateTimePicker
+                value={dateISO}
+                onChange={setDateISO}
+                label={null}
+                className="text-sm"
+              />
+            </div>
+
+            {/* 장소 선택 */}
+            <div className="rounded-lg bg-white border border-gray-200 p-2 flex flex-col gap-1 shadow-xs">
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-600 font-semibold">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 11c1.657 0 3-1.343 3-3S13.657 5 12 5 9 6.343 9 8s1.343 3 3 3z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.5 8c0 7.5-7.5 12-7.5 12S4.5 15.5 4.5 8a7.5 7.5 0 1115 0z"/></svg>
+                장소
+              </div>
+              <select 
+                className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm" 
+                value={locationName} 
+                onChange={e=>{
+                  const selected = locationOptions.find(loc => loc.name === e.target.value)
+                  if (selected) {
+                    setLocationName(selected.name)
+                    setLocationAddress(selected.address || '')
+                    setCustomBaseCost(selected.cost || 0)
+                  } else if (e.target.value === 'other') {
+                    setLocationName('')
+                    setLocationAddress('')
+                    setCustomBaseCost(0)
+                  }
+                }}
+              >
+                <option value="">선택...</option>
+                {locationOptions.map((loc, idx) => (
+                  <option key={idx} value={loc.name}>{loc.name}</option>
+                ))}
+                <option value="other">+ 새</option>
+              </select>
+            </div>
+
+            {/* 팀 수 */}
+            <div className="rounded-lg bg-white border border-gray-200 p-2 flex flex-col gap-1 shadow-xs">
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-600 font-semibold">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h10M7 16h6"/></svg>
+                팀
+              </div>
+              <select className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm" value={teams} onChange={e=>setTeamCount(Number(e.target.value))}>{Array.from({length:9},(_,i)=>i+2).map(n=><option key={n} value={n}>{n}</option>)}</select>
+            </div>
+
+            {/* 드래프트 모드 토글 */}
+            <div className="rounded-lg bg-white border border-gray-200 p-2 flex items-center justify-between shadow-xs">
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-600 font-semibold">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v8m-4-4h8"/></svg>
+                Draft Match
+              </div>
+              <button
+                type="button"
+                onClick={()=>setIsDraftMode(v=>!v)}
+                className={`relative inline-flex h-6 w-11 rounded-full transition-colors shadow-sm border ${isDraftMode? 'bg-purple-500 border-purple-600':'bg-gray-200 border-gray-300'}`}
+                aria-pressed={isDraftMode}
+                aria-label="드래프트 모드 토글"
+              >
+                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-all duration-300 ${isDraftMode? 'translate-x-5':'translate-x-0.5'} mt-0.5`}/>
+              </button>
+            </div>
+          </div>
+
+          {/* 커스텀 장소 입력 */}
+          {(!locationName || !locationOptions.find(loc => loc.name === locationName)) && (
+            <div className="mt-2 pt-2 border-t border-gray-200 grid gap-2 sm:grid-cols-2">
+              <input 
+                className="rounded border border-gray-300 bg-white px-2 py-1 text-sm" 
+                placeholder="장소명" 
+                value={locationName} 
+                onChange={e=>setLocationName(e.target.value)}
+              />
+              <input 
+                className="rounded border border-gray-300 bg-white px-2 py-1 text-sm" 
+                placeholder="주소/URL" 
+                value={locationAddress} 
+                onChange={e=>setLocationAddress(e.target.value)}
+              />
+            </div>
+          )}
+
+          {/* 구장비 설정 */}
+          <div className="mt-2 pt-2 border-t border-gray-200 flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 text-xs font-semibold text-gray-700">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-4.418 0-8 1.79-8 4s3.582 4 8 4 8-1.79 8-4-3.582-4-8-4z"/></svg>
+                구장비
+              </span>
               <button
                 type="button"
                 onClick={()=>setEnablePitchFee(v=>!v)}
-                className={`relative inline-flex h-6 w-11 rounded-full transition-colors shadow-sm border ${enablePitchFee? 'bg-emerald-500 border-emerald-600':'bg-gray-200 border-gray-300'}`}
+                className={`relative inline-flex h-5 w-10 rounded-full transition-colors shadow-sm border ${enablePitchFee? 'bg-emerald-500 border-emerald-600':'bg-gray-200 border-gray-300'}`}
                 aria-pressed={enablePitchFee}
                 aria-label="구장비 토글"
               >
-                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-all duration-300 ${enablePitchFee? 'translate-x-5':'translate-x-0.5'} mt-0.5`}/>
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-all duration-300 ${enablePitchFee? 'translate-x-4':'translate-x-0.5'} mt-0.5`}/>
               </button>
-              <span className="text-xs text-gray-500">{enablePitchFee? '사용 중':'비활성화됨'}</span>
             </div>
 
-            {/* Cost input */}
             {enablePitchFee && (
-            <div className="grid gap-2 sm:grid-cols-2">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-600">총 구장비:</label>
-                <input 
-                  type="number" 
-                  min="0" 
-                  step="0.5" 
-                  placeholder="총 구장비 (예: 220, 330)" 
-                  value={customBaseCost} 
-                  onChange={e=>setCustomBaseCost(e.target.value)} 
-                  className="rounded border border-gray-300 bg-white px-3 py-2 text-sm"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-600">게스트 추가 할증:</label>
-                <input 
-                  type="number" 
-                  min="0" 
-                  step="0.5" 
-                  placeholder="게스트 추가 금액 (예: 2, 3)" 
-                  value={guestSurcharge} 
-                  onChange={e=>setGuestSurcharge(e.target.value)} 
-                  className="rounded border border-gray-300 bg-white px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
-            )}
+              <>
+                <div className="flex items-end gap-2">
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-[11px] text-gray-600">$총액</label>
+                    <input 
+                      type="number" 
+                      min="0" 
+                      step="0.5" 
+                      placeholder="220" 
+                      value={customBaseCost} 
+                      onChange={e=>setCustomBaseCost(e.target.value)} 
+                      className="rounded border border-gray-300 bg-white px-2 py-1 text-sm w-20"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-[11px] text-gray-600">할증(+$)</label>
+                    <input 
+                      type="number" 
+                      min="0" 
+                      step="0.5" 
+                      placeholder="2" 
+                      value={guestSurcharge} 
+                      onChange={e=>setGuestSurcharge(e.target.value)} 
+                      className="rounded border border-gray-300 bg-white px-2 py-1 text-sm w-16"
+                    />
+                  </div>
+                </div>
 
-            {/* 비용 안내 */}
-            {enablePitchFee && (
-              <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                <div><b>예상 구장비</b>: ${baseCost}</div>
-                <div className="mt-1">
-                  배정된 선수: {previewTeams.flat().length}명 
+                {/* 비용 요약 */}
+                <div className="flex items-center gap-2 text-xs text-amber-700 ml-auto">
+                  <span className="font-medium">예상: ${baseCost}</span>
                   {previewTeams.flat().length > 0 && (
-                    <span className="ml-2">
-                      (정회원: ${liveFees.memberFee}/인 · 게스트: ${liveFees.guestFee}/인 +${guestSurcharge})
-                    </span>
+                    <span className="text-gray-600">· {previewTeams.flat().length}명</span>
                   )}
                 </div>
-              </div>
+              </>
             )}
 
-            {/* 지도 링크 프리뷰 */}
+            {/* 지도 링크 */}
             {mapLink && (
-              <div className="text-xs">
-                <a href={mapLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-blue-600 hover:underline">
-                  Google Maps 열기 ↗
-                </a>
-              </div>
+              <a href={mapLink} target="_blank" rel="noreferrer" className="ml-auto text-xs text-blue-600 hover:text-blue-700 font-medium underline">
+                Maps ↗
+              </a>
             )}
           </div>
-        </Row>
-
-        <Row label="팀 수">
-          <div className="flex items-center gap-3">
-            <select className="rounded border border-gray-300 bg-white px-3 py-2 text-sm" value={teams} onChange={e=>setTeamCount(Number(e.target.value))}>{Array.from({length:9},(_,i)=>i+2).map(n=><option key={n} value={n}>{n}팀</option>)}</select>
-            <label className="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked={isDraftMode} onChange={()=>setIsDraftMode(v=>!v)}/>드래프트 모드</label>
-          </div>
-        </Row>
-
-        {/* 빠른 선수 추가 - 상단 고정 */}
-        <QuickAttendanceEditor players={players} snapshot={previewTeams.map(team=>team.map(p=>p.id))} onDraftChange={(newSnap)=>{const byId=new Map(players.map(p=>[String(p.id),p]));const newTeams=newSnap.map(ids=>ids.map(id=>byId.get(String(id))).filter(Boolean));setManualTeams(newTeams);latestTeamsRef.current=newTeams;setShowAIPower(false);setActiveSortMode(null)}} customMemberships={customMemberships}/>
+        </div>
 
         {/* 팀 배정 테이블 with 드래그 앤 드롭 */}
         <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
@@ -828,7 +905,35 @@ export default function MatchPlanner({
             </div>
             
             {/* 오른쪽: 정렬 버튼 */}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* 표기 토글 - 앱 스타일 세그먼트 버튼 */}
+              <div className="flex items-center gap-1 p-1 rounded-full border border-gray-200 bg-white shadow-sm">
+                <button
+                  onClick={()=>setShowPositions(v=>!v)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 transition-all ${showPositions ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}
+                  title="포지션 칩 표시"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4"/></svg>
+                  포지션
+                </button>
+                <button
+                  onClick={()=>setShowOverallChip(v=>!v)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 transition-all ${showOverallChip ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}
+                  title="Overall 칩 표시"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v8m-4-4h8"/></svg>
+                  Overall
+                </button>
+                <button
+                  onClick={()=>setShowAIPowerChip(v=>!v)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1 transition-all ${showAIPowerChip ? 'bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow' : 'text-gray-700 hover:bg-gray-100'}`}
+                  title="AI 파워 칩 표시"
+                >
+                  <span className="text-[11px]">✨</span>
+                  AI
+                </button>
+              </div>
+
               <span className="text-xs text-gray-600 font-medium">정렬:</span>
               <button 
                 onClick={()=>{
@@ -860,8 +965,8 @@ export default function MatchPlanner({
                     const base = manualTeams ?? previewTeams
                     // GK → DF → MF → FW → OTHER 순서로 정렬
                     setManualTeams(base.map(list=>list.slice().sort((a,b)=>{
-                      const posA = positionGroupOf(a)
-                      const posB = positionGroupOf(b)
+                      const posA = getPrimaryCategory(a.positions || [])
+                      const posB = getPrimaryCategory(b.positions || [])
                       const indexA = POS_ORDER.indexOf(posA)
                       const indexB = POS_ORDER.indexOf(posB)
                       return indexA - indexB
@@ -965,7 +1070,7 @@ export default function MatchPlanner({
                       teamIndex={i} 
                       labelKit={kitForTeam(i)} 
                       players={list} 
-                      showOVR={isAdmin} 
+                      showOVR={!!showOverallChip} 
                       isAdmin={isAdmin} 
                       dropHint={dropHint}
                       isDraftMode={isDraftMode}
@@ -973,9 +1078,13 @@ export default function MatchPlanner({
                       onRemovePlayer={handleRemovePlayer}
                       onSetCaptain={handleSetCaptain}
                       matches={matches}
-                      showAIPower={showAIPower}
+                      showAIPower={!!showAIPowerChip}
+                      showPositions={!!showPositions}
                       customMemberships={customMemberships}
                       teamColor={teamColors[i]}
+                      availablePlayers={availablePlayers}
+                      onAddPlayer={handleAddPlayerToTeam}
+                      onAddMany={handleAddManyPlayersToTeam}
                       onColorChange={(newColor) => {
                         const updated = Array.from({length: previewTeams.length}, (_, idx) => 
                           idx === i ? newColor : (teamColors[idx] || null)
@@ -1006,6 +1115,8 @@ export default function MatchPlanner({
             </div>
           )}
         </div>
+
+  {/* 빠른 선수 추가 (팀 컬럼 내 컴팩트 입력으로 대체) */}
       </div>
     </Card>
 
@@ -1153,7 +1264,7 @@ export default function MatchPlanner({
 function Row({label,children}){return(<div className="grid items-start gap-2 sm:grid-cols-[120px_minmax(0,1fr)]"><label className="mt-1 text-sm text-gray-600">{label}</label><div>{children}</div></div>)}
 
 /* 컬럼/플레이어 렌더 */
-function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraftMode,captainId,onRemovePlayer,onSetCaptain,matches,showAIPower,customMemberships=[],teamColor,onColorChange}){
+function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraftMode,captainId,onRemovePlayer,onSetCaptain,matches,showAIPower,showPositions=true,customMemberships=[],teamColor,onColorChange,availablePlayers=[],onAddPlayer,onAddMany}){
   const id=`team-${teamIndex}`
   const {setNodeRef,isOver}=useDroppable({id})
   const [showColorPicker, setShowColorPicker] = React.useState(false)
@@ -1228,7 +1339,7 @@ function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraft
   const rendered=[]
   for(let i=0;i<players.length;i++){
     if(showIndicator&&dropHint.index===i)rendered.push(<React.Fragment key={`hint-${i}`}>{indicator}</React.Fragment>)
-    rendered.push(<PlayerRow key={players[i].id} player={players[i]} showOVR={showOVR} isAdmin={isAdmin} teamIndex={teamIndex} isDraftMode={isDraftMode} isCaptain={captainId===players[i].id} onRemove={onRemovePlayer} onSetCaptain={onSetCaptain} matches={matches} showAIPower={showAIPower} customMemberships={customMemberships}/>)
+  rendered.push(<PlayerRow key={players[i].id} player={players[i]} showOVR={showOVR} isAdmin={isAdmin} teamIndex={teamIndex} isDraftMode={isDraftMode} isCaptain={captainId===players[i].id} onRemove={onRemovePlayer} onSetCaptain={onSetCaptain} matches={matches} showAIPower={showAIPower} customMemberships={customMemberships} showPositions={showPositions}/>)
   }
   if(showIndicator&&dropHint.index===players.length)rendered.push(<React.Fragment key="hint-end">{indicator}</React.Fragment>)
   
@@ -1360,17 +1471,305 @@ function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraft
         {players.length===0&&!isOver&&(<li className="text-xs text-gray-400">팀원 없음 — 이 카드로 드래그해서 추가</li>)}
       </ul>
     </SortableContext>
+
+    {/* 컴팩트 선수 추가 영역 */}
+    {availablePlayers.length > 0 && (
+      <div className="border-t border-gray-100 px-3 py-2 bg-gradient-to-r from-emerald-50 to-blue-50">
+        <CompactAddPlayer
+          teamIndex={teamIndex}
+          players={availablePlayers}
+          onAdd={(pid)=>onAddPlayer&&onAddPlayer(pid, teamIndex)}
+          onAddMany={(ids)=>onAddMany&&onAddMany(ids, teamIndex)}
+          customMemberships={customMemberships}
+        />
+      </div>
+    )}
   </div>)}
 
+/* Compact add-player input for each team */
+function CompactAddPlayer({ teamIndex, players, onAdd, onAddMany, customMemberships = [] }){
+  const [q, setQ] = useState('')
+  const [isComposing, setIsComposing] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [selectedIds, setSelectedIds] = useState(()=>new Set())
+  const [selectedTag, setSelectedTag] = useState('')
+  const containerRef = useRef(null)
+  const inputRef = useRef(null)
+  const dropdownRef = useRef(null)
+  const [dropdownRect, setDropdownRect] = useState(null)
+
+  // 태그 목록 (사용 가능 선수 기준) + 멤버십 태그 포함
+  const allTags = useMemo(() => {
+    const map = new Map()
+    const memColor = (m) => {
+      const s = (m || '').toString().trim()
+      if (!s) return 'stone'
+      if (/정회원|member/i.test(s)) return 'emerald'
+      if (/게스트|guest/i.test(s)) return 'red'
+      if (/준회원|associate/i.test(s)) return 'blue'
+      return 'stone'
+    }
+    players.forEach(p => {
+      // custom tags
+      if (Array.isArray(p.tags)) {
+        p.tags.forEach(t => {
+          if (t && t.name && !map.has(t.name)) map.set(t.name, { name: t.name, color: t.color })
+        })
+      }
+      // membership tag
+      const m = p.membership
+      if (m) {
+        const key = `MEM:${String(m)}`
+        if (!map.has(key)) {
+          map.set(key, { name: `멤버십:${String(m)}`, color: memColor(m), _isMembership: true, _match: String(m) })
+        }
+      }
+    })
+    return Array.from(map.values()).sort((a,b)=>a.name.localeCompare(b.name))
+  }, [players])
+
+  // 태그별 카운트
+  const tagCounts = useMemo(() => {
+    const counts = new Map()
+    players.forEach(p => {
+      if (Array.isArray(p.tags)) {
+        p.tags.forEach(t => { if (t && t.name) counts.set(t.name, (counts.get(t.name)||0)+1) })
+      }
+      const m = p.membership
+      if (m) {
+        const key = `멤버십:${String(m)}`
+        counts.set(key, (counts.get(key)||0)+1)
+      }
+    })
+    return counts
+  }, [players])
+
+  const tagOptions = useMemo(() => {
+    const opts = [{ label: '전체', value: '' }]
+    for (const tag of allTags) {
+      const count = tagCounts.get(tag.name) || 0
+      opts.push({ label: `${tag.name} (${count})`, value: tag.name })
+    }
+    return opts
+  }, [allTags, tagCounts])
+
+  const filtered = useMemo(() => {
+    const t = q.trim().toLowerCase()
+    let base = players
+    if (selectedTag) {
+      if (selectedTag.startsWith('멤버십:')) {
+        const mem = selectedTag.replace('멤버십:', '')
+        base = base.filter(p => String(p.membership || '').trim() === mem)
+      } else {
+        base = base.filter(p => Array.isArray(p.tags) && p.tags.some(tag => tag.name === selectedTag))
+      }
+    }
+    if (t) base = base.filter(p => (p.name || '').toLowerCase().includes(t))
+    return base.slice().sort((a,b)=> (a.name||'').localeCompare(b.name||''))
+  }, [players, q, selectedTag])
+
+  // 외부 클릭/ESC 닫기
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (!containerRef.current) return
+      // 포탈 드롭다운 내부 클릭은 닫지 않음
+      if (dropdownRef.current && dropdownRef.current.contains(e.target)) return
+      if (!containerRef.current.contains(e.target)) setOpen(false)
+    }
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDocClick)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDocClick)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [])
+
+  // 드롭다운 위치 계산 (포탈 렌더)
+  const updateRect = () => {
+    const el = inputRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    const top = r.bottom
+    const left = r.left
+    const width = r.width
+    const maxHeight = Math.max(160, Math.min(480, window.innerHeight - top - 8))
+    setDropdownRect({ top, left, width, maxHeight })
+  }
+  useEffect(() => {
+    if (!open) return
+    updateRect()
+    const onResize = () => updateRect()
+    const onScroll = () => updateRect()
+    window.addEventListener('resize', onResize)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('scroll', onScroll, true)
+    }
+  }, [open])
+
+  const handleEnter = (e) => {
+    if (e.key === 'Enter' && !isComposing) {
+      e.preventDefault()
+      if (filtered.length >= 1) {
+        const pid = filtered[0].id
+        if (onAdd) onAdd(pid)
+        setQ('')
+        // 드롭다운 유지 (멀티 연속 추가 가능)
+        setOpen(true)
+      }
+    }
+  }
+
+  const toggleSelect = (pid) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(pid)) next.delete(pid); else next.add(pid)
+      return next
+    })
+  }
+
+  const bulkAdd = () => {
+    if (selectedIds.size === 0) return
+    const ids = Array.from(selectedIds)
+    if (onAddMany) onAddMany(ids)
+    notify(`${ids.length}명을 팀 ${teamIndex+1}에 추가했습니다 ✅`)
+    setSelectedIds(new Set())
+    setQ('')
+    setOpen(true)
+  }
+
+  const addAllFiltered = () => {
+    if (!filtered || filtered.length === 0) return
+    const ids = filtered.map(p => p.id)
+    if (onAddMany) onAddMany(ids)
+    notify(`필터된 전체 ${ids.length}명을 팀 ${teamIndex+1}에 추가했습니다 ✅`)
+    setSelectedIds(new Set())
+    setQ('')
+    setOpen(true)
+    // 만약 현재 태그/검색으로 걸러진 모든 선수를 추가하여 리스트가 비게 될 경우 태그를 자동 초기화
+    // (필터 유지 시 드롭다운이 다시 열리지 않는 UX 문제 해결)
+    if (selectedTag && filtered.length === ids.length) {
+      setSelectedTag('')
+    }
+  }
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <svg className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            ref={inputRef}
+            className="w-full rounded-md border border-gray-300 bg-white pl-8 pr-2 py-1.5 text-xs placeholder-gray-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+            placeholder={`팀 ${teamIndex+1}에 선수 추가...`}
+            value={q}
+            onChange={(e)=>{setQ(e.target.value); setOpen(true)}}
+            onKeyDown={handleEnter}
+            onFocus={()=>setOpen(true)}
+            onCompositionStart={()=>setIsComposing(true)}
+            onCompositionEnd={()=>setIsComposing(false)}
+          />
+        </div>
+        <span className="text-[11px] text-gray-500 whitespace-nowrap">대기 {players.length}명</span>
+      </div>
+
+      {open && dropdownRect && ReactDOM.createPortal(
+        <div
+          ref={dropdownRef}
+          className="fixed z-[999] rounded-md border border-gray-200 bg-white shadow-xl"
+          style={{ top: dropdownRect.top + 'px', left: dropdownRect.left + 'px', width: dropdownRect.width + 'px' }}
+          onMouseDown={(e)=>e.stopPropagation()}
+        >
+          {/* 태그 필터 바 - 간결한 Select */}
+          {allTags.length > 0 && (
+            <div className="px-2 py-2 border-b border-gray-100 bg-gray-50 sticky top-0">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-gray-600 shrink-0">태그 필터</span>
+                <div className="flex-1 min-w-0">
+                  <Select
+                    value={selectedTag}
+                    onChange={(v)=>setSelectedTag(v)}
+                    options={tagOptions}
+                    placeholder="전체"
+                  />
+                </div>
+                {selectedTag && (
+                  <button className="text-[11px] text-gray-600 hover:text-gray-800" onClick={()=>setSelectedTag('')}>초기화</button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* 목록 (단일 리스트 스타일) */}
+          <div className="max-h-[60vh] overflow-auto" style={{ maxHeight: dropdownRect.maxHeight }}>
+            <div>
+            {filtered.length === 0 && (
+              <div className="px-3 py-6 text-center text-xs text-gray-400">
+                필터 결과가 없습니다{selectedTag ? ' — 태그를 변경하거나 초기화하세요' : ''}
+              </div>
+            )}
+            {filtered.map(p => {
+              const badges = getBadgesWithCustom(p.membership, customMemberships)
+              const badgeInfo = getMembershipBadge(p.membership, customMemberships)
+              const checked = selectedIds.has(p.id)
+              return (
+                <div key={p.id} className={'flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-emerald-50'}>
+                  <input type="checkbox" className="w-4 h-4" checked={checked} onChange={(e)=>{e.stopPropagation(); toggleSelect(p.id)}} />
+                  <button
+                    onClick={(e)=>{e.preventDefault(); e.stopPropagation(); toggleSelect(p.id)}}
+                    className="flex-1 flex items-center gap-2 text-left"
+                    title={`선택 토글`}
+                  >
+                    <InitialAvatar id={p.id} name={p.name} size={20} badges={badges} photoUrl={p.photoUrl} customMemberships={customMemberships} badgeInfo={badgeInfo} />
+                    <span className="truncate text-[13px]">{p.name}</span>
+                  </button>
+                  <button
+                    onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); onAdd ? onAdd(p.id) : (onAddMany && onAddMany([p.id])) }}
+                    className="ml-auto text-[11px] text-emerald-700 px-2 py-0.5 rounded hover:bg-emerald-50"
+                    title={`팀 ${teamIndex+1}에 바로 추가`}
+                  >+ 추가</button>
+                </div>
+              )
+            })}
+            </div>
+          </div>
+
+          {/* 액션 바 */}
+          <div className="sticky bottom-0 flex items-center gap-2 px-2 py-2 bg-white border-t border-gray-100">
+            <button
+              onClick={bulkAdd}
+              disabled={selectedIds.size===0}
+              className={`px-3 py-1.5 rounded text-xs font-semibold ${selectedIds.size>0? 'bg-emerald-500 text-white hover:bg-emerald-600':'bg-gray-100 text-gray-400'}`}
+            >선택 {selectedIds.size}명 추가</button>
+            <button
+              onClick={addAllFiltered}
+              disabled={filtered.length===0}
+              className={`px-3 py-1.5 rounded text-xs font-semibold ${filtered.length>0? 'bg-blue-500 text-white hover:bg-blue-600':'bg-gray-100 text-gray-400'}`}
+            >필터 전체 {filtered.length}명 추가</button>
+            {(selectedIds.size>0 || q || selectedTag) && (
+              <button onClick={()=>{setSelectedIds(new Set()); setQ(''); setSelectedTag('')}} className="ml-auto text-xs text-gray-600 hover:text-gray-800">초기화</button>
+            )}
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
 /* PlayerRow */
-function PlayerRow({player,showOVR,isAdmin,teamIndex,isDraftMode,isCaptain,onRemove,onSetCaptain,matches,showAIPower,customMemberships=[]}){
+function PlayerRow({player,showOVR,isAdmin,teamIndex,isDraftMode,isCaptain,onRemove,onSetCaptain,matches,showAIPower,customMemberships=[],showPositions=true}){
   const{attributes,listeners,setNodeRef,transform,transition,isDragging}=useSortable({id:String(player.id)})
   const style={transform:CSS.Transform.toString(transform),transition,opacity:isDragging?0.7:1,boxShadow:isDragging?'0 6px 18px rgba(0,0,0,.12)':undefined,borderRadius:8,background:isDragging?'rgba(16,185,129,0.06)':undefined}
-  const pos=positionGroupOf(player),isGK=pos==='GK',unknown=isUnknownPlayer(player),ovrVal=unknown?'?':player.ovr??overall(player)
+  const pos=getPrimaryCategory(player.positions||[]),isGK=pos==='GK',unknown=isUnknownPlayer(player),ovrVal=unknown?'?':player.ovr??overall(player)
   const member=isMember(player.membership)
   
   // 배지 정보 가져오기
-  const badges = getBadgesWithCustom(player.membership, isCaptain, customMemberships)
+  const badges = getBadgesWithCustom(player.membership, customMemberships)
   const badgeInfo = isCaptain ? null : getMembershipBadge(player.membership, customMemberships)
   
   // OVR 색상 함수
@@ -1397,7 +1796,9 @@ function PlayerRow({player,showOVR,isAdmin,teamIndex,isDraftMode,isCaptain,onRem
       <span className="flex items-center gap-2 min-w-0 flex-1">
         <InitialAvatar id={player.id} name={player.name} size={24} badges={badges} photoUrl={player.photoUrl} customMemberships={customMemberships} badgeInfo={badgeInfo} />
         <span className="whitespace-normal break-words">{player.name}</span>
-        <PositionChips positions={player.positions || []} size="sm" maxDisplay={2} />
+        {showPositions && (
+          <PositionChips positions={player.positions || []} size="sm" maxDisplay={2} />
+        )}
       </span>
 
       {!isGK && showOVR && <span className={`ovr-chip shrink-0 rounded-lg bg-gradient-to-br ${unknown?'from-stone-400 to-stone-500':getOVRColor(ovrVal)} text-white text-[11px] px-2 py-[2px] font-semibold shadow-sm`} data-ovr>
@@ -1469,8 +1870,8 @@ function kitForTeam(i){return[
 ][i%10]}
 function DragGhost({player,showOVR,customMemberships=[]}){
   if(!player)return null
-  const pos=positionGroupOf(player),isGK=pos==='GK',unknown=isUnknownPlayer(player),ovrVal=unknown?'?':player.ovr??overall(player)
-  const badges = getBadgesWithCustom(player.membership, false, customMemberships)
+  const pos=getPrimaryCategory(player.positions||[]),isGK=pos==='GK',unknown=isUnknownPlayer(player),ovrVal=unknown?'?':player.ovr??overall(player)
+  const badges = getBadgesWithCustom(player.membership, customMemberships)
   const badgeInfo = getMembershipBadge(player.membership, customMemberships)
   
   return(
@@ -1603,49 +2004,71 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
   }
   
   return (
-    <div className="mt-3 rounded border border-gray-200 bg-white p-3">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <label className="text-xs text-gray-600 font-medium">빠른 선수 추가</label>
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200">
-          <span className="text-xs text-emerald-700 font-medium">추가할 팀:</span>
+    <div className="rounded-lg border-2 border-emerald-200 bg-gradient-to-br from-emerald-50 to-blue-50 p-4 shadow-sm">
+      {/* 헤더 섹션 */}
+      <div className="mb-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+          </svg>
+          <h3 className="text-sm font-semibold text-gray-800">선수 추가</h3>
+          <span className="text-xs text-gray-500">({notInMatch.length}명 대기 중)</span>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-emerald-300 shadow-sm">
+          <span className="text-xs text-gray-600 font-medium">추가할 팀:</span>
           <select 
-            className="rounded border-0 bg-transparent px-1.5 py-0.5 text-xs font-bold text-emerald-700 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer" 
+            className="border-0 bg-transparent px-1 py-0 text-sm font-bold text-emerald-700 focus:outline-none focus:ring-0 cursor-pointer" 
             value={teamIdx} 
             onChange={e=>setTeamIdx(Number(e.target.value))}
           >
             {snapshot.map((_,i)=><option key={i} value={i}>팀 {i+1}</option>)}
           </select>
         </div>
-        <input 
-          className="flex-1 min-w-[180px] rounded border border-gray-300 bg-white px-2 py-1.5 text-sm" 
-          placeholder="이름 검색..."
-          value={q}
-          onChange={e=>setQ(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onCompositionStart={()=>setIsComposing(true)}
-          onCompositionEnd={()=>setIsComposing(false)}
-        />
+      </div>
+
+      {/* 검색 & 필터 초기화 */}
+      <div className="mb-3 flex gap-2">
+        <div className="relative flex-1">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input 
+            className="w-full rounded-lg border border-gray-300 bg-white pl-10 pr-3 py-2 text-sm placeholder-gray-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 transition-all" 
+            placeholder="이름으로 검색... (Enter로 빠른 추가)"
+            value={q}
+            onChange={e=>setQ(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onCompositionStart={()=>setIsComposing(true)}
+            onCompositionEnd={()=>setIsComposing(false)}
+          />
+        </div>
         {(selectedTag || selectedMembership || q.trim()) && (
           <button 
             onClick={()=>{setSelectedTag('');setSelectedMembership('');setQ('')}}
-            className="rounded border border-gray-300 bg-white px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:border-gray-400 transition-all font-medium"
             title="필터 초기화"
           >
-            ✕
+            ✕ 초기화
           </button>
         )}
       </div>
       
+      {/* 태그 & 멤버십 필터 */}
       {allTags.length > 0 && (
-        <div className="mb-2">
-          <div className="flex flex-wrap items-center gap-1.5 mb-2">
-            <span className="text-xs text-gray-500">태그:</span>
+        <div className="mb-3 rounded-lg bg-white p-3 border border-gray-200">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="text-xs font-semibold text-gray-700 flex items-center gap-1">
+              <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+              </svg>
+              태그
+            </span>
             <button
               onClick={() => setSelectedTag('')}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
                 selectedTag === '' 
-                  ? 'bg-stone-700 text-white shadow-sm' 
-                  : 'bg-stone-100 text-stone-700 border border-stone-200 hover:bg-stone-200'
+                  ? 'bg-gray-800 text-white shadow-sm' 
+                  : 'bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200'
               }`}
             >
               전체
@@ -1664,10 +2087,10 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
                 <button
                   key={tag.name}
                   onClick={() => setSelectedTag(tag.name)}
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium border transition-all ${
+                  className={`rounded-full px-3 py-1 text-xs font-medium border transition-all ${
                     isActive 
                       ? colorClass ? colorClass.replace('bg-', 'bg-').replace('-100', '-600').replace('text-', 'text-white border-') : 'shadow-sm'
-                      : colorClass || 'bg-stone-100 text-stone-700 border-stone-200'
+                      : colorClass || 'bg-gray-100 text-gray-700 border-gray-200'
                   } ${!isActive && 'hover:opacity-80'}`}
                   style={Object.keys(style).length > 0 ? style : undefined}
                 >
@@ -1679,14 +2102,19 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
           
           {/* 멤버십 필터 */}
           {allMemberships.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1.5 mb-2">
-              <span className="text-xs text-gray-500">멤버십:</span>
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100">
+              <span className="text-xs font-semibold text-gray-700 flex items-center gap-1">
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                </svg>
+                멤버십
+              </span>
               <button
                 onClick={() => setSelectedMembership('')}
-                className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
                   selectedMembership === '' 
-                    ? 'bg-stone-700 text-white shadow-sm' 
-                    : 'bg-stone-100 text-stone-700 border border-stone-200 hover:bg-stone-200'
+                    ? 'bg-gray-800 text-white shadow-sm' 
+                    : 'bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200'
                 }`}
               >
                 전체
@@ -1698,10 +2126,10 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
                   <button
                     key={membership}
                     onClick={() => setSelectedMembership(membership)}
-                    className={`rounded-full px-2.5 py-1 text-[11px] font-medium border transition-all ${
+                    className={`rounded-full px-3 py-1 text-xs font-medium border transition-all ${
                       isActive 
                         ? badgeInfo?.bgColor || 'bg-blue-600 text-white shadow-sm' 
-                        : badgeInfo?.bgColor?.replace('bg-', 'bg-').replace('-600', '-100').replace('text-white', badgeInfo.textColor || 'text-stone-700') || 'bg-stone-100 text-stone-700 border-stone-200'
+                        : badgeInfo?.bgColor?.replace('bg-', 'bg-').replace('-600', '-100').replace('text-white', badgeInfo.textColor || 'text-gray-700') || 'bg-gray-100 text-gray-700 border-gray-200'
                     } ${!isActive && 'hover:opacity-80'}`}
                   >
                     {membership}
@@ -1710,65 +2138,78 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
               })}
             </div>
           )}
-          
-          {/* 전체 추가 버튼 */}
-          {filtered.length > 0 && (
-            <button
-              onClick={addAllFilteredToTeam}
-              className="w-full rounded-lg border-2 border-dashed border-emerald-300 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400 transition-all flex items-center justify-center gap-1.5"
-              title={`${selectedTag ? `"${selectedTag}" 태그의 ` : ''}${selectedMembership ? `"${selectedMembership}" 멤버십의 ` : ''}모든 선수 (${filtered.length}명)를 팀 ${teamIdx + 1}에 추가`}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              <span>
-                {selectedTag || selectedMembership ? `필터된 선수 모두 추가` : '전체 선수 모두 추가'}
-                <span className="ml-1 text-emerald-600">({filtered.length}명)</span>
-              </span>
-            </button>
-          )}
         </div>
       )}
       
+      {/* 일괄 추가 버튼 */}
+      {filtered.length > 0 && (
+        <button
+          onClick={addAllFilteredToTeam}
+          className="w-full mb-3 rounded-lg border-2 border-dashed border-emerald-400 bg-white px-4 py-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 hover:border-emerald-500 transition-all flex items-center justify-center gap-2 shadow-sm"
+          title={`${selectedTag ? `"${selectedTag}" 태그의 ` : ''}${selectedMembership ? `"${selectedMembership}" 멤버십의 ` : ''}모든 선수 (${filtered.length}명)를 팀 ${teamIdx + 1}에 추가`}
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+          <span>
+            {selectedTag || selectedMembership ? `필터된 선수 모두 추가` : '전체 선수 모두 추가'}
+            <span className="ml-1 font-bold text-emerald-600">({filtered.length}명)</span>
+          </span>
+        </button>
+      )}
+      
+      {/* 선수 목록 */}
       {notInMatch.length === 0 ? (
-        <div className="text-xs text-gray-400 py-2">모든 선수가 팀에 배정되었습니다</div>
+        <div className="text-center py-8 text-sm text-gray-500 bg-white rounded-lg border border-gray-200">
+          <svg className="w-12 h-12 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          모든 선수가 팀에 배정되었습니다
+        </div>
       ) : (
         <>
           {!shouldShowList ? (
-            <div className="text-center py-2">
+            <div className="text-center py-4 bg-white rounded-lg border-2 border-dashed border-gray-300">
               <button 
                 onClick={() => setShowList(true)}
-                className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                className="text-sm text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-2 mx-auto"
               >
-                + 전체 선수 더보기 ({notInMatch.length}명)
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+                전체 선수 목록 보기 ({notInMatch.length}명)
               </button>
             </div>
           ) : (
             <>
               {(selectedTag || selectedMembership || q.trim()) && (
-                <div className="mb-2 text-xs text-gray-600">
-                  필터된 선수: {filtered.length}명
-                  {selectedTag && <span className="ml-1 font-medium">(태그: {selectedTag})</span>}
-                  {selectedMembership && <span className="ml-1 font-medium">(멤버십: {selectedMembership})</span>}
+                <div className="mb-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-2 text-sm">
+                    <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                    </svg>
+                    <span className="font-medium text-blue-900">필터 결과: {filtered.length}명</span>
+                    {selectedTag && <span className="px-2 py-0.5 bg-white rounded text-xs font-medium text-blue-700 border border-blue-300">태그: {selectedTag}</span>}
+                    {selectedMembership && <span className="px-2 py-0.5 bg-white rounded text-xs font-medium text-blue-700 border border-blue-300">멤버십: {selectedMembership}</span>}
+                  </div>
                 </div>
               )}
-              <div className="max-h-[400px] overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+              <div className="max-h-[500px] overflow-y-auto border-2 border-gray-300 rounded-lg p-2 bg-white shadow-inner">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {filtered.map(p => {
-                    const badges = getBadgesWithCustom(p.membership, false, customMemberships)
+                    const badges = getBadgesWithCustom(p.membership, customMemberships)
                     const badgeInfo = getMembershipBadge(p.membership, customMemberships)
                     return (
                       <button 
                         key={p.id} 
                         onClick={() => addPlayerToTeam(p.id)}
-                        className="group flex items-center gap-2 text-xs p-2 rounded hover:bg-white hover:shadow-sm cursor-pointer transition border border-transparent hover:border-emerald-300 relative"
+                        className="group flex items-center gap-2 text-sm p-2.5 rounded-lg hover:bg-emerald-50 cursor-pointer transition-all border-2 border-transparent hover:border-emerald-400 hover:shadow-md relative"
                         title={`팀 ${teamIdx + 1}에 추가`}
                       >
-                        <InitialAvatar id={p.id} name={p.name} size={28} badges={badges} photoUrl={p.photoUrl} customMemberships={customMemberships} badgeInfo={badgeInfo} />
-                        <span className="truncate text-left flex-1">{p.name}</span>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-emerald-600 font-medium opacity-0 group-hover:opacity-100 transition-opacity">팀{teamIdx + 1}</span>
-                          <span className="text-emerald-600 text-lg leading-none">+</span>
+                        <InitialAvatar id={p.id} name={p.name} size={32} badges={badges} photoUrl={p.photoUrl} customMemberships={customMemberships} badgeInfo={badgeInfo} />
+                        <span className="truncate text-left flex-1 font-medium text-gray-800">{p.name}</span>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <span className="text-xs text-emerald-700 font-semibold">+팀{teamIdx + 1}</span>
                         </div>
                       </button>
                     )
@@ -1778,9 +2219,12 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
               <div className="mt-2 text-center">
                 <button 
                   onClick={() => setShowList(false)}
-                  className="text-xs text-gray-600 hover:text-gray-700 font-medium"
+                  className="text-sm text-gray-600 hover:text-gray-800 font-medium flex items-center gap-1 mx-auto"
                 >
-                  접기
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                  </svg>
+                  목록 접기
                 </button>
               </div>
             </>

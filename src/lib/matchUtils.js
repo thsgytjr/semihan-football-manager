@@ -89,3 +89,14 @@ export function extractStatsByPlayer(m) {
   }
   return out
 }
+
+/**
+ * Get membership badges with custom membership support
+ */
+import { getMembershipBadge } from './membershipConfig'
+
+export function getBadgesWithCustom(membership, customMemberships = []) {
+  if (!Array.isArray(customMemberships)) customMemberships = []
+  const badgeInfo = getMembershipBadge(membership, customMemberships)
+  return badgeInfo ? [badgeInfo.badge] : []
+}
