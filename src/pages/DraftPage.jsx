@@ -71,7 +71,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
   const [draftSettings, setDraftSettings] = useState({
     timerDuration: 15, // 타이머 시간 (초)
     firstPickCount: 1, // 첫 턴 선택 수
-    regularPickCount: 2, // 이후 턴 선택 수
+    regularPickCount: 1, // 이후 턴 선택 수
     timerEnabled: false, // 타이머 활성화 여부 (기본 OFF)
     turnTransitionEnabled: false, // 턴 전환 딜레이 활성화 여부 (기본 OFF)
     turnTransitionDelay: 5, // 다음 턴 전환 딜레이 (기본 5초)
