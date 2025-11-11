@@ -243,8 +243,8 @@ export default function MatchPlanner({
       }
     }
     
-    // datetime-local 형식(YYYY-MM-DDTHH:MM)을 ISO 8601로 변환
-  const dateISOFormatted = dateISO ? new Date(dateISO + ':00').toISOString() : new Date().toISOString()
+    // 날짜 문자열은 로컬 형식 그대로 저장 (타임존 변환으로 시간이 바뀌는 문제 방지)
+  const dateISOFormatted = dateISO && dateISO.length >= 16 ? dateISO.slice(0,16) : getNextSaturday630()
     
     const payload={
       ...mkMatch({
@@ -277,8 +277,8 @@ export default function MatchPlanner({
     // 팀 구성 스냅샷 저장 (선수 ID 배열)
     const teamsSnapshot = previewTeams.map(team => team.map(p => p.id))
 
-    // datetime-local 형식(YYYY-MM-DDTHH:MM)을 ISO 8601로 변환
-  const dateISOFormatted = dateISO ? new Date(dateISO + ':00').toISOString() : new Date().toISOString()
+    // 날짜 문자열은 로컬 형식 그대로 저장 (타임존 변환으로 시간이 바뀌는 문제 방지)
+  const dateISOFormatted = dateISO && dateISO.length >= 16 ? dateISO.slice(0,16) : getNextSaturday630()
 
     const upcomingMatch = createUpcomingMatch({
       dateISO: dateISOFormatted,

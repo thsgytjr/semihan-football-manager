@@ -82,6 +82,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
   
   // 예정된 매치 선택
   const [selectedUpcomingMatchId, setSelectedUpcomingMatchId] = useState(null)
+  const originalDateRef = useRef(null) // 선택된 예정 매치의 원본 시간 보존
   
   // 드래프트 보드 ref (스크롤용)
   const draftBoardRef = useRef(null)
@@ -99,6 +100,10 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
     if (selectedUpcomingMatchId && upcomingMatches) {
       const selectedMatch = upcomingMatches.find(m => m.id === selectedUpcomingMatchId)
       if (selectedMatch) {
+        // 최초 선택 시 원본 dateISO 저장 (변형 없이)
+        if (!originalDateRef.current) {
+          originalDateRef.current = selectedMatch.dateISO
+        }
         // setup 상태가 아니면 불러오지 않음 (진행 중인 드래프트 보호)
         if (draftState !== 'setup') return
         
@@ -180,6 +185,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
       setCaptains([])
       setTeams([])
       setPlayerPool([])
+      originalDateRef.current = null
     }
   }, [selectedUpcomingMatchId, upcomingMatches, players, draftState])
 
@@ -759,12 +765,13 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
     )
 
     // 매치 업데이트
+    // dateISO를 건드리지 않고 팀 관련 정보만 업데이트 (시간 덮어쓰기 방지)
     onUpdateUpcomingMatch(selectedUpcomingMatchId, {
       snapshot,
       captainIds,
       isDraftComplete: true,
       draftCompletedAt: new Date().toISOString(),
-      teamCount: snapshot.length // 실제 팀 수 저장
+      teamCount: snapshot.length
     })
 
     notify(`예정된 매치에 ${snapshot.length}팀 드래프트 결과가 저장되었습니다!`)
