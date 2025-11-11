@@ -10,6 +10,23 @@ export const USE_MATCHES_TABLE = true
 
 // supabase client is provided by lib/supabaseClient (single instance)
 
+// Mock mode helper (localhost에서 ?nomock 없으면 localStorage 사용)
+function isMockMode() {
+  try {
+    const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    if (!isLocal) return false
+    const usp = new URLSearchParams(window.location.search)
+    return !usp.has('nomock')
+  } catch {
+    return false
+  }
+}
+
+const LS_APPDB_KEY = 'sfm:appdb'
+const LS_CACHE_PLAYERS = 'sfm:cache:players'
+const LS_CACHE_MATCHES = 'sfm:cache:matches'
+const LS_CACHE_MEMBERSHIP = 'sfm:cache:membership'
+
 // 방(룸) 개념 — 같은 ROOM_ID를 쓰는 모든 사용자가 같은 데이터 공유
 // 팀별로 자동으로 다른 room ID 사용 (semihan-lite-room-1, dksc-lite-room-1 등)
 let ROOM_ID = `${TEAM_CONFIG.shortName}-lite-room-1`
@@ -19,26 +36,56 @@ export function setRoomId(id) { ROOM_ID = id || ROOM_ID }
 // [A] Players (정규화 테이블)
 // -----------------------------
 export async function listPlayers() {
-  const { data, error } = await supabase
-    .from('players')
-    .select('*')
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  // 앱 내부 필드명과 맞추기 위해 매핑
-  return (data || []).map(row => ({
-    id: row.id,
-    name: row.name,
-    position: row.position || null, // 레거시 필드
-    positions: row.positions || [], // 새로운 배열 필드
-    membership: row.membership || null,
-    origin: row.origin || 'none',
-    status: row.status || 'active', // 선수 상태
-    tags: row.tags || [], // 커스텀 태그
-    photoUrl: row.photo_url || null,
-    stats: row.stats || {},
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-  }))
+  try {
+    const { data, error } = await supabase
+      .from('players')
+      .select('*')
+      .order('created_at', { ascending: false })
+    
+    if (error) throw error
+    
+    // 앱 내부 필드명과 맞추기 위해 매핑
+    const players = (data || []).map(row => ({
+      id: row.id,
+      name: row.name,
+      position: row.position || null, // 레거시 필드
+      positions: row.positions || [], // 새로운 배열 필드
+      membership: row.membership || null,
+      origin: row.origin || 'none',
+      status: row.status || 'active', // 선수 상태
+      tags: row.tags || [], // 커스텀 태그
+      photoUrl: row.photo_url || null,
+      stats: row.stats || {},
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    }))
+    
+    // 성공 시 캐시에 저장
+    try {
+      localStorage.setItem(LS_CACHE_PLAYERS, JSON.stringify(players))
+    } catch (e) {
+      logger.warn('[listPlayers] Failed to cache', e)
+    }
+    
+    return players
+  } catch (error) {
+    logger.error('[listPlayers] Supabase error, trying cache', error)
+    
+    // 오프라인 폴백: 캐시에서 읽기
+    try {
+      const cached = localStorage.getItem(LS_CACHE_PLAYERS)
+      if (cached) {
+        logger.log('[listPlayers] Using cached data')
+        return JSON.parse(cached)
+      }
+    } catch (e) {
+      logger.error('[listPlayers] Cache parse error', e)
+    }
+    
+    // 캐시도 없으면 빈 배열
+    logger.warn('[listPlayers] No cache available, returning empty array')
+    return []
+  }
 }
 
 export async function upsertPlayer(p) {
@@ -92,21 +139,73 @@ export function subscribePlayers(callback) {
 // [B] App DB JSON (간편 공유용 appdb 테이블)
 // ---------------------------------------
 export async function loadDB() {
-  const { data, error } = await supabase
-    .from('appdb')
-    .select('data')
-    .eq('id', ROOM_ID)
-    .single()
-  
-  if (error || !data) {
-    return { upcomingMatches: [], tagPresets: [] }
+  // Mock mode: localStorage 사용
+  if (isMockMode()) {
+    try {
+      const raw = localStorage.getItem(LS_APPDB_KEY)
+      if (!raw) return { upcomingMatches: [], tagPresets: [], membershipSettings: [] }
+      const parsed = JSON.parse(raw)
+      return parsed || { upcomingMatches: [], tagPresets: [], membershipSettings: [] }
+    } catch (e) {
+      logger.error('[loadDB] localStorage parse error', e)
+      return { upcomingMatches: [], tagPresets: [], membershipSettings: [] }
+    }
   }
-  
-  const parsed = typeof data.data === 'string' ? JSON.parse(data.data) : data.data
-  return parsed || { upcomingMatches: [], tagPresets: [] }
+
+  // Production mode: Supabase 사용 (오프라인 폴백 포함)
+  try {
+    const { data, error } = await supabase
+      .from('appdb')
+      .select('data')
+      .eq('id', ROOM_ID)
+      .single()
+    
+    if (error) throw error
+    
+    const parsed = typeof data.data === 'string' ? JSON.parse(data.data) : data.data
+    const result = parsed || { upcomingMatches: [], tagPresets: [], membershipSettings: [] }
+    
+    // 성공 시 캐시에 저장
+    try {
+      localStorage.setItem(LS_APPDB_KEY + ':cache', JSON.stringify(result))
+    } catch (e) {
+      logger.warn('[loadDB] Failed to cache', e)
+    }
+    
+    return result
+  } catch (error) {
+    logger.error('[loadDB] Supabase error, trying cache', error)
+    
+    // 오프라인 폴백: 캐시에서 읽기
+    try {
+      const cached = localStorage.getItem(LS_APPDB_KEY + ':cache')
+      if (cached) {
+        logger.log('[loadDB] Using cached appdb data')
+        return JSON.parse(cached)
+      }
+    } catch (e) {
+      logger.error('[loadDB] Cache parse error', e)
+    }
+    
+    // 캐시도 없으면 빈 객체
+    logger.warn('[loadDB] No cache available')
+    return { upcomingMatches: [], tagPresets: [], membershipSettings: [] }
+  }
 }
 
 export async function saveDB(db) {
+  // Mock mode: localStorage 사용
+  if (isMockMode()) {
+    try {
+      localStorage.setItem(LS_APPDB_KEY, JSON.stringify(db))
+      return
+    } catch (e) {
+      logger.error('[saveDB] localStorage save error', e)
+      return
+    }
+  }
+
+  // Production mode: Supabase 사용
   const payload = {
     id: ROOM_ID,
     data: db,

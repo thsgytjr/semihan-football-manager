@@ -2,6 +2,8 @@
 import { supabase } from '../lib/supabaseClient'
 import { logger } from '../lib/logger'
 
+const LS_CACHE_MEMBERSHIP = 'sfm:cache:membership'
+
 /**
  * 모든 멤버십 설정 가져오기
  */
@@ -14,7 +16,7 @@ export async function getMembershipSettings() {
 
     if (error) {
       logger.error('❌ 멤버십 설정 조회 실패:', error)
-      return []
+      throw error
     }
 
     // DB 필드명을 앱에서 사용하는 필드명으로 변환
@@ -29,9 +31,30 @@ export async function getMembershipSettings() {
       updatedAt: item.updated_at
     }))
 
+    // 성공 시 캐시에 저장
+    try {
+      localStorage.setItem(LS_CACHE_MEMBERSHIP, JSON.stringify(mappedData))
+    } catch (e) {
+      logger.warn('[getMembershipSettings] Failed to cache', e)
+    }
+
     return mappedData
   } catch (err) {
-    logger.error('❌ 멤버십 설정 조회 오류:', err)
+    logger.error('❌ 멤버십 설정 조회 오류, 캐시 시도:', err)
+    
+    // 오프라인 폴백: 캐시에서 읽기
+    try {
+      const cached = localStorage.getItem(LS_CACHE_MEMBERSHIP)
+      if (cached) {
+        logger.log('[getMembershipSettings] Using cached data')
+        return JSON.parse(cached)
+      }
+    } catch (e) {
+      logger.error('[getMembershipSettings] Cache parse error', e)
+    }
+    
+    // 캐시도 없으면 빈 배열
+    logger.warn('[getMembershipSettings] No cache available')
     return []
   }
 }

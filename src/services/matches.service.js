@@ -8,6 +8,7 @@ import { getCurrentUser } from '../lib/auth'
 import { logger } from '../lib/logger'
 
 const ROOM_ID = `${TEAM_CONFIG.shortName}-lite-room-1`
+const LS_CACHE_MATCHES = 'sfm:cache:matches'
 
 // Supabase DB 컬럼명 → 앱 내부 필드명 변환
 // 주의: matches 테이블은 camelCase 컬럼명 사용 (dateISO, attendeeIds 등)
@@ -175,9 +176,33 @@ export async function listMatchesFromDB() {
       .order('dateISO', { ascending: false })
     
     if (error) throw error
-    return (data || []).map(toAppFormat)
+    
+    const matches = (data || []).map(toAppFormat)
+    
+    // 성공 시 캐시에 저장
+    try {
+      localStorage.setItem(LS_CACHE_MATCHES, JSON.stringify(matches))
+    } catch (e) {
+      logger.warn('[listMatchesFromDB] Failed to cache', e)
+    }
+    
+    return matches
   } catch (e) {
-    logger.error('[listMatchesFromDB] failed', e)
+    logger.error('[listMatchesFromDB] Supabase error, trying cache', e)
+    
+    // 오프라인 폴백: 캐시에서 읽기
+    try {
+      const cached = localStorage.getItem(LS_CACHE_MATCHES)
+      if (cached) {
+        logger.log('[listMatchesFromDB] Using cached data')
+        return JSON.parse(cached)
+      }
+    } catch (err) {
+      logger.error('[listMatchesFromDB] Cache parse error', err)
+    }
+    
+    // 캐시도 없으면 빈 배열
+    logger.warn('[listMatchesFromDB] No cache available')
     return []
   }
 }
