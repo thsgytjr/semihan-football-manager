@@ -139,15 +139,58 @@ export function subscribePlayers(callback) {
 // [B] App DB JSON (간편 공유용 appdb 테이블)
 // ---------------------------------------
 export async function loadDB() {
-  // Mock mode: localStorage 사용
+  // Mock mode: localStorage 사용하되, production 데이터도 읽어서 병합
   if (isMockMode()) {
     try {
-      const raw = localStorage.getItem(LS_APPDB_KEY)
-      if (!raw) return { upcomingMatches: [], tagPresets: [], membershipSettings: [] }
-      const parsed = JSON.parse(raw)
-      return parsed || { upcomingMatches: [], tagPresets: [], membershipSettings: [] }
+      // 1. localStorage 데이터 읽기
+      const localRaw = localStorage.getItem(LS_APPDB_KEY)
+      const localData = localRaw ? JSON.parse(localRaw) : null
+      
+      // 2. Production DB에서도 데이터 읽기 시도 (캐시용)
+      let prodData = null
+      try {
+        const { data, error } = await supabase
+          .from('appdb')
+          .select('data')
+          .eq('id', ROOM_ID)
+          .single()
+        
+        if (!error && data) {
+          prodData = typeof data.data === 'string' ? JSON.parse(data.data) : data.data
+          // Production 데이터를 캐시에 저장
+          try {
+            localStorage.setItem(LS_APPDB_KEY + ':prod', JSON.stringify(prodData))
+          } catch (e) {
+            logger.warn('[loadDB] Failed to cache prod data', e)
+          }
+        }
+      } catch (e) {
+        logger.warn('[loadDB] Failed to load prod data in mock mode, using cache', e)
+        // Production 로드 실패 시 캐시된 production 데이터 사용
+        try {
+          const cachedProd = localStorage.getItem(LS_APPDB_KEY + ':prod')
+          if (cachedProd) {
+            prodData = JSON.parse(cachedProd)
+          }
+        } catch (err) {
+          logger.error('[loadDB] Failed to parse cached prod data', err)
+        }
+      }
+      
+      // 3. 병합: localStorage 우선, production 데이터는 참고용
+      // upcomingMatches: localStorage에 없으면 production 것 사용
+      // tagPresets, membershipSettings: 둘 다 병합
+      const result = {
+        upcomingMatches: (localData?.upcomingMatches?.length > 0) 
+          ? localData.upcomingMatches 
+          : (prodData?.upcomingMatches || []),
+        tagPresets: localData?.tagPresets || prodData?.tagPresets || [],
+        membershipSettings: localData?.membershipSettings || prodData?.membershipSettings || []
+      }
+      
+      return result
     } catch (e) {
-      logger.error('[loadDB] localStorage parse error', e)
+      logger.error('[loadDB] Mock mode error', e)
       return { upcomingMatches: [], tagPresets: [], membershipSettings: [] }
     }
   }
