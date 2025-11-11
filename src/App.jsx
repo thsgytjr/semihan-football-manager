@@ -463,21 +463,59 @@ export default function App(){
   function handleUpdateUpcomingMatch(id,patch,silent=false){
     if(!isAdmin)return notify("Admin만 가능합니다.");
     const before=(db.upcomingMatches||[]).find(m=>m.id===id)
-    const patched={...patch}
-    if('dateISO' in patched){ patched.dateISO=normalizeDateISO(patched.dateISO) }
-    const next=(db.upcomingMatches||[]).map(m=>m.id===id?{...m,...patched}:m)
-    setDb(prev=>({...prev,upcomingMatches:next}))
-    saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:db.tagPresets||[]})
-    if(before){
-      const after=next.find(m=>m.id===id)
-      const diffParticipants=(before.participantIds||before.attendeeIds||[]).length - (after.participantIds||after.attendeeIds||[]).length
-      if(diffParticipants>0){
-        console.warn('[UpcomingMatch] Participant count decreased', {id, before: (before.participantIds||before.attendeeIds||[]).length, after: (after.participantIds||after.attendeeIds||[]).length})
-      }
-      if(before.dateISO!==after.dateISO){
-        console.warn('[UpcomingMatch] dateISO changed', {id, before: before.dateISO, after: after.dateISO})
+    if(!before){console.warn('[UpcomingMatch] update target missing',id);return}
+
+    // 필드 화이트리스트 (의도치 않은 전체 객체 머지 방지)
+    const ALLOWED_FIELDS=new Set([
+      'dateISO','location','snapshot','captainIds','formations','teamCount','isDraftMode','isDraftComplete','draftCompletedAt','totalCost','feesDisabled','teamColors','criterion','status'
+    ])
+
+    const sanitized={}
+    for(const [k,v]of Object.entries(patch||{})){
+      if(ALLOWED_FIELDS.has(k)){
+        // snapshot / captainIds / formations 등은 깊은 복사
+        if(Array.isArray(v)) sanitized[k]=v.map(x=>x)
+        else if(typeof v==='object'&&v!==null) sanitized[k]={...v}
+        else sanitized[k]=v
       }
     }
+
+    // participantIds / attendeeIds 업데이트는 스냅샷 동반시에만 허용 (명시적 저장 시)
+    if(Array.isArray(patch?.participantIds) && Array.isArray(patch?.snapshot)){
+      sanitized.participantIds=patch.participantIds.slice()
+      sanitized.attendeeIds=patch.participantIds.slice()
+    }
+
+    if('dateISO' in sanitized){ sanitized.dateISO=normalizeDateISO(sanitized.dateISO) }
+
+    // 변경이 없는 경우 조기 종료
+    const hasChange=Object.keys(sanitized).length>0
+    if(!hasChange){ if(!silent) notify('변경사항이 없습니다.'); return }
+
+    const next=(db.upcomingMatches||[]).map(m=>m.id===id?{...m,...sanitized}:m)
+    setDb(prev=>({...prev,upcomingMatches:next}))
+    saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:db.tagPresets||[]})
+
+    const after=next.find(m=>m.id===id)
+    if(after){
+      const beforeP=(before.participantIds||before.attendeeIds||[])
+      const afterP=(after.participantIds||after.attendeeIds||[])
+      const beforeC=before.captainIds||[]
+      const afterC=after.captainIds||[]
+      if(beforeP.length!==afterP.length||beforeP.some((x,i)=>x!==afterP[i])){
+        console.warn('[UpcomingMatch] participantIds changed',{id,before:beforeP,after:afterP})
+      }
+      if(beforeC.length!==afterC.length||beforeC.some((x,i)=>x!==afterC[i])){
+        console.warn('[UpcomingMatch] captainIds changed',{id,before:beforeC,after:afterC})
+      }
+      if(before.snapshot&&after.snapshot&&JSON.stringify(before.snapshot)!==JSON.stringify(after.snapshot)){
+        console.warn('[UpcomingMatch] snapshot changed',{id,beforeLen:before.snapshot.length,afterLen:after.snapshot.length})
+      }
+      if(before.dateISO!==after.dateISO){
+        console.warn('[UpcomingMatch] dateISO changed',{id,before:before.dateISO,after:after.dateISO})
+      }
+    }
+
     if(!silent)notify("예정된 매치가 업데이트되었습니다.")
   }
 

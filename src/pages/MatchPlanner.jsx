@@ -324,7 +324,7 @@ export default function MatchPlanner({
 
     onSaveUpcomingMatch(upcomingMatch)
     setLinkedUpcomingMatchId(upcomingMatch.id) // 저장 후 자동 연결
-  setLiveSyncUpcoming(false) // 새로 저장한 후엔 freeze (자동 변형 방지)
+  // live-sync 기능 제거: 수동 저장만 허용하여 자동 변형 방지
     notify(`${isDraftMode ? '드래프트 ' : ''}예정 매치로 저장되었습니다 ✅`)
   }
 
@@ -1173,15 +1173,7 @@ export default function MatchPlanner({
         if (activeMatches.length !== upcomingMatches.length && upcomingMatches.length > 0) {
           const expiredCount = upcomingMatches.length - activeMatches.length
           setTimeout(() => {
-            // 비동기로 만료된 매치들을 DB에서 제거
-            activeMatches.forEach((match, index) => {
-              const originalMatch = upcomingMatches.find(m => m.id === match.id)
-              if (originalMatch) {
-                onUpdateUpcomingMatch(match.id, match)
-              }
-            })
-            
-            // 만료된 매치들 삭제
+            // 만료된 매치들 삭제만 수행 (정규화된 active 목록을 DB에 재저장하지 않음)
             upcomingMatches.forEach(match => {
               if (!activeMatches.find(m => m.id === match.id)) {
                 onDeleteUpcomingMatch(match.id)
@@ -1242,8 +1234,8 @@ export default function MatchPlanner({
                             type="checkbox"
                             checked={isDraftComplete}
                             onChange={(e) => {
-                              const updatedMatch = { ...match, isDraftComplete: e.target.checked }
-                              onUpdateUpcomingMatch(match.id, updatedMatch)
+                              // 부분 업데이트만 수행 (전체 객체 머지 금지)
+                              onUpdateUpcomingMatch(match.id, { isDraftComplete: e.target.checked })
                               notify(e.target.checked ? '드래프트가 완료로 표시되었습니다 ✅' : '드래프트가 진행중으로 표시되었습니다 ✅')
                             }}
                             className="w-3 h-3 text-emerald-600 bg-gray-100 border-gray-300 rounded focus:ring-emerald-500 focus:ring-2"
