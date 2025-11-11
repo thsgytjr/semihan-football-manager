@@ -14,8 +14,6 @@ export default function DateTimePicker({
   value,
   onChange,
   disabled=false,
-  isPast=false,
-  error=null,
   label='일시',
   min,
   className=''
@@ -74,14 +72,13 @@ export default function DateTimePicker({
         type="button"
         disabled={disabled}
         onClick={()=>setOpen(o=>!o)}
-        className={`w-full rounded-md border px-3 py-2 text-sm flex items-center justify-between transition-colors ${disabled?"bg-gray-100 cursor-not-allowed":isPast?"border-red-400 bg-red-50 text-red-700":"border-gray-300 bg-white hover:bg-gray-50"}`}
+        className={`w-full rounded-md border px-3 py-2 text-sm flex items-center justify-between transition-colors ${disabled?"bg-gray-100 cursor-not-allowed":"border-gray-300 bg-white hover:bg-gray-50"}`}
       >
         <span className="truncate">
           {value ? value.replace('T',' ') : '날짜/시간 선택'}
         </span>
         <span className="ml-2 text-[10px] text-gray-500">{open? '▲':'▼'}</span>
       </button>
-      {error && <div className="mt-1 text-[11px] text-red-600">{error}</div>}
       {open && !disabled && (
         <div ref={popRef} className="z-30 absolute mt-2 w-64 rounded-lg border border-gray-300 bg-white shadow-lg p-3 space-y-3">
           <div className="flex items-center justify-between">

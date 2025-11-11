@@ -194,7 +194,6 @@ export default function MatchPlanner({
 
   function save(){
     if(!isAdmin){notify('Admin만 가능합니다.');return}
-    if(isPastDate){ notify('❌ 과거 날짜/시간입니다. 수정 후 다시 시도하세요.'); return }
     let baseTeams=(latestTeamsRef.current&&latestTeamsRef.current.length)?latestTeamsRef.current:previewTeams
     
     // 주장을 각 팀의 맨 앞으로 정렬
@@ -255,7 +254,7 @@ export default function MatchPlanner({
   function saveAsUpcomingMatch(){
     if(!isAdmin){notify('Admin만 가능합니다.');return}
     if(!onSaveUpcomingMatch){notify('예정 매치 저장 기능이 없습니다.');return}
-    if(isPastDate){ notify('❌ 과거 날짜/시간입니다. 수정 후 다시 시도하세요.'); return }
+    if(isPastDate){ return }
     
     // 실제로 팀에 배정된 선수들의 ID 목록 가져오기
     const assignedPlayerIds = previewTeams.flat().map(p => p.id)
@@ -658,8 +657,6 @@ export default function MatchPlanner({
           <DateTimePicker
             value={dateISO}
             onChange={setDateISO}
-            isPast={isPastDate}
-            error={dateError}
             label={null}
             className="w-full"
           />
@@ -709,11 +706,17 @@ export default function MatchPlanner({
             
             {/* Pitch fee toggle */}
             <div className="flex items-center gap-3 mt-2">
-              <label className="flex items-center gap-2 text-sm font-medium">
-                <input type="checkbox" checked={enablePitchFee} onChange={()=>setEnablePitchFee(v=>!v)} />
-                구장비 사용
-              </label>
-              {!enablePitchFee && <span className="text-xs text-gray-500">(비용 계산 비활성화됨)</span>}
+              <span className="text-sm font-medium text-gray-700">구장비</span>
+              <button
+                type="button"
+                onClick={()=>setEnablePitchFee(v=>!v)}
+                className={`relative inline-flex h-6 w-11 rounded-full transition-colors shadow-sm border ${enablePitchFee? 'bg-emerald-500 border-emerald-600':'bg-gray-200 border-gray-300'}`}
+                aria-pressed={enablePitchFee}
+                aria-label="구장비 토글"
+              >
+                <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-all duration-300 ${enablePitchFee? 'translate-x-5':'translate-x-0.5'} mt-0.5`}/>
+              </button>
+              <span className="text-xs text-gray-500">{enablePitchFee? '사용 중':'비활성화됨'}</span>
             </div>
 
             {/* Cost input */}
@@ -990,11 +993,16 @@ export default function MatchPlanner({
           </DndContext>
         </div>
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
           {isAdmin&&(
-            <div className="flex items-center gap-2">
-              <button onClick={saveAsUpcomingMatch} disabled={!!dateError} className={`rounded px-4 py-2 text-white font-semibold ${dateError?'bg-blue-300 cursor-not-allowed':'bg-blue-500 hover:bg-blue-600'}`}>예정 매치로 저장</button>
-              <button onClick={save} disabled={!!dateError} className={`rounded px-4 py-2 text-white font-semibold ${dateError?'bg-emerald-300 cursor-not-allowed':'bg-emerald-500 hover:bg-emerald-600'}`}>매치 저장</button>
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <button onClick={saveAsUpcomingMatch} disabled={isPastDate} className={`rounded px-4 py-2 text-white font-semibold ${isPastDate?'bg-blue-300 cursor-not-allowed':'bg-blue-500 hover:bg-blue-600'}`}>예정 매치로 저장</button>
+                <button onClick={save} className="rounded px-4 py-2 text-white font-semibold bg-emerald-500 hover:bg-emerald-600">매치 저장</button>
+              </div>
+              {isPastDate && (
+                <span className="text-xs text-amber-600 ml-1">⚠️ 과거 시점은 예정 매치로 저장 불가 (매치 저장만 가능)</span>
+              )}
             </div>
           )}
         </div>

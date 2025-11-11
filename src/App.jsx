@@ -27,6 +27,19 @@ import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEna
 
 const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden role="img" className="shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5"/><rect x="2" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/><rect x="18.5" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>)
 
+// 타임아웃 래퍼 유틸리티
+const withTimeout = (promise, ms, label) => {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => 
+      setTimeout(() => reject(new Error(`Timeout: ${label}`)), ms)
+    )
+  ]).catch(err => {
+    logger.warn(`⏱️ Network timeout: ${label}`, err.message)
+    return null
+  })
+}
+
 export default function App(){
   const[tab,setTab]=useState("dashboard"),[db,setDb]=useState({players:[],matches:[],visits:0,upcomingMatches:[],tagPresets:[],membershipSettings:[]}),[selectedPlayerId,setSelectedPlayerId]=useState(null)
   const[isAdmin,setIsAdmin]=useState(false),[isAnalyticsAdmin,setIsAnalyticsAdmin]=useState(false),[loginOpen,setLoginOpen]=useState(false)
@@ -126,47 +139,61 @@ export default function App(){
     })()
   },[])
 
-  useEffect(()=>{let mounted=true;(async()=>{
+  useEffect(()=>{let mounted=true;let hardTimeoutId=null;(async()=>{
     try{
-      // DB 마이그레이션 실행 (membership_settings 테이블 확인)
-      await runMigrations()
+      // 8초 하드 타임아웃 설정 (초기 로딩 전체 보호)
+      hardTimeoutId = setTimeout(() => {
+        if(mounted) {
+          setLoading(false)
+          notify('⏱️ 초기 로딩 타임아웃 - 페이지를 새로고침해주세요')
+          logger.error('[App] Hard timeout reached (8s)')
+          // 모바일에서 자동 새로고침
+          if(/iPhone|iPad|Android/.test(navigator.userAgent)) {
+            setTimeout(() => window.location.reload(), 2000)
+          }
+        }
+      }, 8000)
       
-      const playersFromDB=await listPlayers(),shared=await loadDB()
+      // 각 네트워크 호출에 5초 타임아웃 적용
+      await withTimeout(runMigrations(), 5000, 'runMigrations')
+      
+      const playersFromDB = await withTimeout(listPlayers(), 5000, 'listPlayers')
+      const shared = await withTimeout(loadDB(), 5000, 'loadDB')
       
       // 멤버십 설정 로드 (새 테이블에서)
-      const membershipSettings = await getMembershipSettings()
+      const membershipSettings = await withTimeout(getMembershipSettings(), 5000, 'getMembershipSettings')
       
       // Matches 로드: USE_MATCHES_TABLE 플래그에 따라 분기
       let matchesData = []
       if (USE_MATCHES_TABLE) {
         logger.log('[App] Loading matches from Supabase matches table')
-        matchesData = await listMatchesFromDB()
+        matchesData = await withTimeout(listMatchesFromDB(), 5000, 'listMatchesFromDB') || []
       } else {
         logger.log('[App] Loading matches from appdb JSON')
-        matchesData = shared.matches || []
+        matchesData = (shared && shared.matches) || []
       }
       
       if(!mounted)return
       
       // 만료된 예정 매치들을 필터링
-      const activeUpcomingMatches = filterExpiredMatches(shared.upcomingMatches||[])
+      const activeUpcomingMatches = filterExpiredMatches((shared && shared.upcomingMatches) || [])
       
       // 만료된 매치가 있었다면 DB에서도 제거
-      if(activeUpcomingMatches.length !== (shared.upcomingMatches||[]).length) {
-        const updatedShared = {...shared, upcomingMatches: activeUpcomingMatches}
-        await saveDB(updatedShared).catch(logger.error)
+      if(activeUpcomingMatches.length !== ((shared && shared.upcomingMatches) || []).length) {
+        const updatedShared = {...(shared || {}), upcomingMatches: activeUpcomingMatches}
+        await withTimeout(saveDB(updatedShared), 3000, 'saveDB').catch(logger.error)
       }
       
       // 총 방문자 수 조회 (visit_logs 테이블에서)
-      const totalVisits = await getTotalVisits()
+      const totalVisits = await withTimeout(getTotalVisits(), 5000, 'getTotalVisits') || 0
       
       setDb({
-        players:playersFromDB,
-        matches:matchesData,
-        visits:totalVisits,
-        upcomingMatches:activeUpcomingMatches,
-        tagPresets:shared.tagPresets||[],
-        membershipSettings:membershipSettings||[]
+        players: playersFromDB || [],
+        matches: matchesData,
+        visits: totalVisits,
+        upcomingMatches: activeUpcomingMatches,
+        tagPresets: (shared && shared.tagPresets) || [],
+        membershipSettings: membershipSettings || []
       })
 
       // 방문 추적 (개발 환경 및 프리뷰 모드 제외)
@@ -183,7 +210,7 @@ export default function App(){
           
           // 방문자 수 증가 (프리뷰 모드 재확인)
           if(!isPreviewMode() && !isDevelopmentEnvironment()){
-            await incrementVisits()
+            await withTimeout(incrementVisits(), 3000, 'incrementVisits')
           }
           
           // IP 주소 조회 후 로그 저장 (비동기, 실패해도 계속 진행)
@@ -194,7 +221,7 @@ export default function App(){
             }
             
             // 방문 로그 저장
-            await logVisit({
+            await withTimeout(logVisit({
               visitorId,
               ipAddress,
               userAgent,
@@ -202,7 +229,7 @@ export default function App(){
               browser,
               os,
               phoneModel
-            })
+            }), 3000, 'logVisit')
           }).catch(logger.error)
         }catch(e){
           logger.error('Visit tracking failed:', e)
@@ -214,7 +241,11 @@ export default function App(){
         }
       }
     }catch(e){logger.error("[App] initial load failed",e)}
-    finally{if(mounted)setLoading(false)}
+    finally{
+      // 하드 타임아웃 정리
+      if(hardTimeoutId) clearTimeout(hardTimeoutId)
+      if(mounted)setLoading(false)
+    }
   })()
     const offP=subscribePlayers(list=>setDb(prev=>({...prev,players:list})))
     
