@@ -143,33 +143,67 @@ export default function App(){
 
   useEffect(()=>{let mounted=true;let hardTimeoutId=null;(async()=>{
     try{
-      // 8초 하드 타임아웃 설정 (초기 로딩 전체 보호)
+      // 10초 하드 타임아웃 설정 (모바일 네트워크 고려하여 증가)
       hardTimeoutId = setTimeout(() => {
         if(mounted) {
           setLoading(false)
-          notify('⏱️ 초기 로딩 타임아웃 - 페이지를 새로고침해주세요')
-          logger.error('[App] Hard timeout reached (8s)')
-          // 모바일에서 자동 새로고침
-          if(/iPhone|iPad|Android/.test(navigator.userAgent)) {
-            setTimeout(() => window.location.reload(), 2000)
+          logger.error('[App] Hard timeout reached (10s)')
+          
+          // 타임아웃 시 캐시 삭제 후 자동 재시도 (무한루프 방지: 최대 1회)
+          const retryCount = parseInt(sessionStorage.getItem('sfm:retry_count') || '0', 10)
+          
+          if (retryCount < 1) {
+            sessionStorage.setItem('sfm:retry_count', String(retryCount + 1))
+            
+            // 캐시 클리어
+            try {
+              const keysToRemove = []
+              for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i)
+                if (key && key.startsWith('sfm:cache:')) {
+                  keysToRemove.push(key)
+                }
+              }
+              keysToRemove.forEach(k => localStorage.removeItem(k))
+              logger.log('[App] Cache cleared before retry')
+            } catch (e) {
+              logger.error('[App] Failed to clear cache', e)
+            }
+            
+            notify('⏱️ 로딩 타임아웃 - 캐시 클리어 후 재시도합니다...')
+            setTimeout(() => window.location.reload(), 1500)
+          } else {
+            // 재시도 실패 시
+            sessionStorage.removeItem('sfm:retry_count')
+            notify('⏱️ 로딩 실패 - 네트워크 연결을 확인해주세요', 'error')
+            
+            // 모바일에서는 사용자에게 수동 새로고침 안내
+            if(/iPhone|iPad|Android/.test(navigator.userAgent)) {
+              setTimeout(() => {
+                const userConfirm = window.confirm('네트워크 연결이 불안정합니다.\n브라우저를 완전히 종료 후 다시 시작해주세요.\n\n지금 페이지를 다시 로드하시겠습니까?')
+                if (userConfirm) {
+                  window.location.href = window.location.href.split('?')[0] + '?t=' + Date.now()
+                }
+              }, 2000)
+            }
           }
         }
-      }, 8000)
+      }, 10000)
       
-      // 각 네트워크 호출에 5초 타임아웃 적용
-      await withTimeout(runMigrations(), 5000, 'runMigrations')
+      // 각 네트워크 호출에 6초 타임아웃 적용 (모바일 고려)
+      await withTimeout(runMigrations(), 6000, 'runMigrations')
       
-      const playersFromDB = await withTimeout(listPlayers(), 5000, 'listPlayers')
-      const shared = await withTimeout(loadDB(), 5000, 'loadDB')
+      const playersFromDB = await withTimeout(listPlayers(), 6000, 'listPlayers')
+      const shared = await withTimeout(loadDB(), 6000, 'loadDB')
       
       // 멤버십 설정 로드 (새 테이블에서)
-      const membershipSettings = await withTimeout(getMembershipSettings(), 5000, 'getMembershipSettings')
+      const membershipSettings = await withTimeout(getMembershipSettings(), 6000, 'getMembershipSettings')
       
       // Matches 로드: USE_MATCHES_TABLE 플래그에 따라 분기
       let matchesData = []
       if (USE_MATCHES_TABLE) {
         logger.log('[App] Loading matches from Supabase matches table')
-        matchesData = await withTimeout(listMatchesFromDB(), 5000, 'listMatchesFromDB') || []
+        matchesData = await withTimeout(listMatchesFromDB(), 6000, 'listMatchesFromDB') || []
       } else {
         logger.log('[App] Loading matches from appdb JSON')
         matchesData = (shared && shared.matches) || []
@@ -177,17 +211,20 @@ export default function App(){
       
       if(!mounted)return
       
+      // 로딩 성공 시 재시도 카운터 초기화
+      sessionStorage.removeItem('sfm:retry_count')
+      
       // 만료된 예정 매치들을 필터링
       const activeUpcomingMatches = filterExpiredMatches((shared && shared.upcomingMatches) || [])
       
       // 만료된 매치가 있었다면 DB에서도 제거
       if(activeUpcomingMatches.length !== ((shared && shared.upcomingMatches) || []).length) {
         const updatedShared = {...(shared || {}), upcomingMatches: activeUpcomingMatches}
-        await withTimeout(saveDB(updatedShared), 3000, 'saveDB').catch(logger.error)
+        await withTimeout(saveDB(updatedShared), 4000, 'saveDB').catch(logger.error)
       }
       
       // 총 방문자 수 조회 (visit_logs 테이블에서)
-      const totalVisits = await withTimeout(getTotalVisits(), 5000, 'getTotalVisits') || 0
+      const totalVisits = await withTimeout(getTotalVisits(), 6000, 'getTotalVisits') || 0
       
       setDb({
         players: playersFromDB || [],
@@ -212,7 +249,7 @@ export default function App(){
           
           // 방문자 수 증가 (프리뷰 모드 재확인)
           if(!isPreviewMode() && !isDevelopmentEnvironment()){
-            await withTimeout(incrementVisits(), 3000, 'incrementVisits')
+            await withTimeout(incrementVisits(), 4000, 'incrementVisits')
           }
           
           // IP 주소 조회 후 로그 저장 (비동기, 실패해도 계속 진행)
@@ -231,7 +268,7 @@ export default function App(){
               browser,
               os,
               phoneModel
-            }), 3000, 'logVisit')
+            }), 4000, 'logVisit')
           }).catch(logger.error)
         }catch(e){
           logger.error('Visit tracking failed:', e)

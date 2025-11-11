@@ -81,5 +81,28 @@ export default defineConfig(({ mode }) => {
     envPrefix: 'VITE_',
     // MSW Service Worker 파일이 올바르게 제공되도록 설정
     publicDir: 'public',
+    build: {
+      // 브라우저 캐시 무력화: 빌드마다 새로운 파일명 생성
+      rollupOptions: {
+        output: {
+          // 파일명에 타임스탬프 해시 포함
+          entryFileNames: `assets/[name]-[hash].js`,
+          chunkFileNames: `assets/[name]-[hash].js`,
+          assetFileNames: `assets/[name]-[hash].[ext]`
+        }
+      },
+      // 청크 크기 경고 임계값 (기존 경고 유지)
+      chunkSizeWarningLimit: 1000,
+      // 소스맵 생성 (프로덕션 디버깅용)
+      sourcemap: mode === 'production' ? false : true,
+    },
+    server: {
+      headers: {
+        // 개발 서버에서도 캐시 방지
+        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
+    }
   }
 })

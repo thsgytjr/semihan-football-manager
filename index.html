@@ -6,6 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Goalify</title>
     
+    <!-- 캐시 방지 메타태그 (모바일 브라우저 캐시 이슈 해결) -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    
     <!-- Open Graph 메타태그 (링크 공유 시 미리보기) -->
     <meta property="og:title" content="Goalify" id="og-title" />
     <meta property="og:description" content="Plan. Play. Win." id="og-description" />
@@ -23,9 +28,59 @@
     
     <!-- Tailwind via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- 초기 타이틀 및 OG 태그 동적 로드 -->
+    <!-- 초기 타이틀 및 OG 태그 동적 로드 + 캐시 클린업 -->
     <script>
       try {
+        // 앱 버전 체크 및 구 캐시 정리
+        const APP_VERSION = 'v2.0.0'; // 메이저 업데이트 시 버전 변경
+        const lastVersion = localStorage.getItem('app_version');
+        
+        if (lastVersion !== APP_VERSION) {
+          console.log('[Cache] Version changed, clearing old cache', lastVersion, '->', APP_VERSION);
+          
+          // 구 캐시 키 정리 (sfm:cache:* 패턴)
+          const keysToRemove = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && (key.startsWith('sfm:cache:') || key.includes(':prod'))) {
+              keysToRemove.push(key);
+            }
+          }
+          keysToRemove.forEach(key => {
+            try {
+              localStorage.removeItem(key);
+            } catch (e) {
+              console.warn('[Cache] Failed to remove', key, e);
+            }
+          });
+          
+          // 새 버전 기록
+          localStorage.setItem('app_version', APP_VERSION);
+          console.log('[Cache] Cache cleared, new version set');
+        }
+        
+        // LocalStorage 용량 체크 (5MB 이상이면 캐시 정리)
+        let totalSize = 0;
+        for (let key in localStorage) {
+          if (localStorage.hasOwnProperty(key)) {
+            totalSize += (localStorage[key].length + key.length) * 2; // UTF-16
+          }
+        }
+        const sizeInMB = totalSize / (1024 * 1024);
+        
+        if (sizeInMB > 5) {
+          console.warn('[Cache] LocalStorage > 5MB, clearing cache data', sizeInMB.toFixed(2) + 'MB');
+          const keysToRemove = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('sfm:cache:')) {
+              keysToRemove.push(key);
+            }
+          }
+          keysToRemove.forEach(key => localStorage.removeItem(key));
+        }
+        
+        // 타이틀 설정
         const settings = localStorage.getItem('app_settings');
         if (settings) {
           const parsed = JSON.parse(settings);
@@ -42,7 +97,7 @@
           if (twitterTitle) twitterTitle.setAttribute('content', title);
         }
       } catch (e) {
-        console.error('Failed to load initial title:', e);
+        console.error('Failed to load initial setup:', e);
       }
     </script>
   </head>
