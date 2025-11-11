@@ -260,15 +260,17 @@ export default function Dashboard({
 
       {/* 리더보드 */}
       <Card 
-        title="리더보드"
-        right={
-          <div className="flex items-center gap-2 min-w-[140px]">
-            <Select
-              value={leaderboardSeason}
-              onChange={(val) => { setLeaderboardSeason(val); setApDateKey('all') }}
-              options={seasonOptions.map(v => ({ value: v, label: v === 'all' ? '전체 시즌' : `${v}년` }))}
-              className="w-[150px]"
-            />
+        title={
+          <div className="flex items-center gap-2">
+            <span>리더보드</span>
+            <div className="w-[120px]">
+              <Select
+                value={leaderboardSeason}
+                onChange={(val) => { setLeaderboardSeason(val); setApDateKey('all') }}
+                options={seasonOptions.map(v => ({ value: v, label: v === 'all' ? '전체 시즌' : `${v}년` }))}
+                size="sm"
+              />
+            </div>
           </div>
         }
       >
@@ -350,15 +352,17 @@ export default function Dashboard({
 
       {/* 매치 히스토리 (OVR 표시 숨김) */}
       <Card 
-        title="매치 히스토리"
-        right={
-          <div className="flex items-center gap-2 min-w-[140px]">
-            <Select
-              value={historySeason}
-              onChange={(val) => setHistorySeason(val)}
-              options={seasonOptions.map(v => ({ value: v, label: v === 'all' ? '전체 시즌' : `${v}년` }))}
-              className="w-[150px]"
-            />
+        title={
+          <div className="flex items-center gap-2">
+            <span>매치 히스토리</span>
+            <div className="w-[120px]">
+              <Select
+                value={historySeason}
+                onChange={(val) => setHistorySeason(val)}
+                options={seasonOptions.map(v => ({ value: v, label: v === 'all' ? '전체 시즌' : `${v}년` }))}
+                size="sm"
+              />
+            </div>
           </div>
         }
       >
