@@ -6,18 +6,23 @@ import {
   listPayments,
   addPayment,
   deletePayment,
+    updatePayment,
   getDuesSettings,
   updateDuesSetting,
   getAccountingSummary,
   getPlayerPaymentStats,
   getMatchPayments,
   confirmMatchPayment,
+  cancelMatchPayment,
   ensureDuesDefaults,
   getDuesRenewals
 } from '../lib/accounting'
 import { isMember } from '../lib/fees'
 import { DollarSign, Users, Calendar, TrendingUp, Plus, X, Check, AlertCircle, RefreshCw } from 'lucide-react'
 import InitialAvatar from '../components/InitialAvatar'
+import FinancialDashboard from '../components/FinancialDashboard'
+import { getAccountingOverrides, updateAccountingOverrides } from '../lib/appSettings'
+import { calculateMatchFees, calculatePlayerMatchFee } from '../lib/matchFeeCalculator'
 
 export default function AccountingPage({ players = [], matches = [], upcomingMatches = [], isAdmin }) {
   const [payments, setPayments] = useState([])
@@ -25,12 +30,14 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
-  const [selectedTab, setSelectedTab] = useState('payments') // overview, payments, dues, match-fees, renewals
+  const [selectedTab, setSelectedTab] = useState('overview') // overview, payments, dues, match-fees, renewals, player-stats
   const [showAddPayment, setShowAddPayment] = useState(false)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const [playerStats, setPlayerStats] = useState(null)
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
   const [showAdvancedDates, setShowAdvancedDates] = useState(false)
+  const [feeOverrides, setFeeOverrides] = useState(() => getAccountingOverrides())
+  const [savingOverrides, setSavingOverrides] = useState(false)
 
   const [renewals, setRenewals] = useState({})
   // 매치별 구장비 페이지네이션
@@ -50,6 +57,14 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   useEffect(() => {
     loadData()
   }, [dateRange])
+
+  // 초기 override 로드 (클라이언트 설정에서)
+  useEffect(() => {
+    try {
+      const o = getAccountingOverrides()
+      setFeeOverrides(o)
+    } catch {}
+  }, [])
 
   async function loadData() {
     if (!isAdmin) return
@@ -118,11 +133,16 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     }
   }
 
-  async function handleDeletePayment(id) {
+  async function handleDeletePayment(payment) {
     if (!window.confirm('이 결제 내역을 삭제하시겠습니까?')) return
 
     try {
-      await deletePayment(id)
+      if (payment.payment_type === 'match_fee' && payment.match_id && payment.player_id) {
+        // 매치 구장비 결제는 match_payments도 되돌림 처리
+        await cancelMatchPayment(payment.match_id, payment.player_id)
+      } else {
+        await deletePayment(payment.id)
+      }
       notify('삭제되었습니다')
       loadData()
     } catch (error) {
@@ -154,7 +174,8 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     registration: '가입비',
     monthly_dues: '월회비',
     annual_dues: '연회비',
-    match_fee: '구장비'
+    match_fee: '구장비',
+    reimbursement: '상환'
   }
 
   const paymentMethodLabels = {
@@ -179,6 +200,13 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     const now = new Date()
     const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10)
     const end = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().slice(0,10)
+    setDateRange({ start, end })
+  }
+
+  function setThisYearRange() {
+    const now = new Date()
+    const start = new Date(now.getFullYear(), 0, 1).toISOString().slice(0,10)
+    const end = new Date(now.getFullYear(), 11, 31).toISOString().slice(0,10)
     setDateRange({ start, end })
   }
 
@@ -219,7 +247,8 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     registrationFees: { total: 0, count: 0 },
     monthlyDues: { total: 0, count: 0 },
     annualDues: { total: 0, count: 0 },
-    matchFees: { total: 0, count: 0 }
+    matchFees: { total: 0, count: 0 },
+    reimbursements: { total: 0, count: 0 }
   }
 
   return (
@@ -262,17 +291,25 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
           >
             리뉴얼
           </TabButton>
+          <TabButton
+            active={selectedTab === 'player-stats'}
+            onClick={() => setSelectedTab('player-stats')}
+            icon={<Users size={16} />}
+          >
+            선수별 납부
+          </TabButton>
         </div>
       </Card>
 
-      {/* 날짜 필터 */}
+      {/* 날짜 필터 & 년도 필터 */}
       <Card>
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold text-gray-700 mr-1">기간:</span>
             <button onClick={setThisMonthRange} className="px-3 py-1.5 text-sm bg-gray-100 rounded hover:bg-gray-200">이번 달</button>
+            <button onClick={setThisYearRange} className="px-3 py-1.5 text-sm bg-gray-100 rounded hover:bg-gray-200">이번 해</button>
             <button onClick={()=>setDateRange({ start: '', end: '' })} className="px-3 py-1.5 text-sm bg-gray-100 rounded hover:bg-gray-200">전체</button>
-            <button onClick={()=>setShowAdvancedDates(v=>!v)} className="ml-auto px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900">기간 지정</button>
+            <button onClick={()=>setShowAdvancedDates(v=>!v)} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900">기간 지정</button>
           </div>
           {showAdvancedDates && (
             <div className="flex items-center gap-3">
@@ -294,38 +331,18 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
         </div>
       </Card>
 
-      {/* 개요 탭 */}
+      {/* 개요 탭 - 재정 대시보드 */}
       {selectedTab === 'overview' && (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard
-              icon={<DollarSign className="text-emerald-600" size={24} />}
-              label="총 수입"
-              value={`$${safeSummary.totalRevenue.toFixed(2)}`}
-              bgColor="bg-emerald-50"
-            />
-            <StatCard
-              icon={<Users className="text-blue-600" size={24} />}
-              label="가입비"
-              value={`$${safeSummary.registrationFees.total.toFixed(2)}`}
-              subtitle={`${safeSummary.registrationFees.count}건`}
-              bgColor="bg-blue-50"
-            />
-            <StatCard
-              icon={<Calendar className="text-purple-600" size={24} />}
-              label="회비 (월/연)"
-              value={`$${(safeSummary.monthlyDues.total + safeSummary.annualDues.total).toFixed(2)}`}
-              subtitle={`${safeSummary.monthlyDues.count + safeSummary.annualDues.count}건`}
-              bgColor="bg-purple-50"
-            />
-            <StatCard
-              icon={<TrendingUp className="text-orange-600" size={24} />}
-              label="구장비"
-              value={`$${safeSummary.matchFees.total.toFixed(2)}`}
-              subtitle={`${safeSummary.matchFees.count}건`}
-              bgColor="bg-orange-50"
-            />
-          </div>
+          <FinancialDashboard
+            summary={safeSummary}
+            payments={payments}
+            matches={matches}
+            upcomingMatches={upcomingMatches}
+            players={players}
+            dateRange={dateRange}
+            onRefresh={loadData}
+          />
           {(loadError || (payments.length === 0 && duesSettings.length === 0)) && (
             <Card>
               <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
@@ -344,77 +361,117 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
               </div>
             </Card>
           )}
-
-          {/* 선수별 납부 현황 */}
-          <Card title="선수별 납부 현황">
-            <div className="space-y-2">
-              {players.filter(p => !p.isUnknown).map(player => (
-                <div
-                  key={player.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 cursor-pointer"
-                  onClick={() => loadPlayerStats(player.id)}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">
-                      {player.name?.[0] || '?'}
-                    </div>
-                    <div>
-                      <div className="font-semibold">{player.name}</div>
-                      <div className="text-xs text-gray-500">{player.membership || 'Guest'}</div>
-                    </div>
-                  </div>
-                  {selectedPlayer === player.id && playerStats && (
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-emerald-600">
-                        ${playerStats.total.toFixed(2)}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {playerStats.registration.paid ? '가입비 ✓' : '가입비 ✗'} · 
-                        매치 {playerStats.matchFees.count}회
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          {/* 회비 리뉴얼 일정 */}
-          <Card title="회비 리뉴얼 일정">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2 px-2">선수</th>
-                    <th className="text-left py-2 px-2">최근 월회비</th>
-                    <th className="text-left py-2 px-2">다음 월회비</th>
-                    <th className="text-left py-2 px-2">최근 연회비</th>
-                    <th className="text-left py-2 px-2">다음 연회비</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {players.filter(p=>!p.isUnknown).map(p => {
-                    const r = renewals[p.id] || {}
-                    const fmt = (iso) => iso ? new Date(iso).toLocaleDateString('ko-KR') : '-'
-                    const warnMonthly = r.nextMonthly && new Date(r.nextMonthly) < new Date(Date.now() + 5*24*60*60*1000)
-                    const warnAnnual = r.nextAnnual && new Date(r.nextAnnual) < new Date(Date.now() + 10*24*60*60*1000)
-                    return (
-                      <tr key={p.id} className="border-b hover:bg-gray-50">
-                        <td className="py-2 px-2 font-medium">{p.name}</td>
-                        <td className="py-2 px-2 text-gray-700">{fmt(r.lastMonthly)}</td>
-                        <td className={`py-2 px-2 ${warnMonthly?'text-amber-600 font-semibold':'text-gray-700'}`}>{fmt(r.nextMonthly)}</td>
-                        <td className="py-2 px-2 text-gray-700">{fmt(r.lastAnnual)}</td>
-                        <td className={`py-2 px-2 ${warnAnnual?'text-red-600 font-semibold':'text-gray-700'}`}>{fmt(r.nextAnnual)}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div className="mt-2 text-xs text-gray-500">* 월회비는 1개월 뒤, 연회비는 1년 뒤를 기준으로 다음 리뉴얼을 계산합니다. 근접(월 5일 / 연 10일 이내) 항목은 강조됩니다.</div>
-          </Card>
         </>
   )}
+
+      {/* 선수별 납부 현황 탭 */}
+      {selectedTab === 'player-stats' && (
+        <Card title="선수별 납부 현황">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+            {players.filter(p => !p.isUnknown).map(player => {
+              // 선수별 통계 계산
+              const playerPayments = payments.filter(p => p.player_id === player.id)
+              const total = playerPayments.reduce((sum, p) => {
+                if (p.payment_type === 'reimbursement') return sum - parseFloat(p.amount)
+                return sum + parseFloat(p.amount)
+              }, 0)
+              
+              const registrationPaid = playerPayments.some(p => p.payment_type === 'registration')
+              const matchCount = playerPayments.filter(p => p.payment_type === 'match_fee').length
+              
+              return (
+                <div
+                  key={player.id}
+                  className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer border border-gray-200"
+                  onClick={() => {
+                    loadPlayerStats(player.id)
+                    setSelectedPlayer(player.id)
+                  }}
+                >
+                  <div className="flex flex-col items-center text-center gap-2">
+                    <InitialAvatar 
+                      id={player.id} 
+                      name={player.name} 
+                      size={48} 
+                      photoUrl={player.photoUrl} 
+                    />
+                    <div className="w-full">
+                      <div className="font-semibold text-sm truncate">{player.name}</div>
+                      <div className="text-xs text-gray-500">{player.membership || 'Guest'}</div>
+                    </div>
+                    <div className="w-full pt-2 border-t border-gray-300">
+                      <div className="text-lg font-bold text-emerald-600">
+                        ${total.toFixed(0)}
+                      </div>
+                      <div className="text-xs text-gray-500 flex items-center justify-center gap-1">
+                        {registrationPaid ? '✓' : '✗'} 가입비
+                        {matchCount > 0 && ` · ${matchCount}경기`}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          
+          {/* 선택된 선수 상세 정보 */}
+          {selectedPlayer && playerStats && (
+            <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-semibold">
+                  {players.find(p => p.id === selectedPlayer)?.name} 상세 내역
+                </h4>
+                <button
+                  onClick={() => {
+                    setSelectedPlayer(null)
+                    setPlayerStats(null)
+                  }}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="bg-white p-3 rounded">
+                  <div className="text-xs text-gray-600">가입비</div>
+                  <div className="font-semibold">
+                    {playerStats.registration.paid ? `$${playerStats.registration.amount.toFixed(2)}` : '미납'}
+                  </div>
+                </div>
+                <div className="bg-white p-3 rounded">
+                  <div className="text-xs text-gray-600">월회비</div>
+                  <div className="font-semibold">
+                    ${playerStats.monthlyDues.totalPaid.toFixed(2)}
+                    <span className="text-xs text-gray-500 ml-1">({playerStats.monthlyDues.count}회)</span>
+                  </div>
+                </div>
+                <div className="bg-white p-3 rounded">
+                  <div className="text-xs text-gray-600">연회비</div>
+                  <div className="font-semibold">
+                    ${playerStats.annualDues.totalPaid.toFixed(2)}
+                    <span className="text-xs text-gray-500 ml-1">({playerStats.annualDues.count}회)</span>
+                  </div>
+                </div>
+                <div className="bg-white p-3 rounded">
+                  <div className="text-xs text-gray-600">구장비</div>
+                  <div className="font-semibold">
+                    ${playerStats.matchFees.totalPaid.toFixed(2)}
+                    <span className="text-xs text-gray-500 ml-1">({playerStats.matchFees.count}회)</span>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-3 p-3 bg-white rounded">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">총 납부액</span>
+                  <span className="text-xl font-bold text-emerald-600">
+                    ${playerStats.total.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* 결제 내역 탭 */}
       {selectedTab === 'payments' && (
@@ -560,18 +617,34 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                         {paymentTypeLabels[payment.payment_type]}
                       </span>
                     </td>
-                    <td className="py-3 px-4 font-semibold text-emerald-600">
-                      ${parseFloat(payment.amount).toFixed(2)}
+                    <td className={`py-3 px-4 font-semibold ${payment.payment_type === 'reimbursement' ? 'text-red-600' : 'text-emerald-600'}`}>
+                      {payment.payment_type === 'reimbursement' ? '-' : ''}${parseFloat(payment.amount).toFixed(2)}
                     </td>
                     <td className="py-3 px-4 text-sm">
-                      {paymentMethodLabels[payment.payment_method] || payment.payment_method}
+                      <select
+                        value={payment.payment_method}
+                        onChange={async (e) => {
+                          try {
+                            await updatePayment(payment.id, { payment_method: e.target.value })
+                            notify('결제 방법이 업데이트되었습니다 ✅')
+                            loadData()
+                          } catch (err) {
+                            notify('결제 방법 업데이트 실패')
+                          }
+                        }}
+                        className="px-2 py-1 border rounded"
+                      >
+                        {Object.entries(paymentMethodLabels).map(([key, label]) => (
+                          <option key={key} value={key}>{label}</option>
+                        ))}
+                      </select>
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-600">
                       {payment.notes || '-'}
                     </td>
                     <td className="py-3 px-4 text-right">
                       <button
-                        onClick={() => handleDeletePayment(payment.id)}
+                        onClick={() => handleDeletePayment(payment)}
                         className="text-red-500 hover:text-red-700"
                       >
                         <X size={16} />
@@ -597,6 +670,78 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                 label={paymentTypeLabels[setting.setting_type]}
               />
             ))}
+            {/* 구장비 계산 오버라이드 */}
+            <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <div className="font-semibold text-lg">구장비 계산 오버라이드</div>
+                  <div className="text-sm text-gray-700">매치에 저장된 값 대신, 아래 설정을 우선 적용합니다.</div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">멤버 구장비 (1인)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={feeOverrides.memberFeeOverride ?? ''}
+                    onChange={(e) => setFeeOverrides(prev => ({ ...prev, memberFeeOverride: e.target.value === '' ? null : parseFloat(e.target.value) }))}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    placeholder="비우면 미적용"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">게스트 할증</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={feeOverrides.guestSurchargeOverride ?? ''}
+                    onChange={(e) => setFeeOverrides(prev => ({ ...prev, guestSurchargeOverride: e.target.value === '' ? null : parseFloat(e.target.value) }))}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    placeholder="비우면 기본값 사용"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">매치 전체 구장비 (총액)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={feeOverrides.venueTotalOverride ?? ''}
+                    onChange={(e) => setFeeOverrides(prev => ({ ...prev, venueTotalOverride: e.target.value === '' ? null : parseFloat(e.target.value) }))}
+                    className="w-full px-3 py-2 border rounded-lg"
+                    placeholder="비우면 미적용"
+                  />
+                </div>
+              </div>
+              <div className="text-xs text-gray-600 mt-2">
+                우선순위: 전체 구장비(총액) → 멤버 구장비 + 게스트 할증 → 매치 저장값. 계산은 0.5 단위로 반올림합니다.
+              </div>
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={async () => {
+                    setSavingOverrides(true)
+                    try {
+                      await updateAccountingOverrides(feeOverrides)
+                      notify('구장비 오버라이드가 저장되었습니다 ✅')
+                    } catch (e) {
+                      notify('저장 실패')
+                    } finally {
+                      setSavingOverrides(false)
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
+                  disabled={savingOverrides}
+                >
+                  {savingOverrides ? '저장 중...' : '저장'}
+                </button>
+                <button
+                  onClick={() => setFeeOverrides({ memberFeeOverride: null, guestSurchargeOverride: null, venueTotalOverride: null })}
+                  className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+                >
+                  초기화
+                </button>
+              </div>
+            </div>
           </div>
         </Card>
       )}
@@ -648,25 +793,104 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                 <thead>
                   <tr className="border-b bg-gray-50">
                     <th className="text-left py-2 px-2">선수</th>
-                    <th className="text-left py-2 px-2">최근 월회비</th>
-                    <th className="text-left py-2 px-2">다음 월회비</th>
-                    <th className="text-left py-2 px-2">최근 연회비</th>
-                    <th className="text-left py-2 px-2">다음 연회비</th>
+                    <th className="text-center py-2 px-2">납부 방식</th>
+                    <th className="text-left py-2 px-2">최근 납부일</th>
+                    <th className="text-left py-2 px-2">다음 납부 예정일</th>
+                    <th className="text-center py-2 px-2">상태</th>
                   </tr>
                 </thead>
                 <tbody>
                   {players.filter(p=>!p.isUnknown).map(p => {
                     const r = renewals[p.id] || {}
-                    const fmt = (iso) => iso ? new Date(iso).toLocaleDateString('ko-KR') : '-'
-                    const warnMonthly = r.nextMonthly && new Date(r.nextMonthly) < new Date(Date.now() + 5*24*60*60*1000)
-                    const warnAnnual = r.nextAnnual && new Date(r.nextAnnual) < new Date(Date.now() + 10*24*60*60*1000)
+                    const fmt = (iso) => iso ? new Date(iso).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }) : '-'
+                    
+                    // 월회비 vs 연회비 판단
+                    const hasMonthly = r.lastMonthly && (!r.lastAnnual || new Date(r.lastMonthly) > new Date(r.lastAnnual))
+                    const hasAnnual = r.lastAnnual && (!r.lastMonthly || new Date(r.lastAnnual) > new Date(r.lastMonthly))
+                    
+                    let paymentMode = '미정'
+                    let lastPaid = '-'
+                    let nextDue = '-'
+                    let isOverdue = false
+                    let missedMonths = []
+                    
+                    if (hasMonthly) {
+                      paymentMode = '월회비'
+                      lastPaid = fmt(r.lastMonthly)
+                      nextDue = fmt(r.nextMonthly)
+                      isOverdue = r.nextMonthly && new Date(r.nextMonthly) < new Date()
+
+                      // 최근 6개월 동안 미납한 월 목록 계산 (현재 월은 제외)
+                      const window = []
+                      const now = new Date()
+                      for (let i=1; i<=6; i++) {
+                        const d = new Date(now.getFullYear(), now.getMonth()-i, 1)
+                        window.push({ y: d.getFullYear(), m: d.getMonth()+1 })
+                      }
+                      const paidMonths = new Set(
+                        payments
+                          .filter(pay => pay.player_id === p.id && pay.payment_type === 'monthly_dues')
+                          .map(pay => {
+                            const d = new Date(pay.payment_date)
+                            return `${d.getFullYear()}-${d.getMonth()+1}`
+                          })
+                      )
+                      missedMonths = window
+                        .filter(({y,m}) => !paidMonths.has(`${y}-${m}`))
+                        .map(({m}) => `${m}월`)
+                    } else if (hasAnnual) {
+                      paymentMode = '연회비'
+                      lastPaid = fmt(r.lastAnnual)
+                      nextDue = fmt(r.nextAnnual)
+                      isOverdue = r.nextAnnual && new Date(r.nextAnnual) < new Date()
+                    }
+                    
+                    const warnSoon = !isOverdue && (
+                      (r.nextMonthly && new Date(r.nextMonthly) < new Date(Date.now() + 5*24*60*60*1000)) ||
+                      (r.nextAnnual && new Date(r.nextAnnual) < new Date(Date.now() + 10*24*60*60*1000))
+                    )
+                    
                     return (
                       <tr key={p.id} className="border-b hover:bg-gray-50">
-                        <td className="py-2 px-2 font-medium flex items-center gap-2"><InitialAvatar id={p.id} name={p.name} size={24} photoUrl={p.photoUrl} />{p.name}</td>
-                        <td className="py-2 px-2 text-gray-700">{fmt(r.lastMonthly)}</td>
-                        <td className={`py-2 px-2 ${warnMonthly?'text-amber-600 font-semibold':'text-gray-700'}`}>{fmt(r.nextMonthly)}</td>
-                        <td className="py-2 px-2 text-gray-700">{fmt(r.lastAnnual)}</td>
-                        <td className={`py-2 px-2 ${warnAnnual?'text-red-600 font-semibold':'text-gray-700'}`}>{fmt(r.nextAnnual)}</td>
+                        <td className="py-2 px-2">
+                          <div className="flex items-center gap-2">
+                            <InitialAvatar id={p.id} name={p.name} size={24} photoUrl={p.photoUrl} />
+                            <span className="font-medium">{p.name}</span>
+                          </div>
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                            paymentMode === '월회비' ? 'bg-purple-100 text-purple-700' :
+                            paymentMode === '연회비' ? 'bg-indigo-100 text-indigo-700' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>
+                            {paymentMode}
+                          </span>
+                        </td>
+                        <td className="py-2 px-2 text-gray-700">{lastPaid}</td>
+                        <td className={`py-2 px-2 ${
+                          isOverdue ? 'text-red-600 font-semibold' :
+                          warnSoon ? 'text-amber-600 font-semibold' :
+                          'text-gray-700'
+                        }`}>
+                          {nextDue}
+                          {isOverdue && <span className="ml-1 text-xs">(연체)</span>}
+                          {warnSoon && <span className="ml-1 text-xs">(임박)</span>}
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          <div className="flex flex-col items-center gap-0.5">
+                            {isOverdue ? (
+                              <span className="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700 font-medium">미납</span>
+                            ) : warnSoon ? (
+                              <span className="px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-700 font-medium">주의</span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-700 font-medium">정상</span>
+                            )}
+                            {paymentMode === '월회비' && missedMonths.length > 0 && (
+                              <span className="text-[11px] text-red-600">미납: {missedMonths.join(', ')}</span>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     )
                   })}
@@ -678,7 +902,10 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
               <UnpaidList title="월회비 미납" players={players} renewals={renewals} mode="monthly" />
               <UnpaidList title="연회비 미납" players={players} renewals={renewals} mode="annual" />
             </div>
-            <div className="text-xs text-gray-500">* 월회비는 이번 달 결제가 없으면 미납, 연회비는 1년 이상 경과 또는 기록 없으면 미납.</div>
+            <div className="text-xs text-gray-500">
+              * 각 선수의 최근 납부 이력을 기준으로 월회비/연회비 방식을 자동 판단합니다.<br/>
+              * 월회비는 다음 달까지, 연회비는 1년 뒤까지를 다음 납부일로 계산합니다.
+            </div>
           </div>
         </Card>
       )}
@@ -797,6 +1024,7 @@ function DuesSettingRow({ setting, onUpdate, label }) {
 function MatchFeesSection({ match, players }) {
   const [matchPayments, setMatchPayments] = useState([])
   const [loading, setLoading] = useState(true)
+  const [showReimbursement, setShowReimbursement] = useState(false)
 
   useEffect(() => {
     loadMatchPayments()
@@ -823,6 +1051,37 @@ function MatchFeesSection({ match, players }) {
     }
   }
 
+  async function handleCancelPayment(playerId) {
+    if (!window.confirm('납부 확인을 취소하시겠습니까?')) return
+    
+    try {
+      await cancelMatchPayment(match.id, playerId)
+      notify('납부 확인이 취소되었습니다')
+      loadMatchPayments()
+    } catch (error) {
+      notify('취소 실패')
+    }
+  }
+
+  async function handleReimbursement(playerId, amount) {
+    if (!window.confirm('이 선수에게 상환 처리하시겠습니까?')) return
+    
+    try {
+      await addPayment({
+        playerId,
+        paymentType: 'reimbursement',
+        amount,
+        paymentMethod: 'venmo',
+        paymentDate: new Date().toISOString(),
+        notes: `${match.location?.name || '매치'} 구장비 대신 결제`
+      })
+      notify('상환 처리되었습니다 ✅')
+      setShowReimbursement(false)
+    } catch (error) {
+      notify('상환 처리 실패')
+    }
+  }
+
   const matchDate = new Date(match.dateISO).toLocaleDateString('ko-KR', {
     month: 'short',
     day: 'numeric',
@@ -831,96 +1090,121 @@ function MatchFeesSection({ match, players }) {
     minute: '2-digit'
   })
 
-  // 저장된 매치: attendeeIds + snapshot 고려
-  const participantIds = match.attendeeIds || match.participantIds || (Array.isArray(match.snapshot)?match.snapshot.flat():[]) || []
-  let memberFee = typeof match.fees?.memberFee === 'number' ? match.fees.memberFee : 0
-  let guestFee = typeof match.fees?.guestFee === 'number' 
-    ? match.fees.guestFee 
-    : (memberFee ? memberFee + (match.fees?.guestSurcharge || 2) : 0)
-
-  // Fallback: fees가 비었는데 totalCost만 있으면 다시 계산
-  if ((!memberFee || !guestFee) && typeof match.totalCost === 'number' && participantIds.length > 0) {
-    const members = participantIds.map(id => players.find(p => p.id === id)).filter(Boolean).filter(p => isMember(p.membership)).length
-    const guests = participantIds.length - members
-    const surcharge = match.fees?.guestSurcharge || 2
-    const count = members + guests
-    if (count > 0) {
-      let calcMember = (match.totalCost - surcharge * guests) / count
-      calcMember = Math.round(calcMember * 2) / 2
-      memberFee = calcMember
-      guestFee = calcMember + surcharge
-    }
-  }
+  // 통합된 구장비 계산 로직 사용
+  const { memberFee, guestFee, participantIds } = calculateMatchFees(match, players)
 
   return (
     <div className="border rounded-lg p-4">
-      <div className="flex items-center justify-between mb-4">
-        <div>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex-1">
           <div className="font-semibold">{matchDate}</div>
-          <div className="text-sm text-gray-600">
+          <div className="text-xs text-gray-600">
             {match.location?.name || '장소 미정'} · {participantIds.length}명 · 
-            1인당 멤버 ${memberFee.toFixed(2)} · 게스트 ${guestFee.toFixed(2)}
+            멤버 ${memberFee.toFixed(2)} / 게스트 ${guestFee.toFixed(2)}
           </div>
+          {match.paidBy && (
+            <div className="text-xs text-blue-600 mt-1">
+              💳 {players.find(p => p.id === match.paidBy)?.name || 'Unknown'}님이 대신 결제
+            </div>
+          )}
         </div>
-        <div className="text-right">
-          <div className="text-sm text-gray-600">납부율</div>
-          <div className="text-lg font-bold">
-            {matchPayments.filter(p => p.payment_status === 'paid').length} / {participantIds.length}
+        <div className="text-right flex items-center gap-3">
+          <div>
+            <div className="text-xs text-gray-600">납부율</div>
+            <div className="text-lg font-bold text-emerald-600">
+              {matchPayments.filter(p => p.payment_status === 'paid').length} / {participantIds.length}
+            </div>
           </div>
+          {match.paidBy && (
+            <button
+              onClick={() => {
+                const totalCost = match.totalCost || (participantIds.length * memberFee)
+                handleReimbursement(match.paidBy, totalCost)
+              }}
+              className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+            >
+              상환
+            </button>
+          )}
         </div>
       </div>
 
       {loading ? (
-        <div className="text-center py-4 text-gray-500">로딩 중...</div>
+        <div className="text-center py-4 text-gray-500 text-sm">로딩 중...</div>
       ) : (
-        <div className="space-y-2">
-          {participantIds.map(playerId => {
-            const player = players.find(p => p.id === playerId)
-            const payment = matchPayments.find(p => p.player_id === playerId)
-            const isPaid = payment?.payment_status === 'paid'
-            const expected = isMember(player?.membership) ? memberFee : guestFee
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-xs text-gray-600">
+                <th className="text-left py-2 px-2">선수</th>
+                <th className="text-left py-2 px-2">구분</th>
+                <th className="text-right py-2 px-2">금액</th>
+                <th className="text-center py-2 px-2">상태</th>
+                <th className="text-right py-2 px-2">작업</th>
+              </tr>
+            </thead>
+            <tbody>
+              {participantIds.map(playerId => {
+                const player = players.find(p => p.id === playerId)
+                const payment = matchPayments.find(p => p.player_id === playerId)
+                const isPaid = payment?.payment_status === 'paid'
+                const expected = calculatePlayerMatchFee(match, player, players)
 
-            return (
-              <div
-                key={playerId}
-                className={`flex items-center justify-between p-3 rounded-lg ${
-                  isPaid ? 'bg-emerald-50' : 'bg-gray-50'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`${isPaid ? 'bg-emerald-500' : 'bg-gray-300'} rounded-full w-8 h-8 flex items-center justify-center overflow-hidden`}>{isPaid ? <Check size={16} className="text-white"/> : <InitialAvatar id={player?.id} name={player?.name||'?'} size={32} photoUrl={player?.photoUrl} />}</div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{player?.name || 'Unknown'}</span>
-                      {player && (
-                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                          isMember(player.membership) 
-                            ? 'bg-blue-100 text-blue-800' 
-                            : 'bg-gray-100 text-gray-800'
-                        }`}>
-                          {isMember(player.membership) ? '멤버' : '게스트'}
-                        </span>
+                return (
+                  <tr
+                    key={playerId}
+                    className={`border-b last:border-b-0 ${isPaid ? 'bg-emerald-50' : 'hover:bg-gray-50'}`}
+                  >
+                    <td className="py-2 px-2">
+                      <div className="flex items-center gap-2">
+                        <InitialAvatar id={player?.id} name={player?.name||'?'} size={24} photoUrl={player?.photoUrl} />
+                        <span className="font-medium">{player?.name || 'Unknown'}</span>
+                      </div>
+                    </td>
+                    <td className="py-2 px-2">
+                      <span className={`px-2 py-0.5 rounded text-xs ${
+                        isMember(player?.membership) 
+                          ? 'bg-blue-100 text-blue-700' 
+                          : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {isMember(player?.membership) ? '멤버' : '게스트'}
+                      </span>
+                    </td>
+                    <td className="py-2 px-2 text-right font-semibold">
+                      ${expected.toFixed(2)}
+                    </td>
+                    <td className="py-2 px-2 text-center">
+                      {isPaid ? (
+                        <div className="flex items-center justify-center gap-1 text-emerald-600">
+                          <Check size={14} />
+                          <span className="text-xs">완료</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-500">미납</span>
                       )}
-                    </div>
-                    <div className="text-xs text-gray-500">
-                      {isPaid ? `납부 완료 · ${new Date(payment.payment_date).toLocaleDateString('ko-KR')}` : '미납'}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="font-semibold">${expected.toFixed(2)}</div>
-                  {!isPaid && (
-                    <button
-                      onClick={() => handleConfirmPayment(playerId, expected)}
-                      className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
-                    >
-                      확인
-                    </button>
-                  )}
-                </div>
-              </div>
-            )
-          })}
+                    </td>
+                    <td className="py-2 px-2 text-right">
+                      {isPaid ? (
+                        <button
+                          onClick={() => handleCancelPayment(playerId)}
+                          className="px-2 py-1 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200"
+                        >
+                          취소
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleConfirmPayment(playerId, expected)}
+                          className="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
+                        >
+                          확인
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       )}
     </div>

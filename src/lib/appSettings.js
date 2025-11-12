@@ -19,6 +19,11 @@ const DEFAULT_SETTINGS = {
     stats: true,        // 기록 입력
       accounting: true,   // 회계
     analytics: true     // 방문자 분석
+  },
+  accounting: {
+    memberFeeOverride: null,        // 숫자 또는 null
+    guestSurchargeOverride: null,   // 숫자 또는 null
+    venueTotalOverride: null        // 매치 전체 구장비 강제 설정 (멤버/게스트 계산에 사용)
   }
 }
 
@@ -138,4 +143,18 @@ export async function updateAllFeatures(features) {
   
   const success = await saveAppSettingsToServer(settings)
   return success
+}
+
+// 회계 구장비 관련 override 업데이트 (서버 + 로컬)
+export async function updateAccountingOverrides(partial) {
+  const settings = getAppSettings()
+  if (!settings.accounting) settings.accounting = { ...DEFAULT_SETTINGS.accounting }
+  settings.accounting = { ...settings.accounting, ...partial }
+  const success = await saveAppSettingsToServer(settings)
+  return success ? settings.accounting : null
+}
+
+export function getAccountingOverrides() {
+  const settings = getAppSettings()
+  return settings.accounting || DEFAULT_SETTINGS.accounting
 }

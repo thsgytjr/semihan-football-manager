@@ -361,6 +361,13 @@ export async function getPlayerPaymentStats(playerId) {
             stats.matchFees.totalPaid += amount
             stats.matchFees.count += 1
             break
+        case 'reimbursement':
+            // 상환은 비용이므로 총계에서 차감
+            stats.total -= amount
+            if (!stats.reimbursements) stats.reimbursements = { totalPaid: 0, count: 0 }
+            stats.reimbursements.totalPaid += amount
+            stats.reimbursements.count += 1
+            break
         }
       })
       return stats
@@ -426,7 +433,8 @@ export async function getAccountingSummary({ startDate, endDate } = {}) {
         registrationFees: { total: 0, count: 0 },
         monthlyDues: { total: 0, count: 0 },
         annualDues: { total: 0, count: 0 },
-        matchFees: { total: 0, count: 0 }
+        matchFees: { total: 0, count: 0 },
+        reimbursements: { total: 0, count: 0 }
       }
       data.forEach(payment => {
         const amount = parseFloat(payment.amount)
@@ -436,6 +444,11 @@ export async function getAccountingSummary({ startDate, endDate } = {}) {
           case 'monthly_dues': summary.monthlyDues.total += amount; summary.monthlyDues.count += 1; break
           case 'annual_dues': summary.annualDues.total += amount; summary.annualDues.count += 1; break
           case 'match_fee': summary.matchFees.total += amount; summary.matchFees.count += 1; break
+          case 'reimbursement': 
+            summary.reimbursements.total += amount
+            summary.reimbursements.count += 1
+            summary.totalRevenue -= amount // 상환은 비용이므로 수익에서 차감
+            break
         }
       })
       return summary
@@ -454,12 +467,19 @@ export async function getAccountingSummary({ startDate, endDate } = {}) {
       registrationFees: { total: 0, count: 0 },
       monthlyDues: { total: 0, count: 0 },
       annualDues: { total: 0, count: 0 },
-      matchFees: { total: 0, count: 0 }
+      matchFees: { total: 0, count: 0 },
+      reimbursements: { total: 0, count: 0 }
     }
 
     data.forEach(payment => {
       const amount = parseFloat(payment.amount)
-      summary.totalRevenue += amount
+      
+      // 상환은 비용이므로 수익에서 차감, 나머지는 수익에 추가
+      if (payment.payment_type === 'reimbursement') {
+        summary.totalRevenue -= amount
+      } else {
+        summary.totalRevenue += amount
+      }
 
       switch (payment.payment_type) {
         case 'registration':
@@ -477,6 +497,10 @@ export async function getAccountingSummary({ startDate, endDate } = {}) {
         case 'match_fee':
           summary.matchFees.total += amount
           summary.matchFees.count += 1
+          break
+        case 'reimbursement':
+          summary.reimbursements.total += amount
+          summary.reimbursements.count += 1
           break
       }
     })
@@ -588,6 +612,56 @@ export async function confirmMatchPayment(matchId, playerId, amount, paymentMeth
     return { matchPayment, payment }
   } catch (error) {
     logger.error('[Accounting] Failed to confirm match payment:', error)
+    throw error
+  }
+}
+
+/**
+ * 구장비 납부 취소 (실수로 확인한 경우)
+ */
+export async function cancelMatchPayment(matchId, playerId) {
+  try {
+    if (isMockMode()) {
+      const db = loadLS()
+      // match_payments에서 미납으로 되돌림
+      const row = (db.match_payments||[]).find(r => r.match_id === matchId && r.player_id === playerId)
+      if (row) {
+        row.paid_amount = 0
+        row.payment_status = 'pending'
+        row.payment_date = null
+      }
+      // payments 테이블에서 해당 기록 삭제
+      db.payments = (db.payments||[]).filter(p => !(p.match_id === matchId && p.player_id === playerId && p.payment_type === 'match_fee'))
+      saveLS(db)
+      return { ok: true }
+    }
+    
+    // 1. match_payments 미납으로 되돌림
+    const { error: mpError } = await supabase
+      .from('match_payments')
+      .update({
+        paid_amount: 0,
+        payment_status: 'pending',
+        payment_date: null
+      })
+      .eq('match_id', matchId)
+      .eq('player_id', playerId)
+
+    if (mpError) throw mpError
+
+    // 2. payments 테이블에서 해당 기록 삭제
+    const { error: pError } = await supabase
+      .from('payments')
+      .delete()
+      .eq('match_id', matchId)
+      .eq('player_id', playerId)
+      .eq('payment_type', 'match_fee')
+
+    if (pError) throw pError
+
+    return { ok: true }
+  } catch (error) {
+    logger.error('[Accounting] Failed to cancel match payment:', error)
     throw error
   }
 }
