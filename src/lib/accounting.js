@@ -579,16 +579,21 @@ export async function confirmMatchPayment(matchId, playerId, amount, paymentMeth
       saveLS(db)
       return { ok: true }
     }
-    // 1. match_payments 업데이트
-    const { error: mpError } = await supabase
+    // 1. match_payments 업데이트 또는 생성 (upsert)
+    const { data: matchPayment, error: mpError } = await supabase
       .from('match_payments')
-      .update({
+      .upsert({
+        match_id: matchId,
+        player_id: playerId,
+        expected_amount: amount,
         paid_amount: amount,
         payment_status: 'paid',
         payment_date: new Date().toISOString()
+      }, {
+        onConflict: 'match_id,player_id'
       })
-      .eq('match_id', matchId)
-      .eq('player_id', playerId)
+      .select()
+      .single()
 
     if (mpError) throw mpError
 
