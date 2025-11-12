@@ -718,6 +718,13 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
   
   // ✅ G/A 표시 토글: 기본 꺼짐
   const [showGA, setShowGA] = useState(false)
+  
+  // ✅ 2개 경기장 모드 토글
+  const [multiFieldMode, setMultiFieldMode] = useState(m?.multiField || false)
+  
+  // ✅ 게임별 매치업 정보 (2개 경기장 모드용)
+  // gameMatchups[gameIndex] = [[teamA1, teamA2], [teamB1, teamB2]]
+  const [gameMatchups, setGameMatchups] = useState(m?.gameMatchups || [])
 
   // ✅ 초안 변경은 반드시 setSnap 경유 → dirty 플래그 유지
   const setSnap=(next)=>{ setDraftSnap(next); setDirty(true) }
@@ -743,10 +750,20 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
     setQuarterScores(qs.length > 0 ? qs : (initialSnap.length? initialSnap.map(()=>[]): null))
   }
   const saveDraft=()=>{ 
+    console.log('💾 Saving draft:', {
+      multiFieldMode,
+      gameMatchups,
+      draftSnapLength: draftSnap.length
+    })
+    
     const patch = {
       snapshot: draftSnap,
-      attendeeIds: draftSnap.flat()
+      attendeeIds: draftSnap.flat(),
+      multiField: multiFieldMode,
+      gameMatchups: gameMatchups
     }
+    
+    console.log('💾 Patch object:', patch)
     
     // Draft 모드 저장
     if (localDraftMode) {
@@ -1047,26 +1064,91 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               minGames
             }))
           } else {
-            // 4팀 이상: 최고 골득실 유지
-            currentStats = quarterScores.map((_, teamIdx) => {
-              let bestDiff = -Infinity
-              let currentTotal = 0
-              const quarters = quarterScores[teamIdx] || []
-              quarters.forEach((score, qi) => {
-                const qScores = quarterScores.map(t => Number(t[qi] || 0))
-                const myScore = Number(score || 0)
-                currentTotal += myScore
-                const opponentScores = qScores.filter((_, idx) => idx !== teamIdx)
-                const avgOpponent = opponentScores.length > 0 
-                  ? opponentScores.reduce((a, b) => a + b, 0) / opponentScores.length 
-                  : 0
-                const goalDiff = myScore - avgOpponent
-                if (goalDiff > bestDiff) bestDiff = goalDiff
+            // 4팀 이상
+            const maxQ = Math.max(0, ...quarterScores.map(a=>Array.isArray(a)?a.length:0))
+            
+            // 매치업 정보가 있으면 승점제, 없으면 골득실
+            if (multiFieldMode && gameMatchups && gameMatchups.length > 0) {
+              // 2개 경기장 모드: 승점제
+              const teamGamePoints = Array.from({ length: teamCount }, () => [])
+              const gamesPlayed = Array.from({ length: teamCount }, () => 0)
+              const totals = Array.from({ length: teamCount }, () => 0)
+              
+              for (let qi = 0; qi < maxQ; qi++) {
+                const matchup = gameMatchups[qi]
+                if (!matchup || !Array.isArray(matchup)) continue
+                
+                for (const pair of matchup) {
+                  if (!Array.isArray(pair) || pair.length !== 2) continue
+                  const [a, b] = pair
+                  if (a === undefined || b === undefined || a < 0 || b < 0 || a >= teamCount || b >= teamCount) continue
+                  
+                  const aScore = Number(quarterScores[a]?.[qi] ?? 0)
+                  const bScore = Number(quarterScores[b]?.[qi] ?? 0)
+                  totals[a] += aScore
+                  totals[b] += bScore
+                  gamesPlayed[a] += 1
+                  gamesPlayed[b] += 1
+                  
+                  let aPts = 0, bPts = 0
+                  if (aScore > bScore) { aPts = 3; bPts = 0 }
+                  else if (bScore > aScore) { aPts = 0; bPts = 3 }
+                  else { aPts = 1; bPts = 1 }
+                  
+                  teamGamePoints[a].push(aPts)
+                  teamGamePoints[b].push(bPts)
+                }
+              }
+              
+              const unequalGP = gamesPlayed.some(g => g !== gamesPlayed[0])
+              const totalPoints = teamGamePoints.map(pts => pts.reduce((a,b)=>a+b, 0))
+              
+              let weightedPoints = totalPoints
+              let minGames = 0
+              if (unequalGP) {
+                minGames = Math.min(...gamesPlayed.filter(g => g > 0))
+                weightedPoints = teamGamePoints.map(pts => {
+                  if (pts.length === 0) return 0
+                  const sorted = [...pts].sort((a,b) => b - a)
+                  return sorted.slice(0, minGames).reduce((a,b) => a + b, 0)
+                })
+                const maxWPts = Math.max(...weightedPoints)
+                leaders = weightedPoints.map((p,i)=>p===maxWPts?i:-1).filter(i=>i>=0)
+              } else {
+                const maxPts = Math.max(...totalPoints)
+                leaders = totalPoints.map((p,i)=>p===maxPts?i:-1).filter(i=>i>=0)
+              }
+              
+              currentStats = teamGamePoints.map((pts,i)=>({ 
+                totalPoints: totalPoints[i], 
+                weightedPoints: weightedPoints[i],
+                total: totals[i], 
+                gp: gamesPlayed[i],
+                gamePoints: pts,
+                minGames
+              }))
+            } else {
+              // 단일 경기장: 최고 골득실 유지
+              currentStats = quarterScores.map((_, teamIdx) => {
+                let bestDiff = -Infinity
+                let currentTotal = 0
+                const quarters = quarterScores[teamIdx] || []
+                quarters.forEach((score, qi) => {
+                  const qScores = quarterScores.map(t => Number(t[qi] || 0))
+                  const myScore = Number(score || 0)
+                  currentTotal += myScore
+                  const opponentScores = qScores.filter((_, idx) => idx !== teamIdx)
+                  const avgOpponent = opponentScores.length > 0 
+                    ? opponentScores.reduce((a, b) => a + b, 0) / opponentScores.length 
+                    : 0
+                  const goalDiff = myScore - avgOpponent
+                  if (goalDiff > bestDiff) bestDiff = goalDiff
+                })
+                return { bestDiff, total: currentTotal }
               })
-              return { bestDiff, total: currentTotal }
-            })
-            const maxBestDiff = Math.max(...currentStats.map(s => s.bestDiff))
-            leaders = currentStats.map((s, i) => s.bestDiff === maxBestDiff ? i : -1).filter(i => i >= 0)
+              const maxBestDiff = Math.max(...currentStats.map(s => s.bestDiff))
+              leaders = currentStats.map((s, i) => s.bestDiff === maxBestDiff ? i : -1).filter(i => i >= 0)
+            }
           }
           
           return (
@@ -1115,7 +1197,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       </div>
                       
                       <div className="flex items-center gap-3">
-                        {isThreeTeams ? (
+                        {isThreeTeams || (score.totalPoints !== undefined) ? (
                           <>
                             <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
                               승점 {score.totalPoints}
@@ -1143,13 +1225,13 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               </div>
               
               <div className="mt-2 text-[10px] text-blue-600 text-center">
-                {isThreeTeams 
+                {isThreeTeams || (currentStats[0]?.totalPoints !== undefined)
                   ? (currentStats.some(s=>s.gp!==currentStats[0].gp)
                       ? `💡 팀별 경기수가 다르면 각 팀의 최고 성적 ${currentStats[0].minGames}경기만 비교 (가중 승점)`
-                      : '💡 3팀일 때는 승점(승3·무1·패0)으로 승자를 결정합니다')
+                      : '💡 승점(승3·무1·패0)으로 승자를 결정합니다')
                   : '💡 각 팀의 최고 골득실로 승자를 결정합니다'}
               </div>
-              {isThreeTeams && currentStats.some(s=>s.gp!==currentStats[0].gp) && (
+              {(isThreeTeams || currentStats[0]?.totalPoints !== undefined) && currentStats.some(s=>s.gp!==currentStats[0].gp) && (
                 <div className="mt-1 text-[10px] text-purple-700 text-center font-medium">
                   예: T1과 T2가 3경기, T3가 2경기 → 모든 팀의 최고 2경기만 비교
                 </div>
@@ -1169,34 +1251,78 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
           const teamCount = displayedQuarterScores.length
           const isMultiTeam = teamCount >= 3 // 3팀 이상 여부
           const isThreeTeams = teamCount === 3
-          // 3팀: 승점 계산
-          const points = isThreeTeams ? (()=>{
-            const teamGamePoints = [[],[],[]]
-            const totalPts = [0,0,0]
-            const gp = [0,0,0]
-            const pairs=[[0,1],[1,2],[0,2]]
-            for(let qi=0; qi<maxQ; qi++){
-              const [a,b]=pairs[qi%3]
-              const aScore = Number(Array.isArray(displayedQuarterScores[a]) ? (displayedQuarterScores[a][qi] ?? 0) : (qi===0 ? (displayedQuarterScores[a]||0) : 0))
-              const bScore = Number(Array.isArray(displayedQuarterScores[b]) ? (displayedQuarterScores[b][qi] ?? 0) : (qi===0 ? (displayedQuarterScores[b]||0) : 0))
-              gp[a]+=1; gp[b]+=1
-              
-              let aPts = 0, bPts = 0
-              if(aScore>bScore) { aPts=3; bPts=0 }
-              else if(bScore>aScore) { aPts=0; bPts=3 }
-              else { aPts=1; bPts=1 }
-              
-              teamGamePoints[a].push(aPts)
-              teamGamePoints[b].push(bPts)
-              totalPts[a]+=aPts
-              totalPts[b]+=bPts
+          const isFourPlusWithMatchups = teamCount >= 4 && m?.multiField && m?.gameMatchups && Array.isArray(m.gameMatchups) && m.gameMatchups.length > 0
+          
+          // 디버깅: 4팀 이상일 때 multiField 정보 출력
+          if (teamCount >= 4) {
+            console.log('🔍 Match Debug:', {
+              matchId: m.id,
+              teamCount,
+              multiField: m?.multiField,
+              gameMatchups: m?.gameMatchups,
+              hasMatchups: m?.gameMatchups && Array.isArray(m.gameMatchups) && m.gameMatchups.length > 0,
+              isFourPlusWithMatchups
+            })
+          }
+          
+          // 승점 계산 (3팀 또는 4팀+ 매치업 모드)
+          const points = (isThreeTeams || isFourPlusWithMatchups) ? (()=>{
+            const teamGamePoints = Array.from({ length: teamCount }, () => [])
+            const totalPts = Array.from({ length: teamCount }, () => 0)
+            const gp = Array.from({ length: teamCount }, () => 0)
+            
+            if (isThreeTeams) {
+              // 3팀: 고정 패턴
+              const pairs=[[0,1],[1,2],[0,2]]
+              for(let qi=0; qi<maxQ; qi++){
+                const [a,b]=pairs[qi%3]
+                const aScore = Number(Array.isArray(displayedQuarterScores[a]) ? (displayedQuarterScores[a][qi] ?? 0) : (qi===0 ? (displayedQuarterScores[a]||0) : 0))
+                const bScore = Number(Array.isArray(displayedQuarterScores[b]) ? (displayedQuarterScores[b][qi] ?? 0) : (qi===0 ? (displayedQuarterScores[b]||0) : 0))
+                gp[a]+=1; gp[b]+=1
+                
+                let aPts = 0, bPts = 0
+                if(aScore>bScore) { aPts=3; bPts=0 }
+                else if(bScore>aScore) { aPts=0; bPts=3 }
+                else { aPts=1; bPts=1 }
+                
+                teamGamePoints[a].push(aPts)
+                teamGamePoints[b].push(bPts)
+                totalPts[a]+=aPts
+                totalPts[b]+=bPts
+              }
+            } else if (isFourPlusWithMatchups) {
+              // 4팀+: 매치업 기반
+              for(let qi=0; qi<maxQ; qi++){
+                const matchup = m.gameMatchups[qi]
+                if (!matchup || !Array.isArray(matchup)) continue
+                
+                for (const pair of matchup) {
+                  if (!Array.isArray(pair) || pair.length !== 2) continue
+                  const [a, b] = pair
+                  if (a === undefined || b === undefined || a < 0 || b < 0 || a >= teamCount || b >= teamCount) continue
+                  
+                  const aScore = Number(Array.isArray(displayedQuarterScores[a]) ? (displayedQuarterScores[a][qi] ?? 0) : 0)
+                  const bScore = Number(Array.isArray(displayedQuarterScores[b]) ? (displayedQuarterScores[b][qi] ?? 0) : 0)
+                  gp[a]+=1; gp[b]+=1
+                  
+                  let aPts = 0, bPts = 0
+                  if(aScore>bScore) { aPts=3; bPts=0 }
+                  else if(bScore>aScore) { aPts=0; bPts=3 }
+                  else { aPts=1; bPts=1 }
+                  
+                  teamGamePoints[a].push(aPts)
+                  teamGamePoints[b].push(bPts)
+                  totalPts[a]+=aPts
+                  totalPts[b]+=bPts
+                }
+              }
             }
             
             let weightedPts = totalPts
-            const minGames = Math.min(...gp)
+            const minGames = Math.min(...gp.filter(g => g > 0))
             const unequalGP = gp.some(v=>v!==gp[0])
             
-            if (unequalGP) {
+            if (unequalGP && minGames > 0) {
               weightedPts = teamGamePoints.map(pts => {
                 if (pts.length === 0) return 0
                 const sorted = [...pts].sort((a,b) => b - a)
@@ -1205,8 +1331,8 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
             }
             
             return { totalPts, weightedPts, gp, minGames, teamGamePoints }
-          })() : []
-          const unequalGP = isThreeTeams ? points.gp.some(v=>v!==points.gp[0]) : false
+          })() : null
+          const unequalGP = points ? points.gp.some(v=>v!==points.gp[0]) : false
           
           // Calculate quarter wins for each team
           const allTeamQuarterWins = displayedQuarterScores.map((_, teamIdx) => {
@@ -1219,8 +1345,8 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
             }).length
           })
           
-          // 3팀+: 각 팀의 최고 골득실 계산 (4팀 이상에만 의미)
-          const bestGoalDiffs = (isMultiTeam && !isThreeTeams) ? displayedQuarterScores.map((_, teamIdx) => {
+          // 3팀+: 각 팀의 최고 골득실 계산 (4팀 이상 단일 경기장에만 의미)
+          const bestGoalDiffs = (isMultiTeam && !isThreeTeams && !isFourPlusWithMatchups) ? displayedQuarterScores.map((_, teamIdx) => {
             let bestDiff = -Infinity
             for (let qi = 0; qi < maxQ; qi++) {
               const scores = displayedQuarterScores.map(teamScores => 
@@ -1237,12 +1363,12 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
             return bestDiff
           }) : []
           
-          // 3팀: 승점으로 승자 결정, 4팀+: 최고 골득실
-          const bestDiffWinners = (!isMultiTeam || isThreeTeams) ? [] : (()=>{
+          // 승자 결정: 3팀 또는 4팀+ 매치업은 승점, 4팀+ 단일 경기장은 최고 골득실
+          const bestDiffWinners = (!isMultiTeam || isThreeTeams || isFourPlusWithMatchups) ? [] : (()=>{
             const maxBestDiff = Math.max(...bestGoalDiffs)
             return bestGoalDiffs.map((diff, i) => diff === maxBestDiff ? i : -1).filter(i => i >= 0)
           })()
-          const pointWinners = isThreeTeams ? (()=>{
+          const pointWinners = (isThreeTeams || isFourPlusWithMatchups) ? (()=>{
             if (unequalGP) {
               const maxWPts = Math.max(...points.weightedPts)
               return points.weightedPts.map((p,i)=>p===maxWPts?i:-1).filter(i=>i>=0)
@@ -1259,9 +1385,9 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                  <div className="text-[10px] text-gray-500">
                    <span className="inline-flex items-center gap-1">
                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    {isThreeTeams ? (unequalGP ? '가중 승점' : '승점') : (isMultiTeam ? '최고 골득실' : '게임승리')}
+                    {(isThreeTeams || isFourPlusWithMatchups) ? (unequalGP ? '가중 승점' : '승점') : (isMultiTeam ? '최고 골득실' : '게임승리')}
                    </span>
-                   {isThreeTeams && unequalGP && (
+                   {(isThreeTeams || isFourPlusWithMatchups) && unequalGP && (
                      <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-purple-300 bg-purple-50 px-1.5 py-0.5 text-purple-800" title={`각 팀의 최고 ${points.minGames}경기만 승점 비교`}>
                        ⚖︎ 가중 승점 적용
                      </span>
@@ -1276,10 +1402,10 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       <span key={qi} className="w-6 text-center">G{qi+1}</span>
                     ))}
                   </div>
-                  {isThreeTeams && <span className="w-10 text-center">승점</span>}
-                  {isThreeTeams && unequalGP && <span className="w-12 text-center">가중승점</span>}
+                  {(isThreeTeams || isFourPlusWithMatchups) && <span className="w-10 text-center">승점</span>}
+                  {(isThreeTeams || isFourPlusWithMatchups) && unequalGP && <span className="w-12 text-center">가중승점</span>}
                   {(!isMultiTeam) && <span className="w-8 text-center">승리</span>}
-                  {(!isThreeTeams && isMultiTeam) && <span className="w-12 text-center">최고득실</span>}
+                  {(!isThreeTeams && !isFourPlusWithMatchups && isMultiTeam) && <span className="w-12 text-center">최고득실</span>}
                   <span className="w-8 text-right">합계</span>
                 </div>
               </div>
@@ -1287,15 +1413,62 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               <div className="space-y-1">
                 {displayedQuarterScores.map((arr,ti)=>{
                   const teamTotal = teamTotals[ti]
-                  const isWinner = isThreeTeams
+                  
+                  // 승/무/패 결정
+                  let matchResult = null // 'W', 'D', 'L'
+                  if (isThreeTeams || isFourPlusWithMatchups) {
+                    // 승점 기반
+                    const topTeams = []
+                    if (unequalGP) {
+                      const maxWPts = Math.max(...points.weightedPts)
+                      points.weightedPts.forEach((p, i) => { if (p === maxWPts) topTeams.push(i) })
+                    } else {
+                      const maxPts = Math.max(...points.totalPts)
+                      points.totalPts.forEach((p, i) => { if (p === maxPts) topTeams.push(i) })
+                    }
+                    
+                    if (topTeams.length > 1 && topTeams.includes(ti)) {
+                      matchResult = 'D' // 공동 1등 무승부
+                    } else if (topTeams.length === 1 && topTeams.includes(ti)) {
+                      matchResult = 'W' // 단독 1등 승리
+                    } else {
+                      matchResult = 'L' // 패배
+                    }
+                  } else if (isMultiTeam) {
+                    // 최고 골득실 기반 (4팀+ 단일 경기장)
+                    const maxBestDiff = Math.max(...bestGoalDiffs)
+                    const topTeams = bestGoalDiffs.map((d, i) => d === maxBestDiff ? i : -1).filter(i => i >= 0)
+                    
+                    if (topTeams.length > 1 && topTeams.includes(ti)) {
+                      matchResult = 'D'
+                    } else if (topTeams.length === 1 && topTeams.includes(ti)) {
+                      matchResult = 'W'
+                    } else {
+                      matchResult = 'L'
+                    }
+                  } else {
+                    // 2팀 게임 승수 기반
+                    const maxTotal = Math.max(...teamTotals)
+                    const topTeams = teamTotals.map((t, i) => t === maxTotal ? i : -1).filter(i => i >= 0)
+                    
+                    if (topTeams.length > 1 && topTeams.includes(ti)) {
+                      matchResult = 'D'
+                    } else if (topTeams.length === 1 && topTeams.includes(ti)) {
+                      matchResult = 'W'
+                    } else {
+                      matchResult = 'L'
+                    }
+                  }
+                  
+                  const isWinner = (isThreeTeams || isFourPlusWithMatchups)
                     ? (pointWinners.length === 1 && pointWinners[0] === ti)
                     : (isMultiTeam 
                         ? (bestDiffWinners.length === 1 && bestDiffWinners[0] === ti)
                         : (winners.length === 1 && winners[0] === ti))
                   const quarterWins = allTeamQuarterWins[ti]
-                  const bestDiff = (!isThreeTeams && isMultiTeam) ? bestGoalDiffs[ti] : 0
-                  const totalPts = isThreeTeams ? points.totalPts[ti] : 0
-                  const thisWeightedPts = isThreeTeams && unequalGP ? points.weightedPts[ti] : 0
+                  const bestDiff = (!isThreeTeams && !isFourPlusWithMatchups && isMultiTeam) ? bestGoalDiffs[ti] : 0
+                  const totalPts = (isThreeTeams || isFourPlusWithMatchups) ? points.totalPts[ti] : 0
+                  const thisWeightedPts = (isThreeTeams || isFourPlusWithMatchups) && unequalGP ? points.weightedPts[ti] : 0
                   
                   // Calculate which quarters this team won
                   const wonQuarters = Array.from({length: maxQ}).map((_,qi) => {
@@ -1322,7 +1495,16 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   return (
                     <div key={ti} className={`flex items-center justify-between text-sm py-2 px-2 rounded ${isWinner ? 'bg-amber-100 font-medium' : 'bg-white'}`}>
                       <span className="flex items-center gap-2">
-                        팀 {ti+1}
+                        <span>팀 {ti+1}</span>
+                        {matchResult && (
+                          <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] font-bold ${
+                            matchResult === 'W' ? 'bg-blue-500 text-white' :
+                            matchResult === 'D' ? 'bg-gray-400 text-white' :
+                            'bg-red-100 text-red-600'
+                          }`}>
+                            {matchResult}
+                          </span>
+                        )}
                         {isWinner && <span className="text-amber-600">🏆</span>}
                       </span>
                       <div className="flex items-center gap-3">
@@ -1349,7 +1531,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                             )
                           })}
                         </div>
-                        {isThreeTeams ? (
+                        {(isThreeTeams || isFourPlusWithMatchups) ? (
                           <>
                             <div className="w-10 text-center">
                               <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-700`}>
@@ -1733,6 +1915,53 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
           <div className="mt-3">
             {/* Redesigned Game Scores Input - Mobile Optimized */}
             <div className="rounded-lg border-2 border-blue-100 p-2 sm:p-4 bg-gradient-to-br from-blue-50 to-white shadow-sm">
+              {/* 경기장 모드 토글 (4팀 이상일 때만 표시) */}
+              {teamLen >= 4 && (
+                <div className="mb-3 pb-3 border-b border-blue-200">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-medium text-gray-700">경기장 모드</div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => { 
+                          setMultiFieldMode(false); 
+                          setDirty(true);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          !multiFieldMode 
+                            ? 'bg-blue-500 text-white shadow-sm' 
+                            : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        🏟️ 단일 경기장
+                      </button>
+                      <button
+                        onClick={() => { 
+                          setMultiFieldMode(true);
+                          // gameMatchups 초기화 (각 게임마다 기본 매치업 설정)
+                          if (!gameMatchups || gameMatchups.length === 0) {
+                            const defaultMatchups = Array.from({length: maxQ || 1}, () => [[0, 1], [2, 3]]);
+                            setGameMatchups(defaultMatchups);
+                          }
+                          setDirty(true);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          multiFieldMode 
+                            ? 'bg-blue-500 text-white shadow-sm' 
+                            : 'bg-white text-gray-600 border border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        🏟️🏟️ 2개 경기장
+                      </button>
+                    </div>
+                  </div>
+                  {multiFieldMode && (
+                    <div className="mt-2 text-[10px] text-blue-600 bg-blue-50 px-2 py-1.5 rounded">
+                      💡 2개 경기장에서 동시에 경기 진행 시 각 경기장별로 점수를 입력하세요
+                    </div>
+                  )}
+                </div>
+              )}
+              
               <div className="flex items-center justify-between mb-2 sm:mb-3">
                 <div className="flex items-center gap-1 sm:gap-2">
                   <div className="text-sm sm:text-base font-semibold text-gray-800">게임 점수</div>
@@ -1744,6 +1973,11 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                     onClick={()=>{
                       const next = qs.map(arr => [...arr, 0])
                       setQuarterScores(next)
+                      // 2개 경기장 모드면 매치업도 추가
+                      if (multiFieldMode) {
+                        const nextMatchups = [...gameMatchups, [[0, 1], [2, 3]]]
+                        setGameMatchups(nextMatchups)
+                      }
                       setDirty(true)
                     }}
                   >+</button>
@@ -1755,6 +1989,11 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       const newLen = Math.max(0, maxQ - 1)
                       const next = qs.map(arr => arr.slice(0, newLen))
                       setQuarterScores(next)
+                      // 2개 경기장 모드면 매치업도 삭제
+                      if (multiFieldMode && gameMatchups.length > newLen) {
+                        const nextMatchups = gameMatchups.slice(0, newLen)
+                        setGameMatchups(nextMatchups)
+                      }
                       setDirty(true)
                     }}
                   >−</button>
@@ -1762,68 +2001,216 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               </div>
               
               <div className="flex flex-col gap-1.5 sm:gap-3">
-                {/* Header Row */}
-                <div className="flex items-center gap-1 sm:gap-2 pl-10 sm:pl-16">
-                  {Array.from({length: Math.max(1, maxQ)}).map((_,qi)=>(
-                    <div key={qi} className="w-14 sm:w-20 text-center">
-                      <div className="inline-flex items-center justify-center px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-blue-100 rounded-full">
-                        <span className="text-[10px] sm:text-xs font-bold text-blue-700">G{qi+1}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Team Rows */}
-                {draftTeams.map((_, ti) => {
-                  return (
-                    <div key={`qrow-${ti}`} className="flex items-center gap-1 sm:gap-2 bg-white rounded-lg p-1 sm:p-2 shadow-sm border border-gray-200">
-                      <div className="w-8 sm:w-12 flex items-center justify-center">
-                        <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">
-                          <span className="text-white font-bold text-xs sm:text-sm">{ti+1}</span>
+                {!multiFieldMode ? (
+                  <>
+                    {/* 단일 경기장 모드: 기존 UI */}
+                    {/* Header Row */}
+                    <div className="flex items-center gap-1 sm:gap-2 pl-10 sm:pl-16">
+                      {Array.from({length: Math.max(1, maxQ)}).map((_,qi)=>(
+                        <div key={qi} className="w-14 sm:w-20 text-center">
+                          <div className="inline-flex items-center justify-center px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-blue-100 rounded-full">
+                            <span className="text-[10px] sm:text-xs font-bold text-blue-700">G{qi+1}</span>
+                          </div>
                         </div>
-                      </div>
-                      
-                      {Array.from({length: Math.max(1, maxQ)}).map((_,qi)=>{
-                        const val = qs[ti][qi] ?? 0
-                        return (
-                          <div key={`qcell-${ti}-${qi}`} className="w-14 sm:w-20">
-                            <div className="flex items-center gap-0.5 sm:gap-1 justify-center bg-gray-50 rounded-lg p-1 sm:p-1.5 border border-gray-200">
-                              <button
-                                className="rounded-md bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-gray-600 hover:text-red-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 disabled:hover:text-gray-600 font-bold shadow-sm text-xs sm:text-base"
-                                title="점수 내리기"
-                                disabled={val <= 0}
-                                onClick={() => {
-                                  const next = qs.map(a=>a.slice())
-                                  next[ti][qi] = Math.max(0, val - 1)
-                                  setQuarterScores(next)
-                                  setDirty(true)
-                                }}
-                                aria-label="점수 -1"
-                              >−</button>
-                              
-                              <div className="w-6 sm:w-8 flex items-center justify-center">
-                                <span className="inline-block text-center select-none font-bold text-sm sm:text-base text-gray-800">{val}</span>
-                              </div>
-                              
-                              <button
-                                className="rounded-md bg-blue-500 hover:bg-blue-600 border border-blue-600 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-blue-500 font-bold shadow-sm text-xs sm:text-base"
-                                title="점수 올리기"
-                                disabled={val >= 99}
-                                onClick={() => {
-                                  const next = qs.map(a=>a.slice())
-                                  next[ti][qi] = Math.min(99, val + 1)
-                                  setQuarterScores(next)
-                                  setDirty(true)
-                                }}
-                                aria-label="점수 +1"
-                              >+</button>
+                      ))}
+                    </div>
+                    
+                    {/* Team Rows */}
+                    {draftTeams.map((_, ti) => {
+                      return (
+                        <div key={`qrow-${ti}`} className="flex items-center gap-1 sm:gap-2 bg-white rounded-lg p-1 sm:p-2 shadow-sm border border-gray-200">
+                          <div className="w-8 sm:w-12 flex items-center justify-center">
+                            <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">
+                              <span className="text-white font-bold text-xs sm:text-sm">{ti+1}</span>
                             </div>
                           </div>
-                        )
-                      })}
-                    </div>
-                  )
-                })}
+                          
+                          {Array.from({length: Math.max(1, maxQ)}).map((_,qi)=>{
+                            const val = qs[ti][qi] ?? 0
+                            return (
+                              <div key={`qcell-${ti}-${qi}`} className="w-14 sm:w-20">
+                                <div className="flex items-center gap-0.5 sm:gap-1 justify-center bg-gray-50 rounded-lg p-1 sm:p-1.5 border border-gray-200">
+                                  <button
+                                    className="rounded-md bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-gray-600 hover:text-red-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 disabled:hover:text-gray-600 font-bold shadow-sm text-xs sm:text-base"
+                                    title="점수 내리기"
+                                    disabled={val <= 0}
+                                    onClick={() => {
+                                      const next = qs.map(a=>a.slice())
+                                      next[ti][qi] = Math.max(0, val - 1)
+                                      setQuarterScores(next)
+                                      setDirty(true)
+                                    }}
+                                    aria-label="점수 -1"
+                                  >−</button>
+                                  
+                                  <div className="w-6 sm:w-8 flex items-center justify-center">
+                                    <span className="inline-block text-center select-none font-bold text-sm sm:text-base text-gray-800">{val}</span>
+                                  </div>
+                                  
+                                  <button
+                                    className="rounded-md bg-blue-500 hover:bg-blue-600 border border-blue-600 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-blue-500 font-bold shadow-sm text-xs sm:text-base"
+                                    title="점수 올리기"
+                                    disabled={val >= 99}
+                                    onClick={() => {
+                                      const next = qs.map(a=>a.slice())
+                                      next[ti][qi] = Math.min(99, val + 1)
+                                      setQuarterScores(next)
+                                      setDirty(true)
+                                    }}
+                                    aria-label="점수 +1"
+                                  >+</button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    })}
+                  </>
+                ) : (
+                  <>
+                    {/* 2개 경기장 모드: 새로운 UI */}
+                    {Array.from({length: Math.max(1, maxQ)}).map((_,qi)=>{
+                      // 현재 게임의 매치업 가져오기 또는 기본값 설정
+                      const currentMatchup = gameMatchups[qi] || [[0, 1], [2, 3]]
+                      const fieldA = currentMatchup[0] || [0, 1]
+                      const fieldB = currentMatchup[1] || [2, 3]
+                      
+                      // 매치업 업데이트 함수
+                      const updateMatchup = (fieldIndex, positionIndex, newTeamIndex) => {
+                        const nextMatchups = [...gameMatchups]
+                        if (!nextMatchups[qi]) nextMatchups[qi] = [[0, 1], [2, 3]]
+                        nextMatchups[qi][fieldIndex][positionIndex] = newTeamIndex
+                        setGameMatchups(nextMatchups)
+                        setDirty(true)
+                      }
+                      
+                      return (
+                      <div key={`game-${qi}`} className="bg-white rounded-lg border-2 border-blue-200 p-2 sm:p-3">
+                        {/* 게임 헤더 */}
+                        <div className="flex items-center justify-center mb-2">
+                          <div className="inline-flex items-center justify-center px-2.5 py-1 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full">
+                            <span className="text-xs sm:text-sm font-bold text-white">G{qi+1}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {/* 경기장 A */}
+                          <div className="bg-gradient-to-br from-emerald-50 to-green-50 rounded-lg p-2 border border-emerald-200">
+                            <div className="text-center mb-2">
+                              <span className="inline-block px-2 py-0.5 bg-emerald-500 text-white text-[10px] font-bold rounded">경기장 A</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {[0, 1].map((position) => {
+                                const teamIdx = fieldA[position]
+                                const val = qs[teamIdx]?.[qi] ?? 0
+                                return (
+                                  <div key={`fieldA-${position}`} className="bg-white rounded p-1.5 border border-emerald-300">
+                                    {/* 팀 선택 드롭다운 */}
+                                    <select
+                                      className="w-full text-[10px] text-center text-gray-700 font-medium mb-1 bg-emerald-50 border border-emerald-300 rounded px-1 py-0.5 cursor-pointer hover:bg-emerald-100"
+                                      value={teamIdx}
+                                      onChange={(e) => updateMatchup(0, position, Number(e.target.value))}
+                                    >
+                                      {draftTeams.map((_, ti) => (
+                                        <option key={ti} value={ti}>팀 {ti + 1}</option>
+                                      ))}
+                                    </select>
+                                    <div className="flex items-center gap-0.5 justify-center">
+                                      <button
+                                        className="rounded bg-white border border-gray-300 hover:bg-red-50 w-5 h-5 flex items-center justify-center text-gray-600 hover:text-red-600 transition-all disabled:opacity-30 font-bold text-xs"
+                                        disabled={val <= 0}
+                                        onClick={() => {
+                                          const next = qs.map(a=>a.slice())
+                                          next[teamIdx][qi] = Math.max(0, val - 1)
+                                          setQuarterScores(next)
+                                          setDirty(true)
+                                        }}
+                                      >−</button>
+                                      <div className="w-8 flex items-center justify-center">
+                                        <span className="font-bold text-sm text-gray-800">{val}</span>
+                                      </div>
+                                      <button
+                                        className="rounded bg-emerald-500 hover:bg-emerald-600 w-5 h-5 flex items-center justify-center text-white transition-all disabled:opacity-30 font-bold text-xs"
+                                        disabled={val >= 99}
+                                        onClick={() => {
+                                          const next = qs.map(a=>a.slice())
+                                          next[teamIdx][qi] = Math.min(99, val + 1)
+                                          setQuarterScores(next)
+                                          setDirty(true)
+                                        }}
+                                      >+</button>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                            <div className="text-[9px] text-center text-emerald-700 mt-1.5 font-medium">
+                              팀{fieldA[0]+1} vs 팀{fieldA[1]+1}
+                            </div>
+                          </div>
+                          
+                          {/* 경기장 B */}
+                          {teamLen >= 4 && (
+                            <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg p-2 border border-purple-200">
+                              <div className="text-center mb-2">
+                                <span className="inline-block px-2 py-0.5 bg-purple-500 text-white text-[10px] font-bold rounded">경기장 B</span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                {[0, 1].map((position) => {
+                                  const teamIdx = fieldB[position]
+                                  const val = qs[teamIdx]?.[qi] ?? 0
+                                  return (
+                                    <div key={`fieldB-${position}`} className="bg-white rounded p-1.5 border border-purple-300">
+                                      {/* 팀 선택 드롭다운 */}
+                                      <select
+                                        className="w-full text-[10px] text-center text-gray-700 font-medium mb-1 bg-purple-50 border border-purple-300 rounded px-1 py-0.5 cursor-pointer hover:bg-purple-100"
+                                        value={teamIdx}
+                                        onChange={(e) => updateMatchup(1, position, Number(e.target.value))}
+                                      >
+                                        {draftTeams.map((_, ti) => (
+                                          <option key={ti} value={ti}>팀 {ti + 1}</option>
+                                        ))}
+                                      </select>
+                                      <div className="flex items-center gap-0.5 justify-center">
+                                        <button
+                                          className="rounded bg-white border border-gray-300 hover:bg-red-50 w-5 h-5 flex items-center justify-center text-gray-600 hover:text-red-600 transition-all disabled:opacity-30 font-bold text-xs"
+                                          disabled={val <= 0}
+                                          onClick={() => {
+                                            const next = qs.map(a=>a.slice())
+                                            next[teamIdx][qi] = Math.max(0, val - 1)
+                                            setQuarterScores(next)
+                                            setDirty(true)
+                                          }}
+                                        >−</button>
+                                        <div className="w-8 flex items-center justify-center">
+                                          <span className="font-bold text-sm text-gray-800">{val}</span>
+                                        </div>
+                                        <button
+                                          className="rounded bg-purple-500 hover:bg-purple-600 w-5 h-5 flex items-center justify-center text-white transition-all disabled:opacity-30 font-bold text-xs"
+                                          disabled={val >= 99}
+                                          onClick={() => {
+                                            const next = qs.map(a=>a.slice())
+                                            next[teamIdx][qi] = Math.min(99, val + 1)
+                                            setQuarterScores(next)
+                                            setDirty(true)
+                                          }}
+                                        >+</button>
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                              <div className="text-[9px] text-center text-purple-700 mt-1.5 font-medium">
+                                팀{fieldB[0]+1} vs 팀{fieldB[1]+1}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )})}
+                  </>
+                )}
               </div>
               
               {/* Quick Actions - Hidden on mobile, shown on larger screens */}
@@ -1854,7 +2241,9 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                 // save snapshot + draft info + draft mode
                 const patch = { 
                   snapshot: draftSnap, 
-                  attendeeIds: draftSnap.flat()
+                  attendeeIds: draftSnap.flat(),
+                  multiField: multiFieldMode, // 2개 경기장 모드 저장
+                  gameMatchups: multiFieldMode ? gameMatchups : undefined // 매치업 정보 저장
                 }
                 
                 if (localDraftMode) {

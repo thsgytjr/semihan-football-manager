@@ -358,9 +358,11 @@ export function extractMatchTS(m) {
  * @deprecated Use MatchHelpers.getWinnerIndex instead (for new code)
  * 
  * 2팀 경기: 쿼터 승수 → 총득점
- * 3팀+ 경기: 각 팀의 최고 골득실 비교 → 총득점
+ * 3팀 경기: 승점제 (고정 패턴)
+ * 4팀+ 경기 (단일 경기장): 각 팀의 최고 골득실 비교
+ * 4팀+ 경기 (2개 경기장): 매치업 기반 승점제
  */
-export function winnerIndexFromQuarterScores(qs) {
+export function winnerIndexFromQuarterScores(qs, gameMatchups = null) {
   // ⚠️ 이 함수는 복잡한 로직이 있어서 헬퍼로 대체하지 않음
   // MatchHelpers.getWinnerIndex는 단순 총점 비교만 하므로 다름
   // 기존 로직 유지 (쿼터 승수, 골득실 등 고려)
@@ -474,7 +476,63 @@ export function winnerIndexFromQuarterScores(qs) {
     return -1
   }
   
-  // 4팀 이상: 기존 로직 유지 (각 팀의 최고 골득실 비교)
+  // 4팀 이상 + 매치업 정보가 있는 경우 (2개 경기장 모드): 승점제
+  if (teamLen >= 4 && gameMatchups && Array.isArray(gameMatchups) && gameMatchups.length > 0) {
+    const teamGamePoints = Array.from({ length: teamLen }, () => [])
+    const gamesPlayed = Array.from({ length: teamLen }, () => 0)
+    
+    for (let qi = 0; qi < maxQ; qi++) {
+      const matchup = gameMatchups[qi]
+      if (!matchup || !Array.isArray(matchup)) continue
+      
+      // 각 경기장별로 승점 계산
+      for (const pair of matchup) {
+        if (!Array.isArray(pair) || pair.length !== 2) continue
+        const [a, b] = pair
+        if (a === undefined || b === undefined || a < 0 || b < 0 || a >= teamLen || b >= teamLen) continue
+        
+        const aScore = Number(qs[a]?.[qi] ?? 0)
+        const bScore = Number(qs[b]?.[qi] ?? 0)
+        
+        gamesPlayed[a] += 1
+        gamesPlayed[b] += 1
+        
+        let aPts = 0, bPts = 0
+        if (aScore > bScore) { aPts = 3; bPts = 0 }
+        else if (bScore > aScore) { aPts = 0; bPts = 3 }
+        else { aPts = 1; bPts = 1 }
+        
+        teamGamePoints[a].push(aPts)
+        teamGamePoints[b].push(bPts)
+      }
+    }
+    
+    const allEqualGames = gamesPlayed.every(g => g === gamesPlayed[0] && g > 0)
+    
+    if (allEqualGames) {
+      // 모든 팀이 같은 경기 수 → 총 승점으로 비교
+      const totalPoints = teamGamePoints.map(pts => pts.reduce((a,b)=>a+b, 0))
+      const maxPts = Math.max(...totalPoints)
+      const winners = totalPoints.map((p,i)=>p===maxPts?i:-1).filter(i=>i>=0)
+      return winners.length === 1 ? winners[0] : -1
+    }
+    
+    // 게임 수가 다른 경우: 가중 승점
+    const minGames = Math.min(...gamesPlayed.filter(g => g > 0))
+    if (minGames > 0) {
+      const weightedPoints = teamGamePoints.map(pts => {
+        if (pts.length === 0) return 0
+        const sorted = [...pts].sort((a,b) => b - a)
+        return sorted.slice(0, minGames).reduce((a,b) => a + b, 0)
+      })
+      
+      const maxWPts = Math.max(...weightedPoints)
+      const winners = weightedPoints.map((p,i)=>p===maxWPts?i:-1).filter(i=>i>=0)
+      return winners.length === 1 ? winners[0] : -1
+    }
+  }
+  
+  // 4팀 이상 (단일 경기장 또는 매치업 없음): 기존 로직 유지 (각 팀의 최고 골득실 비교)
   const bestGoalDiffs = Array.from({ length: teamLen }, () => -Infinity)
   for (let qi = 0; qi < maxQ; qi++) {
     const scores = qs.map(arr => Array.isArray(arr) ? Number(arr[qi] || 0) : 0)
@@ -512,14 +570,38 @@ export function computeDraftPlayerStatsRows(players = [], matches = []) {
   
   for (const m of validMatches) {
     const qs = coerceQuarterScores(m)
-    const winnerIdx = winnerIndexFromQuarterScores(qs)
+    const gameMatchups = m?.gameMatchups || null
+    const winnerIdx = winnerIndexFromQuarterScores(qs, gameMatchups)
     const teams = extractSnapshotTeams(m)
     if (teams.length === 0) continue
 
-    const isDraw = winnerIdx < 0
+    // 공동 1등 처리: 최고 점수를 받은 팀들 찾기
+    const topTeams = new Set()
+    if (winnerIdx < 0) {
+      // winnerIdx가 -1이면 공동 1등이 있다는 의미
+      // 실제로 최고 점수를 받은 팀 인덱스들을 찾아야 함
+      const totals = qs.map(arr => (Array.isArray(arr) ? arr.reduce((a, b) => a + Number(b || 0), 0) : 0))
+      const maxTotal = Math.max(...totals)
+      totals.forEach((total, idx) => {
+        if (total === maxTotal) topTeams.add(idx)
+      })
+    } else {
+      topTeams.add(winnerIdx)
+    }
+    
     const matchTS = extractMatchTS(m)
     for (let ti = 0; ti < teams.length; ti++) {
-      const result = isDraw ? 'D' : (ti === winnerIdx ? 'W' : 'L')
+      let result
+      if (topTeams.size > 1 && topTeams.has(ti)) {
+        // 공동 1등인 경우 무승부
+        result = 'D'
+      } else if (topTeams.size === 1 && topTeams.has(ti)) {
+        // 단독 1등인 경우 승리
+        result = 'W'
+      } else {
+        // 나머지는 패배
+        result = 'L'
+      }
 
       for (const pid of teams[ti]) {
         // last5 기록 업데이트
@@ -643,17 +725,40 @@ export function computeCaptainStatsRows(players = [], matches = []) {
   
   for (const m of validMatches) {
     const qs = coerceQuarterScores(m)
-    const winnerIdx = winnerIndexFromQuarterScores(qs)
+    const gameMatchups = m?.gameMatchups || null
+    const winnerIdx = winnerIndexFromQuarterScores(qs, gameMatchups)
     const isDraw = winnerIdx < 0
     const caps = extractCaptainsByTeam(m)
     if (!Array.isArray(caps) || caps.length === 0) continue
+
+    // 공동 1등 처리: 최고 점수를 받은 팀들 찾기
+    const topTeams = new Set()
+    if (winnerIdx < 0) {
+      const totals = qs.map(arr => (Array.isArray(arr) ? arr.reduce((a, b) => a + Number(b || 0), 0) : 0))
+      const maxTotal = Math.max(...totals)
+      totals.forEach((total, idx) => {
+        if (total === maxTotal) topTeams.add(idx)
+      })
+    } else {
+      topTeams.add(winnerIdx)
+    }
 
     const matchTS = extractMatchTS(m)
     for (let ti = 0; ti < caps.length; ti++) {
       const pid = toStr(caps[ti])
       if (!pid) continue
 
-      const result = isDraw ? 'D' : (ti === winnerIdx ? 'W' : 'L')
+      let result
+      if (topTeams.size > 1 && topTeams.has(ti)) {
+        // 공동 1등인 경우 무승부
+        result = 'D'
+      } else if (topTeams.size === 1 && topTeams.has(ti)) {
+        // 단독 1등인 경우 승리
+        result = 'W'
+      } else {
+        // 나머지는 패배
+        result = 'L'
+      }
 
       // last5 기록 업데이트
       const list = last5Map.get(pid) || []

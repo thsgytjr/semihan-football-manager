@@ -48,6 +48,8 @@ function toAppFormat(row) {
     quarterScores: row.quarterScores || row.quarter_scores || null, // 쿼터 점수
     teamColors: row.teamColors || row.team_colors || null, // 팀 색상 설정
     fees: row.fees || null, // 📊 비용 정보 추가
+    multiField: row.multiField || row.multi_field || false, // 2개 경기장 모드
+    gameMatchups: row.gameMatchups || row.game_matchups || null, // 게임별 매치업
     created_at: row.created_at,
     updated_at: row.updated_at,
   }
@@ -86,6 +88,8 @@ function toDbFormat(match, userId = null) {
     quarterScores: match.quarterScores ?? null, // 쿼터 점수
     teamColors: match.teamColors ?? null, // 팀 색상 설정
     fees: match.fees ?? null, // 📊 비용 정보 추가
+    multiField: match.multiField ?? false, // 2개 경기장 모드
+    gameMatchups: match.gameMatchups ?? null, // 게임별 매치업
   }
 }
 
@@ -132,6 +136,18 @@ export async function updateMatchInDB(matchId, patch) {
     if ('quarterScores' in patch) payload.quarterScores = patch.quarterScores // 쿼터 점수
     if ('teamColors' in patch) payload.teamColors = patch.teamColors // 팀 색상 설정
     if ('fees' in patch) payload.fees = patch.fees // 📊 비용 정보 추가
+    if ('multiField' in patch) payload.multiField = patch.multiField // 2개 경기장 모드
+    if ('gameMatchups' in patch) payload.gameMatchups = patch.gameMatchups // 게임별 매치업
+    
+    console.log('🔍 updateMatchInDB payload:', {
+      matchId,
+      hasMultiField: 'multiField' in patch,
+      multiFieldValue: patch.multiField,
+      hasGameMatchups: 'gameMatchups' in patch,
+      gameMatchupsValue: patch.gameMatchups,
+      payloadMultiField: payload.multiField,
+      payloadGameMatchups: payload.gameMatchups
+    })
     
     payload.updated_at = new Date().toISOString()
 
