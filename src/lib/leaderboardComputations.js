@@ -370,7 +370,7 @@ export function winnerIndexFromQuarterScores(qs) {
   const maxQ = Math.max(0, ...qs.map(a => Array.isArray(a) ? a.length : 0))
   const totals = qs.map(arr => (Array.isArray(arr) ? arr.reduce((a, b) => a + Number(b || 0), 0) : 0))
   
-  // 2팀 경기: 기존 로직 (쿼터 승수 비교)
+  // 2팀 경기: 기존 로직 (게임 승수 비교)
   if (teamLen === 2) {
     const wins = Array.from({ length: teamLen }, () => 0)
     
@@ -391,37 +391,105 @@ export function winnerIndexFromQuarterScores(qs) {
     return final.length === 1 ? final[0] : -1
   }
   
-  // 3팀+ 경기: 각 팀의 최고 골득실 비교
-  const bestGoalDiffs = Array.from({ length: teamLen }, () => -Infinity)
+  // 3팀 경기: 승점제로 승자 결정 (패턴: G1 0vs1, G2 1vs2, G3 0vs2, 반복)
+  if (teamLen === 3) {
+    const pairs = [ [0,1], [1,2], [0,2] ]
+    
+    // 각 팀별로 각 게임의 승점을 기록 (나중에 가중 승점 계산 시 필요)
+    const teamGamePoints = [[], [], []]
+    const gamesPlayed = [0, 0, 0]
+    
+    for (let qi = 0; qi < maxQ; qi++) {
+      const [a, b] = pairs[qi % 3]
+      const aScore = Number(qs[a]?.[qi] ?? 0)
+      const bScore = Number(qs[b]?.[qi] ?? 0)
+      
+      gamesPlayed[a] += 1
+      gamesPlayed[b] += 1
+      
+      let aPts = 0, bPts = 0
+      if (aScore > bScore) { aPts = 3; bPts = 0 }
+      else if (bScore > aScore) { aPts = 0; bPts = 3 }
+      else { aPts = 1; bPts = 1 }
+      
+      teamGamePoints[a].push(aPts)
+      teamGamePoints[b].push(bPts)
+    }
+
+    const allEqualGames = gamesPlayed.every(g => g === gamesPlayed[0])
+    
+    if (allEqualGames) {
+      // 모든 팀이 같은 경기 수 → 총 승점으로 비교
+      const totalPoints = teamGamePoints.map(pts => pts.reduce((a,b)=>a+b, 0))
+      const maxPts = Math.max(...totalPoints)
+      const winners = totalPoints.map((p,i)=>p===maxPts?i:-1).filter(i=>i>=0)
+      return winners.length === 1 ? winners[0] : -1
+    }
+
+    // 게임 수가 다른 경우: 가중 승점 (Weighted Points)
+    // 최소 게임 수에 맞춰 각 팀의 최고 성적 게임만 선택
+    const minGames = Math.min(...gamesPlayed)
+    const weightedPoints = teamGamePoints.map(pts => {
+      if (pts.length === 0) return 0
+      // 각 팀의 게임별 승점을 내림차순 정렬 후 상위 minGames개만 합산
+      const sorted = [...pts].sort((a,b) => b - a)
+      return sorted.slice(0, minGames).reduce((a,b) => a + b, 0)
+    })
+    
+    const maxWPts = Math.max(...weightedPoints)
+    let candidates = weightedPoints.map((p,i)=>p===maxWPts?i:-1).filter(i=>i>=0)
+    if (candidates.length === 1) return candidates[0]
+
+    // 동률이면 타이브레이커 1: 동률 팀들 간 맞대결(H2H) 승점 비교
+    if (candidates.length === 2) {
+      const [x, y] = candidates
+      let h2hX = 0, h2hY = 0
+      for (let qi = 0; qi < maxQ; qi++) {
+        const [a, b] = pairs[qi % 3]
+        if ((a === x && b === y) || (a === y && b === x)) {
+          const xScore = Number(qs[x]?.[qi] ?? 0)
+          const yScore = Number(qs[y]?.[qi] ?? 0)
+          if (xScore > yScore) h2hX += 3
+          else if (yScore > xScore) h2hY += 3
+          else { h2hX += 1; h2hY += 1 }
+        }
+      }
+      if (h2hX !== h2hY) return h2hX > h2hY ? x : y
+
+      // 타이브레이커 2: H2H 골득실 비교
+      let gdX = 0, gdY = 0
+      for (let qi = 0; qi < maxQ; qi++) {
+        const [a, b] = pairs[qi % 3]
+        if ((a === x && b === y) || (a === y && b === x)) {
+          const xScore = Number(qs[x]?.[qi] ?? 0)
+          const yScore = Number(qs[y]?.[qi] ?? 0)
+          gdX += (xScore - yScore)
+          gdY += (yScore - xScore)
+        }
+      }
+      if (gdX !== gdY) return gdX > gdY ? x : y
+    }
+
+    // 여전히 동률이면 단일 승자를 결정하지 않음
+    return -1
+  }
   
-  // 각 쿼터에서 골득실 계산
+  // 4팀 이상: 기존 로직 유지 (각 팀의 최고 골득실 비교)
+  const bestGoalDiffs = Array.from({ length: teamLen }, () => -Infinity)
   for (let qi = 0; qi < maxQ; qi++) {
     const scores = qs.map(arr => Array.isArray(arr) ? Number(arr[qi] || 0) : 0)
-    
-    // 이 쿼터에서 각 팀의 골득실 계산 (상대팀 평균과 비교)
-    // 상대 팀들의 평균 득점
     for (let ti = 0; ti < teamLen; ti++) {
       const myScore = scores[ti]
       const opponentScores = scores.filter((_, idx) => idx !== ti)
       const avgOpponent = opponentScores.length > 0 
         ? opponentScores.reduce((a, b) => a + b, 0) / opponentScores.length 
         : 0
-      
       const goalDiff = myScore - avgOpponent
-      
-      if (goalDiff > bestGoalDiffs[ti]) {
-        bestGoalDiffs[ti] = goalDiff
-      }
+      if (goalDiff > bestGoalDiffs[ti]) bestGoalDiffs[ti] = goalDiff
     }
   }
-  
-  // 1단계: 최고 골득실이 가장 높은 팀 찾기
   const maxBestDiff = Math.max(...bestGoalDiffs)
-  let candidates = bestGoalDiffs.map((diff, i) => diff === maxBestDiff ? i : -1).filter(i => i >= 0)
-  
-  // 골득실 동률이면 무승부 (여러 팀이 같은 최고 골득실)
-  if (candidates.length > 1) return -1
-  
+  const candidates = bestGoalDiffs.map((diff, i) => diff === maxBestDiff ? i : -1).filter(i => i >= 0)
   return candidates.length === 1 ? candidates[0] : -1
 }
 

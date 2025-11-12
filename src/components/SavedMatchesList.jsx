@@ -990,33 +990,84 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
         ) : null}
       </div>
 
-      {/* 실시간 골득실 현황판 (3팀 이상, 드래프트 모드, 편집 모드에서만 표시) */}
+      {/* 실시간 결과 현황판 (3팀 이상, 드래프트 모드, 편집 모드에서만 표시) */}
       {isDraftMode && quarterScores && quarterScores.length >= 3 && !displayedQuarterScores && (
         (() => {
           const teamCount = quarterScores.length
-          const currentScores = quarterScores.map((_, teamIdx) => {
-            let bestDiff = -Infinity
-            let currentTotal = 0
-            const quarters = quarterScores[teamIdx] || []
-            
-            quarters.forEach((score, qi) => {
-              const qScores = quarterScores.map(t => Number(t[qi] || 0))
-              const myScore = Number(score || 0)
-              currentTotal += myScore
-              
-              const opponentScores = qScores.filter((_, idx) => idx !== teamIdx)
-              const avgOpponent = opponentScores.length > 0 
-                ? opponentScores.reduce((a, b) => a + b, 0) / opponentScores.length 
-                : 0
-              const goalDiff = myScore - avgOpponent
-              if (goalDiff > bestDiff) bestDiff = goalDiff
-            })
-            
-            return { bestDiff, total: currentTotal }
-          })
+          const isThreeTeams = teamCount === 3
+          let leaders = []
+          let currentStats = []
           
-          const maxBestDiff = Math.max(...currentScores.map(s => s.bestDiff))
-          const leaders = currentScores.map((s, i) => s.bestDiff === maxBestDiff ? i : -1).filter(i => i >= 0)
+          if (isThreeTeams) {
+            // 승점 계산: G1 0vs1, G2 1vs2, G3 0vs2 반복
+            const pairs = [[0,1],[1,2],[0,2]]
+            const teamGamePoints = [[],[],[]]
+            const gamesPlayed = [0,0,0]
+            const totals = [0,0,0]
+            const maxQ = Math.max(0, ...quarterScores.map(a=>Array.isArray(a)?a.length:0))
+            for (let qi=0; qi<maxQ; qi++){
+              const [a,b] = pairs[qi%3]
+              const aScore = Number(quarterScores[a]?.[qi] ?? 0)
+              const bScore = Number(quarterScores[b]?.[qi] ?? 0)
+              totals[a]+=aScore; totals[b]+=bScore
+              gamesPlayed[a]+=1; gamesPlayed[b]+=1
+              
+              let aPts = 0, bPts = 0
+              if(aScore>bScore){ aPts=3; bPts=0 } 
+              else if(bScore>aScore){ aPts=0; bPts=3 } 
+              else { aPts=1; bPts=1 }
+              
+              teamGamePoints[a].push(aPts)
+              teamGamePoints[b].push(bPts)
+            }
+            const unequalGP = gamesPlayed.some(g=>g!==gamesPlayed[0])
+            const totalPoints = teamGamePoints.map(pts => pts.reduce((a,b)=>a+b, 0))
+            
+            let weightedPoints = totalPoints
+            let minGames = 0
+            if (unequalGP) {
+              minGames = Math.min(...gamesPlayed)
+              weightedPoints = teamGamePoints.map(pts => {
+                if (pts.length === 0) return 0
+                const sorted = [...pts].sort((a,b) => b - a)
+                return sorted.slice(0, minGames).reduce((a,b) => a + b, 0)
+              })
+              const maxWPts = Math.max(...weightedPoints)
+              leaders = weightedPoints.map((p,i)=>p===maxWPts?i:-1).filter(i=>i>=0)
+            } else {
+              const maxPts = Math.max(...totalPoints)
+              leaders = totalPoints.map((p,i)=>p===maxPts?i:-1).filter(i=>i>=0)
+            }
+            currentStats = teamGamePoints.map((pts,i)=>({ 
+              totalPoints: totalPoints[i], 
+              weightedPoints: weightedPoints[i],
+              total: totals[i], 
+              gp: gamesPlayed[i],
+              gamePoints: pts,
+              minGames
+            }))
+          } else {
+            // 4팀 이상: 최고 골득실 유지
+            currentStats = quarterScores.map((_, teamIdx) => {
+              let bestDiff = -Infinity
+              let currentTotal = 0
+              const quarters = quarterScores[teamIdx] || []
+              quarters.forEach((score, qi) => {
+                const qScores = quarterScores.map(t => Number(t[qi] || 0))
+                const myScore = Number(score || 0)
+                currentTotal += myScore
+                const opponentScores = qScores.filter((_, idx) => idx !== teamIdx)
+                const avgOpponent = opponentScores.length > 0 
+                  ? opponentScores.reduce((a, b) => a + b, 0) / opponentScores.length 
+                  : 0
+                const goalDiff = myScore - avgOpponent
+                if (goalDiff > bestDiff) bestDiff = goalDiff
+              })
+              return { bestDiff, total: currentTotal }
+            })
+            const maxBestDiff = Math.max(...currentStats.map(s => s.bestDiff))
+            leaders = currentStats.map((s, i) => s.bestDiff === maxBestDiff ? i : -1).filter(i => i >= 0)
+          }
           
           return (
             <div className="mb-3 rounded-lg border-2 border-blue-300 bg-gradient-to-br from-blue-50 to-indigo-50 p-3 shadow-sm">
@@ -1027,15 +1078,25 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   </div>
                   <span className="text-xs font-bold text-blue-900">경기 결과</span>
                 </div>
-                <div className="text-[10px] text-blue-700 font-medium">
-                  {leaders.length > 1 ? '동률!' : `팀${leaders[0] + 1} 승리`}
+                <div className="flex items-center gap-2">
+                  {isThreeTeams && (()=>{
+                    const unequal = currentStats.some(s=>s.gp!==currentStats[0].gp)
+                    const minGames = unequal ? Math.min(...currentStats.map(s=>s.gp)) : 0
+                    return unequal ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-purple-300 bg-purple-50 px-2 py-0.5 text-[10px] text-purple-800" title={`팀별 경기수가 달라 가중 승점 적용: 각 팀의 최고 성적 ${minGames}경기만 비교`}>
+                        가중 승점 적용
+                      </span>
+                    ) : null
+                  })()}
+                  <div className="text-[10px] text-blue-700 font-medium">
+                    {leaders.length > 1 ? '동률!' : `팀${leaders[0] + 1} 승리`}
+                  </div>
                 </div>
               </div>
               
               <div className="space-y-1.5">
-                {currentScores.map((score, ti) => {
+                {currentStats.map((score, ti) => {
                   const isLeader = leaders.includes(ti)
-                  const bestDiff = score.bestDiff === -Infinity ? 0 : score.bestDiff
                   
                   return (
                     <div 
@@ -1054,16 +1115,27 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       </div>
                       
                       <div className="flex items-center gap-3">
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
-                          bestDiff > 0 ? 'bg-blue-100 text-blue-700' :
-                          bestDiff < 0 ? 'bg-red-100 text-red-700' :
-                          'bg-gray-100 text-gray-600'
-                        }`}>
-                          골득실 {bestDiff > 0 ? '+' : ''}{bestDiff.toFixed(1)}
-                        </span>
-                        <span className="text-xs text-gray-600">
-                          총 {score.total}골
-                        </span>
+                        {isThreeTeams ? (
+                          <>
+                            <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
+                              승점 {score.totalPoints}
+                            </span>
+                            {score.gp && (currentStats.some(s=>s.gp!==currentStats[0].gp)) && (
+                              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-purple-100 text-purple-700" title={`${score.gp}경기 중 최고 성적 ${score.minGames}경기 = ${score.weightedPoints}점`}>
+                                가중 {score.weightedPoints}점
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                            (score.bestDiff ?? 0) > 0 ? 'bg-blue-100 text-blue-700' :
+                            (score.bestDiff ?? 0) < 0 ? 'bg-red-100 text-red-700' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>
+                            골득실 {(score.bestDiff ?? 0) > 0 ? '+' : ''}{((score.bestDiff ?? 0)).toFixed(1)}
+                          </span>
+                        )}
+                        <span className="text-xs text-gray-600">총 {score.total}골</span>
                       </div>
                     </div>
                   )
@@ -1071,14 +1143,23 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               </div>
               
               <div className="mt-2 text-[10px] text-blue-600 text-center">
-                💡 각 팀의 최고 골득실로 승자를 결정합니다
+                {isThreeTeams 
+                  ? (currentStats.some(s=>s.gp!==currentStats[0].gp)
+                      ? `💡 팀별 경기수가 다르면 각 팀의 최고 성적 ${currentStats[0].minGames}경기만 비교 (가중 승점)`
+                      : '💡 3팀일 때는 승점(승3·무1·패0)으로 승자를 결정합니다')
+                  : '💡 각 팀의 최고 골득실로 승자를 결정합니다'}
               </div>
+              {isThreeTeams && currentStats.some(s=>s.gp!==currentStats[0].gp) && (
+                <div className="mt-1 text-[10px] text-purple-700 text-center font-medium">
+                  예: T1과 T2가 3경기, T3가 2경기 → 모든 팀의 최고 2경기만 비교
+                </div>
+              )}
             </div>
           )
         })()
       )}
 
-      {/* 저장된 쿼터 점수 표시 (드래프트 모드일 때만) */}
+      {/* 저장된 게임 점수 표시 (드래프트 모드일 때만) */}
       {isDraftMode && displayedQuarterScores && (
         (() => {
           const maxQ = Math.max(...displayedQuarterScores.map(a=>Array.isArray(a)?a.length:1))
@@ -1087,6 +1168,45 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
           const winners = teamTotals.map((t,i)=>t===maxTotal?i:-1).filter(i=>i>=0)
           const teamCount = displayedQuarterScores.length
           const isMultiTeam = teamCount >= 3 // 3팀 이상 여부
+          const isThreeTeams = teamCount === 3
+          // 3팀: 승점 계산
+          const points = isThreeTeams ? (()=>{
+            const teamGamePoints = [[],[],[]]
+            const totalPts = [0,0,0]
+            const gp = [0,0,0]
+            const pairs=[[0,1],[1,2],[0,2]]
+            for(let qi=0; qi<maxQ; qi++){
+              const [a,b]=pairs[qi%3]
+              const aScore = Number(Array.isArray(displayedQuarterScores[a]) ? (displayedQuarterScores[a][qi] ?? 0) : (qi===0 ? (displayedQuarterScores[a]||0) : 0))
+              const bScore = Number(Array.isArray(displayedQuarterScores[b]) ? (displayedQuarterScores[b][qi] ?? 0) : (qi===0 ? (displayedQuarterScores[b]||0) : 0))
+              gp[a]+=1; gp[b]+=1
+              
+              let aPts = 0, bPts = 0
+              if(aScore>bScore) { aPts=3; bPts=0 }
+              else if(bScore>aScore) { aPts=0; bPts=3 }
+              else { aPts=1; bPts=1 }
+              
+              teamGamePoints[a].push(aPts)
+              teamGamePoints[b].push(bPts)
+              totalPts[a]+=aPts
+              totalPts[b]+=bPts
+            }
+            
+            let weightedPts = totalPts
+            const minGames = Math.min(...gp)
+            const unequalGP = gp.some(v=>v!==gp[0])
+            
+            if (unequalGP) {
+              weightedPts = teamGamePoints.map(pts => {
+                if (pts.length === 0) return 0
+                const sorted = [...pts].sort((a,b) => b - a)
+                return sorted.slice(0, minGames).reduce((a,b) => a + b, 0)
+              })
+            }
+            
+            return { totalPts, weightedPts, gp, minGames, teamGamePoints }
+          })() : []
+          const unequalGP = isThreeTeams ? points.gp.some(v=>v!==points.gp[0]) : false
           
           // Calculate quarter wins for each team
           const allTeamQuarterWins = displayedQuarterScores.map((_, teamIdx) => {
@@ -1099,8 +1219,8 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
             }).length
           })
           
-          // 3팀+: 각 팀의 최고 골득실 계산
-          const bestGoalDiffs = isMultiTeam ? displayedQuarterScores.map((_, teamIdx) => {
+          // 3팀+: 각 팀의 최고 골득실 계산 (4팀 이상에만 의미)
+          const bestGoalDiffs = (isMultiTeam && !isThreeTeams) ? displayedQuarterScores.map((_, teamIdx) => {
             let bestDiff = -Infinity
             for (let qi = 0; qi < maxQ; qi++) {
               const scores = displayedQuarterScores.map(teamScores => 
@@ -1117,35 +1237,49 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
             return bestDiff
           }) : []
           
-          // 3팀+: 최고 골득실로 승자 결정
-          const maxBestDiff = isMultiTeam ? Math.max(...bestGoalDiffs) : 0
-          const bestDiffWinners = isMultiTeam 
-            ? bestGoalDiffs.map((diff, i) => diff === maxBestDiff ? i : -1).filter(i => i >= 0)
-            : []
+          // 3팀: 승점으로 승자 결정, 4팀+: 최고 골득실
+          const bestDiffWinners = (!isMultiTeam || isThreeTeams) ? [] : (()=>{
+            const maxBestDiff = Math.max(...bestGoalDiffs)
+            return bestGoalDiffs.map((diff, i) => diff === maxBestDiff ? i : -1).filter(i => i >= 0)
+          })()
+          const pointWinners = isThreeTeams ? (()=>{
+            if (unequalGP) {
+              const maxWPts = Math.max(...points.weightedPts)
+              return points.weightedPts.map((p,i)=>p===maxWPts?i:-1).filter(i=>i>=0)
+            } else {
+              const maxPts = Math.max(...points.totalPts)
+              return points.totalPts.map((p,i)=>p===maxPts?i:-1).filter(i=>i>=0)
+            }
+          })() : []
           
           return (
             <div className="mb-3 rounded border border-gray-200 bg-gray-50 p-3">
-              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center justify-between mb-3">
                 <div className="text-xs font-medium text-gray-700">경기 결과</div>
-                <div className="text-[10px] text-gray-500">
-                  <span className="inline-flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                    {isMultiTeam ? '최고 골득실' : '쿼터승리'}
-                  </span>
-                </div>
-              </div>
-              
-              {/* 컬럼 헤더 */}
+                 <div className="text-[10px] text-gray-500">
+                   <span className="inline-flex items-center gap-1">
+                     <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    {isThreeTeams ? (unequalGP ? '가중 승점' : '승점') : (isMultiTeam ? '최고 골득실' : '게임승리')}
+                   </span>
+                   {isThreeTeams && unequalGP && (
+                     <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-purple-300 bg-purple-50 px-1.5 py-0.5 text-purple-800" title={`각 팀의 최고 ${points.minGames}경기만 승점 비교`}>
+                       ⚖︎ 가중 승점 적용
+                     </span>
+                   )}
+                 </div>
+              </div>              {/* 컬럼 헤더 */}
               <div className="flex items-center justify-between text-[10px] text-gray-500 mb-1 px-2">
                 <span>팀</span>
                 <div className="flex items-center gap-3">
                   <div className="flex gap-1">
                     {Array.from({length:maxQ}).map((_,qi)=>(
-                      <span key={qi} className="w-6 text-center">Q{qi+1}</span>
+                      <span key={qi} className="w-6 text-center">G{qi+1}</span>
                     ))}
                   </div>
-                  {isMultiTeam && <span className="w-12 text-center">최고득실</span>}
-                  {!isMultiTeam && <span className="w-8 text-center">승리</span>}
+                  {isThreeTeams && <span className="w-10 text-center">승점</span>}
+                  {isThreeTeams && unequalGP && <span className="w-12 text-center">가중승점</span>}
+                  {(!isMultiTeam) && <span className="w-8 text-center">승리</span>}
+                  {(!isThreeTeams && isMultiTeam) && <span className="w-12 text-center">최고득실</span>}
                   <span className="w-8 text-right">합계</span>
                 </div>
               </div>
@@ -1153,11 +1287,15 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               <div className="space-y-1">
                 {displayedQuarterScores.map((arr,ti)=>{
                   const teamTotal = teamTotals[ti]
-                  const isWinner = isMultiTeam 
-                    ? (bestDiffWinners.length === 1 && bestDiffWinners[0] === ti)
-                    : (winners.length === 1 && winners[0] === ti)
+                  const isWinner = isThreeTeams
+                    ? (pointWinners.length === 1 && pointWinners[0] === ti)
+                    : (isMultiTeam 
+                        ? (bestDiffWinners.length === 1 && bestDiffWinners[0] === ti)
+                        : (winners.length === 1 && winners[0] === ti))
                   const quarterWins = allTeamQuarterWins[ti]
-                  const bestDiff = isMultiTeam ? bestGoalDiffs[ti] : 0
+                  const bestDiff = (!isThreeTeams && isMultiTeam) ? bestGoalDiffs[ti] : 0
+                  const totalPts = isThreeTeams ? points.totalPts[ti] : 0
+                  const thisWeightedPts = isThreeTeams && unequalGP ? points.weightedPts[ti] : 0
                   
                   // Calculate which quarters this team won
                   const wonQuarters = Array.from({length: maxQ}).map((_,qi) => {
@@ -1168,8 +1306,8 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                     return scores[ti] === maxScore && scores.filter(s => s === maxScore).length === 1
                   })
                   
-                  // 각 쿼터의 골득실 계산 (3팀+용)
-                  const quarterGoalDiffs = isMultiTeam ? Array.from({length: maxQ}).map((_,qi) => {
+                  // 각 게임의 골득실 계산 (3팀+용)
+                  const quarterGoalDiffs = (!isThreeTeams && isMultiTeam) ? Array.from({length: maxQ}).map((_,qi) => {
                     const scores = displayedQuarterScores.map(teamScores => 
                       Array.isArray(teamScores) ? (teamScores[qi] ?? 0) : (qi===0 ? (teamScores||0) : 0)
                     )
@@ -1192,13 +1330,13 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                           {Array.from({length:maxQ}).map((_,qi)=>{
                             const v = Array.isArray(arr) ? (arr[qi] ?? 0) : (qi===0? (arr||0) : 0)
                             const wonThisQuarter = wonQuarters[qi]
-                            const qDiff = isMultiTeam ? quarterGoalDiffs[qi] : 0
-                            const isBestQuarter = isMultiTeam && Math.abs(qDiff - bestDiff) < 0.01
+                            const qDiff = (!isThreeTeams && isMultiTeam) ? quarterGoalDiffs[qi] : 0
+                            const isBestQuarter = (!isThreeTeams && isMultiTeam) && Math.abs(qDiff - bestDiff) < 0.01
                             
                             return (
                               <div key={qi} className="w-6 text-center text-xs text-gray-600 relative">
                                 <span className={wonThisQuarter || isBestQuarter ? 'font-semibold' : ''}>{v}</span>
-                                {isMultiTeam ? (
+                                {(!isThreeTeams && isMultiTeam) ? (
                                   isBestQuarter && (
                                     <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-blue-500"></div>
                                   )
@@ -1211,7 +1349,22 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                             )
                           })}
                         </div>
-                        {isMultiTeam ? (
+                        {isThreeTeams ? (
+                          <>
+                            <div className="w-10 text-center">
+                              <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-700`}>
+                                {totalPts}
+                              </span>
+                            </div>
+                            {unequalGP && (
+                              <div className="w-12 text-center">
+                                <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-700`} title={`가중 승점: ${thisWeightedPts}점 (각 팀의 최고 ${points.minGames}경기)`}>
+                                  {thisWeightedPts}
+                                </span>
+                              </div>
+                            )}
+                          </>
+                        ) : (isMultiTeam ? (
                           <div className="w-12 text-center">
                             <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold ${
                               bestDiff > 0 ? 'bg-blue-100 text-blue-700' : 
@@ -1227,13 +1380,31 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                               {quarterWins}
                             </span>
                           </div>
-                        )}
+                        ))}
                         <span className="font-semibold w-8 text-right">{teamTotal}</span>
                       </div>
                     </div>
                   )
                 })}
               </div>
+              
+              {/* 하단 설명 */}
+              {isThreeTeams && (
+                <div className="mt-2 pt-2 border-t border-gray-200">
+                  <div className="text-[10px] text-gray-600 text-center">
+                    {unequalGP ? (
+                      <>
+                        💡 팀별 경기수가 다를 때는 각 팀의 최고 성적 <span className="font-semibold text-purple-700">{points.minGames}경기</span>만 비교합니다
+                        <div className="mt-0.5 text-purple-600 font-medium">
+                          예: T1과 T2가 3경기, T3가 2경기 → 모든 팀의 최고 2경기만 승점 비교
+                        </div>
+                      </>
+                    ) : (
+                      '💡 3팀일 때는 승점(승3·무1·패0)으로 승자를 결정합니다'
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )
         })()
@@ -1375,20 +1546,36 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
           // Get saved team color if available (check for non-null value)
           const teamColor = (m.teamColors && Array.isArray(m.teamColors) && m.teamColors[i] && typeof m.teamColors[i] === 'object') ? m.teamColors[i] : null
           
-          // compute winner index from quarterScores or m.scores
-          let teamTotals = null
+          // compute winner index from scores
           let isWinner = false
           if (Array.isArray(quarterScores) && Array.isArray(quarterScores[i])) {
-            teamTotals = quarterScores.map(arr => Array.isArray(arr)?arr.reduce((a,b)=>a+Number(b||0),0):0)
-          } else if (Array.isArray(m.scores) && m.scores.length) {
-            teamTotals = m.scores.map(Number)
-          }
-          if (teamTotals && teamTotals.length) {
-            const max = Math.max(...teamTotals)
-            const winners = teamTotals.map((v,idx)=>v===max?idx:-1).filter(idx=>idx>=0)
-            if (winners.length === 1 && winners[0] === i) {
-              isWinner = true
+            const teamLen = quarterScores.length
+            const maxQ = Math.max(0, ...quarterScores.map(a=>Array.isArray(a)?a.length:0))
+            if (teamLen === 3) {
+              // points-based for 3 teams
+              const pts=[0,0,0]
+              const pairs=[[0,1],[1,2],[0,2]]
+              for(let qi=0; qi<maxQ; qi++){
+                const [a,b]=pairs[qi%3]
+                const aScore=Number(quarterScores[a]?.[qi] ?? 0)
+                const bScore=Number(quarterScores[b]?.[qi] ?? 0)
+                if(aScore>bScore) pts[a]+=3; else if(bScore>aScore) pts[b]+=3; else { pts[a]+=1; pts[b]+=1 }
+              }
+              const maxPts=Math.max(...pts)
+              const winners=pts.map((p,idx)=>p===maxPts?idx:-1).filter(idx=>idx>=0)
+              isWinner = winners.length===1 && winners[0]===i
+            } else {
+              // fallback: total goals
+              const totals = quarterScores.map(arr => Array.isArray(arr)?arr.reduce((a,b)=>a+Number(b||0),0):0)
+              const max = Math.max(...totals)
+              const winners = totals.map((v,idx)=>v===max?idx:-1).filter(idx=>idx>=0)
+              isWinner = winners.length === 1 && winners[0] === i
             }
+          } else if (Array.isArray(m.scores) && m.scores.length) {
+            const totals = m.scores.map(Number)
+            const max = Math.max(...totals)
+            const winners = totals.map((v,idx)=>v===max?idx:-1).filter(idx=>idx>=0)
+            isWinner = winners.length === 1 && winners[0] === i
           }
           
           // Header style: use teamColor if available, otherwise kit color
@@ -1544,16 +1731,16 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
         return (
 
           <div className="mt-3">
-            {/* Redesigned Quarter Scores Input - Mobile Optimized */}
+            {/* Redesigned Game Scores Input - Mobile Optimized */}
             <div className="rounded-lg border-2 border-blue-100 p-2 sm:p-4 bg-gradient-to-br from-blue-50 to-white shadow-sm">
               <div className="flex items-center justify-between mb-2 sm:mb-3">
                 <div className="flex items-center gap-1 sm:gap-2">
-                  <div className="text-sm sm:text-base font-semibold text-gray-800">쿼터 점수</div>
+                  <div className="text-sm sm:text-base font-semibold text-gray-800">게임 점수</div>
                 </div>
                 <div className="flex items-center gap-1 sm:gap-2">
                   <button
                     className="rounded-lg border-2 border-blue-400 bg-blue-500 hover:bg-blue-600 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-white shadow-sm transition-all active:scale-95 font-semibold text-base sm:text-lg"
-                    title="쿼터 추가"
+                    title="게임 추가"
                     onClick={()=>{
                       const next = qs.map(arr => [...arr, 0])
                       setQuarterScores(next)
@@ -1562,7 +1749,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   >+</button>
                   <button
                     className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center text-gray-700 shadow-sm transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 font-semibold text-base sm:text-lg"
-                    title="마지막 쿼터 삭제"
+                    title="마지막 게임 삭제"
                     disabled={maxQ===0}
                     onClick={()=>{
                       const newLen = Math.max(0, maxQ - 1)
@@ -1580,7 +1767,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   {Array.from({length: Math.max(1, maxQ)}).map((_,qi)=>(
                     <div key={qi} className="w-14 sm:w-20 text-center">
                       <div className="inline-flex items-center justify-center px-1.5 py-0.5 sm:px-2.5 sm:py-1 bg-blue-100 rounded-full">
-                        <span className="text-[10px] sm:text-xs font-bold text-blue-700">Q{qi+1}</span>
+                        <span className="text-[10px] sm:text-xs font-bold text-blue-700">G{qi+1}</span>
                       </div>
                     </div>
                   ))}
@@ -1643,9 +1830,9 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               <div className="mt-2 sm:mt-4 pt-2 sm:pt-3 border-t border-gray-200 flex items-center justify-end">
                 <button 
                   className="px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
-                  title="모든 쿼터 점수 초기화"
+                  title="모든 게임 점수 초기화"
                   onClick={()=>{
-                    if(confirm('모든 쿼터 점수를 0으로 초기화하시겠습니까?')) {
+                    if(confirm('모든 게임 점수를 0으로 초기화하시겠습니까?')) {
                       setQuarterScores(initialSnap.map(()=>[]))
                       setDirty(true)
                     }
@@ -1657,7 +1844,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 mt-2 sm:mt-3">
-              <button className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-2.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium transition-colors" title="주장/쿼터 점수 입력값을 모두 비웁니다." onClick={()=>{
+              <button className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-2.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium transition-colors" title="주장/게임 점수 입력값을 모두 비웁니다." onClick={()=>{
                 // reset editors to a clearly empty state
                 setCaptainIds(initialSnap.map(()=>null))
                 setQuarterScores(initialSnap.map(()=>[]))
