@@ -480,6 +480,7 @@ export function winnerIndexFromQuarterScores(qs, gameMatchups = null) {
   if (teamLen >= 4 && gameMatchups && Array.isArray(gameMatchups) && gameMatchups.length > 0) {
     const teamGamePoints = Array.from({ length: teamLen }, () => [])
     const gamesPlayed = Array.from({ length: teamLen }, () => 0)
+    const teamTotals = Array.from({ length: teamLen }, () => 0)
     
     for (let qi = 0; qi < maxQ; qi++) {
       const matchup = gameMatchups[qi]
@@ -489,11 +490,14 @@ export function winnerIndexFromQuarterScores(qs, gameMatchups = null) {
       for (const pair of matchup) {
         if (!Array.isArray(pair) || pair.length !== 2) continue
         const [a, b] = pair
-        if (a === undefined || b === undefined || a < 0 || b < 0 || a >= teamLen || b >= teamLen) continue
+        // null 체크 추가
+        if (a === null || b === null || a === undefined || b === undefined || a < 0 || b < 0 || a >= teamLen || b >= teamLen) continue
         
         const aScore = Number(qs[a]?.[qi] ?? 0)
         const bScore = Number(qs[b]?.[qi] ?? 0)
         
+        teamTotals[a] += aScore
+        teamTotals[b] += bScore
         gamesPlayed[a] += 1
         gamesPlayed[b] += 1
         
@@ -513,8 +517,15 @@ export function winnerIndexFromQuarterScores(qs, gameMatchups = null) {
       // 모든 팀이 같은 경기 수 → 총 승점으로 비교
       const totalPoints = teamGamePoints.map(pts => pts.reduce((a,b)=>a+b, 0))
       const maxPts = Math.max(...totalPoints)
-      const winners = totalPoints.map((p,i)=>p===maxPts?i:-1).filter(i=>i>=0)
-      return winners.length === 1 ? winners[0] : -1
+      const topCandidates = totalPoints.map((p,i)=>p===maxPts?i:-1).filter(i=>i>=0)
+      
+      // 승점 동점일 때 골득실로 판단
+      if (topCandidates.length > 1) {
+        const maxGoals = Math.max(...topCandidates.map(i => teamTotals[i]))
+        const winners = topCandidates.filter(i => teamTotals[i] === maxGoals)
+        return winners.length === 1 ? winners[0] : -1
+      }
+      return topCandidates.length === 1 ? topCandidates[0] : -1
     }
     
     // 게임 수가 다른 경우: 가중 승점
@@ -527,8 +538,15 @@ export function winnerIndexFromQuarterScores(qs, gameMatchups = null) {
       })
       
       const maxWPts = Math.max(...weightedPoints)
-      const winners = weightedPoints.map((p,i)=>p===maxWPts?i:-1).filter(i=>i>=0)
-      return winners.length === 1 ? winners[0] : -1
+      const topCandidates = weightedPoints.map((p,i)=>p===maxWPts?i:-1).filter(i=>i>=0)
+      
+      // 승점 동점일 때 골득실로 판단
+      if (topCandidates.length > 1) {
+        const maxGoals = Math.max(...topCandidates.map(i => teamTotals[i]))
+        const winners = topCandidates.filter(i => teamTotals[i] === maxGoals)
+        return winners.length === 1 ? winners[0] : -1
+      }
+      return topCandidates.length === 1 ? topCandidates[0] : -1
     }
   }
   
