@@ -750,20 +750,12 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
     setQuarterScores(qs.length > 0 ? qs : (initialSnap.length? initialSnap.map(()=>[]): null))
   }
   const saveDraft=()=>{ 
-    console.log('💾 Saving draft:', {
-      multiFieldMode,
-      gameMatchups,
-      draftSnapLength: draftSnap.length
-    })
-    
     const patch = {
       snapshot: draftSnap,
       attendeeIds: draftSnap.flat(),
       multiField: multiFieldMode,
       gameMatchups: gameMatchups
     }
-    
-    console.log('💾 Patch object:', patch)
     
     // Draft 모드 저장
     if (localDraftMode) {
@@ -1271,18 +1263,6 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
           const isMultiTeam = teamCount >= 3 // 3팀 이상 여부
           const isThreeTeams = teamCount === 3
           const isFourPlusWithMatchups = teamCount >= 4 && m?.multiField && m?.gameMatchups && Array.isArray(m.gameMatchups) && m.gameMatchups.length > 0
-          
-          // 디버깅: 4팀 이상일 때 multiField 정보 출력
-          if (teamCount >= 4) {
-            console.log('🔍 Match Debug:', {
-              matchId: m.id,
-              teamCount,
-              multiField: m?.multiField,
-              gameMatchups: m?.gameMatchups,
-              hasMatchups: m?.gameMatchups && Array.isArray(m.gameMatchups) && m.gameMatchups.length > 0,
-              isFourPlusWithMatchups
-            })
-          }
           
           // 승점 계산 (3팀 또는 4팀+ 매치업 모드)
           const points = (isThreeTeams || isFourPlusWithMatchups) ? (()=>{

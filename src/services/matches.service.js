@@ -139,16 +139,6 @@ export async function updateMatchInDB(matchId, patch) {
     if ('multiField' in patch) payload.multiField = patch.multiField // 2개 경기장 모드
     if ('gameMatchups' in patch) payload.gameMatchups = patch.gameMatchups // 게임별 매치업
     
-    console.log('🔍 updateMatchInDB payload:', {
-      matchId,
-      hasMultiField: 'multiField' in patch,
-      multiFieldValue: patch.multiField,
-      hasGameMatchups: 'gameMatchups' in patch,
-      gameMatchupsValue: patch.gameMatchups,
-      payloadMultiField: payload.multiField,
-      payloadGameMatchups: payload.gameMatchups
-    })
-    
     payload.updated_at = new Date().toISOString()
 
     const { data, error } = await supabase
