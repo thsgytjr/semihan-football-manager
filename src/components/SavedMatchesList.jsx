@@ -1910,22 +1910,6 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                             </span>
                           </div>
                         </div>
-                        {showGA && (
-                          <div className="flex items-center gap-2 shrink-0">
-                            {rec.goals>0 && (
-                              <div className="relative inline-flex items-center justify-center" title="골">
-                                <span role="img" aria-label="goals" className="text-2xl leading-none">⚽</span>
-                                <span className="absolute right-0 bottom-0 flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full bg-black text-[10px] font-bold text-white shadow-sm">{rec.goals}</span>
-                              </div>
-                            )}
-                            {rec.assists>0 && (
-                              <div className="relative inline-flex items-center justify-center" title="어시스트">
-                                <span role="img" aria-label="assists" className="text-2xl leading-none">🎯</span>
-                                <span className="absolute right-0 bottom-0 flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full bg-black text-[10px] font-bold text-white shadow-sm">{rec.assists}</span>
-                              </div>
-                            )}
-                          </div>
-                        )}
                         {/* Stats: Goals / Assists (조건부 표시) */}
                         {showGA && (
                           <div className="flex items-center gap-2 justify-self-end">
