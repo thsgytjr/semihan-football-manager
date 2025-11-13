@@ -515,10 +515,24 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
                     {bulkMsg}
                   </div>
                 )}
-                <div className="text-xs text-gray-600 bg-white/60 rounded px-2 py-1">
-                  💡 <strong>[날짜]goal:assist[득점자 도움자]</strong> 형식으로 입력하면 듀오가 자동 연결됩니다
-                  <br />
-                  💡 적용 후 아래 <strong>수동 입력</strong> 섹션에서 확인하고 <strong className="text-green-700">💾 저장하기</strong> 버튼을 눌러주세요
+                <div className="space-y-1 text-xs text-gray-600 bg-white/60 rounded px-2 py-1">
+                  <div>
+                    💡 <strong>[날짜]goal:assist[득점자 도움자]</strong> 형식으로 입력하면 듀오가 자동 연결됩니다<br />
+                    💡 적용 후 아래 <strong>수동 입력</strong> 섹션에서 확인하고 <strong className="text-green-700">💾 저장하기</strong> 버튼을 눌러주세요
+                  </div>
+                  <div className="pt-1 border-t border-amber-200">
+                    ⌚ <strong>Apple Watch 음성 Bulk 입력</strong>
+                    <div className="mt-0.5 leading-relaxed">
+                      1) 워치에서 <a href="https://www.icloud.com/shortcuts/085247e70699496cac2959a8ae377615" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline font-medium">쇼컷 설치</a> 후 실행<br />
+                      2) 이름 <strong>한 명만 말하면 골</strong> / <strong>두 명 말하면 첫 번째 골, 두 번째 어시스트</strong><br />
+                      3) iPhone 동기화되면 미리알림 앱에 자동 생성:<br />
+                      <code className="block bg-white/80 border border-gray-300 rounded px-2 py-1 mt-0.5 text-[11px] text-gray-700">[11/13/2025 9:16AM]goal:assist[김철수]<br />[11/13/2025 9:16AM]goal:assist[김철수 김영희]</code>
+                      4) 해당 줄을 복사해서 Bulk 입력 창에 붙여넣고 <strong className="text-amber-700">✨ 초안에 적용하기</strong> → <strong className="text-green-700">💾 저장하기</strong>
+                    </div>
+                    <div className="mt-0.5 text-[10px] text-gray-500">
+                      음성 인식으로 이름이 다르게 들어갈 수 있으니 <strong>앱 선수명과 정확히 일치</strong>하도록 미리알림에서 수정 후 붙여넣으세요.
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -915,7 +929,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
 
                 return (
                   <div key={toStr(p.id)} className={`px-3 py-3 transition-colors ${hasStats ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
                       {/* Player Info */}
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <InitialAvatar
@@ -929,51 +943,52 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
                           photoUrl={p.photoUrl}
                         />
                         <div className="min-w-0 flex-1">
-                          <div className="font-semibold text-sm text-gray-800 truncate">{p.name}</div>
+                          <div className="font-semibold text-sm text-gray-800 whitespace-normal break-words sm:whitespace-nowrap sm:truncate">{p.name}</div>
                           <div className="text-xs text-gray-500">{p.position || p.pos || '-'}</div>
                         </div>
                       </div>
-
-                      {/* Goal Counter */}
-                      <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-2 py-1">
-                        <button
-                          onClick={() => removeGoal(p.id)}
-                          disabled={!rec.goals || rec.goals <= 0}
-                          className="w-7 h-7 rounded bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-sm transition-all"
-                        >
-                          −
-                        </button>
-                        <div className="flex items-center gap-1 px-1.5">
-                          <span className="text-xs font-bold text-gray-600">⚽</span>
-                          <span className="w-6 text-center font-bold text-sm tabular-nums">{rec.goals || 0}</span>
+                      {/* Counters (stack below on mobile) */}
+                      <div className="flex w-full sm:w-auto justify-between sm:justify-end gap-2 sm:gap-3 mt-2 sm:mt-0">
+                        {/* Goal Counter */}
+                        <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-2 py-1 shrink-0">
+                          <button
+                            onClick={() => removeGoal(p.id)}
+                            disabled={!rec.goals || rec.goals <= 0}
+                            className="w-7 h-7 rounded bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-sm transition-all"
+                          >
+                            −
+                          </button>
+                          <div className="flex items-center gap-1 px-1.5">
+                            <span className="text-xs font-bold text-gray-600">⚽</span>
+                            <span className="w-6 text-center font-bold text-sm tabular-nums">{rec.goals || 0}</span>
+                          </div>
+                          <button
+                            onClick={() => addGoal(p.id, team.idx)}
+                            className="w-7 h-7 rounded bg-emerald-500 hover:bg-emerald-600 border border-emerald-600 flex items-center justify-center text-white font-bold text-sm transition-all shadow-sm"
+                          >
+                            +
+                          </button>
                         </div>
-                        <button
-                          onClick={() => addGoal(p.id, team.idx)}
-                          className="w-7 h-7 rounded bg-emerald-500 hover:bg-emerald-600 border border-emerald-600 flex items-center justify-center text-white font-bold text-sm transition-all shadow-sm"
-                        >
-                          +
-                        </button>
-                      </div>
-
-                      {/* Assist Counter */}
-                      <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-2 py-1">
-                        <button
-                          onClick={() => removeAssist(p.id)}
-                          disabled={!rec.assists || rec.assists <= 0}
-                          className="w-7 h-7 rounded bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-sm transition-all"
-                        >
-                          −
-                        </button>
-                        <div className="flex items-center gap-1 px-1.5">
-                          <span className="text-xs font-bold text-gray-600">👉</span>
-                          <span className="w-6 text-center font-bold text-sm tabular-nums">{rec.assists || 0}</span>
+                        {/* Assist Counter */}
+                        <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-2 py-1 shrink-0">
+                          <button
+                            onClick={() => removeAssist(p.id)}
+                            disabled={!rec.assists || rec.assists <= 0}
+                            className="w-7 h-7 rounded bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-sm transition-all"
+                          >
+                            −
+                          </button>
+                          <div className="flex items-center gap-1 px-1.5">
+                            <span className="text-xs font-bold text-gray-600">👉</span>
+                            <span className="w-6 text-center font-bold text-sm tabular-nums">{rec.assists || 0}</span>
+                          </div>
+                          <button
+                            onClick={() => addAssist(p.id, team.idx)}
+                            className="w-7 h-7 rounded bg-amber-500 hover:bg-amber-600 border border-amber-600 flex items-center justify-center text-white font-bold text-sm transition-all shadow-sm"
+                          >
+                            +
+                          </button>
                         </div>
-                        <button
-                          onClick={() => addAssist(p.id, team.idx)}
-                          className="w-7 h-7 rounded bg-amber-500 hover:bg-amber-600 border border-amber-600 flex items-center justify-center text-white font-bold text-sm transition-all shadow-sm"
-                        >
-                          +
-                        </button>
                       </div>
                     </div>
                   </div>
