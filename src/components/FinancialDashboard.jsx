@@ -32,6 +32,14 @@ export default function FinancialDashboard({
   const [showAllUnpaid, setShowAllUnpaid] = useState(false)
   const [selectedMatch, setSelectedMatch] = useState(null)
   const [customMemberships, setCustomMemberships] = useState([])
+  const isLocalMock = (() => {
+    try {
+      const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+      if (!isLocal) return false
+      const usp = new URLSearchParams(window.location.search)
+      return !usp.has('nomock')
+    } catch { return false }
+  })()
 
   // 커스텀 멤버십 설정 로드 (배지 스타일/라벨에 사용)
   React.useEffect(() => {
@@ -183,6 +191,11 @@ export default function FinancialDashboard({
 
   return (
     <div className="space-y-6">
+      {isLocalMock && (
+        <div className="p-3 rounded-lg border-2 border-amber-300 bg-amber-50 text-sm text-amber-900">
+          로컬 모드(모의 저장)입니다. 결제/회계 변경은 이 브라우저에만 저장되고 DB에는 기록되지 않습니다.
+        </div>
+      )}
       {/* 핵심 지표 카드 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard

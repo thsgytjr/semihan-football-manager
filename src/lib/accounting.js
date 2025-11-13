@@ -1,6 +1,7 @@
 // src/lib/accounting.js
 // 회계 관리 기능
 import { supabase } from './supabaseClient'
+import { STORAGE_PREFIX } from './teamConfig'
 import { logger } from './logger'
 
 // ---------------- Mock routing helper ----------------
@@ -16,7 +17,8 @@ function isMockMode() {
   }
 }
 
-const LS_KEY = 'sfm:accounting'
+// 팀별 로컬 스토리지 키(세미한/디케이에스씨 등 테넌트 분리)
+const LS_KEY = `${STORAGE_PREFIX}accounting`
 function loadLS() {
   const raw = localStorage.getItem(LS_KEY)
   if (!raw) return { payments: [], dues_settings: [], match_payments: [] }
