@@ -52,6 +52,7 @@ export default function FinancialDashboard({
     if (summary.registrationFees?.total > 0) cats.push({ key: 'registration', label: '가입비', value: summary.registrationFees.total, color: '#3B82F6' })
     if (summary.monthlyDues?.total > 0) cats.push({ key: 'monthly', label: '월회비', value: summary.monthlyDues.total, color: '#8B5CF6' })
     if (summary.annualDues?.total > 0) cats.push({ key: 'annual', label: '연회비', value: summary.annualDues.total, color: '#6366F1' })
+    if (summary.matchFees?.total > 0) cats.push({ key: 'match', label: '구장비', value: summary.matchFees.total, color: '#F97316' })
     if (summary.otherIncome?.total > 0) cats.push({ key: 'other', label: '기타 수입', value: summary.otherIncome.total, color: '#10B981' })
     return cats.sort((a,b)=> b.value - a.value)
   }, [summary])
@@ -92,7 +93,7 @@ export default function FinancialDashboard({
       const participantIds = match.attendeeIds || match.participantIds || 
         (Array.isArray(match.snapshot) ? match.snapshot.flat() : []) || []
       const { memberFee, guestFee } = calculateMatchFees(match, players)
-      const noFeeConfigured = (!memberFee && !guestFee)
+      const noFeeConfigured = (!memberFee && !guestFee) || (memberFee === 0 && guestFee === 0)
       
       const unpaidInMatch = []
       

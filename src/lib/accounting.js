@@ -456,6 +456,7 @@ export async function getAccountingSummary({ startDate, endDate } = {}) {
         registrationFees: { total: 0, count: 0 },
         monthlyDues: { total: 0, count: 0 },
         annualDues: { total: 0, count: 0 },
+        matchFees: { total: 0, count: 0 },
         otherIncome: { total: 0, count: 0 },
         expenses: { total: 0, count: 0 }
       }
@@ -473,6 +474,7 @@ export async function getAccountingSummary({ startDate, endDate } = {}) {
           case 'registration': summary.registrationFees.total += amount; summary.registrationFees.count += 1; break
           case 'monthly_dues': summary.monthlyDues.total += amount; summary.monthlyDues.count += 1; break
           case 'annual_dues': summary.annualDues.total += amount; summary.annualDues.count += 1; break
+          case 'match_fee': summary.matchFees.total += amount; summary.matchFees.count += 1; break
           case 'other_income':
             summary.otherIncome.total += amount
             summary.otherIncome.count += 1
@@ -499,6 +501,7 @@ export async function getAccountingSummary({ startDate, endDate } = {}) {
       registrationFees: { total: 0, count: 0 },
       monthlyDues: { total: 0, count: 0 },
       annualDues: { total: 0, count: 0 },
+      matchFees: { total: 0, count: 0 },
       otherIncome: { total: 0, count: 0 },
       expenses: { total: 0, count: 0 }
     }
@@ -525,6 +528,10 @@ export async function getAccountingSummary({ startDate, endDate } = {}) {
         case 'annual_dues':
           summary.annualDues.total += amount
           summary.annualDues.count += 1
+          break
+        case 'match_fee':
+          summary.matchFees.total += amount
+          summary.matchFees.count += 1
           break
         case 'other_income':
           summary.otherIncome.total += amount

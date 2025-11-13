@@ -18,12 +18,13 @@ import {
   getDuesRenewals
 } from '../lib/accounting'
 import { isMember } from '../lib/fees'
-import { DollarSign, Users, Calendar, TrendingUp, Plus, X, Check, AlertCircle, RefreshCw, Trash2 } from 'lucide-react'
+import { DollarSign, Users, Calendar, TrendingUp, Plus, X, Check, AlertCircle, RefreshCw, Trash2, ArrowUpDown, Download } from 'lucide-react'
 import InitialAvatar from '../components/InitialAvatar'
 import FinancialDashboard from '../components/FinancialDashboard'
 import { listMatchesFromDB } from '../services/matches.service'
 import { getAccountingOverrides, updateAccountingOverrides } from '../lib/appSettings'
 import { calculateMatchFees, calculatePlayerMatchFee } from '../lib/matchFeeCalculator'
+import * as XLSX from 'xlsx'
 
 export default function AccountingPage({ players = [], matches = [], upcomingMatches = [], isAdmin }) {
   const [payments, setPayments] = useState([])
@@ -50,6 +51,9 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   const [selectedPayments, setSelectedPayments] = useState(new Set())
   const [isDeletingBulk, setIsDeletingBulk] = useState(false)
 
+  // 정렬 상태
+  const [sortConfig, setSortConfig] = useState({ key: 'payment_date', direction: 'desc' })
+
   // 신규 결제 폼
   // 로컬 시간 기준으로 datetime-local 기본값 생성
   const nowLocal = new Date()
@@ -58,13 +62,22 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
 
   const [newPayment, setNewPayment] = useState({
     playerId: '',
+    selectedPlayerIds: [],
     paymentType: 'other_income',
     amount: '',
     paymentMethod: 'venmo',
     paymentDate: defaultLocalDateTime,
+    additionalDates: [], // 여러 날짜 추가
     notes: '',
     customPayee: ''
   })
+  const [playerSearch, setPlayerSearch] = useState('')
+  const filteredPlayers = useMemo(() => {
+    const q = playerSearch.trim().toLowerCase()
+    const list = players.filter(p => !p.isUnknown).sort((a, b) => a.name.localeCompare(b.name))
+    if (!q) return list.slice(0, 50)
+    return list.filter(p => p.name.toLowerCase().includes(q)).slice(0, 50)
+  }, [playerSearch, players])
 
   useEffect(() => {
     loadData()
@@ -130,38 +143,57 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       notify(isDonationLike ? '금액을 입력해주세요' : '선수와 금액을 입력해주세요')
       return
     }
-
+    const dateList = [newPayment.paymentDate, ...(newPayment.additionalDates||[])].filter(Boolean)
+    if (dateList.length === 0) {
+      notify('최소 1개 이상의 날짜를 입력해주세요')
+      return
+    }
     try {
-      const paymentData = {
-        playerId: newPayment.playerId || null,
-        paymentType: newPayment.paymentType,
-        amount: parseFloat(newPayment.amount),
-        paymentMethod: newPayment.paymentMethod,
-        paymentDate: newPayment.paymentDate,
-        notes: newPayment.notes
+      const playerIds = isDonationLike ? [null] : ((newPayment.selectedPlayerIds&&newPayment.selectedPlayerIds.length>0) ? newPayment.selectedPlayerIds : (newPayment.playerId ? [newPayment.playerId] : []))
+      if (!isDonationLike && playerIds.length === 0) {
+        notify('선수를 선택해주세요')
+        return
       }
-      
-      // 커스텀 payee가 있으면 notes 앞에 "[payee: xxx]" 형태로 저장
-      if (isDonationLike && newPayment.customPayee) {
-        paymentData.notes = `[payee: ${newPayment.customPayee}]${paymentData.notes ? ' ' + paymentData.notes : ''}`
+      const tasks = []
+      for (const pid of playerIds) {
+        for (const dt of dateList) {
+          const paymentData = {
+            playerId: isDonationLike ? null : pid,
+            paymentType: newPayment.paymentType,
+            amount: parseFloat(newPayment.amount),
+            paymentMethod: newPayment.paymentMethod,
+            paymentDate: dt,
+            notes: newPayment.notes
+          }
+          if (isDonationLike && newPayment.customPayee) {
+            paymentData.notes = `[payee: ${newPayment.customPayee}]${paymentData.notes ? ' ' + paymentData.notes : ''}`
+          }
+          tasks.push(addPayment(paymentData))
+        }
       }
-      
-      await addPayment(paymentData)
-      notify('결제 내역이 추가되었습니다 ✅')
-      setShowAddPayment(false)
-      const now2 = new Date()
-      const def2 = `${now2.getFullYear()}-${pad2(now2.getMonth()+1)}-${pad2(now2.getDate())}T${pad2(now2.getHours())}:${pad2(now2.getMinutes())}`
-      setNewPayment({
-        playerId: '',
-        paymentType: 'other_income',
-        amount: '',
-        paymentMethod: 'venmo',
-        paymentDate: def2,
-        notes: '',
-        customPayee: ''
-      })
-      loadData()
-    } catch (error) {
+      const results = await Promise.allSettled(tasks)
+      const ok = results.filter(r=>r.status==='fulfilled').length
+      const fail = results.length - ok
+      if (ok>0) notify(`${ok}건 결제가 추가되었습니다 ✅`)
+      if (fail>0) notify(`${fail}건 실패`)    
+      if (ok>0) {
+        setShowAddPayment(false)
+        const now2 = new Date()
+        const def2 = `${now2.getFullYear()}-${pad2(now2.getMonth()+1)}-${pad2(now2.getDate())}T${pad2(now2.getHours())}:${pad2(now2.getMinutes())}`
+        setNewPayment({
+          playerId: '',
+          selectedPlayerIds: [],
+          paymentType: 'other_income',
+            amount: '',
+            paymentMethod: 'venmo',
+            paymentDate: def2,
+            additionalDates: [],
+            notes: '',
+            customPayee: ''
+        })
+        loadData()
+      }
+    } catch (e) {
       notify('결제 내역 추가 실패')
     }
   }
@@ -244,6 +276,91 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     } else {
       setSelectedPayments(new Set(payments.map(p => p.id)))
     }
+  }
+
+  // 정렬 핸들러
+  function handleSort(key) {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }))
+  }
+
+  // 정렬된 결제 내역
+  const sortedPayments = useMemo(() => {
+    if (!sortConfig.key) return payments
+
+    const sorted = [...payments].sort((a, b) => {
+      let aVal, bVal
+
+      switch (sortConfig.key) {
+        case 'payment_date':
+          aVal = new Date(a.payment_date).getTime()
+          bVal = new Date(b.payment_date).getTime()
+          break
+        case 'player_name':
+          const playerA = players.find(p => p.id === a.player_id)
+          const playerB = players.find(p => p.id === b.player_id)
+          aVal = playerA?.name || ''
+          bVal = playerB?.name || ''
+          break
+        case 'payment_type':
+          aVal = a.payment_type || ''
+          bVal = b.payment_type || ''
+          break
+        case 'amount':
+          aVal = parseFloat(a.amount) || 0
+          bVal = parseFloat(b.amount) || 0
+          break
+        case 'payment_method':
+          aVal = a.payment_method || ''
+          bVal = b.payment_method || ''
+          break
+        default:
+          return 0
+      }
+
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1
+      return 0
+    })
+
+    return sorted
+  }, [payments, sortConfig, players])
+
+  // Excel 내보내기
+  function exportToExcel() {
+    const excelData = sortedPayments.map(payment => {
+      const player = players.find(p => p.id === payment.player_id)
+      const isDonationLike = payment.payment_type === 'other_income' || payment.payment_type === 'expense'
+      
+      let customPayee = null
+      let displayNotes = payment.notes || ''
+      if (isDonationLike && displayNotes) {
+        const match = displayNotes.match(/^\[payee: ([^\]]+)\]/)
+        if (match) {
+          customPayee = match[1]
+          displayNotes = displayNotes.replace(match[0], '').trim()
+        }
+      }
+
+      return {
+        '날짜': new Date(payment.payment_date).toLocaleDateString('ko-KR'),
+        '선수/대상': isDonationLike ? (customPayee || '미지정') : (player?.name || 'Unknown'),
+        '유형': paymentTypeLabels[payment.payment_type] || payment.payment_type,
+        '금액': `$${parseFloat(payment.amount).toFixed(2)}`,
+        '방법': paymentMethodLabels[payment.payment_method] || payment.payment_method,
+        '메모': displayNotes
+      }
+    })
+
+    const ws = XLSX.utils.json_to_sheet(excelData)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '결제 내역')
+    
+    const fileName = `결제내역_${new Date().toLocaleDateString('ko-KR').replace(/\. /g, '-').replace(/\./g, '')}.xlsx`
+    XLSX.writeFile(wb, fileName)
+    notify('Excel 파일이 다운로드되었습니다 ✅')
   }
 
   async function handleUpdateDues(settingType, amount, description) {
@@ -352,7 +469,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     <div className="space-y-6">
       {/* 탭 네비게이션 */}
       <Card>
-        <div className="flex gap-2 border-b pb-4">
+        <div className="flex flex-wrap gap-2 border-b pb-4">
           <TabButton
             active={selectedTab === 'overview'}
             onClick={() => setSelectedTab('overview')}
@@ -565,7 +682,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                             onClick={() => {
                               setSelectedTab('payments')
                               setShowAddPayment(true)
-                              setNewPayment(prev => ({ ...prev, playerId: player.id }))
+                              setNewPayment(prev => ({ ...prev, playerId: '', selectedPlayerIds: [player.id] }))
                             }}
                             className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
                           >
@@ -643,72 +760,54 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
         <Card
           title="결제 내역"
           right={
-            <button
-              onClick={() => setShowAddPayment(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
-            >
-              <Plus size={16} />
-              결제 추가
-            </button>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <button
+                onClick={exportToExcel}
+                className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm whitespace-nowrap"
+                disabled={payments.length === 0}
+              >
+                <Download size={16} />
+                <span className="hidden sm:inline">Excel 내보내기</span>
+                <span className="sm:hidden">Excel</span>
+              </button>
+              <button
+                onClick={() => setShowAddPayment(true)}
+                className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm whitespace-nowrap"
+              >
+                <Plus size={16} />
+                <span className="hidden sm:inline">결제 추가</span>
+                <span className="sm:hidden">추가</span>
+              </button>
+            </div>
           }
         >
           {showAddPayment && (
             <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold">새 결제 추가</h3>
                 <button onClick={() => setShowAddPayment(false)}>
                   <X size={20} className="text-gray-500 hover:text-gray-700" />
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              
+              {/* 상단: 결제 유형, 금액, 방법 - 한 줄로 */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
                 <div>
-                  <label className="block text-sm font-medium mb-1">선수</label>
-                  {['other_income','expense'].includes(newPayment.paymentType) ? (
-                    <div className="text-xs text-gray-600 px-3 py-2 bg-gray-50 border rounded-lg">선수 선택 없이 추가할 수 있습니다.</div>
-                  ) : (
-                    <select
-                      value={newPayment.playerId}
-                      onChange={(e) => setNewPayment({ ...newPayment, playerId: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-lg"
-                    >
-                      <option value="">선택...</option>
-                      {players.filter(p => !p.isUnknown).map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-                {['other_income','expense'].includes(newPayment.paymentType) && (
-                  <div>
-                    <label className="block text-sm font-medium mb-1">대상/용도 (선택)</label>
-                    <input
-                      type="text"
-                      value={newPayment.customPayee}
-                      onChange={(e) => setNewPayment({ ...newPayment, customPayee: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-lg"
-                      placeholder="예: 공 구입, 홍길동 후원"
-                    />
-                  </div>
-                )}
-                <div>
-                  <label className="block text-sm font-medium mb-1">결제 유형</label>
+                  <label className="block text-xs font-medium mb-1">결제 유형</label>
                   <select
                     value={newPayment.paymentType}
                     onChange={(e) => {
                       const newType = e.target.value
                       const updates = { paymentType: newType }
-                      
-                      // 회비 타입이면 금액을 자동 입력
                       if (newType === 'registration' || newType === 'monthly_dues' || newType === 'annual_dues') {
                         const fixedAmount = duesMap[newType]
                         if (fixedAmount) {
                           updates.amount = String(fixedAmount)
                         }
                       }
-                      
                       setNewPayment({ ...newPayment, ...updates })
                     }}
-                    className="w-full px-3 py-2 border rounded-lg"
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
                   >
                     {Object.entries(paymentTypeLabels).map(([key, label]) => (
                       <option key={key} value={key}>{label}</option>
@@ -716,60 +815,197 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">금액 ($)</label>
+                  <label className="block text-xs font-medium mb-1">금액 ($)</label>
                   <input
                     type="number"
                     step="0.01"
                     value={newPayment.amount}
                     onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg"
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
                     placeholder="0.00"
                     readOnly={['registration', 'monthly_dues', 'annual_dues'].includes(newPayment.paymentType) && duesMap[newPayment.paymentType]}
                     title={['registration', 'monthly_dues', 'annual_dues'].includes(newPayment.paymentType) ? '회비 설정에서 고정된 금액' : ''}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">결제 방법</label>
+                  <label className="block text-xs font-medium mb-1">결제 방법</label>
                   <select
                     value={newPayment.paymentMethod}
                     onChange={(e) => setNewPayment({ ...newPayment, paymentMethod: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg"
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
                   >
                     {Object.entries(paymentMethodLabels).map(([key, label]) => (
                       <option key={key} value={key}>{label}</option>
                     ))}
                   </select>
                 </div>
+              </div>
+
+              {/* 중간: 선수 선택 or 대상/용도 + 메모 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
                 <div>
-                  <label className="block text-sm font-medium mb-1">결제 날짜</label>
-                  <input
-                    type="datetime-local"
-                    value={newPayment.paymentDate}
-                    onChange={(e) => setNewPayment({ ...newPayment, paymentDate: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg"
-                  />
+                  <label className="block text-xs font-medium mb-1">
+                    {['other_income','expense'].includes(newPayment.paymentType) ? '대상/용도 (선택)' : '선수'}
+                  </label>
+                  {['other_income','expense'].includes(newPayment.paymentType) ? (
+                    <input
+                      type="text"
+                      value={newPayment.customPayee}
+                      onChange={(e) => setNewPayment({ ...newPayment, customPayee: e.target.value })}
+                      className="w-full px-3 py-2 border rounded-lg text-sm"
+                      placeholder="예: 공 구입, 홍길동 후원"
+                    />
+                  ) : (
+                    <div className="space-y-2">
+                      <input
+                        type="text"
+                        value={playerSearch}
+                        onChange={(e)=> setPlayerSearch(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && filteredPlayers.length === 1) {
+                            e.preventDefault()
+                            const player = filteredPlayers[0]
+                            setNewPayment(prev => {
+                              const list = new Set(prev.selectedPlayerIds||[])
+                              if (!list.has(player.id)) list.add(player.id)
+                              return { ...prev, selectedPlayerIds: Array.from(list), playerId: '' }
+                            })
+                            // 한글 조합 완료를 위해 약간의 지연 후 클리어
+                            setTimeout(() => setPlayerSearch(''), 0)
+                          }
+                        }}
+                        placeholder="이름 검색... (1명일 때 Enter로 추가)"
+                        className="w-full px-2 py-1.5 border rounded text-xs"
+                      />
+                      <div className="max-h-32 overflow-y-auto border rounded bg-white divide-y text-xs">
+                        {filteredPlayers.length === 0 && (
+                          <div className="px-2 py-1.5 text-gray-500">검색 결과 없음</div>
+                        )}
+                        {filteredPlayers.map(p => {
+                          const selected = (newPayment.selectedPlayerIds||[]).includes(p.id)
+                          return (
+                            <button
+                              type="button"
+                              key={p.id}
+                              onClick={() => setNewPayment(prev => {
+                                const list = new Set(prev.selectedPlayerIds||[])
+                                if (list.has(p.id)) list.delete(p.id); else list.add(p.id)
+                                return { ...prev, selectedPlayerIds: Array.from(list), playerId: '' }
+                              })}
+                              className={`w-full flex items-center gap-1.5 px-2 py-1.5 text-left hover:bg-blue-50 ${selected ? 'bg-blue-100' : ''}`}
+                            >
+                              <InitialAvatar id={p.id} name={p.name} size={20} photoUrl={p.photoUrl} />
+                              <span className="flex-1 truncate text-xs">{p.name}</span>
+                              {selected && <span className="text-[10px] text-blue-600 font-medium">✓</span>}
+                            </button>
+                          )
+                        })}
+                      </div>
+                      {(newPayment.selectedPlayerIds||[]).length > 0 && (
+                        <div className="text-xs">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-blue-600 font-medium">선택: {newPayment.selectedPlayerIds.length}명</span>
+                            <button
+                              type="button"
+                              onClick={() => setNewPayment(prev => ({ ...prev, selectedPlayerIds: [] }))}
+                              className="text-[10px] text-gray-600 hover:text-gray-800 underline"
+                            >전체 해제</button>
+                          </div>
+                          <div className="flex flex-wrap gap-1">
+                            {newPayment.selectedPlayerIds.map(pid => {
+                              const pl = players.find(pp => pp.id === pid)
+                              if (!pl) return null
+                              return (
+                                <div key={pid} className="inline-flex items-center gap-0.5 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-[11px]">
+                                  <InitialAvatar id={pl.id} name={pl.name} size={14} photoUrl={pl.photoUrl} />
+                                  <span className="text-gray-800">{pl.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setNewPayment(prev => ({ ...prev, selectedPlayerIds: (prev.selectedPlayerIds||[]).filter(id => id !== pid) }))}
+                                    className="text-gray-500 hover:text-gray-700"
+                                  >
+                                    <X size={10} />
+                                  </button>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">메모</label>
+                  <label className="block text-xs font-medium mb-1">메모 (선택)</label>
                   <input
                     type="text"
                     value={newPayment.notes}
                     onChange={(e) => setNewPayment({ ...newPayment, notes: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg"
+                    className="w-full px-3 py-2 border rounded-lg text-sm"
                     placeholder="선택사항"
                   />
                 </div>
               </div>
-              <div className="mt-4 flex gap-2">
+
+              {/* 하단: 날짜(들) */}
+              <div className="mb-3">
+                <label className="block text-xs font-medium mb-1 flex items-center justify-between">
+                  <span>결제 날짜</span>
+                  <button
+                    type="button"
+                    onClick={() => setNewPayment(prev => ({ ...prev, additionalDates: [...(prev.additionalDates||[]), prev.paymentDate ] }))}
+                    className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
+                  >현재 날짜 복제</button>
+                </label>
+                <div className="space-y-1.5">
+                  <input
+                    type="datetime-local"
+                    value={newPayment.paymentDate}
+                    onChange={(e) => setNewPayment({ ...newPayment, paymentDate: e.target.value })}
+                    className="w-full px-3 py-1.5 border rounded text-sm"
+                  />
+                  {(newPayment.additionalDates||[]).map((dt, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="datetime-local"
+                        value={dt}
+                        onChange={(e) => {
+                          const copy = [...newPayment.additionalDates]
+                          copy[idx] = e.target.value
+                          setNewPayment(prev => ({ ...prev, additionalDates: copy }))
+                        }}
+                        className="flex-1 px-3 py-1.5 border rounded text-sm"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const copy = newPayment.additionalDates.filter((_,i)=> i!==idx)
+                          setNewPayment(prev => ({ ...prev, additionalDates: copy }))
+                        }}
+                        className="p-1.5 rounded bg-gray-200 hover:bg-gray-300"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setNewPayment(prev => ({ ...prev, additionalDates: [...(prev.additionalDates||[]), defaultLocalDateTime] }))}
+                    className="w-full py-1.5 text-[11px] border border-dashed rounded hover:bg-gray-50"
+                  >+ 추가 날짜</button>
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end">
                 <button
                   onClick={handleAddPayment}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium"
                 >
                   추가
                 </button>
                 <button
                   onClick={() => setShowAddPayment(false)}
-                  className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+                  className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 text-sm"
                 >
                   취소
                 </button>
@@ -779,7 +1015,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
 
           {/* Bulk delete toolbar */}
           {selectedPayments.size > 0 && (
-            <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200 flex items-center justify-between">
+            <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <input
                   type="checkbox"
@@ -794,7 +1030,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
               <button
                 onClick={handleBulkDeletePayments}
                 disabled={isDeletingBulk}
-                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
               >
                 {isDeletingBulk ? (
                   <>
@@ -811,29 +1047,74 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
             </div>
           )}
 
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <div className="inline-block min-w-full align-middle px-2 sm:px-0">
+              <table className="min-w-full w-full text-xs sm:text-sm">
               <thead>
                 <tr className="border-b">
-                  <th className="py-3 px-4 w-12">
+                  <th className="py-2 px-1 sm:py-3 sm:px-4 w-6 sm:w-12">
                     <input
                       type="checkbox"
                       checked={payments.length > 0 && selectedPayments.size === payments.length}
                       onChange={toggleSelectAllPayments}
-                      className="w-4 h-4"
+                      className="w-3 h-3 sm:w-4 sm:h-4"
                     />
                   </th>
-                  <th className="text-left py-3 px-4">날짜</th>
-                  <th className="text-left py-3 px-4">선수</th>
-                  <th className="text-left py-3 px-4">유형</th>
-                  <th className="text-left py-3 px-4">금액</th>
-                  <th className="text-left py-3 px-4">방법</th>
-                  <th className="text-left py-3 px-4">메모</th>
-                  <th className="text-right py-3 px-4">작업</th>
+                  <th className="text-left py-2 px-1 sm:py-3 sm:px-2">
+                    <button
+                      onClick={() => handleSort('payment_date')}
+                      className="flex items-center gap-0.5 hover:text-blue-600 font-semibold text-[9px] sm:text-sm"
+                    >
+                      <span className="hidden sm:inline">날짜</span>
+                      <span className="sm:hidden">날짜</span>
+                      <ArrowUpDown size={10} className={`sm:w-3.5 sm:h-3.5 ${sortConfig.key === 'payment_date' ? 'text-blue-600' : 'text-gray-400'}`} />
+                    </button>
+                  </th>
+                  <th className="text-left py-2 px-1 sm:py-3 sm:px-2">
+                    <button
+                      onClick={() => handleSort('player_name')}
+                      className="flex items-center gap-0.5 hover:text-blue-600 font-semibold text-[9px] sm:text-sm"
+                    >
+                      <span className="hidden sm:inline">선수</span>
+                      <span className="sm:hidden">이름</span>
+                      <ArrowUpDown size={10} className={`sm:w-3.5 sm:h-3.5 ${sortConfig.key === 'player_name' ? 'text-blue-600' : 'text-gray-400'}`} />
+                    </button>
+                  </th>
+                  <th className="text-left py-2 px-1 sm:py-3 sm:px-2">
+                    <button
+                      onClick={() => handleSort('payment_type')}
+                      className="flex items-center gap-0.5 hover:text-blue-600 font-semibold text-[9px] sm:text-sm"
+                    >
+                      유형
+                      <ArrowUpDown size={10} className={`sm:w-3.5 sm:h-3.5 ${sortConfig.key === 'payment_type' ? 'text-blue-600' : 'text-gray-400'}`} />
+                    </button>
+                  </th>
+                  <th className="text-left py-2 px-1 sm:py-3 sm:px-2">
+                    <button
+                      onClick={() => handleSort('amount')}
+                      className="flex items-center gap-0.5 hover:text-blue-600 font-semibold text-[9px] sm:text-sm"
+                    >
+                      금액
+                      <ArrowUpDown size={10} className={`sm:w-3.5 sm:h-3.5 ${sortConfig.key === 'amount' ? 'text-blue-600' : 'text-gray-400'}`} />
+                    </button>
+                  </th>
+                  <th className="text-left py-2 px-1 sm:py-3 sm:px-2 hidden md:table-cell">
+                    <button
+                      onClick={() => handleSort('payment_method')}
+                      className="flex items-center gap-1 hover:text-blue-600 font-semibold text-sm"
+                    >
+                      방법
+                      <ArrowUpDown size={14} className={sortConfig.key === 'payment_method' ? 'text-blue-600' : 'text-gray-400'} />
+                    </button>
+                  </th>
+                  <th className="text-left py-3 px-2 hidden lg:table-cell">메모</th>
+                  <th className="text-right py-2 px-1 sm:py-3 sm:px-2 w-6 sm:w-auto">
+                    <span className="text-[9px] sm:text-sm font-semibold hidden sm:inline">작업</span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {payments.map(payment => {
+                {sortedPayments.map(payment => {
                   const player = players.find(p => p.id === payment.player_id) || players.find(p => p.id === payment.players?.id)
                   const isDonationLike = payment.payment_type === 'other_income' || payment.payment_type === 'expense'
                   
@@ -850,29 +1131,32 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                   
                   return (
                   <tr key={payment.id} className="border-b hover:bg-gray-50">
-                    <td className="py-3 px-4">
+                    <td className="py-2 px-1 sm:py-3 sm:px-4">
                       <input
                         type="checkbox"
                         checked={selectedPayments.has(payment.id)}
                         onChange={() => toggleSelectPayment(payment.id)}
-                        className="w-4 h-4"
+                        className="w-3 h-3 sm:w-4 sm:h-4"
                       />
                     </td>
-                    <td className="py-3 px-4 text-sm">
-                      {new Date(payment.payment_date).toLocaleDateString('ko-KR')}
+                    <td className="py-2 px-1 sm:py-3 sm:px-2 text-[9px] sm:text-sm">
+                      <div className="hidden sm:block">{new Date(payment.payment_date).toLocaleDateString('ko-KR')}</div>
+                      <div className="sm:hidden">{new Date(payment.payment_date).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })}</div>
                     </td>
-                    <td className="py-3 px-4">
+                    <td className="py-2 px-1 sm:py-3 sm:px-2">
                       {isDonationLike ? (
-                        <div className="text-sm text-gray-700">{customPayee || '미지정'}</div>
+                        <div className="text-[9px] sm:text-sm text-gray-700 truncate max-w-[60px] sm:max-w-none">{customPayee || '미지정'}</div>
                       ) : (
-                        <div className="flex items-center gap-2">
-                          <InitialAvatar id={player?.id} name={player?.name||'Unknown'} size={24} photoUrl={player?.photoUrl} />
-                          <span>{player?.name || 'Unknown'}</span>
+                        <div className="flex items-center gap-0.5 sm:gap-2">
+                          <div className="hidden sm:block">
+                            <InitialAvatar id={player?.id} name={player?.name||'Unknown'} size={20} photoUrl={player?.photoUrl} />
+                          </div>
+                          <span className="text-[9px] sm:text-sm truncate max-w-[60px] sm:max-w-none">{player?.name || 'Unknown'}</span>
                         </div>
                       )}
                     </td>
-                    <td className="py-3 px-4">
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
+                    <td className="py-2 px-1 sm:py-3 sm:px-2">
+                      <span className={`px-1 sm:px-2 py-0.5 sm:py-1 rounded text-[8px] sm:text-xs font-medium whitespace-nowrap ${
                         payment.payment_type === 'registration' ? 'bg-blue-100 text-blue-700' :
                         payment.payment_type === 'monthly_dues' ? 'bg-purple-100 text-purple-700' :
                         payment.payment_type === 'annual_dues' ? 'bg-indigo-100 text-indigo-700' :
@@ -881,13 +1165,22 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                         payment.payment_type === 'expense' ? 'bg-red-100 text-red-700' :
                         'bg-gray-100 text-gray-700'
                       }`}>
-                        {paymentTypeLabels[payment.payment_type] || payment.payment_type}
+                        <span className="hidden sm:inline">{paymentTypeLabels[payment.payment_type] || payment.payment_type}</span>
+                        <span className="sm:hidden">
+                          {payment.payment_type === 'registration' ? '가입' :
+                           payment.payment_type === 'monthly_dues' ? '월' :
+                           payment.payment_type === 'annual_dues' ? '연' :
+                           payment.payment_type === 'match_fee' ? '구장' :
+                           payment.payment_type === 'other_income' ? '수입' :
+                           payment.payment_type === 'expense' ? '지출' : '기타'}
+                        </span>
                       </span>
                     </td>
-                    <td className={`py-3 px-4 font-semibold ${payment.payment_type === 'expense' ? 'text-red-600' : 'text-emerald-600'}`}>
-                      {payment.payment_type === 'expense' ? '-' : ''}${parseFloat(payment.amount).toFixed(2)}
+                    <td className={`py-2 px-1 sm:py-3 sm:px-2 font-semibold text-[9px] sm:text-sm whitespace-nowrap ${payment.payment_type === 'expense' ? 'text-red-600' : 'text-emerald-600'}`}>
+                      <span className="hidden sm:inline">{payment.payment_type === 'expense' ? '-' : ''}${parseFloat(payment.amount).toFixed(2)}</span>
+                      <span className="sm:hidden">{payment.payment_type === 'expense' ? '-' : ''}${Math.round(parseFloat(payment.amount))}</span>
                     </td>
-                    <td className="py-3 px-4 text-sm">
+                    <td className="py-3 px-2 sm:px-4 text-sm hidden md:table-cell">
                       <select
                         value={payment.payment_method}
                         onChange={async (e) => {
@@ -899,28 +1192,29 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                             notify('결제 방법 업데이트 실패')
                           }
                         }}
-                        className="px-2 py-1 border rounded"
+                        className="px-2 py-1 border rounded text-xs"
                       >
                         {Object.entries(paymentMethodLabels).map(([key, label]) => (
                           <option key={key} value={key}>{label}</option>
                         ))}
                       </select>
                     </td>
-                    <td className="py-3 px-4 text-sm text-gray-600">
+                    <td className="py-3 px-2 text-xs text-gray-600 hidden lg:table-cell max-w-xs truncate">
                       {displayNotes || '-'}
                     </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-2 px-1 sm:py-3 sm:px-2 text-right">
                       <button
                         onClick={() => handleDeletePayment(payment)}
-                        className="text-red-500 hover:text-red-700"
+                        className="text-red-500 hover:text-red-700 p-0.5"
                       >
-                        <X size={16} />
+                        <X size={14} className="sm:w-4 sm:h-4" />
                       </button>
                     </td>
                   </tr>
                 )})}
               </tbody>
             </table>
+            </div>
           </div>
         </Card>
       )}
@@ -937,78 +1231,6 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                 label={paymentTypeLabels[setting.setting_type]}
               />
             ))}
-            {/* 구장비 계산 오버라이드 */}
-            <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-              <div className="flex items-center justify-between mb-2">
-                <div>
-                  <div className="font-semibold text-lg">구장비 계산 오버라이드</div>
-                  <div className="text-sm text-gray-700">매치에 저장된 값 대신, 아래 설정을 우선 적용합니다.</div>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
-                <div>
-                  <label className="block text-sm font-medium mb-1">멤버 구장비 (1인)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={feeOverrides.memberFeeOverride ?? ''}
-                    onChange={(e) => setFeeOverrides(prev => ({ ...prev, memberFeeOverride: e.target.value === '' ? null : parseFloat(e.target.value) }))}
-                    className="w-full px-3 py-2 border rounded-lg"
-                    placeholder="비우면 미적용"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">게스트 할증</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={feeOverrides.guestSurchargeOverride ?? ''}
-                    onChange={(e) => setFeeOverrides(prev => ({ ...prev, guestSurchargeOverride: e.target.value === '' ? null : parseFloat(e.target.value) }))}
-                    className="w-full px-3 py-2 border rounded-lg"
-                    placeholder="비우면 기본값 사용"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">매치 전체 구장비 (총액)</label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    value={feeOverrides.venueTotalOverride ?? ''}
-                    onChange={(e) => setFeeOverrides(prev => ({ ...prev, venueTotalOverride: e.target.value === '' ? null : parseFloat(e.target.value) }))}
-                    className="w-full px-3 py-2 border rounded-lg"
-                    placeholder="비우면 미적용"
-                  />
-                </div>
-              </div>
-              <div className="text-xs text-gray-600 mt-2">
-                우선순위: 전체 구장비(총액) → 멤버 구장비 + 게스트 할증 → 매치 저장값. 계산은 0.5 단위로 반올림합니다.
-              </div>
-              <div className="mt-3 flex gap-2">
-                <button
-                  onClick={async () => {
-                    setSavingOverrides(true)
-                    try {
-                      await updateAccountingOverrides(feeOverrides)
-                      notify('구장비 오버라이드가 저장되었습니다 ✅')
-                    } catch (e) {
-                      notify('저장 실패')
-                    } finally {
-                      setSavingOverrides(false)
-                    }
-                  }}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"
-                  disabled={savingOverrides}
-                >
-                  {savingOverrides ? '저장 중...' : '저장'}
-                </button>
-                <button
-                  onClick={() => setFeeOverrides({ memberFeeOverride: null, guestSurchargeOverride: null, venueTotalOverride: null })}
-                  className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
-                >
-                  초기화
-                </button>
-              </div>
-            </div>
           </div>
         </Card>
       )}
@@ -1166,7 +1388,8 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                               setShowAddPayment(true)
                               setNewPayment(prev => ({ 
                                 ...prev, 
-                                playerId: p.id,
+                                playerId: '',
+                                selectedPlayerIds: [p.id],
                                 paymentType: paymentMode === '월회비' ? 'monthly_dues' : paymentMode === '연회비' ? 'annual_dues' : 'monthly_dues'
                               }))
                             }}
