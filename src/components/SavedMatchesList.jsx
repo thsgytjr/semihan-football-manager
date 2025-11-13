@@ -1827,12 +1827,18 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       const totalPts = points.totalPts[ti]
                       const thisWeightedPts = unequalGP ? points.weightedPts[ti] : 0
                       
-                      const wonQuarters = Array.from({length: maxQ}).map((_,qi) => {
-                        const scores = displayedQuarterScores.map(teamScores => 
-                          Array.isArray(teamScores) ? (teamScores[qi] ?? 0) : (qi===0 ? (teamScores||0) : 0)
-                        )
-                        const maxScore = Math.max(...scores)
-                        return scores[ti] === maxScore && scores.filter(s => s === maxScore).length === 1
+                      // 쿼터 승리 표시: 구장 분리 시에는 같은 구장 팀끼리만 비교해야 함 (기존에는 전체 팀 비교 -> 버그)
+                      const wonQuarters = Array.from({length: maxQ}).map((_, qi) => {
+                        const myFieldTeams = points.fieldNames.map((f, idx) => f === myField ? idx : -1).filter(idx => idx >= 0)
+                        if (myFieldTeams.length === 0) return false
+                        // 같은 구장 팀들의 해당 쿼터 점수만 추출
+                        const fieldScores = myFieldTeams.map(tidx => {
+                          const teamScores = displayedQuarterScores[tidx]
+                          return Array.isArray(teamScores) ? (teamScores[qi] ?? 0) : (qi === 0 ? (teamScores || 0) : 0)
+                        })
+                        const myScore = Array.isArray(displayedQuarterScores[ti]) ? (displayedQuarterScores[ti][qi] ?? 0) : (qi === 0 ? (displayedQuarterScores[ti] || 0) : 0)
+                        const maxFieldScore = Math.max(...fieldScores)
+                        return myScore === maxFieldScore && fieldScores.filter(s => s === maxFieldScore).length === 1
                       })
                       
                       return (
