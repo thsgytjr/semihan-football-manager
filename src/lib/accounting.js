@@ -67,6 +67,29 @@ export async function listPayments({ playerId, paymentType, startDate, endDate, 
 /**
  * 결제 내역 추가
  */
+// 입력된 날짜 문자열을 안전한 ISO 문자열(Z 포함)로 정규화
+function normalizePaymentDate(input) {
+  try {
+    if (!input) return new Date().toISOString()
+    // 이미 타임존 정보가 있는 경우 그대로 Date로 파싱하여 ISO 반환
+    if (/[zZ]|[\+\-]\d{2}:?\d{2}$/.test(input)) {
+      const d = new Date(input)
+      if (!isNaN(d)) return d.toISOString()
+    }
+    // YYYY-MM-DD만 있는 경우: 전세계 타임존에서 날짜가 바뀌지 않도록 UTC 정오로 설정
+    const dateOnlyMatch = String(input).match(/^\d{4}-\d{2}-\d{2}$/)
+    if (dateOnlyMatch) {
+      const [y, m, d] = input.split('-').map(Number)
+      const utc = new Date(Date.UTC(y, m - 1, d, 12, 0, 0))
+      return utc.toISOString()
+    }
+    // datetime-local(YYYY-MM-DDTHH:mm) 형태는 로컬 기준으로 파싱 후 ISO로 변환
+    const d = new Date(input)
+    if (!isNaN(d)) return d.toISOString()
+  } catch {}
+  return new Date().toISOString()
+}
+
 export async function addPayment(payment) {
   try {
     if (isMockMode()) {
@@ -76,7 +99,7 @@ export async function addPayment(payment) {
         player_id: payment.playerId,
         payment_type: payment.paymentType,
         amount: payment.amount,
-        payment_date: payment.paymentDate || new Date().toISOString(),
+  payment_date: normalizePaymentDate(payment.paymentDate),
         payment_method: payment.paymentMethod || 'venmo',
         match_id: payment.matchId || null,
         notes: payment.notes || '',
@@ -93,7 +116,7 @@ export async function addPayment(payment) {
         player_id: payment.playerId,
         payment_type: payment.paymentType,
         amount: payment.amount,
-        payment_date: payment.paymentDate || new Date().toISOString(),
+  payment_date: normalizePaymentDate(payment.paymentDate),
         payment_method: payment.paymentMethod || 'venmo',
         match_id: payment.matchId || null,
         notes: payment.notes || '',

@@ -51,12 +51,17 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   const [isDeletingBulk, setIsDeletingBulk] = useState(false)
 
   // 신규 결제 폼
+  // 로컬 시간 기준으로 datetime-local 기본값 생성
+  const nowLocal = new Date()
+  const pad2 = (n) => String(n).padStart(2, '0')
+  const defaultLocalDateTime = `${nowLocal.getFullYear()}-${pad2(nowLocal.getMonth()+1)}-${pad2(nowLocal.getDate())}T${pad2(nowLocal.getHours())}:${pad2(nowLocal.getMinutes())}`
+
   const [newPayment, setNewPayment] = useState({
     playerId: '',
     paymentType: 'other_income',
     amount: '',
     paymentMethod: 'venmo',
-    paymentDate: new Date().toISOString().slice(0, 16),
+    paymentDate: defaultLocalDateTime,
     notes: '',
     customPayee: ''
   })
@@ -144,12 +149,14 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       await addPayment(paymentData)
       notify('결제 내역이 추가되었습니다 ✅')
       setShowAddPayment(false)
+      const now2 = new Date()
+      const def2 = `${now2.getFullYear()}-${pad2(now2.getMonth()+1)}-${pad2(now2.getDate())}T${pad2(now2.getHours())}:${pad2(now2.getMinutes())}`
       setNewPayment({
         playerId: '',
         paymentType: 'other_income',
         amount: '',
         paymentMethod: 'venmo',
-        paymentDate: new Date().toISOString().slice(0, 16),
+        paymentDate: def2,
         notes: '',
         customPayee: ''
       })
