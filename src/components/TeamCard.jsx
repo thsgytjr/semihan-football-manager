@@ -21,7 +21,7 @@ export default function TeamCard({ name, list, total, criterion }){
                 <div className="flex items-center gap-2">
                   <div className="h-6 w-6 overflow-hidden rounded-full border border-gray-200 bg-gray-100">
                     {p.photoUrl
-                      ? <img src={p.photoUrl} alt="" className="h-full w-full object-cover" />
+                      ? <img src={p.photoUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
                       : <div className="flex h-full w-full items-center justify-center text-[10px] text-gray-500">{p.name?.[0] ?? '🙂'}</div>}
                   </div>
                   <span>{p.name}</span>

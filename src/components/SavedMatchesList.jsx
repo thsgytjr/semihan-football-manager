@@ -927,6 +927,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               src={draftIcon} 
               alt="Draft" 
               className="w-4 h-4 mr-1 align-middle"
+              loading="lazy"
               style={{ filter: 'drop-shadow(0 1px 1px rgba(251,191,36,0.15))' }}
             />
             <span className="align-middle">Draft Match</span>

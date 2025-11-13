@@ -19,10 +19,8 @@ function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null, cust
   const isRandomColor = photoUrl && String(photoUrl).startsWith('RANDOM:')
   let actualPhotoUrl = isRandomColor ? null : photoUrl
   
-  // actualPhotoUrl이 있고 이미 쿼리 파라미터나 해시가 없으면 타임스탬프 추가 (캐시 방지)
-  if (actualPhotoUrl && !actualPhotoUrl.includes('?') && !actualPhotoUrl.includes('#')) {
-    actualPhotoUrl = `${actualPhotoUrl}?v=${Date.now()}`
-  }
+  // 브라우저 캐싱 활용 (타임스탬프 제거)
+  // actualPhotoUrl은 그대로 사용
   
   // 색상 seed 생성
   let colorSeed
@@ -139,7 +137,7 @@ function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null, cust
             alt={name || 'Player'} 
             className="h-full w-full object-cover"
             key={actualPhotoUrl} // URL이 변경되면 이미지 엘리먼트를 새로 생성
-            loading="eager" // 즉시 로드
+            loading="lazy" // 지연 로딩: 뷰포트에 들어올 때만 로드
             onError={(e) => {
               // 이미지 로드 실패 시 폴백
               e.target.style.display = 'none'

@@ -1023,6 +1023,7 @@ function BouncingPlayersLottery({ attendees, isDraftComplete }) {
               <img
                 src={ball.photo}
                 alt=""
+                loading="lazy"
                 onError={(e) => {
                   e.target.style.display = 'none'
                   e.target.nextSibling.style.display = 'flex'

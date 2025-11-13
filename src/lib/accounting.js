@@ -433,21 +433,30 @@ export async function getAccountingSummary({ startDate, endDate } = {}) {
         registrationFees: { total: 0, count: 0 },
         monthlyDues: { total: 0, count: 0 },
         annualDues: { total: 0, count: 0 },
-        matchFees: { total: 0, count: 0 },
-        reimbursements: { total: 0, count: 0 }
+        otherIncome: { total: 0, count: 0 },
+        expenses: { total: 0, count: 0 }
       }
       data.forEach(payment => {
         const amount = parseFloat(payment.amount)
-        summary.totalRevenue += amount
+        
+        // 지출은 비용이므로 수익에서 차감, 나머지는 수익에 추가
+        if (payment.payment_type === 'expense') {
+          summary.totalRevenue -= amount
+        } else {
+          summary.totalRevenue += amount
+        }
+        
         switch (payment.payment_type) {
           case 'registration': summary.registrationFees.total += amount; summary.registrationFees.count += 1; break
           case 'monthly_dues': summary.monthlyDues.total += amount; summary.monthlyDues.count += 1; break
           case 'annual_dues': summary.annualDues.total += amount; summary.annualDues.count += 1; break
-          case 'match_fee': summary.matchFees.total += amount; summary.matchFees.count += 1; break
-          case 'reimbursement': 
-            summary.reimbursements.total += amount
-            summary.reimbursements.count += 1
-            summary.totalRevenue -= amount // 상환은 비용이므로 수익에서 차감
+          case 'other_income':
+            summary.otherIncome.total += amount
+            summary.otherIncome.count += 1
+            break
+          case 'expense':
+            summary.expenses.total += amount
+            summary.expenses.count += 1
             break
         }
       })
@@ -467,15 +476,15 @@ export async function getAccountingSummary({ startDate, endDate } = {}) {
       registrationFees: { total: 0, count: 0 },
       monthlyDues: { total: 0, count: 0 },
       annualDues: { total: 0, count: 0 },
-      matchFees: { total: 0, count: 0 },
-      reimbursements: { total: 0, count: 0 }
+      otherIncome: { total: 0, count: 0 },
+      expenses: { total: 0, count: 0 }
     }
 
     data.forEach(payment => {
       const amount = parseFloat(payment.amount)
       
-      // 상환은 비용이므로 수익에서 차감, 나머지는 수익에 추가
-      if (payment.payment_type === 'reimbursement') {
+      // 지출은 비용이므로 수익에서 차감, 나머지는 수익에 추가
+      if (payment.payment_type === 'expense') {
         summary.totalRevenue -= amount
       } else {
         summary.totalRevenue += amount
@@ -494,13 +503,13 @@ export async function getAccountingSummary({ startDate, endDate } = {}) {
           summary.annualDues.total += amount
           summary.annualDues.count += 1
           break
-        case 'match_fee':
-          summary.matchFees.total += amount
-          summary.matchFees.count += 1
+        case 'other_income':
+          summary.otherIncome.total += amount
+          summary.otherIncome.count += 1
           break
-        case 'reimbursement':
-          summary.reimbursements.total += amount
-          summary.reimbursements.count += 1
+        case 'expense':
+          summary.expenses.total += amount
+          summary.expenses.count += 1
           break
       }
     })
