@@ -53,6 +53,9 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
 
   // 정렬 상태
   const [sortConfig, setSortConfig] = useState({ key: 'payment_date', direction: 'desc' })
+  
+  // 선수별 납부 정렬 상태
+  const [playerStatsSortConfig, setPlayerStatsSortConfig] = useState({ key: 'total', direction: 'desc' })
 
   // 신규 결제 폼
   // 로컬 시간 기준으로 datetime-local 기본값 생성
@@ -363,6 +366,91 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     notify('Excel 파일이 다운로드되었습니다 ✅')
   }
 
+  // 선수별 납부 정렬 핸들러
+  function handlePlayerStatsSort(key) {
+    setPlayerStatsSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }))
+  }
+
+  // 정렬된 선수 목록
+  const sortedPlayerStats = useMemo(() => {
+    const playerData = players
+      .filter(p => !p.isUnknown)
+      .map(player => {
+        const playerPayments = payments.filter(p => p.player_id === player.id)
+        const registration = playerPayments.find(p => p.payment_type === 'registration')
+        const monthlySum = playerPayments.filter(p => p.payment_type === 'monthly_dues').reduce((s, p) => s + parseFloat(p.amount), 0)
+        const annualSum = playerPayments.filter(p => p.payment_type === 'annual_dues').reduce((s, p) => s + parseFloat(p.amount), 0)
+        const matchSum = playerPayments.filter(p => p.payment_type === 'match_fee').reduce((s, p) => s + parseFloat(p.amount), 0)
+        const total = playerPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0)
+        const monthlyCount = playerPayments.filter(p => p.payment_type === 'monthly_dues').length
+        const annualCount = playerPayments.filter(p => p.payment_type === 'annual_dues').length
+        const matchCount = playerPayments.filter(p => p.payment_type === 'match_fee').length
+
+        return {
+          player,
+          registration,
+          registrationAmount: registration ? parseFloat(registration.amount) : 0,
+          monthlySum,
+          monthlyCount,
+          annualSum,
+          annualCount,
+          matchSum,
+          matchCount,
+          total
+        }
+      })
+
+    return playerData.sort((a, b) => {
+      let aVal, bVal
+
+      switch (playerStatsSortConfig.key) {
+        case 'name':
+          aVal = a.player.name
+          bVal = b.player.name
+          break
+        case 'membership':
+          aVal = a.player.membership || 'Guest'
+          bVal = b.player.membership || 'Guest'
+          break
+        case 'registration':
+          aVal = a.registrationAmount
+          bVal = b.registrationAmount
+          break
+        case 'monthly':
+          aVal = a.monthlySum
+          bVal = b.monthlySum
+          break
+        case 'annual':
+          aVal = a.annualSum
+          bVal = b.annualSum
+          break
+        case 'match':
+          aVal = a.matchSum
+          bVal = b.matchSum
+          break
+        case 'total':
+          aVal = a.total
+          bVal = b.total
+          break
+        default:
+          return 0
+      }
+
+      if (typeof aVal === 'string') {
+        return playerStatsSortConfig.direction === 'asc' 
+          ? aVal.localeCompare(bVal) 
+          : bVal.localeCompare(aVal)
+      }
+
+      if (aVal < bVal) return playerStatsSortConfig.direction === 'asc' ? -1 : 1
+      if (aVal > bVal) return playerStatsSortConfig.direction === 'asc' ? 1 : -1
+      return 0
+    })
+  }, [players, payments, playerStatsSortConfig])
+
   async function handleUpdateDues(settingType, amount, description) {
     try {
       await updateDuesSetting(settingType, amount, description)
@@ -592,106 +680,155 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
             <table className="w-full">
               <thead>
                 <tr className="border-b bg-gray-50">
-                  <th className="text-left py-3 px-4 font-semibold">선수</th>
-                  <th className="text-left py-3 px-4 font-semibold">멤버십</th>
-                  <th className="text-right py-3 px-4 font-semibold">가입비</th>
-                  <th className="text-right py-3 px-4 font-semibold">월회비</th>
-                  <th className="text-right py-3 px-4 font-semibold">연회비</th>
-                  <th className="text-right py-3 px-4 font-semibold">구장비</th>
-                  <th className="text-right py-3 px-4 font-semibold">총 납부</th>
+                  <th className="text-left py-3 px-4">
+                    <button
+                      onClick={() => handlePlayerStatsSort('name')}
+                      className="flex items-center gap-1 hover:text-blue-600 font-semibold"
+                    >
+                      선수
+                      <ArrowUpDown size={14} className={playerStatsSortConfig.key === 'name' ? 'text-blue-600' : 'text-gray-400'} />
+                    </button>
+                  </th>
+                  <th className="text-left py-3 px-4">
+                    <button
+                      onClick={() => handlePlayerStatsSort('membership')}
+                      className="flex items-center gap-1 hover:text-blue-600 font-semibold"
+                    >
+                      멤버십
+                      <ArrowUpDown size={14} className={playerStatsSortConfig.key === 'membership' ? 'text-blue-600' : 'text-gray-400'} />
+                    </button>
+                  </th>
+                  <th className="text-right py-3 px-4">
+                    <button
+                      onClick={() => handlePlayerStatsSort('registration')}
+                      className="flex items-center justify-end gap-1 hover:text-blue-600 font-semibold"
+                    >
+                      가입비
+                      <ArrowUpDown size={14} className={playerStatsSortConfig.key === 'registration' ? 'text-blue-600' : 'text-gray-400'} />
+                    </button>
+                  </th>
+                  <th className="text-right py-3 px-4">
+                    <button
+                      onClick={() => handlePlayerStatsSort('monthly')}
+                      className="flex items-center justify-end gap-1 hover:text-blue-600 font-semibold"
+                    >
+                      월회비
+                      <ArrowUpDown size={14} className={playerStatsSortConfig.key === 'monthly' ? 'text-blue-600' : 'text-gray-400'} />
+                    </button>
+                  </th>
+                  <th className="text-right py-3 px-4">
+                    <button
+                      onClick={() => handlePlayerStatsSort('annual')}
+                      className="flex items-center justify-end gap-1 hover:text-blue-600 font-semibold"
+                    >
+                      연회비
+                      <ArrowUpDown size={14} className={playerStatsSortConfig.key === 'annual' ? 'text-blue-600' : 'text-gray-400'} />
+                    </button>
+                  </th>
+                  <th className="text-right py-3 px-4">
+                    <button
+                      onClick={() => handlePlayerStatsSort('match')}
+                      className="flex items-center justify-end gap-1 hover:text-blue-600 font-semibold"
+                    >
+                      구장비
+                      <ArrowUpDown size={14} className={playerStatsSortConfig.key === 'match' ? 'text-blue-600' : 'text-gray-400'} />
+                    </button>
+                  </th>
+                  <th className="text-right py-3 px-4">
+                    <button
+                      onClick={() => handlePlayerStatsSort('total')}
+                      className="flex items-center justify-end gap-1 hover:text-blue-600 font-semibold"
+                    >
+                      총 납부
+                      <ArrowUpDown size={14} className={playerStatsSortConfig.key === 'total' ? 'text-blue-600' : 'text-gray-400'} />
+                    </button>
+                  </th>
                   <th className="text-center py-3 px-4 font-semibold">작업</th>
                 </tr>
               </thead>
               <tbody>
-                {players
-                  .filter(p => !p.isUnknown)
-                  .sort((a, b) => {
-                    const aTotal = payments.filter(p => p.player_id === a.id).reduce((sum, p) => sum + parseFloat(p.amount), 0)
-                    const bTotal = payments.filter(p => p.player_id === b.id).reduce((sum, p) => sum + parseFloat(p.amount), 0)
-                    return bTotal - aTotal
-                  })
-                  .map(player => {
-                    const playerPayments = payments.filter(p => p.player_id === player.id)
-                    const registration = playerPayments.find(p => p.payment_type === 'registration')
-                    const monthlySum = playerPayments.filter(p => p.payment_type === 'monthly_dues').reduce((s, p) => s + parseFloat(p.amount), 0)
-                    const annualSum = playerPayments.filter(p => p.payment_type === 'annual_dues').reduce((s, p) => s + parseFloat(p.amount), 0)
-                    const matchSum = playerPayments.filter(p => p.payment_type === 'match_fee').reduce((s, p) => s + parseFloat(p.amount), 0)
-                    const total = playerPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0)
-                    const monthlyCount = playerPayments.filter(p => p.payment_type === 'monthly_dues').length
-                    const annualCount = playerPayments.filter(p => p.payment_type === 'annual_dues').length
-                    const matchCount = playerPayments.filter(p => p.payment_type === 'match_fee').length
-
-                    return (
-                      <tr key={player.id} className="border-b hover:bg-gray-50">
-                        <td className="py-3 px-4">
-                          <div className="flex items-center gap-2">
-                            <InitialAvatar 
-                              id={player.id} 
-                              name={player.name} 
-                              size={32} 
-                              photoUrl={player.photoUrl} 
-                            />
-                            <span className="font-medium">{player.name}</span>
-                          </div>
-                        </td>
-                        <td className="py-3 px-4">
-                          <span className="text-sm text-gray-600">{player.membership || 'Guest'}</span>
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          {registration ? (
-                            <span className="text-emerald-600 font-semibold">${parseFloat(registration.amount).toFixed(2)}</span>
-                          ) : (
-                            <span className="text-gray-400 text-sm">-</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          {monthlySum > 0 ? (
-                            <div>
-                              <span className="font-semibold">${monthlySum.toFixed(2)}</span>
-                              <span className="text-xs text-gray-500 ml-1">({monthlyCount}회)</span>
-                            </div>
-                          ) : (
-                            <span className="text-gray-400 text-sm">-</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          {annualSum > 0 ? (
-                            <div>
-                              <span className="font-semibold">${annualSum.toFixed(2)}</span>
-                              <span className="text-xs text-gray-500 ml-1">({annualCount}회)</span>
-                            </div>
-                          ) : (
-                            <span className="text-gray-400 text-sm">-</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          {matchSum > 0 ? (
-                            <div>
-                              <span className="font-semibold">${matchSum.toFixed(2)}</span>
-                              <span className="text-xs text-gray-500 ml-1">({matchCount}회)</span>
-                            </div>
-                          ) : (
-                            <span className="text-gray-400 text-sm">-</span>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-right">
-                          <span className="text-lg font-bold text-emerald-600">${total.toFixed(2)}</span>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <button
-                            onClick={() => {
-                              setSelectedTab('payments')
-                              setShowAddPayment(true)
-                              setNewPayment(prev => ({ ...prev, playerId: '', selectedPlayerIds: [player.id] }))
-                            }}
-                            className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
-                          >
-                            결제 추가
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
+                {sortedPlayerStats.map(({ player, registration, registrationAmount, monthlySum, monthlyCount, annualSum, annualCount, matchSum, matchCount, total }) => {
+                  // 멤버십 배지 설정
+                  const badges = []
+                  const membership = player.membership?.trim()
+                  
+                  if (!membership || membership === 'Guest' || membership === 'guest' || membership === '게스트') {
+                    badges.push('G')
+                  } else if (membership === '준회원') {
+                    badges.push('준')
+                  }
+                  
+                  return (
+                  <tr key={player.id} className="border-b hover:bg-gray-50">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <InitialAvatar 
+                          id={player.id} 
+                          name={player.name} 
+                          size={32} 
+                          photoUrl={player.photoUrl}
+                          badges={badges}
+                        />
+                        <span className="font-medium">{player.name}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className="text-sm text-gray-600">{player.membership || 'Guest'}</span>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      {registration ? (
+                        <span className="text-emerald-600 font-semibold">${parseFloat(registration.amount).toFixed(2)}</span>
+                      ) : (
+                        <span className="text-gray-400 text-sm">-</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      {monthlySum > 0 ? (
+                        <div>
+                          <span className="font-semibold">${monthlySum.toFixed(2)}</span>
+                          <span className="text-xs text-gray-500 ml-1">({monthlyCount}회)</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 text-sm">-</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      {annualSum > 0 ? (
+                        <div>
+                          <span className="font-semibold">${annualSum.toFixed(2)}</span>
+                          <span className="text-xs text-gray-500 ml-1">({annualCount}회)</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 text-sm">-</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      {matchSum > 0 ? (
+                        <div>
+                          <span className="font-semibold">${matchSum.toFixed(2)}</span>
+                          <span className="text-xs text-gray-500 ml-1">({matchCount}회)</span>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 text-sm">-</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      <span className="text-lg font-bold text-emerald-600">${total.toFixed(2)}</span>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <button
+                        onClick={() => {
+                          setSelectedTab('payments')
+                          setShowAddPayment(true)
+                          setNewPayment(prev => ({ ...prev, playerId: '', selectedPlayerIds: [player.id] }))
+                        }}
+                        className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                      >
+                        결제 추가
+                      </button>
+                    </td>
+                  </tr>
+                )})}
               </tbody>
             </table>
           </div>
@@ -1408,11 +1545,6 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                 </tbody>
               </table>
             </div>
-            {/* 미납자 목록 */}
-            <div className="grid md:grid-cols-2 gap-4">
-              <UnpaidList title="월회비 미납" players={players} renewals={renewals} mode="monthly" />
-              <UnpaidList title="연회비 미납" players={players} renewals={renewals} mode="annual" />
-            </div>
             <div className="text-xs text-gray-500">
               * 각 선수의 최근 납부 이력을 기준으로 월회비/연회비 방식을 자동 판단합니다.<br/>
               * 월회비는 다음 달까지, 연회비는 1년 뒤까지를 다음 납부일로 계산합니다.
@@ -1719,39 +1851,5 @@ function MatchFeesSection({ match, players }) {
         </div>
       )}
     </div>
-  )
-}
-
-function UnpaidList({ title, players, renewals, mode }) {
-  const now = new Date()
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate())
-  const list = players.filter(p => {
-    if (p.isUnknown) return false
-    const r = renewals[p.id] || {}
-    if (mode === 'monthly') {
-      if (!r.lastMonthly) return true
-      return new Date(r.lastMonthly) < startOfMonth // 이번 달 결제 없음
-    } else {
-      if (!r.lastAnnual) return true
-      return new Date(r.lastAnnual) < oneYearAgo
-    }
-  })
-  return (
-    <Card title={title}>
-      {list.length === 0 ? (
-        <p className="text-sm text-gray-500">미납자가 없습니다.</p>
-      ) : (
-        <ul className="space-y-1">
-          {list.map(p => (
-            <li key={p.id} className="flex items-center gap-2 p-2 rounded bg-gray-50">
-              <InitialAvatar id={p.id} name={p.name} size={24} photoUrl={p.photoUrl} />
-              <span className="font-medium text-sm">{p.name}</span>
-              <span className="text-xs text-gray-500 ml-auto">{mode==='monthly'?'이번 달 미납':'1년 경과'}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Card>
   )
 }
