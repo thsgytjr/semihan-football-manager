@@ -4,6 +4,59 @@
 import { toStr, isMember, extractAttendeeIds, extractStatsByPlayer } from './matchUtils'
 import * as MatchHelpers from './matchHelpers'
 
+/**
+ * 2개 구장에서 팀들이 완전히 분리되어 경기했는지 판별
+ * @param {Array} gameMatchups - 매치업 배열 [[field1_pair, field2_pair], ...]
+ * @param {number} teamCount - 전체 팀 수
+ * @returns {Object|null} - {field1Teams: Set, field2Teams: Set} 또는 null (섞임)
+ */
+function checkFieldSeparation(gameMatchups, teamCount) {
+  if (!gameMatchups || !Array.isArray(gameMatchups) || gameMatchups.length === 0) {
+    return null
+  }
+  
+  const field1Teams = new Set()
+  const field2Teams = new Set()
+  
+  for (const matchup of gameMatchups) {
+    if (!Array.isArray(matchup)) continue
+    
+    matchup.forEach((pair, fieldIdx) => {
+      if (!Array.isArray(pair) || pair.length !== 2) return
+      const [a, b] = pair
+      
+      if (fieldIdx === 0) {
+        // 구장1 (첫 번째 매치업)
+        if (a !== null && a !== undefined && a >= 0) field1Teams.add(a)
+        if (b !== null && b !== undefined && b >= 0) field1Teams.add(b)
+      } else if (fieldIdx === 1) {
+        // 구장2 (두 번째 매치업)
+        if (a !== null && a !== undefined && a >= 0) field2Teams.add(a)
+        if (b !== null && b !== undefined && b >= 0) field2Teams.add(b)
+      }
+    })
+  }
+  
+  // 팀들이 섞였는지 확인 (교집합이 있으면 섞임)
+  const intersection = new Set([...field1Teams].filter(t => field2Teams.has(t)))
+  if (intersection.size > 0) {
+    return null // 섞임
+  }
+  
+  // 각 구장에 최소 2팀 이상 있어야 함
+  if (field1Teams.size < 2 || field2Teams.size < 2) {
+    return null
+  }
+  
+  // 모든 팀이 커버되어야 함
+  const allTeams = new Set([...field1Teams, ...field2Teams])
+  if (allTeams.size !== teamCount) {
+    return null
+  }
+  
+  return { field1Teams, field2Teams }
+}
+
 /* --------------------- Attack Points Computation --------------------- */
 
 /**
@@ -589,30 +642,110 @@ export function computeDraftPlayerStatsRows(players = [], matches = []) {
   for (const m of validMatches) {
     const qs = coerceQuarterScores(m)
     const gameMatchups = m?.gameMatchups || null
-    const winnerIdx = winnerIndexFromQuarterScores(qs, gameMatchups)
+    const teamCount = qs.length
     const teams = extractSnapshotTeams(m)
     if (teams.length === 0) continue
 
-    // 공동 1등 처리: 최고 점수를 받은 팀들 찾기
+    // 구장 분리 체크 (4팀+ 매치업 모드)
+    const separation = (teamCount >= 4 && gameMatchups && Array.isArray(gameMatchups) && gameMatchups.length > 0)
+      ? checkFieldSeparation(gameMatchups, teamCount)
+      : null
+    
+    // 승자 결정
     const topTeams = new Set()
-    if (winnerIdx < 0) {
-      // winnerIdx가 -1이면 공동 1등이 있다는 의미
-      // 실제로 최고 점수를 받은 팀 인덱스들을 찾아야 함
-      const totals = qs.map(arr => (Array.isArray(arr) ? arr.reduce((a, b) => a + Number(b || 0), 0) : 0))
-      const maxTotal = Math.max(...totals)
-      totals.forEach((total, idx) => {
-        if (total === maxTotal) topTeams.add(idx)
-      })
+    
+    if (separation) {
+      // 구장별로 분리된 경우: 각 구장의 승자를 모두 topTeams에 추가
+      const { field1Teams, field2Teams } = separation
+      
+      const getFieldWinners = (fieldTeams, fieldIdx) => {
+        const teamGamePoints = {}
+        const teamTotals = {}
+        const gamesPlayed = {}
+        
+        fieldTeams.forEach(t => {
+          teamGamePoints[t] = []
+          teamTotals[t] = 0
+          gamesPlayed[t] = 0
+        })
+        
+        const maxQ = Math.max(0, ...qs.map(a => Array.isArray(a) ? a.length : 0))
+        
+        for (let qi = 0; qi < maxQ; qi++) {
+          const matchup = gameMatchups[qi]
+          if (!matchup || !Array.isArray(matchup)) continue
+          const pair = matchup[fieldIdx]
+          if (!Array.isArray(pair) || pair.length !== 2) continue
+          const [a, b] = pair
+          if (!fieldTeams.has(a) || !fieldTeams.has(b)) continue
+          
+          const aScore = Number(qs[a]?.[qi] ?? 0)
+          const bScore = Number(qs[b]?.[qi] ?? 0)
+          teamTotals[a] += aScore
+          teamTotals[b] += bScore
+          gamesPlayed[a] += 1
+          gamesPlayed[b] += 1
+          
+          let aPts = 0, bPts = 0
+          if (aScore > bScore) { aPts = 3; bPts = 0 }
+          else if (bScore > aScore) { aPts = 0; bPts = 3 }
+          else { aPts = 1; bPts = 1 }
+          
+          teamGamePoints[a].push(aPts)
+          teamGamePoints[b].push(bPts)
+        }
+        
+        const totalPoints = {}
+        Object.keys(teamGamePoints).forEach(t => {
+          totalPoints[t] = teamGamePoints[t].reduce((a,b) => a+b, 0)
+        })
+        
+        const maxPts = Math.max(...Object.values(totalPoints))
+        let winners = Object.keys(totalPoints)
+          .filter(t => totalPoints[t] === maxPts)
+          .map(t => parseInt(t))
+        
+        // 동점일 때 골득실로 판단
+        if (winners.length > 1) {
+          const maxGoals = Math.max(...winners.map(t => teamTotals[t]))
+          winners = winners.filter(t => teamTotals[t] === maxGoals)
+        }
+        
+        return winners
+      }
+      
+      const field1Winners = getFieldWinners(field1Teams, 0)
+      const field2Winners = getFieldWinners(field2Teams, 1)
+      
+      field1Winners.forEach(t => topTeams.add(t))
+      field2Winners.forEach(t => topTeams.add(t))
+      
     } else {
-      topTeams.add(winnerIdx)
+      // 기존 로직: 단일 승자 또는 공동 1등
+      const winnerIdx = winnerIndexFromQuarterScores(qs, gameMatchups)
+      
+      if (winnerIdx < 0) {
+        const totals = qs.map(arr => (Array.isArray(arr) ? arr.reduce((a, b) => a + Number(b || 0), 0) : 0))
+        const maxTotal = Math.max(...totals)
+        totals.forEach((total, idx) => {
+          if (total === maxTotal) topTeams.add(idx)
+        })
+      } else {
+        topTeams.add(winnerIdx)
+      }
     }
     
     const matchTS = extractMatchTS(m)
     for (let ti = 0; ti < teams.length; ti++) {
       let result
       if (topTeams.size > 1 && topTeams.has(ti)) {
-        // 공동 1등인 경우 무승부
-        result = 'D'
+        // 공동 1등인 경우 무승부 (또는 구장별 승자 중 하나)
+        // 구장 분리된 경우: 각 구장의 승자는 모두 승리로 처리
+        if (separation) {
+          result = 'W' // 구장별 승자는 승리
+        } else {
+          result = 'D' // 기존 공동 1등은 무승부
+        }
       } else if (topTeams.size === 1 && topTeams.has(ti)) {
         // 단독 1등인 경우 승리
         result = 'W'
@@ -744,21 +877,97 @@ export function computeCaptainStatsRows(players = [], matches = []) {
   for (const m of validMatches) {
     const qs = coerceQuarterScores(m)
     const gameMatchups = m?.gameMatchups || null
-    const winnerIdx = winnerIndexFromQuarterScores(qs, gameMatchups)
-    const isDraw = winnerIdx < 0
+    const teamCount = qs.length
     const caps = extractCaptainsByTeam(m)
     if (!Array.isArray(caps) || caps.length === 0) continue
 
-    // 공동 1등 처리: 최고 점수를 받은 팀들 찾기
+    // 구장 분리 체크 (4팀+ 매치업 모드)
+    const separation = (teamCount >= 4 && gameMatchups && Array.isArray(gameMatchups) && gameMatchups.length > 0)
+      ? checkFieldSeparation(gameMatchups, teamCount)
+      : null
+    
+    // 승자 결정
     const topTeams = new Set()
-    if (winnerIdx < 0) {
-      const totals = qs.map(arr => (Array.isArray(arr) ? arr.reduce((a, b) => a + Number(b || 0), 0) : 0))
-      const maxTotal = Math.max(...totals)
-      totals.forEach((total, idx) => {
-        if (total === maxTotal) topTeams.add(idx)
-      })
+    
+    if (separation) {
+      // 구장별로 분리된 경우: 각 구장의 승자를 모두 topTeams에 추가
+      const { field1Teams, field2Teams } = separation
+      
+      const getFieldWinners = (fieldTeams, fieldIdx) => {
+        const teamGamePoints = {}
+        const teamTotals = {}
+        const gamesPlayed = {}
+        
+        fieldTeams.forEach(t => {
+          teamGamePoints[t] = []
+          teamTotals[t] = 0
+          gamesPlayed[t] = 0
+        })
+        
+        const maxQ = Math.max(0, ...qs.map(a => Array.isArray(a) ? a.length : 0))
+        
+        for (let qi = 0; qi < maxQ; qi++) {
+          const matchup = gameMatchups[qi]
+          if (!matchup || !Array.isArray(matchup)) continue
+          const pair = matchup[fieldIdx]
+          if (!Array.isArray(pair) || pair.length !== 2) continue
+          const [a, b] = pair
+          if (!fieldTeams.has(a) || !fieldTeams.has(b)) continue
+          
+          const aScore = Number(qs[a]?.[qi] ?? 0)
+          const bScore = Number(qs[b]?.[qi] ?? 0)
+          teamTotals[a] += aScore
+          teamTotals[b] += bScore
+          gamesPlayed[a] += 1
+          gamesPlayed[b] += 1
+          
+          let aPts = 0, bPts = 0
+          if (aScore > bScore) { aPts = 3; bPts = 0 }
+          else if (bScore > aScore) { aPts = 0; bPts = 3 }
+          else { aPts = 1; bPts = 1 }
+          
+          teamGamePoints[a].push(aPts)
+          teamGamePoints[b].push(bPts)
+        }
+        
+        const totalPoints = {}
+        Object.keys(teamGamePoints).forEach(t => {
+          totalPoints[t] = teamGamePoints[t].reduce((a,b) => a+b, 0)
+        })
+        
+        const maxPts = Math.max(...Object.values(totalPoints))
+        let winners = Object.keys(totalPoints)
+          .filter(t => totalPoints[t] === maxPts)
+          .map(t => parseInt(t))
+        
+        // 동점일 때 골득실로 판단
+        if (winners.length > 1) {
+          const maxGoals = Math.max(...winners.map(t => teamTotals[t]))
+          winners = winners.filter(t => teamTotals[t] === maxGoals)
+        }
+        
+        return winners
+      }
+      
+      const field1Winners = getFieldWinners(field1Teams, 0)
+      const field2Winners = getFieldWinners(field2Teams, 1)
+      
+      field1Winners.forEach(t => topTeams.add(t))
+      field2Winners.forEach(t => topTeams.add(t))
+      
     } else {
-      topTeams.add(winnerIdx)
+      // 기존 로직: 단일 승자 또는 공동 1등
+      const winnerIdx = winnerIndexFromQuarterScores(qs, gameMatchups)
+      
+      if (winnerIdx < 0) {
+        const totals = qs.map(arr => (Array.isArray(arr) ? arr.reduce((a, b) => a + Number(b || 0), 0) : 0))
+        const maxTotal = Math.max(...totals)
+        totals.forEach((total, idx) => {
+          if (total === maxTotal) topTeams.add(idx)
+        })
+      } else {
+        topTeams.add(winnerIdx)
+      }
     }
 
     const matchTS = extractMatchTS(m)
@@ -768,8 +977,13 @@ export function computeCaptainStatsRows(players = [], matches = []) {
 
       let result
       if (topTeams.size > 1 && topTeams.has(ti)) {
-        // 공동 1등인 경우 무승부
-        result = 'D'
+        // 공동 1등인 경우 무승부 (또는 구장별 승자 중 하나)
+        // 구장 분리된 경우: 각 구장의 승자는 모두 승리로 처리
+        if (separation) {
+          result = 'W' // 구장별 승자는 승리
+        } else {
+          result = 'D' // 기존 공동 1등은 무승부
+        }
       } else if (topTeams.size === 1 && topTeams.has(ti)) {
         // 단독 1등인 경우 승리
         result = 'W'
