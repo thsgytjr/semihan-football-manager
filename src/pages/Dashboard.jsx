@@ -628,7 +628,7 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
         <Tab.List className="inline-flex rounded-full border border-stone-300 bg-white p-1 shadow-sm">
           {[
             { id: 'pts', label: '종합' },
-            { id: 'draft', label: 'Draft' },
+            { id: 'draft', label: 'Draft(주장전)' },
           ].map((t, i) => (
             <Tab key={t.id} className={({ selected }) =>
               `px-3 py-1.5 text-[13px] rounded-full outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${selected ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-50'}`
