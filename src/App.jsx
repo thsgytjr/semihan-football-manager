@@ -25,6 +25,7 @@ import FormationBoard from"./pages/FormationBoard";import DraftPage from"./pages
 import AnalyticsPage from"./pages/AnalyticsPage"
 import AccountingPage from"./pages/AccountingPage"
 import InviteSetupPage from"./pages/InviteSetupPage"
+import AuthLinkErrorPage from"./pages/AuthLinkErrorPage"
 import logoUrl from"./assets/GoalifyLogo.png"
 import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEnabled,updateFeatureEnabled}from"./lib/appSettings"
 
@@ -57,13 +58,25 @@ export default function App(){
   const[previewMode,setPreviewMode]=useState(()=>isPreviewMode())
   const[isDev,setIsDev]=useState(()=>isDevelopmentEnvironment())
   const[showInviteSetup,setShowInviteSetup]=useState(false)
+  const[showAuthError,setShowAuthError]=useState(false)
+  const[authError,setAuthError]=useState({ error:null, errorCode:null, description:null })
 
-  // 초대 토큰 감지 (URL hash에서 type=invite 확인)
+  // 초대 토큰/인증 에러 감지 (URL hash에서 확인)
   useEffect(() => {
     const params = new URLSearchParams(window.location.hash.substring(1))
     const type = params.get('type')
     const accessToken = params.get('access_token')
-    
+    const error = params.get('error')
+    const errorCode = params.get('error_code')
+    const errorDescription = params.get('error_description')
+
+    if (error || errorCode) {
+      setAuthError({ error, errorCode, description: errorDescription })
+      setShowAuthError(true)
+      setShowInviteSetup(false)
+      return
+    }
+
     if (type === 'invite' && accessToken) {
       logger.log('[App] Invite token detected, showing setup page')
       setShowInviteSetup(true)
@@ -75,6 +88,17 @@ export default function App(){
     setShowInviteSetup(false)
     // 세션이 업데이트되면 자동으로 isAdmin이 설정됨
     window.location.hash = '' // URL hash 정리
+  }
+
+  const handleAuthErrorHome = () => {
+    window.location.hash = ''
+    setShowAuthError(false)
+  }
+
+  const handleAuthErrorLogin = () => {
+    window.location.hash = ''
+    setShowAuthError(false)
+    setLoginOpen(true)
   }
 
   // Supabase Auth: 앱 시작 시 세션 확인
@@ -850,7 +874,15 @@ export default function App(){
     </header>
 
     <main className="mx-auto max-w-6xl p-4">
-      {showInviteSetup ? (
+      {showAuthError ? (
+        <AuthLinkErrorPage 
+          error={authError.error}
+          errorCode={authError.errorCode}
+          description={authError.description}
+          onHome={handleAuthErrorHome}
+          onLogin={handleAuthErrorLogin}
+        />
+      ) : showInviteSetup ? (
         <InviteSetupPage onComplete={handleInviteComplete} />
       ) : loading ? (
         <div className="space-y-4">

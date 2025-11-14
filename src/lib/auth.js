@@ -14,8 +14,10 @@ let mockAuthCallbacks = []
  */
 export async function signInAdmin(email, password) {
   try {
-    // localhost에서는 Mock 로그인
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    // localhost에서는 기본적으로 Mock 로그인
+    // 단, VITE_USE_SUPABASE_AUTH_LOCAL === 'true' 이면 실제 Supabase 인증 사용
+    const useRealLocalAuth = import.meta?.env?.VITE_USE_SUPABASE_AUTH_LOCAL === 'true'
+    if (!useRealLocalAuth && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
       const mockUser = {
         id: '00000000-0000-0000-0000-000000000001', // UUID 형식의 Mock ID
         email: email || 'admin@mock.local',
@@ -57,8 +59,9 @@ export async function signInAdmin(email, password) {
  */
 export async function signOut() {
   try {
-    // localhost에서는 Mock 로그아웃
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    const useRealLocalAuth = import.meta?.env?.VITE_USE_SUPABASE_AUTH_LOCAL === 'true'
+    // localhost에서는 기본 Mock, 단 플래그가 true면 실제 로그아웃
+    if (!useRealLocalAuth && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
       mockSession = null
       mockAuthCallbacks.forEach(cb => cb(null))
       logger.log('✅ Mock 로그아웃 성공')
@@ -84,8 +87,9 @@ export async function signOut() {
  */
 export async function getSession() {
   try {
-    // localhost에서는 Mock 세션
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    const useRealLocalAuth = import.meta?.env?.VITE_USE_SUPABASE_AUTH_LOCAL === 'true'
+    // localhost에서는 기본 Mock, 단 플래그 true면 실제 세션 사용
+    if (!useRealLocalAuth && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
       return mockSession
     }
     
@@ -108,8 +112,9 @@ export async function getSession() {
  */
 export async function getCurrentUser() {
   try {
-    // localhost에서는 Mock 사용자
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    const useRealLocalAuth = import.meta?.env?.VITE_USE_SUPABASE_AUTH_LOCAL === 'true'
+    // localhost에서는 기본 Mock, 단 플래그 true면 실제 사용자 사용
+    if (!useRealLocalAuth && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
       return mockSession?.user || null
     }
     
@@ -132,8 +137,9 @@ export async function getCurrentUser() {
  * @returns {Function} - 구독 해제 함수
  */
 export function onAuthStateChange(callback) {
-  // localhost에서는 Mock 이벤트
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+  const useRealLocalAuth = import.meta?.env?.VITE_USE_SUPABASE_AUTH_LOCAL === 'true'
+  // localhost에서는 기본 Mock, 단 플래그 true면 실제 이벤트 사용
+  if (!useRealLocalAuth && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
     mockAuthCallbacks.push(callback)
     // 초기 상태 전달
     callback(mockSession)

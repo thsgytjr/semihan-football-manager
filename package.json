@@ -1,17 +1,17 @@
 {
   "name": "semihan-football-manager",
   "private": true,
-  "version": "5.9.13",
+  "version": "5.9.14",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "dev:s": "vite --mode semihan",
     "dev:d": "vite --mode dksc",
-    "dev:h": "vite --mode hangang --envFile .env.hangang",
+    "dev:h": "vite --mode hangang",
     "build": "vite build",
     "build:s": "vite build --mode semihan",
     "build:d": "vite build --mode dksc",
-    "build:h": "vite build --mode hangang --envFile .env.hangang",
+    "build:h": "vite build --mode hangang",
     "lint": "eslint .",
     "preview": "vite preview"
   },
