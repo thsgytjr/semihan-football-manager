@@ -11,6 +11,8 @@ const DEFAULT_SETTINGS = {
   appTitle: 'Semihan-FM',
   appName: 'Semihan Football Manager',
   tutorialEnabled: true,
+  // 선택: 관리자 이메일 화이트리스트(있으면 이 목록만 Admin 허용)
+  adminEmails: [],
   features: {
     players: true,      // 선수 관리
     planner: true,      // 매치 플래너

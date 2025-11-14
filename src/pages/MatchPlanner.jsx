@@ -72,6 +72,7 @@ import Select from '../components/Select'
 
 /* ───────── 공통 유틸 ───────── */
 const S = toStr
+const POS_ORDER = ["GK","DF","MF","FW","OTHER",""] // 포지션 정렬 순서
 
 export default function MatchPlanner({
   players,

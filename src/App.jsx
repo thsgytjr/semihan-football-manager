@@ -61,6 +61,22 @@ export default function App(){
   const[showAuthError,setShowAuthError]=useState(false)
   const[authError,setAuthError]=useState({ error:null, errorCode:null, description:null })
 
+  // Admin 결정 로직: 설정(adminEmails)이 있으면 이를 우선 사용, 없으면 현행 로직 유지
+  const computeIsAdmin = React.useCallback((sessionUserEmail, settings) => {
+    try {
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      const emails = settings?.adminEmails
+      if (Array.isArray(emails) && emails.length > 0) {
+        const ok = !!sessionUserEmail && emails.some(e => e?.toLowerCase?.() === sessionUserEmail.toLowerCase())
+        return ok || isLocalhost // 로컬에서는 편의상 허용
+      }
+      // 백워드 호환: 설정이 없으면 기존 정책 유지(모든 로그인 사용자 = Admin)
+      return !!sessionUserEmail
+    } catch {
+      return !!sessionUserEmail
+    }
+  }, [])
+
   // 초대 토큰/인증 에러 감지 (URL hash에서 확인)
   useEffect(() => {
     const params = new URLSearchParams(window.location.hash.substring(1))
@@ -105,19 +121,14 @@ export default function App(){
   useEffect(()=>{
     getSession().then(session=>{
       if(session?.user){
+        const nextIsAdmin = computeIsAdmin(session.user.email, getAppSettings())
+        setIsAdmin(nextIsAdmin)
+        if (nextIsAdmin) localStorage.setItem("isAdmin","1"); else localStorage.removeItem("isAdmin")
+
         const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        // 모든 로그인 사용자 = Admin 접근 가능
-        setIsAdmin(true)
-        localStorage.setItem("isAdmin","1")
-        
-        // Analytics는 개발자 이메일만 또는 localhost
         const isDevEmail = isLocalhost || isDeveloperEmail(session.user.email)
         setIsAnalyticsAdmin(isDevEmail)
-        if(isDevEmail) {
-          localStorage.setItem("isAnalyticsAdmin","1")
-        } else {
-          localStorage.removeItem("isAnalyticsAdmin")
-        }
+        if(isDevEmail) localStorage.setItem("isAnalyticsAdmin","1"); else localStorage.removeItem("isAnalyticsAdmin")
       }else{
         setIsAdmin(false)
         setIsAnalyticsAdmin(false)
@@ -129,19 +140,14 @@ export default function App(){
     // 인증 상태 변경 리스너
     const unsubscribe = onAuthStateChange(session=>{
       if(session?.user){
+        const nextIsAdmin = computeIsAdmin(session.user.email, getAppSettings())
+        setIsAdmin(nextIsAdmin)
+        if (nextIsAdmin) localStorage.setItem("isAdmin","1"); else localStorage.removeItem("isAdmin")
+
         const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-        // 모든 로그인 사용자 = Admin 접근 가능
-        setIsAdmin(true)
-        localStorage.setItem("isAdmin","1")
-        
-        // Analytics는 개발자 이메일만 또는 localhost
         const isDevEmail = isLocalhost || isDeveloperEmail(session.user.email)
         setIsAnalyticsAdmin(isDevEmail)
-        if(isDevEmail) {
-          localStorage.setItem("isAnalyticsAdmin","1")
-        } else {
-          localStorage.removeItem("isAnalyticsAdmin")
-        }
+        if(isDevEmail) localStorage.setItem("isAnalyticsAdmin","1"); else localStorage.removeItem("isAnalyticsAdmin")
       }else{
         setIsAdmin(false)
         setIsAnalyticsAdmin(false)
@@ -179,6 +185,13 @@ export default function App(){
         }
         if(settings.features){
           setFeaturesEnabled(settings.features)
+        }
+        // 설정 로드 후 관리자 여부 재평가 (adminEmails 지원)
+        const session = await getSession()
+        if (session?.user) {
+          const nextIsAdmin = computeIsAdmin(session.user.email, settings)
+          setIsAdmin(nextIsAdmin)
+          if (nextIsAdmin) localStorage.setItem("isAdmin","1"); else localStorage.removeItem("isAdmin")
         }
       }catch(e){
         logger.error('Failed to load app settings from server:', e)
