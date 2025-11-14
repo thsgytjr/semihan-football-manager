@@ -70,8 +70,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
   // 드래프트 설정
   const [draftSettings, setDraftSettings] = useState({
     timerDuration: 15, // 타이머 시간 (초)
-    firstPickCount: 1, // 첫 턴 선택 수
-    regularPickCount: 1, // 이후 턴 선택 수
+    draftMode: 'snake', // 드래프트 방식: 'snake' (스네이크) 또는 'roundRobin' (라운드 로빈)
     timerEnabled: false, // 타이머 활성화 여부 (기본 OFF)
     turnTransitionEnabled: false, // 턴 전환 딜레이 활성화 여부 (기본 OFF)
     turnTransitionDelay: 5, // 다음 턴 전환 딜레이 (기본 5초)
@@ -367,7 +366,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
     // 현재 팀과 최대 선택 수 확인
     const currentTeamSize = teams[currentTurn]?.length || 0
     const isVeryFirstTurn = (currentTurn === firstPick && currentTeamSize <= 1)
-    const maxPicks = isVeryFirstTurn ? draftSettings.firstPickCount : draftSettings.regularPickCount
+    const maxPicks = 1 // 한 턴에 1명씩만 선택
     
     // 이미 최대 선택 수에 도달했으면 선택 불가
     if (pickCount >= maxPicks) {
@@ -468,7 +467,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
   const completeTurn = () => {
     const currentTeamSize = teams[currentTurn]?.length || 0
     const isVeryFirstTurn = (currentTurn === firstPick && currentTeamSize <= 1)
-    const maxPicks = isVeryFirstTurn ? draftSettings.firstPickCount : draftSettings.regularPickCount
+    const maxPicks = 1 // 한 턴에 1명씩만 선택
     
     if (pickCount < maxPicks) {
       notify('⚠️ 아직 선택을 완료하지 않았습니다.', 'warning')
@@ -496,25 +495,36 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
   // 다음 턴으로 진행
   const proceedToNextTurn = () => {
     if (!turnOrder.length) return
-    // 현재 orderIndex와 방향을 기준으로 다음 인덱스 계산 (스네이크)
+    
     let nextOrderIndex = orderIndex
     let nextDirection = orderDirection
 
-    if (orderDirection === 1) {
+    if (draftSettings.draftMode === 'snake') {
+      // 스네이크 드래프트: 끝에 도달하면 역방향으로 전환
+      if (orderDirection === 1) {
+        if (orderIndex < teamCount - 1) {
+          nextOrderIndex = orderIndex + 1
+        } else {
+          // 끝에 도달: 역방향으로 전환하며 같은 팀이 한 번 더 시작
+          nextDirection = -1
+          nextOrderIndex = orderIndex
+        }
+      } else {
+        if (orderIndex > 0) {
+          nextOrderIndex = orderIndex - 1
+        } else {
+          // 시작에 도달: 정방향으로 전환하며 같은 팀이 한 번 더 시작
+          nextDirection = 1
+          nextOrderIndex = orderIndex
+        }
+      }
+    } else {
+      // 라운드 로빈: 순서대로 반복, 끝에 도달하면 처음으로
+      nextDirection = 1 // 항상 정방향
       if (orderIndex < teamCount - 1) {
         nextOrderIndex = orderIndex + 1
       } else {
-        // 끝에 도달: 역방향으로 전환하며 같은 팀이 한 번 더 시작
-        nextDirection = -1
-        nextOrderIndex = orderIndex
-      }
-    } else {
-      if (orderIndex > 0) {
-        nextOrderIndex = orderIndex - 1
-      } else {
-        // 시작에 도달: 정방향으로 전환하며 같은 팀이 한 번 더 시작
-        nextDirection = 1
-        nextOrderIndex = orderIndex
+        nextOrderIndex = 0 // 처음으로 돌아감
       }
     }
 
@@ -630,7 +640,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
           
           // 첫 번째 턴 판단
           const isVeryFirstTurn = (currentTurn === firstPick && currentTeam.length <= 1)
-          const maxPicks = isVeryFirstTurn ? draftSettings.firstPickCount : draftSettings.regularPickCount
+          const maxPicks = 1 // 한 턴에 1명씩만 선택
           const picksNeeded = maxPicks - currentPickCount
           
           if (currentPool.length === 0) {
@@ -1003,49 +1013,59 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                   </div>
                 )}
 
-                {/* 첫 턴 선택 수 */}
+                {/* 드래프트 방식 선택 */}
                 <div className="bg-white rounded-xl p-4 border border-blue-100">
                   <label className="block text-sm font-semibold text-blue-900 mb-3">
-                    첫 번째 턴 선택 인원
+                    드래프트 방식
                   </label>
-                  <div className="flex items-center gap-4">
-                    <input
-                      type="range"
-                      min="1"
-                      max="5"
-                      value={draftSettings.firstPickCount}
-                      onChange={(e) => setDraftSettings({...draftSettings, firstPickCount: Number(e.target.value)})}
-                      className="flex-1 h-2 rounded-full appearance-none cursor-pointer"
-                      style={{
-                        background: `linear-gradient(to right, rgb(16 185 129) 0%, rgb(16 185 129) ${((draftSettings.firstPickCount - 1) / 4) * 100}%, rgb(229 231 235) ${((draftSettings.firstPickCount - 1) / 4) * 100}%, rgb(229 231 235) 100%)`
-                      }}
-                    />
-                    <div className="bg-emerald-500 text-white px-4 py-2 rounded-lg font-bold min-w-[70px] text-center">
-                      {draftSettings.firstPickCount}명
-                    </div>
-                  </div>
-                </div>
-
-                {/* 이후 턴 선택 수 */}
-                <div className="bg-white rounded-xl p-4 border border-blue-100">
-                  <label className="block text-sm font-semibold text-blue-900 mb-3">
-                    이후 턴 선택 인원
-                  </label>
-                  <div className="flex items-center gap-4">
-                    <input
-                      type="range"
-                      min="1"
-                      max="5"
-                      value={draftSettings.regularPickCount}
-                      onChange={(e) => setDraftSettings({...draftSettings, regularPickCount: Number(e.target.value)})}
-                      className="flex-1 h-2 rounded-full appearance-none cursor-pointer"
-                      style={{
-                        background: `linear-gradient(to right, rgb(168 85 247) 0%, rgb(168 85 247) ${((draftSettings.regularPickCount - 1) / 4) * 100}%, rgb(229 231 235) ${((draftSettings.regularPickCount - 1) / 4) * 100}%, rgb(229 231 235) 100%)`
-                      }}
-                    />
-                    <div className="bg-purple-500 text-white px-4 py-2 rounded-lg font-bold min-w-[70px] text-center">
-                      {draftSettings.regularPickCount}명
-                    </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setDraftSettings({...draftSettings, draftMode: 'snake'})}
+                      className={`flex-1 p-4 rounded-lg border-2 transition-all ${
+                        draftSettings.draftMode === 'snake'
+                          ? 'border-blue-500 bg-blue-50 shadow-md'
+                          : 'border-gray-200 bg-white hover:border-blue-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                          draftSettings.draftMode === 'snake' ? 'bg-blue-500' : 'bg-gray-300'
+                        }`}>
+                          {draftSettings.draftMode === 'snake' && <Check className="w-4 h-4 text-white" />}
+                        </div>
+                        <span className="font-bold text-gray-900">스네이크 방식</span>
+                      </div>
+                      <p className="text-xs text-gray-600 leading-relaxed">
+                        라운드가 끝나면 순서가 <strong>역전</strong>됩니다. 마지막 선택자가 다음 라운드의 첫 선택자가 되어 공정성을 높입니다.
+                      </p>
+                      <div className="mt-2 text-[10px] text-gray-500 font-mono">
+                        예) 1→2→3→4 → 4→3→2→1 → 1→2→3→4...
+                      </div>
+                    </button>
+                    
+                    <button
+                      onClick={() => setDraftSettings({...draftSettings, draftMode: 'roundRobin'})}
+                      className={`flex-1 p-4 rounded-lg border-2 transition-all ${
+                        draftSettings.draftMode === 'roundRobin'
+                          ? 'border-purple-500 bg-purple-50 shadow-md'
+                          : 'border-gray-200 bg-white hover:border-purple-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                          draftSettings.draftMode === 'roundRobin' ? 'bg-purple-500' : 'bg-gray-300'
+                        }`}>
+                          {draftSettings.draftMode === 'roundRobin' && <Check className="w-4 h-4 text-white" />}
+                        </div>
+                        <span className="font-bold text-gray-900">라운드 로빈</span>
+                      </div>
+                      <p className="text-xs text-gray-600 leading-relaxed">
+                        매 라운드마다 <strong>같은 순서</strong>로 반복됩니다. 순서가 변하지 않아 예측 가능한 선택이 가능합니다.
+                      </p>
+                      <div className="mt-2 text-[10px] text-gray-500 font-mono">
+                        예) 1→2→3→4 → 1→2→3→4 → 1→2→3→4...
+                      </div>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1053,8 +1073,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
               {/* 설정 요약 */}
               <div className="mt-4 p-3 bg-blue-100 rounded-lg">
                 <p className="text-xs text-blue-800">
-                  💡 {teamCount}팀 드래프트 · 첫 번째 턴: <strong>{draftSettings.firstPickCount}명</strong> 선택, 
-                  이후 턴: <strong>{draftSettings.regularPickCount}명</strong>씩 선택
+                  💡 {teamCount}팀 드래프트 · 방식: <strong>{draftSettings.draftMode === 'snake' ? '스네이크 🐍' : '라운드 로빈 🔄'}</strong>
                   {draftSettings.timerEnabled && (
                     <>, 제한시간: <strong>{draftSettings.timerDuration}초</strong></>
                   )}
@@ -1616,27 +1635,54 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                   드래프트 순서
                 </h4>
                 <p className="text-gray-700 text-sm leading-relaxed">
-                  스네이크 드래프트 방식으로 진행됩니다. 
-                  {teamCount === 2 ? (
+                  {draftSettings.draftMode === 'snake' ? (
                     <>
-                      <strong className="text-blue-600 mx-1">
-                        {captains[firstPick]?.name}
-                      </strong>
-                      주장이 먼저 <strong>{draftSettings.firstPickCount}명</strong>을 선택하며, 
-                      이후 각 턴마다 <strong>{draftSettings.regularPickCount}명</strong>씩 번갈아 선택합니다.
+                      <strong className="text-blue-600">스네이크 드래프트 🐍</strong> 방식으로 진행됩니다. 
+                      {teamCount === 2 ? (
+                        <>
+                          <strong className="text-blue-600 mx-1">
+                            {captains[firstPick]?.name}
+                          </strong>
+                          주장이 먼저 1명을 선택하며, 
+                          이후 각 턴마다 1명씩 번갈아 선택합니다.
+                        </>
+                      ) : (
+                        <>
+                          순서: {turnOrder.map((idx, order) => (
+                            <strong key={idx} className="text-blue-600 mx-1">
+                              {order + 1}. {captains[idx]?.name}
+                            </strong>
+                          ))}
+                          <br />
+                          각 턴마다 1명씩 선택합니다.
+                        </>
+                      )}
+                      {' '}각 라운드의 끝에서는 순서가 역전되어 마지막 선택자가 다음 라운드 첫 선택자가 됩니다.
                     </>
                   ) : (
                     <>
-                      순서: {turnOrder.map((idx, order) => (
-                        <strong key={idx} className="text-blue-600 mx-1">
-                          {order + 1}. {captains[idx]?.name}
-                        </strong>
-                      ))}
-                      <br />
-                      각 턴마다 <strong>{draftSettings.regularPickCount}명</strong>씩 선택합니다.
+                      <strong className="text-purple-600">라운드 로빈 🔄</strong> 방식으로 진행됩니다. 
+                      {teamCount === 2 ? (
+                        <>
+                          <strong className="text-purple-600 mx-1">
+                            {captains[firstPick]?.name}
+                          </strong>
+                          주장이 먼저 1명을 선택하며, 
+                          이후 각 턴마다 1명씩 같은 순서로 반복하여 선택합니다.
+                        </>
+                      ) : (
+                        <>
+                          순서: {turnOrder.map((idx, order) => (
+                            <strong key={idx} className="text-purple-600 mx-1">
+                              {order + 1}. {captains[idx]?.name}
+                            </strong>
+                          ))}
+                          <br />
+                          각 턴마다 1명씩 선택하며, 매 라운드마다 같은 순서로 반복됩니다.
+                        </>
+                      )}
                     </>
                   )}
-                  {' '}각 라운드의 끝에서는 순서가 역전되어 마지막 선택자가 다음 라운드 첫 선택자가 됩니다.
                 </p>
                 <p className="text-gray-600 text-xs leading-relaxed mt-2 pt-2 border-t border-gray-200">
                   ⏱️ <strong>드래프트 시작!</strong> 버튼을 누르면 즉시 카운트다운이 시작됩니다. 
@@ -1763,7 +1809,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                   {(() => {
                     const currentTeamSize = teams[currentTurn]?.length || 0
                     const isVeryFirstTurn = (currentTurn === firstPick && currentTeamSize <= 1)
-                    const maxPicks = isVeryFirstTurn ? draftSettings.firstPickCount : draftSettings.regularPickCount
+                    const maxPicks = 1 // 한 턴에 1명씩만 선택
                     const isPickComplete = pickCount >= maxPicks
                     return (
                       <div 
@@ -1787,7 +1833,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                               <p className="text-sm text-gray-600">현재 턴</p>
                               <p className="text-xl font-bold text-gray-900">{captains[currentTurn]?.name} 주장</p>
                               <p className="text-xs text-gray-500">
-                                {pickCount}/{maxPicks} 선택 완료 {isVeryFirstTurn && `(첫 턴: ${draftSettings.firstPickCount}명)`}
+                                {pickCount}/{maxPicks} 선택 완료
                               </p>
                             </div>
                           </div>
