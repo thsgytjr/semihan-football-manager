@@ -1,5 +1,6 @@
 // src/components/Select.jsx  — 세련된 커스텀 드랍다운 (기본 키보드/스크린리더 가능)
 import React, { useEffect, useId, useRef, useState } from 'react'
+import ReactDOM from 'react-dom'
 
 export default function Select({ value, onChange, options, placeholder='선택', className='', labelClassName='', id, label, size='md' }) {
   const [open, setOpen] = useState(false)
@@ -8,12 +9,43 @@ export default function Select({ value, onChange, options, placeholder='선택',
   const uid = useId()
   const sel = options.find(o=>o.value===value)
   const isSm = size === 'sm'
+  const [dropdownRect, setDropdownRect] = useState(null)
 
   useEffect(()=>{
     function onDoc(e){ if(!btnRef.current?.contains(e.target) && !listRef.current?.contains(e.target)) setOpen(false) }
     document.addEventListener('mousedown', onDoc)
     return ()=> document.removeEventListener('mousedown', onDoc)
   },[])
+
+  // 드롭다운 위치 계산
+  const updateRect = () => {
+    if (!btnRef.current) return
+    const r = btnRef.current.getBoundingClientRect()
+    const top = r.bottom + 4
+    const left = r.left
+    const width = r.width
+    const maxHeight = Math.min(240, window.innerHeight - top - 8)
+    setDropdownRect({ top, left, width, maxHeight })
+  }
+
+  useEffect(() => {
+    if (!open) return
+    updateRect()
+    const onResize = () => updateRect()
+    const onScroll = (e) => {
+      // 드롭다운 내부 스크롤은 무시
+      if (listRef.current && e && e.target && (listRef.current === e.target || listRef.current.contains(e.target))) {
+        return
+      }
+      updateRect()
+    }
+    window.addEventListener('resize', onResize)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('scroll', onScroll, true)
+    }
+  }, [open])
 
   function onKey(e){
     if(e.key==='Enter' || e.key===' '){ e.preventDefault(); setOpen(v=>!v) }
@@ -39,12 +71,13 @@ export default function Select({ value, onChange, options, placeholder='선택',
         <svg width={isSm?14:16} height={isSm?14:16} viewBox="0 0 24 24" aria-hidden className="opacity-70"><path fill="currentColor" d="M7 10l5 5 5-5z"/></svg>
       </button>
 
-      {open && (
+  {open && dropdownRect && ReactDOM.createPortal(
         <ul
           ref={listRef}
           tabIndex={-1}
           role="listbox"
-          className={`absolute z-20 mt-1 max-h-60 w-full overflow-auto ${isSm ? 'rounded-md' : 'rounded-lg'} border border-gray-200 bg-white p-1 ${isSm ? 'text-xs' : 'text-sm'} shadow-lg`}
+          className={`fixed z-[1000] max-h-60 overflow-auto ${isSm ? 'rounded-md' : 'rounded-lg'} border border-gray-200 bg-white p-1 ${isSm ? 'text-xs' : 'text-sm'} shadow-lg`}
+          style={{ top: dropdownRect.top + 'px', left: dropdownRect.left + 'px', width: dropdownRect.width + 'px', maxHeight: dropdownRect.maxHeight + 'px' }}
         >
           {options.map(opt=>(
             <li
@@ -59,7 +92,8 @@ export default function Select({ value, onChange, options, placeholder='선택',
               {opt.value===value && <svg width="16" height="16" viewBox="0 0 24 24"><path fill="currentColor" d="M9 16.2l-3.5-3.5L4 14.2l5 5L20 8.2 18.3 6.5z"/></svg>}
             </li>
           ))}
-        </ul>
+        </ul>,
+        document.body
       )}
     </div>
   )

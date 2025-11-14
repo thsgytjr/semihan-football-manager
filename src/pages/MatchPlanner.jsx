@@ -1708,7 +1708,13 @@ function CompactAddPlayer({ teamIndex, players, onAdd, onAddMany, customMembersh
     if (!open) return
     updateRect()
     const onResize = () => updateRect()
-    const onScroll = () => updateRect()
+    // 스크롤 시: 드롭다운 내부 스크롤은 무시, 페이지/컨테이너 스크롤은 위치만 재계산
+    const onScroll = (e) => {
+      if (dropdownRef.current && e && e.target && (dropdownRef.current === e.target || dropdownRef.current.contains(e.target))) {
+        return
+      }
+      updateRect()
+    }
     window.addEventListener('resize', onResize)
     window.addEventListener('scroll', onScroll, true)
     return () => {
@@ -1724,8 +1730,8 @@ function CompactAddPlayer({ teamIndex, players, onAdd, onAddMany, customMembersh
         const pid = filtered[0].id
         if (onAdd) onAdd(pid)
         setQ('')
-        // 드롭다운 유지 (멀티 연속 추가 가능)
-        setOpen(true)
+  // 드롭다운 닫기 (UX 개선)
+  setOpen(false)
       }
     }
   }
@@ -1745,7 +1751,7 @@ function CompactAddPlayer({ teamIndex, players, onAdd, onAddMany, customMembersh
     notify(`${ids.length}명을 팀 ${teamIndex+1}에 추가했습니다 ✅`)
     setSelectedIds(new Set())
     setQ('')
-    setOpen(true)
+  setOpen(false)
   }
 
   const addAllFiltered = () => {
@@ -1755,7 +1761,7 @@ function CompactAddPlayer({ teamIndex, players, onAdd, onAddMany, customMembersh
     notify(`필터된 전체 ${ids.length}명을 팀 ${teamIndex+1}에 추가했습니다 ✅`)
     setSelectedIds(new Set())
     setQ('')
-    setOpen(true)
+  setOpen(false)
     // 만약 현재 태그/검색으로 걸러진 모든 선수를 추가하여 리스트가 비게 될 경우 태그를 자동 초기화
     // (필터 유지 시 드롭다운이 다시 열리지 않는 UX 문제 해결)
     if (selectedTag && filtered.length === ids.length) {
@@ -1772,8 +1778,8 @@ function CompactAddPlayer({ teamIndex, players, onAdd, onAddMany, customMembersh
           </svg>
           <input
             ref={inputRef}
-            className="w-full rounded-md border border-gray-300 bg-white pl-8 pr-2 py-1.5 text-xs placeholder-gray-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
-            placeholder={`팀 ${teamIndex+1}에 선수 추가...`}
+            className="w-full rounded-md border border-gray-300 bg-white pl-8 pr-2 py-2 text-xs placeholder-gray-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
+            placeholder="선수 검색 또는 선택"
             value={q}
             onChange={(e)=>{setQ(e.target.value); setOpen(true)}}
             onKeyDown={handleEnter}
@@ -1788,15 +1794,20 @@ function CompactAddPlayer({ teamIndex, players, onAdd, onAddMany, customMembersh
       {open && dropdownRect && ReactDOM.createPortal(
         <div
           ref={dropdownRef}
-          className="fixed z-[999] rounded-md border border-gray-200 bg-white shadow-xl"
-          style={{ top: dropdownRect.top + 'px', left: dropdownRect.left + 'px', width: dropdownRect.width + 'px' }}
+          className="fixed z-[999] rounded-lg border border-gray-200 bg-white shadow-2xl"
+          style={{ 
+            top: dropdownRect.top + 'px', 
+            left: window.innerWidth <= 640 ? '8px' : dropdownRect.left + 'px', 
+            width: window.innerWidth <= 640 ? 'calc(100vw - 16px)' : dropdownRect.width + 'px',
+            maxWidth: window.innerWidth <= 640 ? 'calc(100vw - 16px)' : '600px'
+          }}
           onMouseDown={(e)=>e.stopPropagation()}
         >
           {/* 태그 필터 바 - 간결한 Select */}
           {allTags.length > 0 && (
-            <div className="px-2 py-2 border-b border-gray-100 bg-gray-50 sticky top-0">
+            <div className="px-3 py-2.5 border-b border-gray-200 bg-gradient-to-b from-gray-50 to-white sticky top-0 z-10">
               <div className="flex items-center gap-2">
-                <span className="text-[11px] text-gray-600 shrink-0">태그 필터</span>
+                <span className="text-xs text-gray-700 font-medium shrink-0">태그</span>
                 <div className="flex-1 min-w-0">
                   <Select
                     value={selectedTag}
@@ -1806,17 +1817,17 @@ function CompactAddPlayer({ teamIndex, players, onAdd, onAddMany, customMembersh
                   />
                 </div>
                 {selectedTag && (
-                  <button className="text-[11px] text-gray-600 hover:text-gray-800" onClick={()=>setSelectedTag('')}>초기화</button>
+                  <button className="text-xs text-emerald-600 hover:text-emerald-700 font-medium px-2 py-1 rounded hover:bg-emerald-50" onClick={()=>setSelectedTag('')}>초기화</button>
                 )}
               </div>
             </div>
           )}
 
           {/* 목록 (단일 리스트 스타일) */}
-          <div className="max-h-[60vh] overflow-auto" style={{ maxHeight: dropdownRect.maxHeight }}>
+          <div className="max-h-[60vh] overflow-y-auto overscroll-contain" style={{ maxHeight: dropdownRect.maxHeight }}>
             <div>
             {filtered.length === 0 && (
-              <div className="px-3 py-6 text-center text-xs text-gray-400">
+              <div className="px-4 py-8 text-center text-sm text-gray-500">
                 필터 결과가 없습니다{selectedTag ? ' — 태그를 변경하거나 초기화하세요' : ''}
               </div>
             )}
@@ -1825,21 +1836,23 @@ function CompactAddPlayer({ teamIndex, players, onAdd, onAddMany, customMembersh
               const badgeInfo = getMembershipBadge(p.membership, customMemberships)
               const checked = selectedIds.has(p.id)
               return (
-                <div key={p.id} className={'flex items-center gap-2 px-2 py-1.5 text-sm hover:bg-emerald-50'}>
-                  <input type="checkbox" className="w-4 h-4" checked={checked} onChange={(e)=>{e.stopPropagation(); toggleSelect(p.id)}} />
+                <div key={p.id} className={'flex items-center gap-3 px-3 py-2.5 text-sm border-b border-gray-50 last:border-0 hover:bg-emerald-50 active:bg-emerald-100 transition-colors'}>
+                  <input type="checkbox" className="w-5 h-5 rounded border-gray-300 text-emerald-600 focus:ring-2 focus:ring-emerald-500 cursor-pointer" checked={checked} onChange={(e)=>{e.stopPropagation(); toggleSelect(p.id)}} />
                   <button
                     onClick={(e)=>{e.preventDefault(); e.stopPropagation(); toggleSelect(p.id)}}
                     className="flex-1 flex items-center gap-2 text-left"
                     title={`선택 토글`}
                   >
-                    <InitialAvatar id={p.id} name={p.name} size={20} badges={badges} photoUrl={p.photoUrl} customMemberships={customMemberships} badgeInfo={badgeInfo} />
-                    <span className="truncate text-[13px]">{p.name}</span>
+                    <InitialAvatar id={p.id} name={p.name} size={28} badges={badges} photoUrl={p.photoUrl} customMemberships={customMemberships} badgeInfo={badgeInfo} />
+                    <span className="truncate text-sm font-medium">{p.name}</span>
                   </button>
                   <button
-                    onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); onAdd ? onAdd(p.id) : (onAddMany && onAddMany([p.id])) }}
-                    className="ml-auto text-[11px] text-emerald-700 px-2 py-0.5 rounded hover:bg-emerald-50"
+                    onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); onAdd ? onAdd(p.id) : (onAddMany && onAddMany([p.id])); setOpen(false) }}
+                    className="ml-auto text-xs text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 px-3 py-1.5 rounded-md font-semibold shadow-sm transition-colors"
                     title={`팀 ${teamIndex+1}에 바로 추가`}
-                  >+ 추가</button>
+                  >
+                    + 추가
+                  </button>
                 </div>
               )
             })}
@@ -1847,19 +1860,25 @@ function CompactAddPlayer({ teamIndex, players, onAdd, onAddMany, customMembersh
           </div>
 
           {/* 액션 바 */}
-          <div className="sticky bottom-0 flex items-center gap-2 px-2 py-2 bg-white border-t border-gray-100">
+          <div className="sticky bottom-0 flex items-center gap-2 px-3 py-3 bg-gradient-to-t from-white to-gray-50 border-t border-gray-200 shadow-[0_-2px_8px_rgba(0,0,0,0.05)]">
             <button
               onClick={bulkAdd}
               disabled={selectedIds.size===0}
-              className={`px-3 py-1.5 rounded text-xs font-semibold ${selectedIds.size>0? 'bg-emerald-500 text-white hover:bg-emerald-600':'bg-gray-100 text-gray-400'}`}
-            >선택 {selectedIds.size}명 추가</button>
+              className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${selectedIds.size>0? 'bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800 shadow-md hover:shadow-lg':'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+            >
+              선택 {selectedIds.size}명 추가
+            </button>
             <button
               onClick={addAllFiltered}
               disabled={filtered.length===0}
-              className={`px-3 py-1.5 rounded text-xs font-semibold ${filtered.length>0? 'bg-blue-500 text-white hover:bg-blue-600':'bg-gray-100 text-gray-400'}`}
-            >필터 전체 {filtered.length}명 추가</button>
+              className={`flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${filtered.length>0? 'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 shadow-md hover:shadow-lg':'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+            >
+              전체 {filtered.length}명
+            </button>
             {(selectedIds.size>0 || q || selectedTag) && (
-              <button onClick={()=>{setSelectedIds(new Set()); setQ(''); setSelectedTag('')}} className="ml-auto text-xs text-gray-600 hover:text-gray-800">초기화</button>
+              <button onClick={()=>{setSelectedIds(new Set()); setQ(''); setSelectedTag('')}} className="px-3 py-2.5 text-xs text-gray-600 hover:text-gray-800 font-medium rounded-lg hover:bg-gray-100">
+                초기화
+              </button>
             )}
           </div>
         </div>,
