@@ -24,6 +24,7 @@ import MatchPlanner from"./pages/MatchPlanner";import StatsInput from"./pages/St
 import FormationBoard from"./pages/FormationBoard";import DraftPage from"./pages/DraftPage"
 import AnalyticsPage from"./pages/AnalyticsPage"
 import AccountingPage from"./pages/AccountingPage"
+import InviteSetupPage from"./pages/InviteSetupPage"
 import logoUrl from"./assets/GoalifyLogo.png"
 import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEnabled,updateFeatureEnabled}from"./lib/appSettings"
 
@@ -55,6 +56,26 @@ export default function App(){
   const{shouldShowTutorial,setShouldShowTutorial}=useAutoTutorial(isAdmin)
   const[previewMode,setPreviewMode]=useState(()=>isPreviewMode())
   const[isDev,setIsDev]=useState(()=>isDevelopmentEnvironment())
+  const[showInviteSetup,setShowInviteSetup]=useState(false)
+
+  // 초대 토큰 감지 (URL hash에서 type=invite 확인)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.substring(1))
+    const type = params.get('type')
+    const accessToken = params.get('access_token')
+    
+    if (type === 'invite' && accessToken) {
+      logger.log('[App] Invite token detected, showing setup page')
+      setShowInviteSetup(true)
+    }
+  }, [])
+
+  const handleInviteComplete = (user) => {
+    logger.log('[App] Invite setup completed for:', user.email)
+    setShowInviteSetup(false)
+    // 세션이 업데이트되면 자동으로 isAdmin이 설정됨
+    window.location.hash = '' // URL hash 정리
+  }
 
   // Supabase Auth: 앱 시작 시 세션 확인
   useEffect(()=>{
@@ -829,7 +850,9 @@ export default function App(){
     </header>
 
     <main className="mx-auto max-w-6xl p-4">
-      {loading ? (
+      {showInviteSetup ? (
+        <InviteSetupPage onComplete={handleInviteComplete} />
+      ) : loading ? (
         <div className="space-y-4">
           <div className="animate-pulse">
             <div className="h-8 bg-stone-200 rounded w-48 mb-4"></div>
