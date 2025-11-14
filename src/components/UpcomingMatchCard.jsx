@@ -594,6 +594,9 @@ function CaptainVsDisplay({ captains, players, matches = [], teamCount = 2 }) {
     
     return statsMap
   }, [players, matches])
+  
+  // id -> player 매핑 (photoUrl 조회용)
+  const idToPlayer = useMemo(() => new Map(players.map(p => [p.id, p])), [players])
 
   const getCaptainStats = (captainId) => {
     return captainStats.get(captainId) || {
@@ -623,7 +626,9 @@ function CaptainVsDisplay({ captains, players, matches = [], teamCount = 2 }) {
                   <InitialAvatar 
                     id={captain.id} 
                     name={captain.name} 
-                    size={28}
+                    size={40}
+                    photoUrl={idToPlayer.get(captain.id)?.photoUrl || captain.photoUrl || null}
+                    badges={['C']}
                   />
                   <span style={{fontSize: '11px', fontWeight: '700', color: '#1f2937'}}>팀{idx + 1}: {captain.name}</span>
                 </div>
@@ -680,7 +685,9 @@ function CaptainVsDisplay({ captains, players, matches = [], teamCount = 2 }) {
             <InitialAvatar 
               id={captains[0].id} 
               name={captains[0].name} 
-              size={32}
+              size={48}
+              photoUrl={idToPlayer.get(captains[0].id)?.photoUrl || captains[0].photoUrl || null}
+              badges={['C']}
             />
             <span style={{fontSize: '13px', fontWeight: '700', color: '#1f2937'}}>{captains[0].name}</span>
           </div>
@@ -751,7 +758,9 @@ function CaptainVsDisplay({ captains, players, matches = [], teamCount = 2 }) {
             <InitialAvatar 
               id={captains[1].id} 
               name={captains[1].name} 
-              size={32}
+              size={48}
+              photoUrl={idToPlayer.get(captains[1].id)?.photoUrl || captains[1].photoUrl || null}
+              badges={['C']}
             />
             <span style={{fontSize: '13px', fontWeight: '700', color: '#1f2937'}}>{captains[1].name}</span>
           </div>
