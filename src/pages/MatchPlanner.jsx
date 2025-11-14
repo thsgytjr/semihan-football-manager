@@ -4,6 +4,7 @@ import ReactDOM from'react-dom'
 import Card from'../components/Card'
 import{mkMatch,decideMode,splitKTeams,hydrateMatch}from'../lib/match'
 import { extractSeason } from '../lib/matchUtils'
+import { localDateTimeToISO, getCurrentLocalDateTime } from '../lib/dateUtils'
 // ...other imports...
 
 // 포지션 고려 팀 분배 함수 (splitKTeamsPosAware)
@@ -86,7 +87,7 @@ export default function MatchPlanner({
   membershipSettings = []
 }){
   const customMemberships = membershipSettings.length > 0 ? membershipSettings : []
-  const[dateISO,setDateISO]=useState(()=>getNextSaturday630()),[attendeeIds,setAttendeeIds]=useState([]),[criterion,setCriterion]=useState('overall'),[shuffleSeed,setShuffleSeed]=useState(0)
+  const[dateISO,setDateISO]=useState(()=>getCurrentLocalDateTime()),[attendeeIds,setAttendeeIds]=useState([]),[criterion,setCriterion]=useState('overall'),[shuffleSeed,setShuffleSeed]=useState(0)
   const[enablePitchFee,setEnablePitchFee]=useState(true) // 구장비 사용 여부 토글
   const[dateError,setDateError]=useState(null) // 과거 날짜 오류 메시지
   const[locationPreset,setLocationPreset]=useState(''),[locationName,setLocationName]=useState(''),[locationAddress,setLocationAddress]=useState('')
@@ -265,8 +266,10 @@ export default function MatchPlanner({
       }
     }
     
-    // 날짜 문자열은 로컬 형식 그대로 저장 (타임존 변환으로 시간이 바뀌는 문제 방지)
-  const dateISOFormatted = dateISO && dateISO.length >= 16 ? dateISO.slice(0,16) : getNextSaturday630()
+    // 날짜 문자열을 타임존 정보와 함께 ISO 형식으로 변환
+  const dateISOFormatted = dateISO && dateISO.length >= 16 
+    ? localDateTimeToISO(dateISO.slice(0,16)) 
+    : localDateTimeToISO(getCurrentLocalDateTime())
     
     const payload={
       ...mkMatch({
@@ -299,8 +302,10 @@ export default function MatchPlanner({
     // 팀 구성 스냅샷 저장 (선수 ID 배열)
     const teamsSnapshot = previewTeams.map(team => team.map(p => p.id))
 
-    // 날짜 문자열은 로컬 형식 그대로 저장 (타임존 변환으로 시간이 바뀌는 문제 방지)
-  const dateISOFormatted = dateISO && dateISO.length >= 16 ? dateISO.slice(0,16) : getNextSaturday630()
+    // 날짜 문자열을 타임존 정보와 함께 ISO 형식으로 변환
+  const dateISOFormatted = dateISO && dateISO.length >= 16 
+    ? localDateTimeToISO(dateISO.slice(0,16)) 
+    : localDateTimeToISO(getCurrentLocalDateTime())
 
     const fees = enablePitchFee ? computeFeesAtSave({ baseCostValue: baseCost, attendees: assignedPlayerIds.map(id => players.find(p=>p.id===id)).filter(Boolean), guestSurcharge }) : null
     const upcomingMatch = createUpcomingMatch({
@@ -1146,8 +1151,10 @@ export default function MatchPlanner({
                       const teamsSnapshot = previewTeams.map(team => team.map(p => p.id))
                       const assignedPlayerIds = previewTeams.flat().map(p => p.id)
                       
-                      // 날짜 문자열은 로컬 형식 그대로 저장
-                      const dateISOFormatted = dateISO && dateISO.length >= 16 ? dateISO.slice(0,16) : getNextSaturday630()
+                      // 날짜 문자열을 타임존 정보와 함께 ISO 형식으로 변환
+                      const dateISOFormatted = dateISO && dateISO.length >= 16 
+                        ? localDateTimeToISO(dateISO.slice(0,16)) 
+                        : localDateTimeToISO(getNextSaturday630())
                       
                       const attendeeObjs = previewTeams.flat().map(p => p)
                       const fees = enablePitchFee ? computeFeesAtSave({ baseCostValue: baseCost, attendees: attendeeObjs, guestSurcharge }) : null
