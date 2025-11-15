@@ -1756,12 +1756,13 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                    </div>
                  </div>
               </div>              {/* 컬럼 헤더 */}
-              <div className="flex items-center justify-between text-[10px] text-gray-500 mb-1 px-2">
+              {/* Responsive scoreboard header: wrap when narrow to avoid horizontal scroll */}
+              <div className="flex items-center justify-between text-[11px] text-gray-600 mb-1 px-2 gap-y-1">
                 <span>팀</span>
                 <div className="flex items-center gap-3">
                   <div className="flex gap-1">
                     {Array.from({length:maxQ}).map((_,qi)=>(
-                      <span key={qi} className="w-6 text-center">G{qi+1}</span>
+                      <span key={qi} className="w-6 text-center font-medium">G{qi+1}</span>
                     ))}
                   </div>
                   {(isThreeTeams || isFourPlusWithMatchups) && <span className="w-10 text-center">승점</span>}
@@ -1842,7 +1843,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       })
                       
                       return (
-                        <div key={ti} className={`flex items-center justify-between text-sm py-2 px-2 rounded border-l-4 ${
+                        <div key={ti} className={`flex items-center justify-between text-xs sm:text-sm py-1.5 sm:py-2 px-2 rounded border-l-4 ${
                           isWinner 
                             ? `bg-amber-50 font-medium ${fieldColor}` 
                             : `bg-white ${fieldColor}`
@@ -1860,14 +1861,14 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                             )}
                             {isWinner && <span className="text-amber-600">🏆</span>}
                           </span>
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-2 sm:gap-3">
                             <div className="flex gap-1">
                               {Array.from({length:maxQ}).map((_,qi)=>{
                                 const v = Array.isArray(arr) ? (arr[qi] ?? 0) : (qi===0? (arr||0) : 0)
                                 const wonThisQuarter = wonQuarters[qi]
                                 
                                 return (
-                                  <div key={qi} className="w-6 text-center text-xs text-gray-600 relative">
+                                  <div key={qi} className="w-6 text-center text-xs text-gray-700 relative">
                                     <span className={wonThisQuarter ? 'font-semibold' : ''}>{v}</span>
                                     {wonThisQuarter && (
                                       <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
@@ -2056,7 +2057,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   }) : []
                   
                   return (
-                    <div key={ti} className={`flex items-center justify-between text-sm py-2 px-2 rounded ${isWinner ? 'bg-amber-100 font-medium' : 'bg-white'}`}>
+                    <div key={ti} className={`flex items-center justify-between text-xs sm:text-sm py-1.5 sm:py-2 px-2 rounded ${isWinner ? 'bg-amber-100 font-medium' : 'bg-white'}`}> 
                       <span className="flex items-center gap-2">
                         <span>팀 {ti+1}</span>
                         {points && points.fieldNames[ti] && (
@@ -2075,7 +2076,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                         )}
                         {isWinner && <span className="text-amber-600">🏆</span>}
                       </span>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2 sm:gap-3">
                         <div className="flex gap-1">
                           {Array.from({length:maxQ}).map((_,qi)=>{
                             const v = Array.isArray(arr) ? (arr[qi] ?? 0) : (qi===0? (arr||0) : 0)
@@ -2084,7 +2085,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                             const isBestQuarter = (!isThreeTeams && isMultiTeam) && Math.abs(qDiff - bestDiff) < 0.01
                             
                             return (
-                              <div key={qi} className="w-6 text-center text-xs text-gray-600 relative">
+                              <div key={qi} className="w-6 text-center text-xs text-gray-700 relative">
                                 <span className={wonThisQuarter || isBestQuarter ? 'font-semibold' : ''}>{v}</span>
                                 {(!isThreeTeams && isMultiTeam) ? (
                                   isBestQuarter && (
