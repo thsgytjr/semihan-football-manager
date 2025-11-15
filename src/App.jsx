@@ -1,5 +1,5 @@
 // src/App.jsx
-import React,{useEffect,useMemo,useState,useCallback}from"react"
+import React,{useEffect,useMemo,useState,useCallback,useRef}from"react"
 import{Home,Users,CalendarDays,ListChecks,ShieldCheck,Lock,Eye,EyeOff,AlertCircle,CheckCircle2,X,Settings,BookOpen,Shuffle,DollarSign}from"lucide-react"
 import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB,incrementVisits,logVisit,getVisitStats,getTotalVisits,USE_MATCHES_TABLE}from"./services/storage.service"
 import { supabase } from './lib/supabaseClient'
@@ -49,6 +49,8 @@ export default function App(){
   const[isAdmin,setIsAdmin]=useState(false),[isAnalyticsAdmin,setIsAnalyticsAdmin]=useState(false),[loginOpen,setLoginOpen]=useState(false)
   const[loading,setLoading]=useState(true)
   const[pageLoading,setPageLoading]=useState(false)
+  const[loadError,setLoadError]=useState(null)
+  const[loadAttempt,setLoadAttempt]=useState(0)
   const[appTitle,setAppTitle]=useState(()=>getAppSettings().appTitle)
   const[settingsOpen,setSettingsOpen]=useState(false)
   const[tutorialOpen,setTutorialOpen]=useState(false)
@@ -60,6 +62,9 @@ export default function App(){
   const[showInviteSetup,setShowInviteSetup]=useState(false)
   const[showAuthError,setShowAuthError]=useState(false)
   const[authError,setAuthError]=useState({ error:null, errorCode:null, description:null })
+
+  // Core-load tracking to avoid race-triggered reloads/timeouts
+  const coreLoadedRef = useRef(false)
 
   // Admin 결정 로직: 설정(adminEmails)이 있으면 이를 우선 사용, 없으면 현행 로직 유지
   const computeIsAdmin = React.useCallback((sessionUserEmail, settings) => {
@@ -105,6 +110,13 @@ export default function App(){
     // 세션이 업데이트되면 자동으로 isAdmin이 설정됨
     window.location.hash = '' // URL hash 정리
   }
+
+  // 사용자가 수동 재시도할 때 호출 (새로고침 없이 재시도)
+  const handleRetryLoading = useCallback(() => {
+    setLoadError(null)
+    setLoading(true)
+    setLoadAttempt(prev => prev + 1)
+  }, [])
 
   const handleAuthErrorHome = () => {
     window.location.hash = ''
@@ -199,173 +211,158 @@ export default function App(){
     })()
   },[])
 
-  useEffect(()=>{let mounted=true;let hardTimeoutId=null;(async()=>{
-    try{
-      // 10초 하드 타임아웃 설정 (모바일 네트워크 고려하여 증가)
-      hardTimeoutId = setTimeout(() => {
-        if(mounted) {
-          setLoading(false)
-          logger.error('[App] Hard timeout reached (10s)')
-          
-          // 타임아웃 시 캐시 삭제 후 자동 재시도 (무한루프 방지: 최대 1회)
-          const retryCount = parseInt(sessionStorage.getItem('sfm:retry_count') || '0', 10)
-          
-          if (retryCount < 1) {
-            sessionStorage.setItem('sfm:retry_count', String(retryCount + 1))
-            
-            // 캐시 클리어
-            try {
-              const keysToRemove = []
-              for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i)
-                if (key && key.startsWith('sfm:cache:')) {
-                  keysToRemove.push(key)
-                }
-              }
-              keysToRemove.forEach(k => localStorage.removeItem(k))
-              logger.log('[App] Cache cleared before retry')
-            } catch (e) {
-              logger.error('[App] Failed to clear cache', e)
-            }
-            
-            notify('⏱️ 로딩 타임아웃 - 캐시 클리어 후 재시도합니다...')
-            setTimeout(() => window.location.reload(), 1500)
-          } else {
-            // 재시도 실패 시
-            sessionStorage.removeItem('sfm:retry_count')
-            notify('⏱️ 로딩 실패 - 네트워크 연결을 확인해주세요', 'error')
-            
-            // 모바일에서는 사용자에게 수동 새로고침 안내
-            if(/iPhone|iPad|Android/.test(navigator.userAgent)) {
-              setTimeout(() => {
-                const userConfirm = window.confirm('네트워크 연결이 불안정합니다.\n브라우저를 완전히 종료 후 다시 시작해주세요.\n\n지금 페이지를 다시 로드하시겠습니까?')
-                if (userConfirm) {
-                  window.location.href = window.location.href.split('?')[0] + '?t=' + Date.now()
-                }
-              }, 2000)
-            }
-          }
-        }
-      }, 10000)
-      
-      // 각 네트워크 호출에 6초 타임아웃 적용 (모바일 고려)
-      await withTimeout(runMigrations(), 6000, 'runMigrations')
-      
-      const playersFromDB = await withTimeout(listPlayers(), 6000, 'listPlayers')
-      const shared = await withTimeout(loadDB(), 6000, 'loadDB')
-      
-      // 멤버십 설정 로드 (새 테이블에서)
-      const membershipSettings = await withTimeout(getMembershipSettings(), 6000, 'getMembershipSettings')
-      
-      // Matches 로드: USE_MATCHES_TABLE 플래그에 따라 분기
-      let matchesData = []
-      if (USE_MATCHES_TABLE) {
-        logger.log('[App] Loading matches from Supabase matches table')
-        matchesData = await withTimeout(listMatchesFromDB(), 6000, 'listMatchesFromDB') || []
-      } else {
-        logger.log('[App] Loading matches from appdb JSON')
-        matchesData = (shared && shared.matches) || []
-      }
-      
-      if(!mounted)return
-      
-      // 로딩 성공 시 재시도 카운터 초기화
-      sessionStorage.removeItem('sfm:retry_count')
-      
-      // 만료된 예정 매치들을 필터링
-      const activeUpcomingMatches = filterExpiredMatches((shared && shared.upcomingMatches) || [])
-      
-      // 만료된 매치가 있었다면 DB에서도 제거
-      if(activeUpcomingMatches.length !== ((shared && shared.upcomingMatches) || []).length) {
-        const updatedShared = {...(shared || {}), upcomingMatches: activeUpcomingMatches}
-        await withTimeout(saveDB(updatedShared), 4000, 'saveDB').catch(logger.error)
-      }
-      
-      // 총 방문자 수 조회 (visit_logs 테이블에서)
-      const totalVisits = await withTimeout(getTotalVisits(), 6000, 'getTotalVisits') || 0
-      
-      setDb({
-        players: playersFromDB || [],
-        matches: matchesData,
-        visits: totalVisits,
-        upcomingMatches: activeUpcomingMatches,
-        tagPresets: (shared && shared.tagPresets) || [],
-        membershipSettings: membershipSettings || []
-      })
+  // 1) 초기 데이터 로딩 (재시도/백오프/타임아웃 포함)
+  useEffect(()=>{
+    let mounted = true
+    coreLoadedRef.current = false
+    setLoadError(null)
+    setLoading(true)
 
-      // 방문 추적 (개발 환경 및 프리뷰 모드 제외)
-      if(shouldTrackVisit()){
-        try{
-          sessionStorage?.setItem('visited','1')
-          
-          // 방문자 정보 수집
-          const visitorId = getOrCreateVisitorId()
-          const userAgent = navigator?.userAgent || ''
-          const screenWidth = window?.screen?.width || null
-          const screenHeight = window?.screen?.height || null
-          const { device, browser, os, phoneModel } = parseUserAgent(userAgent, screenWidth, screenHeight)
-          
-          // 방문자 수 증가 (프리뷰 모드 재확인)
-          if(!isPreviewMode() && !isDevelopmentEnvironment()){
-            await withTimeout(incrementVisits(), 4000, 'incrementVisits')
-          }
-          
-          // IP 주소 조회 후 로그 저장 (비동기, 실패해도 계속 진행)
-          getVisitorIP().then(async (ipAddress) => {
-            // 비동기 작업 완료 시점에 다시 한번 프리뷰 모드 체크
-            if(isPreviewMode() || isDevelopmentEnvironment()){
-              return // 프리뷰 모드거나 개발 환경이면 저장하지 않음
-            }
-            
-            // 방문 로그 저장
-            await withTimeout(logVisit({
-              visitorId,
-              ipAddress,
-              userAgent,
-              deviceType: device,
-              browser,
-              os,
-              phoneModel
-            }), 4000, 'logVisit')
-          }).catch(logger.error)
-        }catch(e){
-          logger.error('Visit tracking failed:', e)
-          // sessionStorage 실패 시 localStorage로 폴백
-          try{
-            const now = Date.now()
-            localStorage.setItem('lastVisit', now.toString())
-          }catch{}
-        }
+    const HARD_TIMEOUT_MS = 12000
+    const scheduledAttempt = loadAttempt
+    const hardTimeoutId = setTimeout(() => {
+      if (!mounted) return
+      if (coreLoadedRef.current) return
+      // 동일 시도에서만 유효
+      if (scheduledAttempt !== loadAttempt) return
+
+      const MAX_ATTEMPTS = 3
+      if (scheduledAttempt < MAX_ATTEMPTS - 1) {
+        setLoadError('네트워크가 느려 연결이 지연되고 있어요. 잠시 후 자동으로 다시 시도합니다.')
+        const backoff = Math.min(15000, 1500 * Math.pow(2, scheduledAttempt))
+        setTimeout(() => setLoadAttempt(prev => prev + 1), backoff)
+      } else {
+        setLoadError('여러 차례 시도했지만 연결되지 않았습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.')
       }
-    }catch(e){logger.error("[App] initial load failed",e)}
-    finally{
-      // 하드 타임아웃 정리
-      if(hardTimeoutId) clearTimeout(hardTimeoutId)
-      if(mounted)setLoading(false)
+      setLoading(false)
+    }, HARD_TIMEOUT_MS)
+
+    ;(async()=>{
+      try{
+        // 각 네트워크 호출에 6초 타임아웃 적용 (모바일 고려)
+        await withTimeout(runMigrations(), 6000, 'runMigrations')
+
+        const playersFromDB = await withTimeout(listPlayers(), 6000, 'listPlayers')
+        const shared = await withTimeout(loadDB(), 6000, 'loadDB')
+
+        // 멤버십 설정 로드 (새 테이블에서)
+        const membershipSettings = await withTimeout(getMembershipSettings(), 6000, 'getMembershipSettings')
+
+        // Matches 로드: USE_MATCHES_TABLE 플래그에 따라 분기
+        let matchesData = []
+        if (USE_MATCHES_TABLE) {
+          logger.log('[App] Loading matches from Supabase matches table')
+          matchesData = await withTimeout(listMatchesFromDB(), 6000, 'listMatchesFromDB') || []
+        } else {
+          logger.log('[App] Loading matches from appdb JSON')
+          matchesData = (shared && shared.matches) || []
+        }
+
+        if(!mounted) return
+
+        // 로딩 성공 시 재시도 카운터 초기화
+        sessionStorage.removeItem('sfm:retry_count')
+
+        // 만료된 예정 매치들을 필터링
+        const activeUpcomingMatches = filterExpiredMatches((shared && shared.upcomingMatches) || [])
+
+        // 만료된 매치가 있었다면 DB에서도 제거
+        if(activeUpcomingMatches.length !== ((shared && shared.upcomingMatches) || []).length) {
+          const updatedShared = {...(shared || {}), upcomingMatches: activeUpcomingMatches}
+          await withTimeout(saveDB(updatedShared), 4000, 'saveDB').catch(logger.error)
+        }
+
+        // 총 방문자 수 조회 (visit_logs 테이블에서)
+        const totalVisits = await withTimeout(getTotalVisits(), 6000, 'getTotalVisits') || 0
+
+        setDb({
+          players: playersFromDB || [],
+          matches: matchesData,
+          visits: totalVisits,
+          upcomingMatches: activeUpcomingMatches,
+          tagPresets: (shared && shared.tagPresets) || [],
+          membershipSettings: membershipSettings || []
+        })
+
+        // 핵심 데이터 로드 완료 표시 및 타임아웃 클리어
+        coreLoadedRef.current = true
+        clearTimeout(hardTimeoutId)
+        setLoadError(null)
+
+        // 방문 추적 (개발 환경 및 프리뷰 모드 제외)
+        if(shouldTrackVisit()){
+          try{
+            sessionStorage?.setItem('visited','1')
+
+            // 방문자 정보 수집
+            const visitorId = getOrCreateVisitorId()
+            const userAgent = navigator?.userAgent || ''
+            const screenWidth = window?.screen?.width || null
+            const screenHeight = window?.screen?.height || null
+            const { device, browser, os, phoneModel } = parseUserAgent(userAgent, screenWidth, screenHeight)
+
+            // 방문자 수 증가 (프리뷰 모드 재확인)
+            if(!isPreviewMode() && !isDevelopmentEnvironment()){
+              await withTimeout(incrementVisits(), 4000, 'incrementVisits')
+            }
+
+            // IP 주소 조회 후 로그 저장 (비동기, 실패해도 계속 진행)
+            getVisitorIP().then(async (ipAddress) => {
+              if(isPreviewMode() || isDevelopmentEnvironment()){
+                return
+              }
+              await withTimeout(logVisit({
+                visitorId,
+                ipAddress,
+                userAgent,
+                deviceType: device,
+                browser,
+                os,
+                phoneModel
+              }), 4000, 'logVisit')
+            }).catch(logger.error)
+          }catch(e){
+            logger.error('Visit tracking failed:', e)
+            try{
+              const now = Date.now()
+              localStorage.setItem('lastVisit', now.toString())
+            }catch{}
+          }
+        }
+      }catch(e){
+        logger.error("[App] initial load failed",e)
+      }
+      finally{
+        if(mounted) setLoading(false)
+      }
+    })()
+
+    return ()=>{
+      mounted=false
+      clearTimeout(hardTimeoutId)
     }
-  })()
+  },[loadAttempt])
+
+  // 2) 실시간 구독은 최초 1회만 설정 (재시도와 분리)
+  useEffect(()=>{
     const offP=subscribePlayers(list=>setDb(prev=>({...prev,players:list})))
-    
+
     // Matches 구독: USE_MATCHES_TABLE 플래그에 따라 분기
     let offMatches = () => {}
     if (USE_MATCHES_TABLE) {
       logger.log('[App] Subscribing to matches table')
       offMatches = subscribeMatches(list=>setDb(prev=>({...prev,matches:list})))
     }
-    
+
     const offDB=subscribeDB(next=>{
-      // 실시간으로 들어오는 데이터도 필터링
       const activeUpcomingMatches = filterExpiredMatches(next.upcomingMatches||[])
-      
-      // USE_MATCHES_TABLE이 false일 때만 appdb의 matches 사용
       if (USE_MATCHES_TABLE) {
         setDb(prev=>({...prev,upcomingMatches:activeUpcomingMatches,tagPresets:next.tagPresets||prev.tagPresets||[]}))
       } else {
         setDb(prev=>({...prev,matches:next.matches||prev.matches||[],upcomingMatches:activeUpcomingMatches,tagPresets:next.tagPresets||prev.tagPresets||[]}))
       }
     })
-    
-    // visit_logs 변경 감지 및 총 방문자 수 업데이트
+
     const visitLogsChannel = supabase
       .channel('visit_logs_changes')
       .on(
@@ -377,14 +374,13 @@ export default function App(){
         }
       )
       .subscribe()
-    
-    // 멤버십 설정 실시간 구독
+
     const offMembership=subscribeMembershipSettings(async()=>{
       const membershipSettings = await getMembershipSettings()
       setDb(prev=>({...prev,membershipSettings:membershipSettings||[]}))
     })
+
     return()=>{
-      mounted=false
       offP?.()
       offMatches?.()
       offDB?.()
@@ -897,6 +893,25 @@ export default function App(){
         />
       ) : showInviteSetup ? (
         <InviteSetupPage onComplete={handleInviteComplete} />
+      ) : loadError ? (
+        <div className="flex min-h-[40vh] flex-col items-center justify-center rounded-2xl border border-amber-200 bg-white p-6 text-center shadow-md">
+          <h2 className="text-lg font-semibold text-stone-900">앱 로딩에 문제가 생겼어요</h2>
+          <p className="text-sm text-stone-600 mt-2 whitespace-pre-line">{loadError}</p>
+          <div className="mt-4 flex flex-wrap justify-center gap-3">
+            <button
+              onClick={handleRetryLoading}
+              className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+            >
+              다시 시도하기
+            </button>
+            <button
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center justify-center rounded-lg border border-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 transition hover:border-stone-300"
+            >
+              창 새로고침
+            </button>
+          </div>
+        </div>
       ) : loading ? (
         <div className="space-y-4">
           <div className="animate-pulse">
