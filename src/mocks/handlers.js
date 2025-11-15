@@ -1,5 +1,5 @@
 import { http, HttpResponse, delay } from 'msw'
-import { mockPlayers, mockMatches, mockVisitLogs, mockAppDB } from './data'
+import { mockPlayers, mockMatches, mockVisitLogs, mockAppDB, mockMembershipSettings } from './data'
 import { logger } from '../lib/logger'
 
 // Mock 인증 상태
@@ -299,6 +299,116 @@ export const handlers = [
       return HttpResponse.json({ id, data: responseData })
     }
     return HttpResponse.json({ error: 'Invalid appdb ID' }, { status: 400 })
+  }),
+
+  // ============ Membership Settings API ============
+  http.get('*/rest/v1/membership_settings', async ({ request }) => {
+    await delay(300)
+    const url = new URL(request.url)
+    const id = url.searchParams.get('id')
+    
+    if (id) {
+      const idValue = id.replace('eq.', '')
+      const setting = mockMembershipSettings.find(s => s.id === idValue)
+      if (setting) {
+        return HttpResponse.json([setting])
+      }
+      return HttpResponse.json([])
+    }
+    
+    // Sort by sort_order
+    const sorted = [...mockMembershipSettings].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0))
+    return HttpResponse.json(sorted)
+  }),
+
+  http.post('*/rest/v1/membership_settings', async ({ request }) => {
+    await delay(300)
+    const body = await request.json()
+    
+    // Handle array of memberships (bulk insert)
+    const memberships = Array.isArray(body) ? body : [body]
+    const results = []
+    
+    for (const membership of memberships) {
+      const newMembership = {
+        id: membership.id || crypto.randomUUID(),
+        name: membership.name,
+        badge: membership.badge,
+        badge_color: membership.badge_color,
+        deletable: membership.deletable !== false,
+        sort_order: membership.sort_order || mockMembershipSettings.length,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+      mockMembershipSettings.push(newMembership)
+      results.push(newMembership)
+    }
+    
+    logger.log('[MSW] membership_settings POST:', results.length, 'added')
+    logger.log('[MSW] membership_settings POST result:', results[0])
+    logger.log('[MSW] membership_settings POST body was array?:', Array.isArray(body))
+    
+    // Supabase .insert([...]) with .select().single() 
+    // insert는 배열을 받지만, .single()이 있으면 단일 객체 반환
+    // 원래 body가 배열이 아니면 results[0] 반환 (단일 insert)
+    const response = results[0]  // 항상 단일 객체 반환 (.single() 사용)
+    logger.log('[MSW] membership_settings POST final response:', response)
+    return HttpResponse.json(response, { status: 201 })
+  }),
+
+  http.patch('*/rest/v1/membership_settings*', async ({ request }) => {
+    await delay(300)
+    const url = new URL(request.url)
+    const body = await request.json()
+    
+    // Extract id from query parameter (id=eq.xxx)
+    const idParam = url.searchParams.get('id')
+    let membershipId = null
+    
+    if (idParam) {
+      membershipId = idParam.replace('eq.', '')
+    } else if (body.id) {
+      membershipId = body.id
+    }
+    
+    if (membershipId) {
+      const index = mockMembershipSettings.findIndex(m => m.id === membershipId)
+      if (index !== -1) {
+        mockMembershipSettings[index] = {
+          ...mockMembershipSettings[index],
+          ...body,
+          updated_at: new Date().toISOString()
+        }
+        logger.log('[MSW] membership_settings PATCH:', membershipId)
+        return HttpResponse.json(mockMembershipSettings[index])
+      }
+    }
+    
+    return HttpResponse.json({ error: 'Membership not found' }, { status: 404 })
+  }),
+
+  http.delete('*/rest/v1/membership_settings*', async ({ request }) => {
+    await delay(300)
+    const url = new URL(request.url)
+    
+    // Extract id from query parameter (id=eq.xxx)
+    const idParam = url.searchParams.get('id')
+    let membershipId = null
+    
+    if (idParam) {
+      membershipId = idParam.replace('eq.', '')
+    }
+    
+    if (membershipId) {
+      const index = mockMembershipSettings.findIndex(m => m.id === membershipId)
+      if (index !== -1) {
+        mockMembershipSettings.splice(index, 1)
+        logger.log('[MSW] membership_settings DELETE:', membershipId)
+        return HttpResponse.json({ success: true })
+      }
+    }
+    
+    return HttpResponse.json({ error: 'Membership not found' }, { status: 404 })
   }),
 
   // ============ Realtime Subscriptions (더미 응답) ============

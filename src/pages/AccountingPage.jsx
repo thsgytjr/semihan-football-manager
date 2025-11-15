@@ -1,5 +1,6 @@
 // src/pages/AccountingPage.jsx
 import React, { useEffect, useState, useMemo } from 'react'
+import ConfirmDialog from '../components/ConfirmDialog'
 import Card from '../components/Card'
 import { notify } from '../components/Toast'
 import {
@@ -40,6 +41,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   const [showAdvancedDates, setShowAdvancedDates] = useState(false)
   const [feeOverrides, setFeeOverrides] = useState(() => getAccountingOverrides())
   const [savingOverrides, setSavingOverrides] = useState(false)
+  const [confirmState, setConfirmState] = useState({ open: false, kind: null, payload: null })
 
   const [renewals, setRenewals] = useState({})
   const [matchesLocal, setMatchesLocal] = useState(matches)
@@ -202,20 +204,8 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   }
 
   async function handleDeletePayment(payment) {
-    if (!window.confirm('이 결제 내역을 삭제하시겠습니까?')) return
-
-    try {
-      if (payment.payment_type === 'match_fee' && payment.match_id && payment.player_id) {
-        // 매치 구장비 결제는 match_payments도 되돌림 처리
-        await cancelMatchPayment(payment.match_id, payment.player_id)
-      } else {
-        await deletePayment(payment.id)
-      }
-      notify('삭제되었습니다')
-      loadData()
-    } catch (error) {
-      notify('삭제 실패')
-    }
+    // Open confirm dialog; actual deletion handled in onConfirm
+    setConfirmState({ open: true, kind: 'delete-payment', payload: { payment } })
   }
 
   async function handleBulkDeletePayments() {
@@ -223,42 +213,8 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       notify('삭제할 결제 내역을 선택해주세요')
       return
     }
-
-    if (!window.confirm(`선택한 ${selectedPayments.size}개의 결제 내역을 삭제하시겠습니까?`)) {
-      return
-    }
-
-    setIsDeletingBulk(true)
-    try {
-      const deletePromises = Array.from(selectedPayments).map(paymentId => {
-        const payment = payments.find(p => p.id === paymentId)
-        if (!payment) return Promise.resolve()
-        
-        if (payment.payment_type === 'match_fee' && payment.match_id && payment.player_id) {
-          return cancelMatchPayment(payment.match_id, payment.player_id)
-        } else {
-          return deletePayment(paymentId)
-        }
-      })
-
-      const results = await Promise.allSettled(deletePromises)
-      
-      const successCount = results.filter(r => r.status === 'fulfilled').length
-      const failCount = results.filter(r => r.status === 'rejected').length
-
-      if (failCount === 0) {
-        notify(`${successCount}개의 결제 내역이 삭제되었습니다 ✅`)
-      } else {
-        notify(`${successCount}개 삭제 성공, ${failCount}개 실패`)
-      }
-
-      setSelectedPayments(new Set())
-      loadData()
-    } catch (error) {
-      notify('일괄 삭제 실패')
-    } finally {
-      setIsDeletingBulk(false)
-    }
+    // Open confirm; actual deletion in onConfirm
+    setConfirmState({ open: true, kind: 'bulk-delete', payload: { ids: Array.from(selectedPayments) } })
   }
 
   function toggleSelectPayment(paymentId) {
@@ -1552,6 +1508,70 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
           </div>
         </Card>
       )}
+
+      {/* Confirm dialogs for destructive actions in Payments tab */}
+      <ConfirmDialog
+        open={confirmState.open && confirmState.kind === 'delete-payment'}
+        title="결제 내역 삭제"
+        message="이 결제 내역을 삭제하시겠습니까?"
+        confirmLabel="삭제하기"
+        cancelLabel="취소"
+        tone="danger"
+        onCancel={() => setConfirmState({ open: false, kind: null, payload: null })}
+        onConfirm={async () => {
+          const payment = confirmState.payload?.payment
+          if (!payment) { setConfirmState({ open: false, kind: null, payload: null }); return }
+          try {
+            if (payment.payment_type === 'match_fee' && payment.match_id && payment.player_id) {
+              await cancelMatchPayment(payment.match_id, payment.player_id)
+            } else {
+              await deletePayment(payment.id)
+            }
+            notify('삭제되었습니다')
+            loadData()
+          } catch (error) {
+            notify('삭제 실패')
+          } finally {
+            setConfirmState({ open: false, kind: null, payload: null })
+          }
+        }}
+      />
+      <ConfirmDialog
+        open={confirmState.open && confirmState.kind === 'bulk-delete'}
+        title="일괄 삭제"
+        message={`선택한 ${confirmState.payload?.ids?.length || 0}개의 결제 내역을 삭제하시겠습니까?`}
+        confirmLabel="삭제하기"
+        cancelLabel="취소"
+        tone="danger"
+        onCancel={() => setConfirmState({ open: false, kind: null, payload: null })}
+        onConfirm={async () => {
+          const ids = confirmState.payload?.ids || []
+          setIsDeletingBulk(true)
+          try {
+            const deletePromises = ids.map(paymentId => {
+              const payment = payments.find(p => p.id === paymentId)
+              if (!payment) return Promise.resolve()
+              if (payment.payment_type === 'match_fee' && payment.match_id && payment.player_id) {
+                return cancelMatchPayment(payment.match_id, payment.player_id)
+              } else {
+                return deletePayment(paymentId)
+              }
+            })
+            const results = await Promise.allSettled(deletePromises)
+            const successCount = results.filter(r => r.status === 'fulfilled').length
+            const failCount = results.filter(r => r.status === 'rejected').length
+            if (failCount === 0) notify(`${successCount}개의 결제 내역이 삭제되었습니다 ✅`)
+            else notify(`${successCount}개 삭제 성공, ${failCount}개 실패`)
+            setSelectedPayments(new Set())
+            loadData()
+          } catch (error) {
+            notify('일괄 삭제 실패')
+          } finally {
+            setIsDeletingBulk(false)
+            setConfirmState({ open: false, kind: null, payload: null })
+          }
+        }}
+      />
     </div>
   )
 }
@@ -1668,6 +1688,7 @@ function MatchFeesSection({ match, players }) {
   const [matchPayments, setMatchPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [showReimbursement, setShowReimbursement] = useState(false)
+  const [confirmState, setConfirmState] = useState({ open: false, kind: null, payload: null })
 
   useEffect(() => {
     loadMatchPayments()
@@ -1695,34 +1716,11 @@ function MatchFeesSection({ match, players }) {
   }
 
   async function handleCancelPayment(playerId) {
-    if (!window.confirm('납부 확인을 취소하시겠습니까?')) return
-    
-    try {
-      await cancelMatchPayment(match.id, playerId)
-      notify('납부 확인이 취소되었습니다')
-      loadMatchPayments()
-    } catch (error) {
-      notify('취소 실패')
-    }
+    setConfirmState({ open: true, kind: 'cancel-payment', payload: { playerId } })
   }
 
   async function handleReimbursement(playerId, amount) {
-    if (!window.confirm('이 선수에게 상환 처리하시겠습니까?')) return
-    
-    try {
-      await addPayment({
-        playerId,
-        paymentType: 'reimbursement',
-        amount,
-        paymentMethod: 'venmo',
-        paymentDate: new Date().toISOString(),
-        notes: `${match.location?.name || '매치'} 구장비 대신 결제`
-      })
-      notify('상환 처리되었습니다 ✅')
-      setShowReimbursement(false)
-    } catch (error) {
-      notify('상환 처리 실패')
-    }
+    setConfirmState({ open: true, kind: 'reimburse', payload: { playerId, amount } })
   }
 
   const matchDate = new Date(match.dateISO).toLocaleDateString('ko-KR', {
@@ -1753,6 +1751,41 @@ function MatchFeesSection({ match, players }) {
         </div>
         <div className="text-right flex items-center gap-3">
           <div>
+          <ConfirmDialog
+            open={confirmState.open}
+            title={confirmState.kind === 'cancel-payment' ? '납부 확인 취소' : '상환 처리'}
+            message={confirmState.kind === 'cancel-payment' 
+              ? '납부 확인을 취소하시겠습니까?'
+              : '이 선수에게 상환 처리하시겠습니까?'}
+            confirmLabel={confirmState.kind === 'cancel-payment' ? '취소하기' : '상환 처리'}
+            cancelLabel="닫기"
+            tone="danger"
+            onCancel={() => setConfirmState({ open: false, kind: null, payload: null })}
+            onConfirm={async () => {
+              try {
+                if (confirmState.kind === 'cancel-payment') {
+                  await cancelMatchPayment(match.id, confirmState.payload.playerId)
+                  notify('납부 확인이 취소되었습니다')
+                  loadMatchPayments()
+                } else if (confirmState.kind === 'reimburse') {
+                  await addPayment({
+                    playerId: confirmState.payload.playerId,
+                    paymentType: 'reimbursement',
+                    amount: confirmState.payload.amount,
+                    paymentMethod: 'venmo',
+                    paymentDate: new Date().toISOString(),
+                    notes: `${match.location?.name || '매치'} 구장비 대신 결제`
+                  })
+                  notify('상환 처리되었습니다 ✅')
+                  setShowReimbursement(false)
+                }
+              } catch (error) {
+                notify(confirmState.kind === 'cancel-payment' ? '취소 실패' : '상환 처리 실패')
+              } finally {
+                setConfirmState({ open: false, kind: null, payload: null })
+              }
+            }}
+          />
             <div className="text-xs text-gray-600">납부율</div>
             <div className="text-lg font-bold text-emerald-600">
               {matchPayments.filter(p => p.payment_status === 'paid').length} / {participantIds.length}

@@ -1,6 +1,7 @@
 // src/components/MembershipSettings.jsx
 import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import ConfirmDialog from './ConfirmDialog'
 import { DEFAULT_MEMBERSHIPS, BADGE_COLORS, getBadgeColorStyle, validateMembership, canDeleteMembership } from '../lib/membershipConfig'
 import { addMembershipSetting, updateMembershipSetting, deleteMembershipSetting } from '../services/membership.service'
 import { notify } from './Toast'
@@ -15,15 +16,23 @@ export default function MembershipSettings({
   const [editingId, setEditingId] = useState(null)
   const [draft, setDraft] = useState(null)
   const [useCustomColor, setUseCustomColor] = useState(false)
+  const [confirmState, setConfirmState] = useState({ open: false, target: null })
+  const [locallyModified, setLocallyModified] = useState(false) // 로컬 수정 플래그
 
   useEffect(() => {
+    // 로컬에서 수정한 경우 외부 업데이트 무시 (한 번만)
+    if (locallyModified) {
+      setLocallyModified(false)
+      return
+    }
+    
     // 커스텀이 있으면 그것을 사용, 없으면 기본값 사용
     if (customMemberships.length > 0) {
       setMemberships(customMemberships)
     } else {
       setMemberships(DEFAULT_MEMBERSHIPS)
     }
-  }, [customMemberships])
+  }, [customMemberships, locallyModified])
 
   const startAdd = () => {
     setEditingId('new')
@@ -69,7 +78,22 @@ export default function MembershipSettings({
           sort_order: memberships.length
         }
         const saved = await addMembershipSetting(newMembership)
-        setMemberships([...memberships, { ...draft, id: saved.id }])
+        
+        // DB에서 반환된 ID를 사용하되, UI 데이터는 draft에서 가져오기
+        const newMembershipWithId = {
+          id: saved.id,
+          name: draft.name,
+          badge: draft.badge || null,
+          badgeColor: draft.badgeColor,
+          deletable: true,
+          sortOrder: saved.sortOrder || memberships.length
+        }
+        
+        const updatedMemberships = [...memberships, newMembershipWithId]
+        setMemberships(updatedMemberships)
+        setLocallyModified(true) // 로컬 수정 플래그 설정
+        // 부모 컴포넌트 업데이트 (즉시 반영)
+        onSave(updatedMemberships)
         notify('새 멤버십이 추가되었습니다', 'success')
       } else {
         // 기존 멤버십 수정 - DB 업데이트
@@ -79,7 +103,11 @@ export default function MembershipSettings({
           badge_color: draft.badgeColor
         }
         await updateMembershipSetting(editingId, updates)
-        setMemberships(memberships.map(m => m.id === editingId ? draft : m))
+        const updatedMemberships = memberships.map(m => m.id === editingId ? draft : m)
+        setMemberships(updatedMemberships)
+        setLocallyModified(true) // 로컬 수정 플래그 설정
+        // 부모 컴포넌트 업데이트 (즉시 반영)
+        onSave(updatedMemberships)
         notify('멤버십이 수정되었습니다', 'success')
       }
 
@@ -96,18 +124,8 @@ export default function MembershipSettings({
       notify(`${usedCount}명의 선수가 이 멤버십을 사용 중입니다. 먼저 선수들의 멤버십을 변경해주세요.`, 'error')
       return
     }
-
-    if (!confirm(`"${membership.name}" 멤버십을 삭제하시겠습니까?`)) {
-      return
-    }
-
-    try {
-      await deleteMembershipSetting(membership.id)
-      setMemberships(memberships.filter(m => m.id !== membership.id))
-      notify('멤버십이 삭제되었습니다', 'success')
-    } catch (err) {
-      notify('멤버십 삭제에 실패했습니다: ' + err.message, 'error')
-    }
+    // Open confirm dialog; handle in onConfirm below
+    setConfirmState({ open: true, target: membership })
   }
 
   const handleSave = () => {
@@ -137,7 +155,7 @@ export default function MembershipSettings({
           </p>
         </div>
 
-        {/* 본문 */}
+  {/* 본문 */}
         <div className="flex-1 overflow-y-auto p-6">
           <div className="space-y-3">
             {memberships.map(membership => (
@@ -475,6 +493,34 @@ export default function MembershipSettings({
             적용
           </button>
         </div>
+
+        {/* Confirm dialog for membership deletion */}
+        <ConfirmDialog
+          open={confirmState.open}
+          title="멤버십 삭제"
+          message={`"${confirmState.target?.name || ''}" 멤버십을 삭제하시겠습니까?`}
+          confirmLabel="삭제하기"
+          cancelLabel="취소"
+          tone="danger"
+          onCancel={() => setConfirmState({ open: false, target: null })}
+          onConfirm={async () => {
+            const membership = confirmState.target
+            if (!membership) { setConfirmState({ open: false, target: null }); return }
+            try {
+              await deleteMembershipSetting(membership.id)
+              const updatedMemberships = memberships.filter(m => m.id !== membership.id)
+              setMemberships(updatedMemberships)
+              setLocallyModified(true) // 로컬 수정 플래그 설정
+              // 부모 컴포넌트 업데이트 (즉시 반영)
+              onSave(updatedMemberships)
+              notify('멤버십이 삭제되었습니다', 'success')
+            } catch (err) {
+              notify('멤버십 삭제에 실패했습니다: ' + err.message, 'error')
+            } finally {
+              setConfirmState({ open: false, target: null })
+            }
+          }}
+        />
       </div>
     </div>,
     document.body

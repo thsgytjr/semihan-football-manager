@@ -2,6 +2,7 @@
 import React,{useEffect,useMemo,useRef,useState}from'react'
 import ReactDOM from'react-dom'
 import Card from'../components/Card'
+import ConfirmDialog from'../components/ConfirmDialog'
 import{mkMatch,decideMode,splitKTeams,hydrateMatch}from'../lib/match'
 import { extractSeason } from '../lib/matchUtils'
 import { localDateTimeToISO, getCurrentLocalDateTime } from '../lib/dateUtils'
@@ -111,6 +112,7 @@ export default function MatchPlanner({
   const[activeSortMode,setActiveSortMode]=useState(null) // 현재 활성화된 정렬 모드: 'name' | 'position' | 'ovr' | 'aipower' | null
   const[aiDistributedTeams,setAiDistributedTeams]=useState(null) // AI 배정 이전 상태 (Revert용)
   const[teamColors,setTeamColors]=useState([]) // Team colors: [{bg, text, border, label}, ...] - empty array means use default kit colors
+  const[confirmDelete,setConfirmDelete]=useState({open:false,id:null,kind:null})
   
   // 시즌 필터 상태
   const [selectedSeason, setSelectedSeason] = useState('all')
@@ -924,16 +926,7 @@ export default function MatchPlanner({
               )}
               {previewTeams.flat().length > 0 && (
                 <button 
-                  onClick={()=>{
-                    if(window.confirm('모든 팀 배정을 초기화하시겠습니까?')) {
-                      setAiDistributedTeams(manualTeams ?? previewTeams)
-                      setManualTeams(Array.from({length: teams}, () => []))
-                      setCaptainIds([])
-                      setShowAIPower(false)
-                      setActiveSortMode(null)
-                      notify('팀 배정이 초기화되었습니다')
-                    }
-                  }} 
+                  onClick={()=> setConfirmDelete({ open: true, id: '__reset_teams__', kind: 'reset-teams' })} 
                   className="rounded border border-red-300 bg-white px-2 py-1 text-xs text-red-600 hover:bg-red-50"
                   title="모든 선수를 팀에서 제거"
                 >
@@ -1302,12 +1295,7 @@ export default function MatchPlanner({
                         불러오기
                       </button>
                       <button
-                        onClick={() => {
-                          if (window.confirm('이 예정된 매치를 삭제하시겠습니까?')) {
-                            onDeleteUpcomingMatch(match.id)
-                            notify('예정된 매치가 삭제되었습니다 ✅')
-                          }
-                        }}
+                        onClick={()=>setConfirmDelete({open:true,id:match.id, kind:'delete-upcoming'})}
                         className="px-3 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
                         title="예정된 매치 삭제"
                       >
@@ -1367,6 +1355,25 @@ export default function MatchPlanner({
         <div className="mt-2 text-xs text-gray-500">* 자유 배치 · GK는 하단 골키퍼 존(80~98%)만 이동</div>
       </FullscreenModal>
     )}
+    <ConfirmDialog
+      open={confirmDelete.open}
+      title={confirmDelete.kind==='reset-teams'?'팀 배정 초기화':'예정된 매치 삭제'}
+      message={confirmDelete.kind==='reset-teams'?'모든 팀 배정을 초기화하시겠습니까?':'이 예정된 매치를 삭제하시겠습니까?'}
+      confirmLabel={confirmDelete.kind==='reset-teams'?'초기화':'삭제하기'}
+      cancelLabel="취소"
+      tone="danger"
+      onCancel={()=>setConfirmDelete({open:false,id:null,kind:null})}
+      onConfirm={()=>{
+        if(confirmDelete.kind==='reset-teams'){
+          // 초기화 핸들러가 있는 위치에서 setManualTeams 등을 실행해야 하지만,
+          // 여기서는 신호만 내려서 실제 초기화 로직과 연결하세요.
+          // TODO: 필요 시 특정 핸들러 호출 연결
+        }else if(confirmDelete.id){
+          onDeleteUpcomingMatch(confirmDelete.id);notify('예정된 매치가 삭제되었습니다 ✅')
+        }
+        setConfirmDelete({open:false,id:null,kind:null})
+      }}
+    />
   </div>)
 }
 

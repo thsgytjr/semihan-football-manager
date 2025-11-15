@@ -1,5 +1,6 @@
 // src/pages/StatsInput.jsx
 import React, { useMemo, useState, useEffect } from 'react'
+import ConfirmDialog from '../components/ConfirmDialog'
 import Card from '../components/Card'
 import InitialAvatar from '../components/InitialAvatar'
 import { hydrateMatch } from '../lib/match'
@@ -122,6 +123,8 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
   const [bulkText, setBulkText] = useState('')
   const [bulkMsg, setBulkMsg] = useState('')
   const [showSaved, setShowSaved] = useState(false)
+  const [confirmState, setConfirmState] = useState({ open: false, kind: null })
+  const [alertState, setAlertState] = useState({ open: false, title: '안내', message: '' })
 
   const save = () => {
     if (!editingMatch) return
@@ -559,6 +562,8 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
   const [showLinkPanel, setShowLinkPanel] = useState(false)
   const [addingGoalFor, setAddingGoalFor] = useState(null) // { playerId, teamIdx }
   const [addingAssistFor, setAddingAssistFor] = useState(null) // { playerId, teamIdx }
+  const [confirmState, setConfirmState] = useState({ open: false, kind: null })
+  const [alertState, setAlertState] = useState({ open: false, title: '안내', message: '' })
 
   if (!editingMatch) return null
 
@@ -746,11 +751,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
         <div className="text-base font-bold text-gray-800">⚽ 수동 입력</div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => {
-              if (confirm('모든 골/어시스트 기록을 초기화하시겠습니까?')) {
-                setDraft({})
-              }
-            }}
+            onClick={() => setConfirmState({ open: true, kind: 'reset-all' })}
             className="rounded-lg border-2 border-red-300 bg-red-50 hover:bg-red-100 px-3 py-2 text-sm font-semibold text-red-700 transition-all"
           >
             🗑️ 모두 초기화
@@ -1004,6 +1005,26 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
           </div>
         )}
       </div>
+      {/* Confirm/Alert Dialogs */}
+      <ConfirmDialog
+        open={confirmState.open && confirmState.kind === 'reset-all'}
+        title="초기화 확인"
+        message="모든 골/어시스트 기록을 초기화하시겠습니까?"
+        confirmLabel="초기화"
+        cancelLabel="취소"
+        tone="danger"
+        onCancel={() => setConfirmState({ open: false, kind: null })}
+        onConfirm={() => { setDraft({}); setConfirmState({ open: false, kind: null }) }}
+      />
+      <ConfirmDialog
+        open={alertState.open}
+        title={alertState.title}
+        message={alertState.message}
+        confirmLabel="확인"
+        cancelLabel={null}
+        tone="default"
+        onConfirm={() => setAlertState({ open: false, title: '안내', message: '' })}
+      />
     </div>
   )
 }
@@ -1012,6 +1033,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
 function GoalAssistLinkingPanel({ players, draft, setDraft, teams }) {
   const [selectedGoal, setSelectedGoal] = useState(null)
   const [selectedAssist, setSelectedAssist] = useState(null)
+  const [alertState, setAlertState] = useState({ open: false, title: '안내', message: '' })
 
   // Helper to find team of a player
   const getPlayerTeam = (playerId) => {
@@ -1081,7 +1103,7 @@ function GoalAssistLinkingPanel({ players, draft, setDraft, teams }) {
   const linkGoalToAssist = () => {
     if (!selectedGoal || !selectedAssist) return
     if (selectedGoal.playerId === selectedAssist.playerId) {
-      alert('자기 자신에게 어시스트할 수 없습니다')
+      setAlertState({ open: true, title: '안내', message: '자기 자신에게 어시스트할 수 없습니다' })
       return
     }
 
@@ -1289,6 +1311,17 @@ function GoalAssistLinkingPanel({ players, draft, setDraft, teams }) {
         <br />
         💡 <strong>연결 해제:</strong> 연결된 골 옆의 ✕ 버튼을 클릭하여 연결을 해제할 수 있습니다.
       </div>
+      
+      {/* Alert Dialog */}
+      <ConfirmDialog
+        open={alertState.open}
+        title={alertState.title}
+        message={alertState.message}
+        confirmLabel="확인"
+        cancelLabel={null}
+        tone="default"
+        onConfirm={() => setAlertState({ open: false, title: '안내', message: '' })}
+      />
     </div>
   )
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import ConfirmDialog from '../components/ConfirmDialog'
 import { Search, RefreshCw, Save, X, Clock, Check, ArrowRight, ArrowLeft } from 'lucide-react'
 import Card from '../components/Card'
 import DraftBoard from '../components/DraftBoard'
@@ -17,6 +18,8 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
   const [turnOrder, setTurnOrder] = useState([]) // 드래프트 순서 [0, 1, 2, 3...]
   const [orderIndex, setOrderIndex] = useState(0) // turnOrder 내 현재 인덱스
   const [orderDirection, setOrderDirection] = useState(1) // 1: 정방향, -1: 역방향 (스네이크)
+  const [confirmState, setConfirmState] = useState({ open: false, kind: null })
+  const [alertState, setAlertState] = useState({ open: false, message: '' })
   
   // 하위 호환성을 위한 별칭 (DraftBoard 컴포넌트가 captain1, captain2, team1, team2를 참조할 수 있음)
   const captain1 = captains[0] || null
@@ -191,7 +194,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
   // 드래프트 시작 - 참여 인원 선택 단계로 이동
   const startDraft = () => {
     if (allPlayers.length < 2) {
-      alert('최소 2명의 선수가 필요합니다.')
+  setAlertState({ open: true, message: '최소 2명의 선수가 필요합니다.' })
       return
     }
     
@@ -224,7 +227,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
   // 참여 인원 확정 후 주장 선택으로 이동
   const confirmParticipants = () => {
     if (participatingPlayers.length < 2) {
-      alert('최소 2명의 선수를 선택해주세요.')
+  setAlertState({ open: true, message: '최소 2명의 선수를 선택해주세요.' })
       return
     }
     setPlayerPool([...participatingPlayers])
@@ -264,7 +267,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
   const confirmCaptains = () => {
     const selectedCaptains = captains.filter(Boolean)
     if (selectedCaptains.length !== teamCount) {
-      alert(`주장 ${teamCount}명을 모두 선택해주세요.`)
+  setAlertState({ open: true, message: `주장 ${teamCount}명을 모두 선택해주세요.` })
       return
     }
     
@@ -308,7 +311,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
   const confirmFirstPick = () => {
     if (teamCount === 2) {
       if (!turnOrder.length && spinResult === null) {
-        alert('먼저 순서를 뽑아주세요.')
+  setAlertState({ open: true, message: '먼저 순서를 뽑아주세요.' })
         return
       }
       if (!turnOrder.length && spinResult !== null) {
@@ -317,7 +320,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
       }
     } else {
       if (turnOrder.length !== teamCount) {
-        alert('먼저 순서를 뽑아주세요.')
+  setAlertState({ open: true, message: '먼저 순서를 뽑아주세요.' })
         return
       }
     }
@@ -736,18 +739,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
   
   // 이전 단계로 돌아가기
   const goBackToPreviousStep = () => {
-    if (window.confirm('정말 이전 단계로 돌아가시겠습니까? 현재 진행 중인 드래프트가 초기화됩니다.')) {
-      setDraftState('ready')
-      setTeam1([captain1])
-      setTeam2([captain2])
-      setPlayerPool(participatingPlayers.filter(p => p.id !== captain1.id && p.id !== captain2.id))
-      setTimeLeft(draftSettings.timerDuration)
-      setPickCount(0)
-      pickCountRef.current = 0 // ref 초기화
-      setSearchTerm('')
-      setIsReadyForNextTurn(false)
-      setCurrentTurn(firstPick)
-    }
+    setConfirmState({ open: true, kind: 'back' })
   }
 
   // 드래프트 결과를 예정된 매치에 저장
@@ -2067,6 +2059,38 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
           }
         }
       `}</style>
+      {/* 인앱 Confirm/Alert 모달 */}
+      <ConfirmDialog
+        open={confirmState.open && confirmState.kind==='back'}
+        title="드래프트 초기화"
+        message={'정말 이전 단계로 돌아가시겠습니까? 현재 진행 중인 드래프트가 초기화됩니다.'}
+        confirmLabel="돌아가기"
+        cancelLabel="취소"
+        tone="danger"
+        onCancel={()=>setConfirmState({ open:false, kind:null })}
+        onConfirm={()=>{
+          setDraftState('ready')
+          setTeam1([captain1])
+          setTeam2([captain2])
+          setPlayerPool(participatingPlayers.filter(p => p.id !== captain1.id && p.id !== captain2.id))
+          setTimeLeft(draftSettings.timerDuration)
+          setPickCount(0)
+          pickCountRef.current = 0
+          setSearchTerm('')
+          setIsReadyForNextTurn(false)
+          setCurrentTurn(firstPick)
+          setConfirmState({ open:false, kind:null })
+        }}
+      />
+      <ConfirmDialog
+        open={alertState.open}
+        title="안내"
+        message={alertState.message}
+        confirmLabel="확인"
+        cancelLabel={null}
+        tone="default"
+        onConfirm={()=>setAlertState({ open:false, message:'' })}
+      />
     </div>
   )
 }

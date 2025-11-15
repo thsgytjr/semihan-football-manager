@@ -1,5 +1,6 @@
 // src/components/SavedMatchesList.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react"
+import ConfirmDialog from './ConfirmDialog'
 import InitialAvatar from "./InitialAvatar"
 import { overall } from "../lib/players"
 import { hydrateMatch } from "../lib/match"
@@ -768,6 +769,17 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
   
   // ✅ 2개 경기장 모드 토글
   const [multiFieldMode, setMultiFieldMode] = useState(m?.multiField || false)
+  // 삭제 확인 모달
+  const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null })
+          {enableLoadToPlanner&&<button className="text-[10px] rounded border border-blue-300 bg-blue-50 text-blue-700 px-1.5 py-0.5 hover:bg-blue-100 transition-colors leading-tight" onClick={()=>onLoadToPlanner?.(m)}>로드</button>}
+          {isAdmin&&onDeleteMatch&&(
+            <button
+              className="text-[10px] rounded border border-red-300 bg-red-50 text-red-700 px-1.5 py-0.5 hover:bg-red-100 transition-colors leading-tight"
+              onClick={()=> setConfirmDelete({ open: true, id: m.id })}
+            >
+              삭제
+            </button>
+          )}
   
   // ✅ 게임별 매치업 정보 (2개 경기장 모드용)
   // gameMatchups[gameIndex] = [[teamA1, teamA2], [teamB1, teamB2]]
@@ -1029,7 +1041,14 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
             </label>
           )}
           {enableLoadToPlanner&&<button className="text-[10px] rounded border border-blue-300 bg-blue-50 text-blue-700 px-1.5 py-0.5 hover:bg-blue-100 transition-colors leading-tight" onClick={()=>onLoadToPlanner?.(m)}>로드</button>}
-          {isAdmin&&onDeleteMatch&&<button className="text-[10px] rounded border border-red-300 bg-red-50 text-red-700 px-1.5 py-0.5 hover:bg-red-100 transition-colors leading-tight" onClick={()=>{ if(window.confirm("정말 삭제하시겠어요?\n삭제 시 대시보드의 공격포인트/기록 집계에 영향을 줄 수 있습니다.")) onDeleteMatch(m.id) }}>삭제</button>}
+          {isAdmin&&onDeleteMatch&&(
+            <button
+              className="text-[10px] rounded border border-red-300 bg-red-50 text-red-700 px-1.5 py-0.5 hover:bg-red-100 transition-colors leading-tight"
+              onClick={()=> setConfirmDelete({ open: true, id: m.id })}
+            >
+              삭제
+            </button>
+          )}
         </div>
       </div>
 
@@ -2175,6 +2194,28 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
         })()
       )}
 
+      {/* 삭제/초기화 확인 모달 */}
+      <ConfirmDialog
+        open={confirmDelete.open}
+        title={confirmDelete.id === '__reset_quarter_scores__' ? '점수 초기화' : '매치 삭제'}
+        message={confirmDelete.id === '__reset_quarter_scores__' 
+          ? '모든 게임 점수를 0으로 초기화하시겠습니까?'
+          : '정말 삭제하시겠어요?\n삭제 시 대시보드의 공격포인트/기록 집계에 영향을 줄 수 있습니다.'}
+        confirmLabel={confirmDelete.id === '__reset_quarter_scores__' ? '초기화' : '삭제하기'}
+        cancelLabel="취소"
+        tone="danger"
+        onCancel={() => setConfirmDelete({ open: false, id: null })}
+        onConfirm={() => {
+          if (confirmDelete.id === '__reset_quarter_scores__') {
+            setQuarterScores(initialSnap.map(()=>[]))
+            setDirty(true)
+          } else if (confirmDelete.id && onDeleteMatch) {
+            onDeleteMatch(confirmDelete.id)
+          }
+          setConfirmDelete({ open: false, id: null })
+        }}
+      />
+
       {/* 골/어시 토글과 배지 범례 */}
       <div className="mb-1 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         {/* 왼쪽: G/A 표시 슬라이드 토글 */}
@@ -2938,12 +2979,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                 <button 
                   className="px-2 py-1 sm:px-3 sm:py-1.5 text-[10px] sm:text-xs font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
                   title="모든 게임 점수 초기화"
-                  onClick={()=>{
-                    if(confirm('모든 게임 점수를 0으로 초기화하시겠습니까?')) {
-                      setQuarterScores(initialSnap.map(()=>[]))
-                      setDirty(true)
-                    }
-                  }}
+                  onClick={()=> setConfirmDelete({ open: true, id: '__reset_quarter_scores__' })}
                 >
                   초기화
                 </button>

@@ -4,6 +4,7 @@ import { logger } from '../lib/logger'
 
 export let mockPlayers = []
 export let mockMatches = []
+export let mockMembershipSettings = []
 
 // sessionStorage에서 저장된 Mock 데이터 불러오기
 function loadMockFromSession() {
@@ -13,8 +14,9 @@ function loadMockFromSession() {
       const data = JSON.parse(stored)
       mockPlayers = data.players || []
       mockMatches = data.matches || []
+      mockMembershipSettings = data.membershipSettings || []
       logger.log('✨ SessionStorage에서 Mock 데이터 복구됨')
-      logger.log(`   - 선수: ${mockPlayers.length}명, 매치: ${mockMatches.length}개`)
+      logger.log(`   - 선수: ${mockPlayers.length}명, 매치: ${mockMatches.length}개, 멤버십: ${mockMembershipSettings.length}개`)
       return true
     }
   } catch (e) {
@@ -29,6 +31,7 @@ function saveMockToSession() {
     const data = {
       players: mockPlayers,
       matches: mockMatches,
+      membershipSettings: mockMembershipSettings,
       timestamp: new Date().toISOString()
     }
     sessionStorage.setItem('mock_data', JSON.stringify(data))
@@ -118,6 +121,22 @@ export async function loadSemihanDataToMock() {
       logger.log('ℹ️ 저장된 매치가 없습니다.')
     }
     
+    // 2.5️⃣ Membership Settings 테이블에서 로드
+    logger.log('🔄 Membership Settings 테이블 조회 중...')
+    const { data: membershipSettings, error: membershipError } = await supabase
+      .from('membership_settings')
+      .select('*')
+      .order('sort_order', { ascending: true })
+    
+    if (membershipError) {
+      logger.warn('⚠️ Membership Settings 조회 실패:', membershipError.message)
+    } else if (membershipSettings && membershipSettings.length > 0) {
+      mockMembershipSettings.splice(0, mockMembershipSettings.length, ...membershipSettings)
+      logger.log(`✅ ${membershipSettings.length}개의 멤버십 설정 로드됨`)
+    } else {
+      logger.log('ℹ️ 저장된 멤버십 설정이 없습니다.')
+    }
+    
     // 3️⃣ AppDB에서 설정 로드
     logger.log('🔐 AppDB (semihan) 조회 중...')
     const { data: appdbRows, error: appdbError } = await supabase
@@ -147,6 +166,7 @@ export async function loadSemihanDataToMock() {
     logger.log('   📊 현재 상태:')
     logger.log('      - 선수:', mockPlayers.length, '명')
     logger.log('      - 매치:', mockMatches.length, '개')
+    logger.log('      - 멤버십 설정:', mockMembershipSettings.length, '개')
     logger.log('   🔒 이후의 모든 변경사항은 Mock(로컬 메모리)에만 저장됩니다.')
     logger.log('   💾 페이지 새로고침해도 변경사항 유지됩니다.')
     logger.log('   🔄 서버를 재시작하면 Prod 데이터로 리셋됩니다.')

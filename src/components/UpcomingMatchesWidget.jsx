@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import ConfirmDialog from './ConfirmDialog'
 import UpcomingMatchCard from './UpcomingMatchCard'
 import { updateMatchStatus, convertToRegularMatch, filterExpiredMatches } from '../lib/upcomingMatch'
 
@@ -14,6 +15,8 @@ export default function UpcomingMatchesWidget({
   const [isMinimized, setIsMinimized] = useState(true)
   const [hasBounced, setHasBounced] = useState(false)
   const [notificationCleared, setNotificationCleared] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null })
+  const [alertState, setAlertState] = useState({ open: false, title: '안내', message: '' })
   // Removed opening animation state
   
   // 실시간으로 만료된 매치들을 필터링
@@ -251,9 +254,7 @@ export default function UpcomingMatchesWidget({
                   // Edit functionality
                 }}
                 onDelete={(match) => {
-                  if (window.confirm('정말로 이 예정된 매치를 삭제하시겠습니까?')) {
-                    onDeleteUpcomingMatch?.(match.id)
-                  }
+                  setConfirmDelete({ open: true, id: match.id })
                 }}
                 onStartDraft={(match) => {
                   const updatedMatch = updateMatchStatus(match, 'drafting')
@@ -261,7 +262,7 @@ export default function UpcomingMatchesWidget({
                 }}
                 onCreateMatch={(match) => {
                   const regularMatch = convertToRegularMatch(match)
-                  alert('매치 생성 기능은 MatchPlanner에서 "불러오기" 버튼을 사용하세요!')
+                  setAlertState({ open: true, title: '안내', message: '매치 생성 기능은 MatchPlanner에서 "불러오기" 버튼을 사용하세요!' })
                 }}
                 onUpdateCaptains={(match, updatedMatch) => {
                   // updatedMatch에 captainIds가 포함되어 있음
@@ -273,6 +274,28 @@ export default function UpcomingMatchesWidget({
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={confirmDelete.open}
+        title="예정된 매치 삭제"
+        message={'정말로 이 예정된 매치를 삭제하시겠습니까?'}
+        confirmLabel="삭제하기"
+        cancelLabel="취소"
+        tone="danger"
+        onCancel={() => setConfirmDelete({ open: false, id: null })}
+        onConfirm={() => {
+          if (confirmDelete.id) onDeleteUpcomingMatch?.(confirmDelete.id)
+          setConfirmDelete({ open: false, id: null })
+        }}
+      />
+      <ConfirmDialog
+        open={alertState.open}
+        title={alertState.title}
+        message={alertState.message}
+        confirmLabel="확인"
+        cancelLabel={null}
+        tone="default"
+        onConfirm={() => setAlertState({ open: false, title: '안내', message: '' })}
+      />
     </div>
   )
 }

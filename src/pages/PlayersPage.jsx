@@ -30,6 +30,7 @@ import { randomAvatarDataUrl } from "../utils/avatar"
 import PositionChips from "../components/PositionChips"
 import MembershipSettings from "../components/MembershipSettings"
 import { DEFAULT_MEMBERSHIPS, getMembershipBadge } from "../lib/membershipConfig"
+import ConfirmDialog from "../components/ConfirmDialog"
 
 const S = (v) => (v == null ? "" : String(v))
 const posOf = (p) => {
@@ -119,6 +120,7 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
   const [editingTagIndex, setEditingTagIndex] = useState(null)
   const [editTagName, setEditTagName] = useState('')
   const [editTagColor, setEditTagColor] = useState('blue')
+  const [confirmTagDelete, setConfirmTagDelete] = useState({ open: false, index: null, name: '' })
 
   useEffect(() => {
     if (open && player !== undefined) {
@@ -919,9 +921,7 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
                                       type="button"
                                       onClick={(e) => {
                                         e.stopPropagation()
-                                        if (confirm(`"${preset.name}" 태그를 삭제하시겠습니까?`)) {
-                                          onDeleteTagPreset(idx)
-                                        }
+                                        setConfirmTagDelete({ open: true, index: idx, name: preset.name })
                                       }}
                                       className="p-1 bg-rose-500 text-white rounded-full hover:bg-rose-600 shadow-lg transition-colors"
                                       title="삭제"
@@ -1178,6 +1178,21 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
           </div>
         </div>
       )}
+      
+      {/* ConfirmDialog for tag preset deletion */}
+      <ConfirmDialog
+        open={confirmTagDelete.open}
+        title="태그 삭제"
+        message={`"${confirmTagDelete.name}" 태그를 삭제하시겠습니까?`}
+        confirmLabel="삭제하기"
+        cancelLabel="취소"
+        tone="danger"
+        onCancel={() => setConfirmTagDelete({ open: false, index: null, name: '' })}
+        onConfirm={() => {
+          if (confirmTagDelete.index != null) onDeleteTagPreset(confirmTagDelete.index)
+          setConfirmTagDelete({ open: false, index: null, name: '' })
+        }}
+      />
     </div>
   )
 
