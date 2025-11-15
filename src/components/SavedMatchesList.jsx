@@ -777,7 +777,9 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
   const setSnap=(next)=>{ setDraftSnap(next); setDirty(true) }
   const setCaptain=(teamIdx, playerId)=>{ 
     const next=[...(captainIds||[])]
-    next[teamIdx]=String(playerId)
+    const current = next[teamIdx] ? String(next[teamIdx]) : null
+    // 토글: 같은 선수 다시 누르면 해제, 아니면 해당 선수로 지정
+    next[teamIdx] = (current === String(playerId)) ? null : String(playerId)
     setCaptainIds(next)
     setDirty(true)
   }
@@ -2537,9 +2539,9 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                                   ? 'ring-2 ring-yellow-400 rounded-full scale-110 brightness-110' 
                                   : ''
                               }`}
-                              title={captainIds && captainIds[i] === String(p.id) ? "주장으로 지정됨" : "이 선수를 주장으로 지정"}
+                              title={captainIds && captainIds[i] === String(p.id) ? "주장 해제" : "이 선수를 주장으로 지정"}
                               onClick={()=>setCaptain(i, p.id)}
-                              aria-label="주장 지정"
+                              aria-label={captainIds && captainIds[i] === String(p.id) ? "주장 해제" : "주장 지정"}
                             >
                               <img src={captainIcon} alt="주장" className="w-full h-full object-contain" />
                             </button>
