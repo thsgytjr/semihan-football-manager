@@ -172,7 +172,7 @@ export function addRanks(rows, rankBy) {
     // For 동점자(동순위), rank는 해당 항목만 비교, 오더는 sort 순서 유지
     let keyVal
     if (rankBy === 'cs') keyVal = r.cs
-    if (rankBy === 'g') keyVal = r.g
+    else if (rankBy === 'g') keyVal = r.g
     else if (rankBy === 'a') keyVal = r.a
     else if (rankBy === 'gp') keyVal = r.gp
     else keyVal = r.pts
