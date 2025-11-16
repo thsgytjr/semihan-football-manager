@@ -66,10 +66,26 @@ function checkFieldSeparation(gameMatchups, teamCount) {
 export function computeAttackRows(players = [], matches = []) {
   const index = new Map()
   const idToPlayer = new Map(players.map(p => [toStr(p.id), p]))
+  const isDefOrGk = (p) => {
+    const pos = (p?.position || p?.pos || '').toString().toUpperCase()
+    const positions = Array.isArray(p?.positions) ? p.positions.map(x => String(x).toUpperCase()) : []
+    const all = [pos, ...positions]
+    return all.some(s => s.includes('GK') || s.includes('골키퍼') || s.includes('KEEPER') || s.includes('DF') || s.includes('DEF') || s.includes('수비'))
+  }
   
   for (const m of (matches || [])) {
     const attendedIds = new Set(extractAttendeeIds(m))
     const statsMap = extractStatsByPlayer(m)
+  const teams = extractSnapshotTeams(m)
+  const qs = MatchHelpers.getQuarterScores ? MatchHelpers.getQuarterScores(m) : coerceQuarterScores(m)
+    const gameMatchups = m?.gameMatchups || null
+    const teamCount = Array.isArray(qs) ? qs.length : 0
+    // Track which players have manual cleanSheet for this match to avoid double-counting
+    const manualCSPlayers = new Set(
+      Object.entries(statsMap)
+        .filter(([_, rec]) => Number(rec?.cleanSheet || 0) > 0)
+        .map(([pid, _]) => toStr(pid))
+    )
     
     // Track appearances
     for (const pid of attendedIds) {
@@ -82,13 +98,14 @@ export function computeAttackRows(players = [], matches = []) {
         photoUrl: p.photoUrl || null,
         gp: 0, 
         g: 0, 
-        a: 0
+        a: 0,
+        cs: 0
       }
       row.gp += 1
       index.set(pid, row)
     }
     
-    // Track goals and assists
+    // Track goals, assists, and manual clean sheets
     for (const [pid, rec] of Object.entries(statsMap)) {
       const p = idToPlayer.get(pid)
       if (!p) continue
@@ -99,12 +116,19 @@ export function computeAttackRows(players = [], matches = []) {
         photoUrl: p.photoUrl || null,
         gp: 0, 
         g: 0, 
-        a: 0
+        a: 0,
+        cs: 0
       }
       row.g += Number(rec?.goals || 0)
       row.a += Number(rec?.assists || 0)
+      // If manual cleanSheet is provided in stats, respect and add the numeric value
+      if (Number(rec?.cleanSheet || 0) > 0) {
+        row.cs += Number(rec?.cleanSheet || 0)
+      }
       index.set(pid, row)
     }
+
+    // 자동 클린시트 제거: 더 이상 실점 0 자동 부여 로직을 수행하지 않음 (순수 수동 입력 기반)
   }
   
   return [...index.values()]
@@ -120,6 +144,9 @@ export function computeAttackRows(players = [], matches = []) {
  * Sort comparator for attack point rankings
  */
 export function sortComparator(rankBy) {
+  if (rankBy === 'cs') {
+    return (a, b) => (b.cs - a.cs) || (b.gp - a.gp) || (b.pts - a.pts) || a.name.localeCompare(b.name)
+  }
   if (rankBy === 'g') {
     return (a, b) => (b.g - a.g) || (b.pts - a.pts) || (b.a - a.a) || (b.gp - a.gp) || a.name.localeCompare(b.name)
   }
@@ -144,6 +171,7 @@ export function addRanks(rows, rankBy) {
   return sorted.map((r, i) => {
     // For 동점자(동순위), rank는 해당 항목만 비교, 오더는 sort 순서 유지
     let keyVal
+    if (rankBy === 'cs') keyVal = r.cs
     if (rankBy === 'g') keyVal = r.g
     else if (rankBy === 'a') keyVal = r.a
     else if (rankBy === 'gp') keyVal = r.gp

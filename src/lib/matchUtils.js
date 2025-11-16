@@ -77,7 +77,9 @@ export function extractStatsByPlayer(m) {
       out[pid] = { 
         goals: Number(v?.goals || 0), 
         assists: Number(v?.assists || 0), 
-        events: Array.isArray(v?.events) ? v.events.slice() : [] 
+        events: Array.isArray(v?.events) ? v.events.slice() : [],
+        // Include clean sheet if present (manual entry via StatsInput)
+        cleanSheet: Number(v?.cleanSheet || v?.cs || 0)
       }
     }
     return out
@@ -91,13 +93,17 @@ export function extractStatsByPlayer(m) {
       const date = rec?.dateISO || rec?.date || rec?.time || rec?.ts || null
       const isGoal = /goal/i.test(type)
       const isAssist = /assist/i.test(type)
-      out[pid] = out[pid] || { goals: 0, assists: 0, events: [] }
+      out[pid] = out[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0 }
       if (isGoal) {
         out[pid].goals = (out[pid].goals || 0) + Number(rec?.goals || 1)
         out[pid].events.push({ type: 'goal', date })
       } else if (isAssist) {
         out[pid].assists = (out[pid].assists || 0) + Number(rec?.assists || 1)
         out[pid].events.push({ type: 'assist', date })
+      }
+      // If array-form stats happen to carry cleanSheet value per record, sum it (rare)
+      if (Number(rec?.cleanSheet || 0) > 0) {
+        out[pid].cleanSheet = (out[pid].cleanSheet || 0) + Number(rec.cleanSheet)
       }
     }
   }

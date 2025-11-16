@@ -114,7 +114,8 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       next[toStr(p.id)] = {
         goals: Number(rec.goals || 0),
         assists: Number(rec.assists || 0),
-        events: Array.isArray(rec.events) ? rec.events.slice() : []
+        events: Array.isArray(rec.events) ? rec.events.slice() : [],
+        cleanSheet: Number(rec.cleanSheet || 0)
       }
     }
     setDraft(next)
@@ -744,12 +745,29 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
     })
   }
 
+  const resetAllCS = () => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev || {}))
+      Object.keys(next).forEach(k => {
+        if (next[k]) next[k].cleanSheet = 0
+      })
+      return next
+    })
+  }
+
   return (
     <div className="space-y-4">
       {/* Header with Save Button */}
       <div className="flex items-center justify-between">
         <div className="text-base font-bold text-gray-800">⚽ 수동 입력</div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={resetAllCS}
+            className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700 transition-all"
+            title="모든 선수의 클린시트 수를 0으로 초기화"
+          >
+            CS 초기화
+          </button>
           <button
             onClick={() => setConfirmState({ open: true, kind: 'reset-all' })}
             className="rounded-lg border-2 border-red-300 bg-red-50 hover:bg-red-100 px-3 py-2 text-sm font-semibold text-red-700 transition-all"
@@ -930,7 +948,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
 
                 return (
                   <div key={toStr(p.id)} className={`px-3 py-3 transition-colors ${hasStats ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
                       {/* Player Info */}
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <InitialAvatar
@@ -948,44 +966,52 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
                           <div className="text-xs text-gray-500">{p.position || p.pos || '-'}</div>
                         </div>
                       </div>
-                      {/* Counters (stack below on mobile) */}
-                      <div className="flex w-full sm:w-auto justify-between sm:justify-end gap-2 sm:gap-3 mt-2 sm:mt-0">
+                      {/* Counters (compact; never push name) */}
+                      <div className="flex flex-wrap justify-end gap-1.5 sm:gap-2 mt-2 sm:mt-0 ml-auto">
                         {/* Goal Counter */}
-                        <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-2 py-1 shrink-0">
+                        <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-1.5 py-1 shrink-0">
                           <button
                             onClick={() => removeGoal(p.id)}
                             disabled={!rec.goals || rec.goals <= 0}
-                            className="w-7 h-7 rounded bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-sm transition-all"
+                            className="w-6 h-6 rounded bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-[11px] transition-all"
                           >
                             −
                           </button>
-                          <div className="flex items-center gap-1 px-1.5">
-                            <span className="text-xs font-bold text-gray-600">⚽</span>
-                            <span className="w-6 text-center font-bold text-sm tabular-nums">{rec.goals || 0}</span>
+                          <div className="flex items-center gap-0.5 px-1">
+                            <span className="text-[11px] font-bold text-gray-600">⚽</span>
+                            <span className="w-5 text-center font-bold text-[12px] tabular-nums">{rec.goals || 0}</span>
                           </div>
                           <button
                             onClick={() => addGoal(p.id, team.idx)}
-                            className="w-7 h-7 rounded bg-emerald-500 hover:bg-emerald-600 border border-emerald-600 flex items-center justify-center text-white font-bold text-sm transition-all shadow-sm"
+                            className="w-6 h-6 rounded bg-emerald-500 hover:bg-emerald-600 border border-emerald-600 flex items-center justify-center text-white font-bold text-[11px] transition-all shadow-sm"
                           >
                             +
                           </button>
                         </div>
+                        {/* Clean Sheet Counter (all players, numeric) */}
+                        <CleanSheetCounter
+                          player={p}
+                          teamIdx={team.idx}
+                          draft={draft}
+                          setDraft={setDraft}
+                          match={editingMatch}
+                        />
                         {/* Assist Counter */}
-                        <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-2 py-1 shrink-0">
+                        <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-1.5 py-1 shrink-0">
                           <button
                             onClick={() => removeAssist(p.id)}
                             disabled={!rec.assists || rec.assists <= 0}
-                            className="w-7 h-7 rounded bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-sm transition-all"
+                            className="w-6 h-6 rounded bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-[11px] transition-all"
                           >
                             −
                           </button>
-                          <div className="flex items-center gap-1 px-1.5">
-                            <span className="text-xs font-bold text-gray-600">👉</span>
-                            <span className="w-6 text-center font-bold text-sm tabular-nums">{rec.assists || 0}</span>
+                          <div className="flex items-center gap-0.5 px-1">
+                            <span className="text-[11px] font-bold text-gray-600">👉</span>
+                            <span className="w-5 text-center font-bold text-[12px] tabular-nums">{rec.assists || 0}</span>
                           </div>
                           <button
                             onClick={() => addAssist(p.id, team.idx)}
-                            className="w-7 h-7 rounded bg-amber-500 hover:bg-amber-600 border border-amber-600 flex items-center justify-center text-white font-bold text-sm transition-all shadow-sm"
+                            className="w-6 h-6 rounded bg-amber-500 hover:bg-amber-600 border border-amber-600 flex items-center justify-center text-white font-bold text-[11px] transition-all shadow-sm"
                           >
                             +
                           </button>
@@ -1030,6 +1056,53 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
 }
 
 /* ======== Goal/Assist Linking Panel Component ======== */
+function CleanSheetCounter({ player, teamIdx, draft, setDraft }) {
+  const pid = toStr(player.id)
+  const rec = draft[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0 }
+
+  const dec = () => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0 }
+      base.cleanSheet = Math.max(0, Number(base.cleanSheet || 0) - 1)
+      next[pid] = base
+      return next
+    })
+  }
+
+  const inc = () => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0 }
+      base.cleanSheet = Math.max(0, Number(base.cleanSheet || 0) + 1)
+      next[pid] = base
+      return next
+    })
+  }
+
+  return (
+  <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-1.5 py-1 shrink-0" title="클린시트 (수동 입력)">
+      <button
+        onClick={dec}
+        disabled={!rec.cleanSheet || rec.cleanSheet <= 0}
+        className="w-6 h-6 rounded bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-[11px] transition-all"
+      >
+        −
+      </button>
+      <div className="flex items-center gap-0.5 px-1">
+        <span className="text-[11px] font-bold text-gray-600">CS</span>
+        <span className="w-5 text-center font-bold text-[12px] tabular-nums">{Number(rec.cleanSheet || 0)}</span>
+      </div>
+      <button
+        onClick={inc}
+        className="w-6 h-6 rounded bg-emerald-500 hover:bg-emerald-600 border border-emerald-600 flex items-center justify-center text-white font-bold text-[11px] transition-all shadow-sm"
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
 function GoalAssistLinkingPanel({ players, draft, setDraft, teams }) {
   const [selectedGoal, setSelectedGoal] = useState(null)
   const [selectedAssist, setSelectedAssist] = useState(null)

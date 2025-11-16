@@ -129,10 +129,11 @@ export default function Dashboard({
 
   // 탭 구조 개편: 1차(종합|draft), 2차(종합: pts/g/a/gp | draft: playerWins/captainWins/attack)
   const [primaryTab, setPrimaryTab] = useState('pts') // 'pts' | 'draft'
-  const [apTab, setApTab] = useState('pts')           // 'pts' | 'g' | 'a' | 'gp'
+  const [apTab, setApTab] = useState('pts')           // 'pts' | 'g' | 'a' | 'gp' | 'cs' | 'duo'
   const [draftTab, setDraftTab] = useState('playerWins') // 'playerWins' | 'captainWins' | 'attack'
   const rankedRows = useMemo(() => addRanks(baseRows, apTab), [baseRows, apTab])
   const duoRows = useMemo(() => computeDuoRows(players, filteredMatches), [players, filteredMatches])
+  const csRows = useMemo(() => addRanks(baseRows, 'cs'), [baseRows])
 
   const [showAll, setShowAll] = useState(false)
   const [highlightedMatchId, setHighlightedMatchId] = useState(null) // 하이라이트할 매치 ID
@@ -320,7 +321,16 @@ export default function Dashboard({
             />
           )
         ) : (
-          apTab === 'duo' ? (
+          apTab === 'cs' ? (
+            <CleanSheetTable
+              key={`cs-${apDateKey}`}
+              rows={csRows}
+              showAll={showAll}
+              onToggle={() => setShowAll(s => !s)}
+              controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+              apDateKey={apDateKey}
+            />
+          ) : apTab === 'duo' ? (
             <DuoTable
               key={`duo-${apDateKey}`}
               rows={duoRows}
@@ -613,6 +623,7 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
     { id: 'g', label: '득점' },
     { id: 'a', label: '어시' },
     { id: 'gp', label: '출전' },
+    { id: 'cs', label: '클린시트' },
     { id: 'duo', label: '듀오' },
   ]
   const DraftOptions = [
@@ -648,6 +659,7 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
               { id: 'g', label: '득점' },
               { id: 'a', label: '어시' },
               { id: 'gp', label: '출전' },
+              { id: 'cs', label: '클린시트' },
               { id: 'duo', label: '듀오' },
             ].map(o => {
               const active = apTab === o.id
@@ -747,7 +759,7 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
       <table className="w-full text-sm" style={{ minWidth: '100%' }}>
         <thead>
           <tr>
-            <th colSpan={6} className="border-b px-2 py-2">
+            <th colSpan={7} className="border-b px-2 py-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="text-xs text-stone-600">총 선수 <span className="font-semibold">{totalPlayers}</span>명</div>
                 <div className="ml-auto">{controls}</div>
@@ -961,6 +973,65 @@ function DuoTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselin
       onToggle={onToggle}
       controls={controls}
       title="총 듀오"
+      columns={columns}
+      renderRow={renderRow}
+      membershipSettings={customMemberships}
+    />
+  )
+}
+
+/* ---------------------- Main Component --------------------- */
+
+/* ---------------------- 클린시트 카드 --------------------- */
+function CleanSheetTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null, customMemberships = [] }) {
+  const baselineKey = 'cs_count_v1'
+  const [baselineRanks] = useState(() => {
+    try {
+      const saved = localStorage.getItem(baselineKey)
+      if (saved) return JSON.parse(saved) || {}
+      if (apDateKey === 'all' && initialBaselineRanks && Object.keys(initialBaselineRanks).length > 0) {
+        localStorage.setItem(baselineKey, JSON.stringify(initialBaselineRanks))
+        return initialBaselineRanks
+      }
+      return {}
+    } catch { return {} }
+  })
+
+  const deltaFor = (id, currentRank) => {
+    if (apDateKey !== 'all') return null
+    if (!baselineRanks || Object.keys(baselineRanks).length === 0) return null
+    let prevRank = baselineRanks[String(id)]
+    if (prevRank == null) {
+      const maxPrev = Math.max(...Object.values(baselineRanks))
+      if (Number.isFinite(maxPrev)) prevRank = maxPrev + 1
+    }
+    if (prevRank == null) return null
+    const diff = prevRank - currentRank
+    if (diff === 0) return { diff: 0, dir: 'same' }
+    return { diff, dir: diff > 0 ? 'up' : 'down' }
+  }
+
+  const columns = [
+    { label: '순위', px: 1.5, align: 'center', className: 'w-[60px]' },
+    { label: '선수', px: 2 },
+    { label: 'CS', px: 1.5, align: 'center', className: 'w-[50px]' }
+  ]
+
+  const renderRow = (r, tone) => (
+    <>
+      <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
+      <PlayerNameCell id={r.id} name={r.name} membership={r.membership} tone={tone} photoUrl={r.photoUrl} customMemberships={customMemberships} />
+      <StatCell value={r.cs || 0} tone={tone} align="center" width={50} />
+    </>
+  )
+
+  return (
+    <LeaderboardTable
+      rows={rows}
+      showAll={showAll}
+      onToggle={onToggle}
+      controls={controls}
+      title="클린시트"
       columns={columns}
       renderRow={renderRow}
       membershipSettings={customMemberships}
