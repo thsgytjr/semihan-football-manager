@@ -5,6 +5,8 @@ import { logger } from '../lib/logger'
 export let mockPlayers = []
 export let mockMatches = []
 export let mockMembershipSettings = []
+export let mockUpcomingMatches = []
+export let mockTagPresets = []
 
 // sessionStorage에서 저장된 Mock 데이터 불러오기
 function loadMockFromSession() {
@@ -15,8 +17,10 @@ function loadMockFromSession() {
       mockPlayers = data.players || []
       mockMatches = data.matches || []
       mockMembershipSettings = data.membershipSettings || []
+      mockUpcomingMatches = data.upcomingMatches || []
+      mockTagPresets = data.tagPresets || []
       logger.log('✨ SessionStorage에서 Mock 데이터 복구됨')
-      logger.log(`   - 선수: ${mockPlayers.length}명, 매치: ${mockMatches.length}개, 멤버십: ${mockMembershipSettings.length}개`)
+      logger.log(`   - 선수: ${mockPlayers.length}명, 매치: ${mockMatches.length}개, 멤버십: ${mockMembershipSettings.length}개, 예정 매치: ${mockUpcomingMatches.length}개, 태그: ${mockTagPresets.length}개`)
       return true
     }
   } catch (e) {
@@ -32,6 +36,8 @@ function saveMockToSession() {
       players: mockPlayers,
       matches: mockMatches,
       membershipSettings: mockMembershipSettings,
+      upcomingMatches: mockUpcomingMatches,
+      tagPresets: mockTagPresets,
       timestamp: new Date().toISOString()
     }
     sessionStorage.setItem('mock_data', JSON.stringify(data))
@@ -79,6 +85,16 @@ export const mockAppDB = {
     upcomingMatches: [],
     tagPresets: []
   }
+}
+
+// Export unified mockData for handlers
+export const mockData = {
+  get players() { return mockPlayers },
+  get matches() { return mockMatches },
+  get membershipSettings() { return mockMembershipSettings },
+  get upcomingMatches() { return mockUpcomingMatches },
+  get tagPresets() { return mockTagPresets },
+  get visitLogs() { return mockVisitLogs }
 }
 
 // Prod DB에서 데이터 로드 (Read-Only) + Mock으로 전환
@@ -137,6 +153,43 @@ export async function loadSemihanDataToMock() {
       logger.log('ℹ️ 저장된 멤버십 설정이 없습니다.')
     }
     
+    // 2.6️⃣ Upcoming Matches 테이블에서 로드
+    logger.log('🔄 Upcoming Matches 테이블 조회 중...')
+    const { data: upcomingMatches, error: upcomingError } = await supabase
+      .from('upcoming_matches')
+      .select('*')
+      .order('match_date', { ascending: true })
+    
+    if (upcomingError && upcomingError.code !== 'PGRST205') {
+      // PGRST205 = table not found (테이블이 아직 생성되지 않음)
+      logger.warn('⚠️ Upcoming Matches 조회 실패:', upcomingError.message)
+    } else if (upcomingError && upcomingError.code === 'PGRST205') {
+      logger.log('ℹ️ Upcoming Matches 테이블 미생성 (SQL 실행 후 사용 가능)')
+    } else if (upcomingMatches && upcomingMatches.length > 0) {
+      mockUpcomingMatches.splice(0, mockUpcomingMatches.length, ...upcomingMatches)
+      logger.log(`✅ ${upcomingMatches.length}개의 예정 매치 로드됨`)
+    } else {
+      logger.log('ℹ️ 저장된 예정 매치가 없습니다.')
+    }
+    
+    // 2.7️⃣ Tag Presets 테이블에서 로드
+    logger.log('🔄 Tag Presets 테이블 조회 중...')
+    const { data: tagPresets, error: tagError } = await supabase
+      .from('tag_presets')
+      .select('*')
+      .order('sort_order', { ascending: true })
+    
+    if (tagError && tagError.code !== 'PGRST205') {
+      logger.warn('⚠️ Tag Presets 조회 실패:', tagError.message)
+    } else if (tagError && tagError.code === 'PGRST205') {
+      logger.log('ℹ️ Tag Presets 테이블 미생성 (SQL 실행 후 사용 가능)')
+    } else if (tagPresets && tagPresets.length > 0) {
+      mockTagPresets.splice(0, mockTagPresets.length, ...tagPresets)
+      logger.log(`✅ ${tagPresets.length}개의 태그 프리셋 로드됨`)
+    } else {
+      logger.log('ℹ️ 저장된 태그 프리셋이 없습니다.')
+    }
+    
     // 3️⃣ AppDB에서 설정 로드
     logger.log('🔐 AppDB (semihan) 조회 중...')
     const { data: appdbRows, error: appdbError } = await supabase
@@ -167,6 +220,8 @@ export async function loadSemihanDataToMock() {
     logger.log('      - 선수:', mockPlayers.length, '명')
     logger.log('      - 매치:', mockMatches.length, '개')
     logger.log('      - 멤버십 설정:', mockMembershipSettings.length, '개')
+    logger.log('      - 예정 매치:', mockUpcomingMatches.length, '개')
+    logger.log('      - 태그 프리셋:', mockTagPresets.length, '개')
     logger.log('   🔒 이후의 모든 변경사항은 Mock(로컬 메모리)에만 저장됩니다.')
     logger.log('   💾 페이지 새로고침해도 변경사항 유지됩니다.')
     logger.log('   🔄 서버를 재시작하면 Prod 데이터로 리셋됩니다.')

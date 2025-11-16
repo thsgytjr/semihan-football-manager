@@ -1,10 +1,12 @@
 // src/App.jsx
 import React,{useEffect,useMemo,useState,useCallback,useRef}from"react"
 import{Home,Users,CalendarDays,ListChecks,ShieldCheck,Lock,Eye,EyeOff,AlertCircle,CheckCircle2,X,Settings,BookOpen,Shuffle,DollarSign}from"lucide-react"
-import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB,incrementVisits,logVisit,getVisitStats,getTotalVisits,USE_MATCHES_TABLE}from"./services/storage.service"
+import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB,incrementVisits,logVisit,getVisitStats,getTotalVisits,USE_MATCHES_TABLE,USE_UPCOMING_MATCHES_TABLE,USE_TAG_PRESETS_TABLE}from"./services/storage.service"
 import { supabase } from './lib/supabaseClient'
 import{saveMatchToDB,updateMatchInDB,deleteMatchFromDB,listMatchesFromDB,subscribeMatches}from"./services/matches.service"
 import{getMembershipSettings,subscribeMembershipSettings}from"./services/membership.service"
+import{listUpcomingMatches,addUpcomingMatch,updateUpcomingMatch,deleteUpcomingMatch,subscribeUpcomingMatches}from"./services/upcomingMatches.service"
+import{listTagPresets,addTagPreset,updateTagPreset,deleteTagPreset,saveAllTagPresets,subscribeTagPresets}from"./services/tagPresets.service"
 import{mkPlayer}from"./lib/players";import{notify}from"./components/Toast"
 import{filterExpiredMatches, normalizeDateISO}from"./lib/upcomingMatch"
 import{getOrCreateVisitorId,getVisitorIP,parseUserAgent,shouldTrackVisit,isPreviewMode,isDevelopmentEnvironment}from"./lib/visitorTracking"
@@ -258,18 +260,59 @@ export default function App(){
           matchesData = (shared && shared.matches) || []
         }
 
+        // Upcoming Matches 로드: USE_UPCOMING_MATCHES_TABLE 플래그에 따라 분기
+        let upcomingMatchesData = []
+        if (USE_UPCOMING_MATCHES_TABLE) {
+          logger.log('[App] Loading upcoming matches from Supabase upcoming_matches table')
+          try {
+            upcomingMatchesData = await withTimeout(listUpcomingMatches(), 6000, 'listUpcomingMatches') || []
+          } catch (err) {
+            logger.warn('[App] upcoming_matches table not found, falling back to AppDB')
+            upcomingMatchesData = (shared && shared.upcomingMatches) || []
+          }
+        } else {
+          logger.log('[App] Loading upcoming matches from appdb JSON')
+          upcomingMatchesData = (shared && shared.upcomingMatches) || []
+        }
+
+        // Tag Presets 로드: USE_TAG_PRESETS_TABLE 플래그에 따라 분기
+        let tagPresetsData = []
+        if (USE_TAG_PRESETS_TABLE) {
+          logger.log('[App] Loading tag presets from Supabase tag_presets table')
+          try {
+            tagPresetsData = await withTimeout(listTagPresets(), 6000, 'listTagPresets') || []
+          } catch (err) {
+            logger.warn('[App] tag_presets table not found, falling back to AppDB')
+            tagPresetsData = (shared && shared.tagPresets) || []
+          }
+        } else {
+          logger.log('[App] Loading tag presets from appdb JSON')
+          tagPresetsData = (shared && shared.tagPresets) || []
+        }
+
         if(!mounted) return
 
         // 로딩 성공 시 재시도 카운터 초기화
         sessionStorage.removeItem('sfm:retry_count')
 
         // 만료된 예정 매치들을 필터링
-        const activeUpcomingMatches = filterExpiredMatches((shared && shared.upcomingMatches) || [])
+        const activeUpcomingMatches = filterExpiredMatches(upcomingMatchesData)
 
-        // 만료된 매치가 있었다면 DB에서도 제거
-        if(activeUpcomingMatches.length !== ((shared && shared.upcomingMatches) || []).length) {
-          const updatedShared = {...(shared || {}), upcomingMatches: activeUpcomingMatches}
-          await withTimeout(saveDB(updatedShared), 4000, 'saveDB').catch(logger.error)
+        // 만료된 매치가 있었다면 DB에서도 제거 (테이블 모드에서는 개별 삭제)
+        if(activeUpcomingMatches.length !== upcomingMatchesData.length) {
+          if (USE_UPCOMING_MATCHES_TABLE) {
+            // 테이블 모드: 만료된 매치들을 개별 삭제
+            const expiredIds = upcomingMatchesData
+              .filter(m => !activeUpcomingMatches.find(am => am.id === m.id))
+              .map(m => m.id)
+            for (const id of expiredIds) {
+              await deleteUpcomingMatch(id).catch(logger.error)
+            }
+          } else {
+            // AppDB 모드: 전체 업데이트
+            const updatedShared = {...(shared || {}), upcomingMatches: activeUpcomingMatches}
+            await withTimeout(saveDB(updatedShared), 4000, 'saveDB').catch(logger.error)
+          }
         }
 
         // 총 방문자 수 조회 (visit_logs 테이블에서)
@@ -280,7 +323,7 @@ export default function App(){
           matches: matchesData,
           visits: totalVisits,
           upcomingMatches: activeUpcomingMatches,
-          tagPresets: (shared && shared.tagPresets) || [],
+          tagPresets: tagPresetsData,
           membershipSettings: membershipSettings || []
         })
 
@@ -354,12 +397,46 @@ export default function App(){
       offMatches = subscribeMatches(list=>setDb(prev=>({...prev,matches:list})))
     }
 
+    // Upcoming Matches 구독: USE_UPCOMING_MATCHES_TABLE 플래그에 따라 분기
+    let offUpcomingMatches = () => {}
+    if (USE_UPCOMING_MATCHES_TABLE) {
+      logger.log('[App] Subscribing to upcoming_matches table')
+      offUpcomingMatches = subscribeUpcomingMatches(list=>{
+        const activeUpcomingMatches = filterExpiredMatches(list||[])
+        setDb(prev=>({...prev,upcomingMatches:activeUpcomingMatches}))
+      })
+    }
+
+    // Tag Presets 구독: USE_TAG_PRESETS_TABLE 플래그에 따라 분기
+    let offTagPresets = () => {}
+    if (USE_TAG_PRESETS_TABLE) {
+      logger.log('[App] Subscribing to tag_presets table')
+      offTagPresets = subscribeTagPresets(list=>setDb(prev=>({...prev,tagPresets:list||[]})))
+    }
+
+    // AppDB 구독 (테이블 모드가 아닌 데이터만)
     const offDB=subscribeDB(next=>{
-      const activeUpcomingMatches = filterExpiredMatches(next.upcomingMatches||[])
-      if (USE_MATCHES_TABLE) {
-        setDb(prev=>({...prev,upcomingMatches:activeUpcomingMatches,tagPresets:next.tagPresets||prev.tagPresets||[]}))
-      } else {
-        setDb(prev=>({...prev,matches:next.matches||prev.matches||[],upcomingMatches:activeUpcomingMatches,tagPresets:next.tagPresets||prev.tagPresets||[]}))
+      const updates = {}
+      
+      // Matches: 테이블 모드가 아니면 AppDB에서 가져오기
+      if (!USE_MATCHES_TABLE) {
+        updates.matches = next.matches || []
+      }
+      
+      // Upcoming Matches: 테이블 모드가 아니면 AppDB에서 가져오기
+      if (!USE_UPCOMING_MATCHES_TABLE) {
+        const activeUpcomingMatches = filterExpiredMatches(next.upcomingMatches||[])
+        updates.upcomingMatches = activeUpcomingMatches
+      }
+      
+      // Tag Presets: 테이블 모드가 아니면 AppDB에서 가져오기
+      if (!USE_TAG_PRESETS_TABLE) {
+        updates.tagPresets = next.tagPresets || []
+      }
+      
+      // 업데이트할 항목이 있으면 반영
+      if (Object.keys(updates).length > 0) {
+        setDb(prev=>({...prev,...updates}))
       }
     })
 
@@ -383,6 +460,8 @@ export default function App(){
     return()=>{
       offP?.()
       offMatches?.()
+      offUpcomingMatches?.()
+      offTagPresets?.()
       offDB?.()
       offMembership?.()
       try { supabase.removeChannel?.(visitLogsChannel) } catch {}
@@ -554,26 +633,56 @@ export default function App(){
     }
   }
   
-  function handleSaveUpcomingMatch(upcomingMatch){
+  async function handleSaveUpcomingMatch(upcomingMatch){
     if(!isAdmin)return notify("Admin만 가능합니다.");
     const normalized={...upcomingMatch,dateISO:normalizeDateISO(upcomingMatch.dateISO)}
-    setDb(prev=>{
-      const next=[...(prev.upcomingMatches||[]),normalized]
-      saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:prev.tagPresets||[]})
-      return {...prev,upcomingMatches:next}
-    })
+    
+    if (USE_UPCOMING_MATCHES_TABLE) {
+      // 테이블 모드: Supabase upcoming_matches 테이블에 저장
+      try {
+        const saved = await addUpcomingMatch(normalized)
+        setDb(prev=>({...prev,upcomingMatches:[...(prev.upcomingMatches||[]),saved]}))
+        notify("예정된 매치가 추가되었습니다.")
+      } catch(e) {
+        logger.error('[handleSaveUpcomingMatch] failed', e)
+        notify("예정된 매치 추가에 실패했습니다.")
+      }
+    } else {
+      // AppDB 모드: 기존 JSON 방식
+      setDb(prev=>{
+        const next=[...(prev.upcomingMatches||[]),normalized]
+        saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:prev.tagPresets||[]})
+        return {...prev,upcomingMatches:next}
+      })
+    }
   }
-  function handleDeleteUpcomingMatch(id){
+  
+  async function handleDeleteUpcomingMatch(id){
     if(!isAdmin)return notify("Admin만 가능합니다.");
-    setDb(prev=>{
-      const target=(prev.upcomingMatches||[]).find(m=>m.id===id)
-      const next=(prev.upcomingMatches||[]).filter(m=>m.id!==id)
-      saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:prev.tagPresets||[]})
-      if(target) console.info('[UpcomingMatch] Deleted', {id:target.id,dateISO:target.dateISO,participantCount:(target.participantIds||target.attendeeIds||[]).length})
-      return {...prev,upcomingMatches:next}
-    })
+    
+    if (USE_UPCOMING_MATCHES_TABLE) {
+      // 테이블 모드: Supabase upcoming_matches 테이블에서 삭제
+      try {
+        await deleteUpcomingMatch(id)
+        const next=(db.upcomingMatches||[]).filter(m=>m.id!==id)
+        setDb(prev=>({...prev,upcomingMatches:next}))
+        notify("예정된 매치를 삭제했습니다.")
+      } catch(e) {
+        logger.error('[handleDeleteUpcomingMatch] failed', e)
+        notify("예정된 매치 삭제에 실패했습니다.")
+      }
+    } else {
+      // AppDB 모드: 기존 JSON 방식
+      setDb(prev=>{
+        const target=(prev.upcomingMatches||[]).find(m=>m.id===id)
+        const next=(prev.upcomingMatches||[]).filter(m=>m.id!==id)
+        saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:prev.tagPresets||[]})
+        if(target) console.info('[UpcomingMatch] Deleted', {id:target.id,dateISO:target.dateISO,participantCount:(target.participantIds||target.attendeeIds||[]).length})
+        return {...prev,upcomingMatches:next}
+      })
+    }
   }
-  function handleUpdateUpcomingMatch(id,patch,silent=false){
+  async function handleUpdateUpcomingMatch(id,patch,silent=false){
     if(!isAdmin)return notify("Admin만 가능합니다.");
     const before=(db.upcomingMatches||[]).find(m=>m.id===id)
     if(!before){console.warn('[UpcomingMatch] update target missing',id);return}
@@ -605,109 +714,223 @@ export default function App(){
     const hasChange=Object.keys(sanitized).length>0
     if(!hasChange){ if(!silent) notify('변경사항이 없습니다.'); return }
 
-    setDb(prev=>{
-      const next=(prev.upcomingMatches||[]).map(m=>m.id===id?{...m,...sanitized}:m)
-      saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:prev.tagPresets||[]})
-      
-      const after=next.find(m=>m.id===id)
-      if(after){
-        const beforeP=(before.participantIds||before.attendeeIds||[])
-        const afterP=(after.participantIds||after.attendeeIds||[])
-        const beforeC=before.captainIds||[]
-        const afterC=after.captainIds||[]
-        if(beforeP.length!==afterP.length||beforeP.some((x,i)=>x!==afterP[i])){
-          console.warn('[UpcomingMatch] participantIds changed',{id,before:beforeP,after:afterP})
-        }
-        if(beforeC.length!==afterC.length||beforeC.some((x,i)=>x!==afterC[i])){
-          console.warn('[UpcomingMatch] captainIds changed',{id,before:beforeC,after:afterC})
-        }
-        if(before.snapshot&&after.snapshot&&JSON.stringify(before.snapshot)!==JSON.stringify(after.snapshot)){
-          console.warn('[UpcomingMatch] snapshot changed',{id,beforeLen:before.snapshot.length,afterLen:after.snapshot.length})
-        }
-        if(before.dateISO!==after.dateISO){
-          console.warn('[UpcomingMatch] dateISO changed',{id,before:before.dateISO,after:after.dateISO})
-        }
+    if (USE_UPCOMING_MATCHES_TABLE) {
+      // 테이블 모드: Supabase upcoming_matches 테이블 업데이트
+      try {
+        const updated = await updateUpcomingMatch(id, sanitized)
+        const next=(db.upcomingMatches||[]).map(m=>m.id===id?updated:m)
+        setDb(prev=>({...prev,upcomingMatches:next}))
+        if(!silent)notify("예정된 매치가 업데이트되었습니다.")
+      } catch(e) {
+        logger.error('[handleUpdateUpcomingMatch] failed', e)
+        if(!silent)notify("업데이트에 실패했습니다.")
       }
+    } else {
+      // AppDB 모드: 기존 JSON 방식
+      setDb(prev=>{
+        const next=(prev.upcomingMatches||[]).map(m=>m.id===id?{...m,...sanitized}:m)
+        saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:prev.tagPresets||[]})
+        
+        const after=next.find(m=>m.id===id)
+        if(after){
+          const beforeP=(before.participantIds||before.attendeeIds||[])
+          const afterP=(after.participantIds||after.attendeeIds||[])
+          const beforeC=before.captainIds||[]
+          const afterC=after.captainIds||[]
+          if(beforeP.length!==afterP.length||beforeP.some((x,i)=>x!==afterP[i])){
+            console.warn('[UpcomingMatch] participantIds changed',{id,before:beforeP,after:afterP})
+          }
+          if(beforeC.length!==afterC.length||beforeC.some((x,i)=>x!==afterC[i])){
+            console.warn('[UpcomingMatch] captainIds changed',{id,before:beforeC,after:afterC})
+          }
+          if(before.snapshot&&after.snapshot&&JSON.stringify(before.snapshot)!==JSON.stringify(after.snapshot)){
+            console.warn('[UpcomingMatch] snapshot changed',{id,beforeLen:before.snapshot.length,afterLen:after.snapshot.length})
+          }
+          if(before.dateISO!==after.dateISO){
+            console.warn('[UpcomingMatch] dateISO changed',{id,before:before.dateISO,after:after.dateISO})
+          }
+        }
+        
+        return {...prev,upcomingMatches:next}
+      })
       
-      return {...prev,upcomingMatches:next}
-    })
-
-    if(!silent)notify("예정된 매치가 업데이트되었습니다.")
+      if(!silent)notify("예정된 매치가 업데이트되었습니다.")
+    }
   }
 
   // 태그 프리셋 관리
-  function handleSaveTagPresets(tagPresets){
+  async function handleSaveTagPresets(tagPresets){
     if(!isAdmin)return notify("Admin만 가능합니다.");
-    setDb(prev=>{
-      const updated = {...prev,tagPresets};
-      saveDB({players:prev.players||[],matches:prev.matches||[],visits:prev.visits||0,upcomingMatches:prev.upcomingMatches||[],tagPresets,membershipSettings:prev.membershipSettings||[]});
-      return updated;
-    });
-    notify("태그 프리셋이 저장되었습니다.");
+    
+    if (USE_TAG_PRESETS_TABLE) {
+      // 테이블 모드: Supabase tag_presets 테이블에 저장 (전체 교체)
+      try {
+        const saved = await saveAllTagPresets(tagPresets)
+        setDb(prev=>({...prev,tagPresets:saved}))
+        notify("태그 프리셋이 저장되었습니다.");
+      } catch(e) {
+        logger.error('[handleSaveTagPresets] failed', e)
+        notify("태그 프리셋 저장에 실패했습니다.")
+      }
+    } else {
+      // AppDB 모드: 기존 JSON 방식
+      setDb(prev=>{
+        const updated = {...prev,tagPresets};
+        saveDB({players:prev.players||[],matches:prev.matches||[],visits:prev.visits||0,upcomingMatches:prev.upcomingMatches||[],tagPresets,membershipSettings:prev.membershipSettings||[]});
+        return updated;
+      });
+      notify("태그 프리셋이 저장되었습니다.");
+    }
   }
-  function handleAddTagPreset(preset){
+  
+  async function handleAddTagPreset(preset){
     if(!isAdmin)return notify("Admin만 가능합니다.");
-    setDb(prev=>{
-      const next=[...(prev.tagPresets||[]),preset];
-      const updated = {...prev,tagPresets:next};
-      saveDB({players:prev.players||[],matches:prev.matches||[],visits:prev.visits||0,upcomingMatches:prev.upcomingMatches||[],tagPresets:next,membershipSettings:prev.membershipSettings||[]});
-      return updated;
-    });
+    
+    if (USE_TAG_PRESETS_TABLE) {
+      // 테이블 모드: Supabase tag_presets 테이블에 추가
+      try {
+        const saved = await addTagPreset(preset)
+        setDb(prev=>({...prev,tagPresets:[...(prev.tagPresets||[]),saved]}))
+      } catch(e) {
+        logger.error('[handleAddTagPreset] failed', e)
+        notify("태그 프리셋 추가에 실패했습니다.")
+      }
+    } else {
+      // AppDB 모드: 기존 JSON 방식
+      setDb(prev=>{
+        const next=[...(prev.tagPresets||[]),preset];
+        const updated = {...prev,tagPresets:next};
+        saveDB({players:prev.players||[],matches:prev.matches||[],visits:prev.visits||0,upcomingMatches:prev.upcomingMatches||[],tagPresets:next,membershipSettings:prev.membershipSettings||[]});
+        return updated;
+      });
+    }
   }
-  function handleUpdateTagPreset(index,updatedPreset){
+  async function handleUpdateTagPreset(index,updatedPreset){
     if(!isAdmin)return notify("Admin만 가능합니다.");
-    setDb(prev=>{
-      const oldPreset=(prev.tagPresets||[])[index];
-      const next=(prev.tagPresets||[]).map((p,i)=>i===index?updatedPreset:p);
-      
-      // 모든 선수의 태그를 업데이트: 이전 프리셋과 일치하는 태그를 새 프리셋으로 교체
-      const updatedPlayers=(prev.players||[]).map(player=>{
-        if(!player.tags||player.tags.length===0)return player;
-        const updatedTags=player.tags.map(tag=>{
-          // 이전 프리셋과 일치하는 태그를 찾아서 새 프리셋으로 교체
-          if(tag.name===oldPreset.name&&tag.color===oldPreset.color){
-            return updatedPreset;
-          }
-          return tag;
+    
+    if (USE_TAG_PRESETS_TABLE) {
+      // 테이블 모드: Supabase tag_presets 테이블 업데이트
+      try {
+        const oldPreset=(db.tagPresets||[])[index];
+        const presetId = oldPreset?.id
+        if (!presetId) {
+          notify("태그 ID를 찾을 수 없습니다.")
+          return
+        }
+        
+        const saved = await updateTagPreset(presetId, updatedPreset)
+        const next=(db.tagPresets||[]).map((p,i)=>i===index?saved:p);
+        
+        // 모든 선수의 태그를 업데이트: 이전 프리셋과 일치하는 태그를 새 프리셋으로 교체
+        const updatedPlayers=(db.players||[]).map(player=>{
+          if(!player.tags||player.tags.length===0)return player;
+          const updatedTags=player.tags.map(tag=>{
+            if(tag.name===oldPreset.name&&tag.color===oldPreset.color){
+              return updatedPreset;
+            }
+            return tag;
+          });
+          return{...player,tags:updatedTags};
         });
-        return{...player,tags:updatedTags};
-      });
-      
-      // 업데이트된 선수들을 Supabase에 저장
-      updatedPlayers.forEach(player=>{
-        upsertPlayer(player).catch(logger.error);
-      });
-      
-      saveDB({players:updatedPlayers,matches:prev.matches||[],visits:prev.visits||0,upcomingMatches:prev.upcomingMatches||[],tagPresets:next,membershipSettings:prev.membershipSettings||[]});
-      notify("태그 프리셋이 업데이트되었습니다.");
-      return {...prev,tagPresets:next,players:updatedPlayers};
-    });
-  }
-  function handleDeleteTagPreset(index){
-    if(!isAdmin)return notify("Admin만 가능합니다.");
-    setDb(prev=>{
-      const deletedPreset=(prev.tagPresets||[])[index];
-      const next=(prev.tagPresets||[]).filter((_,i)=>i!==index);
-      
-      // 모든 선수의 태그에서 삭제되는 프리셋과 일치하는 태그를 제거
-      const updatedPlayers=(prev.players||[]).map(player=>{
-        if(!player.tags||player.tags.length===0)return player;
-        const updatedTags=player.tags.filter(tag=>{
-          // 삭제되는 프리셋과 일치하지 않는 태그만 유지
-          return!(tag.name===deletedPreset.name&&tag.color===deletedPreset.color);
+        
+        // 업데이트된 선수들을 Supabase에 저장
+        updatedPlayers.forEach(player=>{
+          upsertPlayer(player).catch(logger.error);
         });
-        return{...player,tags:updatedTags};
+        
+        setDb(prev=>({...prev,tagPresets:next,players:updatedPlayers}))
+        notify("태그 프리셋이 업데이트되었습니다.");
+      } catch(e) {
+        logger.error('[handleUpdateTagPreset] failed', e)
+        notify("태그 프리셋 업데이트에 실패했습니다.")
+      }
+    } else {
+      // AppDB 모드: 기존 JSON 방식
+      setDb(prev=>{
+        const oldPreset=(prev.tagPresets||[])[index];
+        const next=(prev.tagPresets||[]).map((p,i)=>i===index?updatedPreset:p);
+        
+        // 모든 선수의 태그를 업데이트
+        const updatedPlayers=(prev.players||[]).map(player=>{
+          if(!player.tags||player.tags.length===0)return player;
+          const updatedTags=player.tags.map(tag=>{
+            if(tag.name===oldPreset.name&&tag.color===oldPreset.color){
+              return updatedPreset;
+            }
+            return tag;
+          });
+          return{...player,tags:updatedTags};
+        });
+        
+        updatedPlayers.forEach(player=>{
+          upsertPlayer(player).catch(logger.error);
+        });
+        
+        saveDB({players:updatedPlayers,matches:prev.matches||[],visits:prev.visits||0,upcomingMatches:prev.upcomingMatches||[],tagPresets:next,membershipSettings:prev.membershipSettings||[]});
+        notify("태그 프리셋이 업데이트되었습니다.");
+        return {...prev,tagPresets:next,players:updatedPlayers};
       });
-      
-      // 업데이트된 선수들을 Supabase에 저장
-      updatedPlayers.forEach(player=>{
-        upsertPlayer(player).catch(logger.error);
+    }
+  }
+  
+  async function handleDeleteTagPreset(index){
+    if(!isAdmin)return notify("Admin만 가능합니다.");
+    
+    if (USE_TAG_PRESETS_TABLE) {
+      // 테이블 모드: Supabase tag_presets 테이블에서 삭제
+      try {
+        const deletedPreset=(db.tagPresets||[])[index];
+        const presetId = deletedPreset?.id
+        if (!presetId) {
+          notify("태그 ID를 찾을 수 없습니다.")
+          return
+        }
+        
+        await deleteTagPreset(presetId)
+        const next=(db.tagPresets||[]).filter((_,i)=>i!==index);
+        
+        // 모든 선수의 태그에서 삭제되는 프리셋과 일치하는 태그를 제거
+        const updatedPlayers=(db.players||[]).map(player=>{
+          if(!player.tags||player.tags.length===0)return player;
+          const updatedTags=player.tags.filter(tag=>{
+            return!(tag.name===deletedPreset.name&&tag.color===deletedPreset.color);
+          });
+          return{...player,tags:updatedTags};
+        });
+        
+        updatedPlayers.forEach(player=>{
+          upsertPlayer(player).catch(logger.error);
+        });
+        
+        setDb(prev=>({...prev,tagPresets:next,players:updatedPlayers}))
+        notify("태그 프리셋이 삭제되었습니다.");
+      } catch(e) {
+        logger.error('[handleDeleteTagPreset] failed', e)
+        notify("태그 프리셋 삭제에 실패했습니다.")
+      }
+    } else {
+      // AppDB 모드: 기존 JSON 방식
+      setDb(prev=>{
+        const deletedPreset=(prev.tagPresets||[])[index];
+        const next=(prev.tagPresets||[]).filter((_,i)=>i!==index);
+        
+        const updatedPlayers=(prev.players||[]).map(player=>{
+          if(!player.tags||player.tags.length===0)return player;
+          const updatedTags=player.tags.filter(tag=>{
+            return!(tag.name===deletedPreset.name&&tag.color===deletedPreset.color);
+          });
+          return{...player,tags:updatedTags};
+        });
+        
+        updatedPlayers.forEach(player=>{
+          upsertPlayer(player).catch(logger.error);
+        });
+        
+        saveDB({players:updatedPlayers,matches:prev.matches||[],visits:prev.visits||0,upcomingMatches:prev.upcomingMatches||[],tagPresets:next,membershipSettings:prev.membershipSettings||[]});
+        notify("태그 프리셋이 삭제되었습니다.");
+        return {...prev,tagPresets:next,players:updatedPlayers};
       });
-      
-      saveDB({players:updatedPlayers,matches:prev.matches||[],visits:prev.visits||0,upcomingMatches:prev.upcomingMatches||[],tagPresets:next,membershipSettings:prev.membershipSettings||[]});
-      notify("태그 프리셋이 삭제되었습니다.");
-      return {...prev,tagPresets:next,players:updatedPlayers};
-    });
+    }
   }
 
 

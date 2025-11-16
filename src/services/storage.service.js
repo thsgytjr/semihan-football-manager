@@ -5,8 +5,10 @@ import { TEAM_CONFIG } from '../lib/teamConfig'
 import { logger } from '../lib/logger'
 import { supabase } from '../lib/supabaseClient'
 
-// 마이그레이션 플래그: true면 Supabase matches 테이블 사용, false면 appdb JSON 사용
+// 마이그레이션 플래그: true면 Supabase 테이블 사용, false면 appdb JSON 사용
 export const USE_MATCHES_TABLE = true
+export const USE_UPCOMING_MATCHES_TABLE = true  // upcoming_matches 테이블 사용
+export const USE_TAG_PRESETS_TABLE = true       // tag_presets 테이블 사용
 
 // supabase client is provided by lib/supabaseClient (single instance)
 

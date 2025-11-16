@@ -1,6 +1,8 @@
 import { http, HttpResponse, delay } from 'msw'
-import { mockPlayers, mockMatches, mockVisitLogs, mockAppDB, mockMembershipSettings } from './data'
+import { mockPlayers, mockMatches, mockVisitLogs, mockAppDB, mockMembershipSettings, mockData } from './data'
 import { logger } from '../lib/logger'
+import { upcomingMatchesHandlers } from './upcomingMatches'
+import { tagPresetsHandlers } from './tagPresets'
 
 // Mock 인증 상태
 let mockAuthSession = null
@@ -420,5 +422,9 @@ export const handlers = [
   http.all('*/realtime/*', async () => {
     await delay(100)
     return HttpResponse.json({ status: 'ok' })
-  })
+  }),
+
+  // ============ New Tables ============
+  ...upcomingMatchesHandlers,
+  ...tagPresetsHandlers
 ]
