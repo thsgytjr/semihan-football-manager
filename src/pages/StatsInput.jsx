@@ -265,8 +265,8 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
           }
         }
         if (foundSplits.length === 1) {
-          out.push({ date: dt, type: 'goals', name: foundSplits[0][0] })
-          out.push({ date: dt, type: 'assists', name: foundSplits[0][1] })
+          // Push a single pair item so we can auto-link goal<->assist later
+          out.push({ date: dt, type: 'pair', goalName: foundSplits[0][0], assistName: foundSplits[0][1] })
         } else {
           out.push({ date: dt, type: 'ambiguous', splits: foundSplits, raw })
         }
@@ -346,6 +346,35 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     const deltas = new Map()
     const unmatched = []
     for (const item of parsed) {
+      if (item.type === 'pair') {
+        // Resolve both names and add linked events
+        const gInput = String((item.goalName || '').trim())
+        const aInput = String((item.assistName || '').trim())
+        const gKey = normalizePlayerName(gInput).toLowerCase()
+        const aKey = normalizePlayerName(aInput).toLowerCase()
+        const gPlayer = nameMap.get(gKey)
+        const aPlayer = nameMap.get(aKey)
+        if (!gPlayer || !aPlayer) {
+          if (!gPlayer) unmatched.push(item.goalName)
+          if (!aPlayer) unmatched.push(item.assistName)
+          continue
+        }
+        const gpid = gPlayer.id
+        const apid = aPlayer.id
+        const dateIso = item.date.toISOString()
+
+        const gCur = deltas.get(gpid) || { goals: 0, assists: 0, events: [] }
+        gCur.goals = (gCur.goals || 0) + 1
+        gCur.events.push({ type: 'goal', date: dateIso, assistedBy: toStr(apid) })
+        deltas.set(gpid, gCur)
+
+        const aCur = deltas.get(apid) || { goals: 0, assists: 0, events: [] }
+        aCur.assists = (aCur.assists || 0) + 1
+        aCur.events.push({ type: 'assist', date: dateIso, linkedToGoal: toStr(gpid) })
+        deltas.set(apid, aCur)
+        continue
+      }
+
       const inputName = String((item.name || '').trim())
       const normalized = normalizePlayerName(inputName)
       const key = normalized.toLowerCase()
@@ -380,13 +409,22 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
         const now = next[k] || { goals: 0, assists: 0, events: [] }
         const events = Array.isArray(now.events) ? now.events.slice() : []
 
-        const existingEventKeys = new Set(events.map(e => `${e.type}:${e.date}`))
+        const eventKey = (e) => {
+          const base = `${e.type}:${e.date || ''}`
+          if (e.type === 'goal' && e.assistedBy) return `${base}:a=${toStr(e.assistedBy)}`
+          if (e.type === 'assist' && e.linkedToGoal) return `${base}:g=${toStr(e.linkedToGoal)}`
+          return base
+        }
+        const existingEventKeys = new Set(events.map(eventKey))
 
         for (const e of (delta.events || [])) {
-          const eventKey = `${e.type}:${e.date}`
-          if (!existingEventKeys.has(eventKey)) {
-            events.push({ type: e.type, date: e.date })
-            existingEventKeys.add(eventKey)
+          const key = eventKey(e)
+          if (!existingEventKeys.has(key)) {
+            const toPush = { type: e.type, date: e.date }
+            if (e.assistedBy) toPush.assistedBy = toStr(e.assistedBy)
+            if (e.linkedToGoal) toPush.linkedToGoal = toStr(e.linkedToGoal)
+            events.push(toPush)
+            existingEventKeys.add(key)
           }
         }
 
