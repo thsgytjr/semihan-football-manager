@@ -21,7 +21,17 @@ const DEFAULT_SETTINGS = {
     stats: true,        // 기록 입력
     mom: true,          // MOM 투표/리더보드
     accounting: true,   // 회계
-    analytics: true     // 방문자 분석
+    analytics: true,    // 방문자 분석
+    // 리더보드 카테고리별 표시 토글 (데이터 유지, UI만 제어)
+    leaderboards: {
+      pts: true, // 종합(공격포인트)
+      g: true,   // 득점
+      a: true,   // 어시스트
+      gp: true,  // 출전
+      cs: true,  // 클린시트
+      duo: true, // 듀오
+      cards: true // 카드(옐/레드)
+    }
   },
   accounting: {
     memberFeeOverride: null,        // 숫자 또는 null
@@ -149,10 +159,22 @@ export async function updateFeatureEnabled(featureName, enabled) {
   if (!settings.features) {
     settings.features = DEFAULT_SETTINGS.features
   }
-  settings.features[featureName] = enabled
+  // 단일 키 또는 중첩 키 (예: 'leaderboards.cards') 지원
+  if (featureName.includes('.')) {
+    const [group, key] = featureName.split('.')
+    if (!settings.features[group]) settings.features[group] = { ...(DEFAULT_SETTINGS.features[group] || {}) }
+    settings.features[group][key] = enabled
+  } else {
+    settings.features[featureName] = enabled
+  }
   
   const success = await saveAppSettingsToServer(settings)
   return success
+}
+
+// 리더보드 카테고리 전용 토글 도우미
+export async function updateLeaderboardCategoryEnabled(category, enabled) {
+  return updateFeatureEnabled(`leaderboards.${category}`, enabled)
 }
 
 // 모든 기능 설정 한번에 업데이트

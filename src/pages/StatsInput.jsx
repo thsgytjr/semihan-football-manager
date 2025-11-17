@@ -58,13 +58,15 @@ function extractStatsByPlayer(m) {
       const goals = Number(v?.goals || v?.G || 0)
       const assists = Number(v?.assists || v?.A || 0)
       const cleanSheet = Number(v?.cleanSheet || v?.cs || 0)
+      const yellowCards = Number(v?.yellowCards || v?.yc || 0)
+      const redCards = Number(v?.redCards || v?.rc || 0)
       const events = Array.isArray(v?.events) ? v.events.map(e => ({
         type: e.type || e.event || (e?.isAssist ? 'assist' : 'goal'),
         date: e.dateISO || e.date || e.ts || e.time,
         assistedBy: e.assistedBy,
         linkedToGoal: e.linkedToGoal
       })).filter(Boolean) : []
-      out[pid] = { goals, assists, events, cleanSheet }
+      out[pid] = { goals, assists, events, cleanSheet, yellowCards, redCards }
     }
     return out
   }
@@ -78,7 +80,7 @@ function extractStatsByPlayer(m) {
       const date = rec?.dateISO || rec?.date || rec?.time || rec?.ts || null
       const isGoal = /goal/i.test(type)
       const isAssist = /assist/i.test(type)
-      out[pid] = out[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0 }
+      out[pid] = out[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
       if (isGoal) {
         out[pid].goals = (out[pid].goals || 0) + Number(rec?.goals || 1)
         out[pid].events.push({ type: 'goal', date })
@@ -88,6 +90,12 @@ function extractStatsByPlayer(m) {
       }
       if (Number(rec?.cleanSheet || 0) > 0) {
         out[pid].cleanSheet = (out[pid].cleanSheet || 0) + Number(rec.cleanSheet)
+      }
+      if (Number(rec?.yellowCards || 0) > 0) {
+        out[pid].yellowCards = (out[pid].yellowCards || 0) + Number(rec.yellowCards)
+      }
+      if (Number(rec?.redCards || 0) > 0) {
+        out[pid].redCards = (out[pid].redCards || 0) + Number(rec.redCards)
       }
     }
     return out
@@ -141,7 +149,9 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
         goals: Number(rec.goals || 0),
         assists: Number(rec.assists || 0),
         events: Array.isArray(rec.events) ? rec.events.slice() : [],
-        cleanSheet: csValue
+        cleanSheet: csValue,
+        yellowCards: Number(rec.yellowCards || 0),
+        redCards: Number(rec.redCards || 0)
       }
     }
     console.log('📝 Draft initialized:', next)
@@ -1289,95 +1299,89 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
         </div>
       )}
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* Stats Grid - Compact Table Layout */}
+      <div className="grid gap-4 lg:grid-cols-2">
         {teamRosters.map(team => (
           <div key={team.idx} className="bg-white rounded-lg border-2 border-gray-200 shadow-sm overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-2 text-white font-bold text-sm">
-              {team.name}
+            <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-3 py-2 text-white font-bold text-sm flex items-center justify-between">
+              <span>{team.name}</span>
+              <span className="text-xs opacity-90">{team.players.length}명</span>
             </div>
-            <div className="divide-y divide-gray-100">
-              {team.players.map(p => {
-                const rec = draft[toStr(p.id)] || { goals: 0, assists: 0 }
-                const hasStats = (rec.goals > 0 || rec.assists > 0)
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr className="text-[10px] text-gray-600 uppercase tracking-wide">
+                    <th className="px-2 py-1.5 text-left font-semibold w-[140px] sm:w-[180px]">선수</th>
+                    <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="골">G</th>
+                    <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="어시스트">A</th>
+                    <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="클린시트">CS</th>
+                    <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="옐로우카드">YC</th>
+                    <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="레드카드">RC</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {team.players.map(p => {
+                    const rec = draft[toStr(p.id)] || { goals: 0, assists: 0, cleanSheet: 0, yellowCards: 0, redCards: 0 }
+                    const hasStats = (rec.goals > 0 || rec.assists > 0 || rec.cleanSheet > 0 || rec.yellowCards > 0 || rec.redCards > 0)
 
-                return (
-                  <div key={toStr(p.id)} className={`px-3 py-3 transition-colors ${hasStats ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
-                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
-                      {/* Player Info */}
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <InitialAvatar
-                          id={p.id}
-                          name={p.name}
-                          size={32}
-                          badges={(() => {
-                            const s = toStr(p.membership).toLowerCase();
-                            return (s === 'member' || s.includes('정회원')) ? [] : ['G']
-                          })()}
-                          photoUrl={p.photoUrl}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <div className="font-semibold text-sm text-gray-800 whitespace-normal break-words sm:whitespace-nowrap sm:truncate">{p.name}</div>
-                          { (p.position || p.pos) && (
-                            <div className="text-xs text-gray-500">{p.position || p.pos}</div>
-                          ) }
-                        </div>
-                      </div>
-                      {/* Counters (compact; never push name) */}
-                      <div className="flex flex-wrap justify-end gap-1.5 sm:gap-2 mt-2 sm:mt-0 ml-auto">
-                        {/* Goal Counter */}
-                        <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-1.5 py-1 shrink-0">
-                          <button
-                            onClick={() => removeGoal(p.id)}
-                            disabled={!rec.goals || rec.goals <= 0}
-                            className="w-6 h-6 rounded bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-[11px] transition-all"
-                          >
-                            −
-                          </button>
-                          <div className="flex items-center gap-0.5 px-1">
-                            <span className="text-[11px] font-bold text-gray-600">⚽</span>
-                            <span className="w-5 text-center font-bold text-[12px] tabular-nums">{rec.goals || 0}</span>
+                    return (
+                      <tr key={toStr(p.id)} className={`transition-colors ${hasStats ? 'bg-blue-50/50' : 'hover:bg-gray-50'}`}>
+                        {/* Player Info - Fixed Width */}
+                        <td className="px-2 py-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <InitialAvatar
+                              id={p.id}
+                              name={p.name}
+                              size={28}
+                              badges={(() => {
+                                const s = toStr(p.membership).toLowerCase();
+                                return (s === 'member' || s.includes('정회원')) ? [] : ['G']
+                              })()}
+                              photoUrl={p.photoUrl}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <div className="font-medium text-[13px] text-gray-800 truncate" title={p.name}>{p.name}</div>
+                              {(p.position || p.pos) && (
+                                <div className="text-[10px] text-gray-500 truncate">{p.position || p.pos}</div>
+                              )}
+                            </div>
                           </div>
-                          <button
-                            onClick={() => addGoal(p.id, team.idx)}
-                            className="w-6 h-6 rounded bg-emerald-500 hover:bg-emerald-600 border border-emerald-600 flex items-center justify-center text-white font-bold text-[11px] transition-all shadow-sm"
-                          >
-                            +
-                          </button>
-                        </div>
-                        {/* Clean Sheet Counter (all players, numeric) */}
-                        <CleanSheetCounter
-                          player={p}
-                          teamIdx={team.idx}
-                          draft={draft}
-                          setDraft={setDraft}
-                          match={editingMatch}
-                        />
-                        {/* Assist Counter */}
-                        <div className="flex items-center gap-1 bg-gray-100 rounded-lg px-1.5 py-1 shrink-0">
-                          <button
-                            onClick={() => removeAssist(p.id)}
-                            disabled={!rec.assists || rec.assists <= 0}
-                            className="w-6 h-6 rounded bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-[11px] transition-all"
-                          >
-                            −
-                          </button>
-                          <div className="flex items-center gap-0.5 px-1">
-                            <span className="text-[11px] font-bold text-gray-600">👉</span>
-                            <span className="w-5 text-center font-bold text-[12px] tabular-nums">{rec.assists || 0}</span>
-                          </div>
-                          <button
-                            onClick={() => addAssist(p.id, team.idx)}
-                            className="w-6 h-6 rounded bg-amber-500 hover:bg-amber-600 border border-amber-600 flex items-center justify-center text-white font-bold text-[11px] transition-all shadow-sm"
-                          >
-                            +
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )
-              })}
+                        </td>
+                        {/* Goal Counter - Compact */}
+                        <td className="px-1 py-2">
+                          <CompactCounter
+                            value={rec.goals || 0}
+                            onInc={() => addGoal(p.id, team.idx)}
+                            onDec={() => removeGoal(p.id)}
+                            color="emerald"
+                          />
+                        </td>
+                        {/* Assist Counter - Compact */}
+                        <td className="px-1 py-2">
+                          <CompactCounter
+                            value={rec.assists || 0}
+                            onInc={() => addAssist(p.id, team.idx)}
+                            onDec={() => removeAssist(p.id)}
+                            color="amber"
+                          />
+                        </td>
+                        {/* CS Counter - Compact */}
+                        <td className="px-1 py-2">
+                          <CompactCounterCS player={p} draft={draft} setDraft={setDraft} />
+                        </td>
+                        {/* YC Counter - Compact */}
+                        <td className="px-1 py-2">
+                          <CompactCounterYC player={p} draft={draft} setDraft={setDraft} />
+                        </td>
+                        {/* RC Counter - Compact */}
+                        <td className="px-1 py-2">
+                          <CompactCounterRC player={p} draft={draft} setDraft={setDraft} />
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
         ))}
@@ -1412,7 +1416,190 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
   )
 }
 
-/* ======== Goal/Assist Linking Panel Component ======== */
+/* ======== Compact Counter Components ======== */
+
+// Generic compact counter (vertical layout, minimal spacing)
+function CompactCounter({ value, onInc, onDec, color = 'emerald' }) {
+  const hasValue = value > 0
+  const colorMap = {
+    emerald: {
+      bg: 'bg-emerald-500 hover:bg-emerald-600 border-emerald-600',
+      text: 'text-emerald-700'
+    },
+    amber: {
+      bg: 'bg-amber-500 hover:bg-amber-600 border-amber-600',
+      text: 'text-amber-700'
+    }
+  }
+  const colors = colorMap[color] || colorMap.emerald
+
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <button
+        onClick={onInc}
+        className={`w-10 h-5 rounded-t ${colors.bg} border flex items-center justify-center text-white font-bold text-[10px] transition-all active:scale-95`}
+      >
+        +
+      </button>
+      <div className={`w-10 h-6 flex items-center justify-center font-bold text-[13px] tabular-nums ${hasValue ? colors.text : 'text-gray-400'}`}>
+        {value}
+      </div>
+      <button
+        onClick={onDec}
+        disabled={value <= 0}
+        className={`w-10 h-5 rounded-b bg-white border hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-[10px] transition-all active:scale-95`}
+      >
+        −
+      </button>
+    </div>
+  )
+}
+
+function CompactCounterCS({ player, draft, setDraft }) {
+  const pid = toStr(player.id)
+  const rec = draft[pid] || { cleanSheet: 0 }
+  const value = Number(rec.cleanSheet || 0)
+  const hasValue = value > 0
+
+  const inc = () => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      base.cleanSheet = Math.max(0, Number(base.cleanSheet || 0) + 1)
+      next[pid] = base
+      return next
+    })
+  }
+
+  const dec = () => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      base.cleanSheet = Math.max(0, Number(base.cleanSheet || 0) - 1)
+      next[pid] = base
+      return next
+    })
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <button
+        onClick={inc}
+        className="w-10 h-5 rounded-t bg-green-500 hover:bg-green-600 border border-green-600 flex items-center justify-center text-white font-bold text-[10px] transition-all active:scale-95"
+      >
+        +
+      </button>
+      <div className={`w-10 h-6 flex items-center justify-center font-bold text-[13px] tabular-nums ${hasValue ? 'text-green-700' : 'text-gray-400'}`}>
+        {value}
+      </div>
+      <button
+        onClick={dec}
+        disabled={value <= 0}
+        className="w-10 h-5 rounded-b bg-white border hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-[10px] transition-all active:scale-95"
+      >
+        −
+      </button>
+    </div>
+  )
+}
+
+function CompactCounterYC({ player, draft, setDraft }) {
+  const pid = toStr(player.id)
+  const rec = draft[pid] || { yellowCards: 0 }
+  const value = Number(rec.yellowCards || 0)
+  const hasValue = value > 0
+
+  const inc = () => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      base.yellowCards = Math.max(0, Number(base.yellowCards || 0) + 1)
+      next[pid] = base
+      return next
+    })
+  }
+
+  const dec = () => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      base.yellowCards = Math.max(0, Number(base.yellowCards || 0) - 1)
+      next[pid] = base
+      return next
+    })
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <button
+        onClick={inc}
+        className="w-10 h-5 rounded-t bg-yellow-500 hover:bg-yellow-600 border border-yellow-600 flex items-center justify-center text-white font-bold text-[10px] transition-all active:scale-95"
+      >
+        +
+      </button>
+      <div className={`w-10 h-6 flex items-center justify-center font-bold text-[13px] tabular-nums ${hasValue ? 'text-yellow-700' : 'text-gray-400'}`}>
+        {value}
+      </div>
+      <button
+        onClick={dec}
+        disabled={value <= 0}
+        className="w-10 h-5 rounded-b bg-white border hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-[10px] transition-all active:scale-95"
+      >
+        −
+      </button>
+    </div>
+  )
+}
+
+function CompactCounterRC({ player, draft, setDraft }) {
+  const pid = toStr(player.id)
+  const rec = draft[pid] || { redCards: 0 }
+  const value = Number(rec.redCards || 0)
+  const hasValue = value > 0
+
+  const inc = () => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      base.redCards = Math.max(0, Number(base.redCards || 0) + 1)
+      next[pid] = base
+      return next
+    })
+  }
+
+  const dec = () => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      base.redCards = Math.max(0, Number(base.redCards || 0) - 1)
+      next[pid] = base
+      return next
+    })
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <button
+        onClick={inc}
+        className="w-10 h-5 rounded-t bg-rose-500 hover:bg-rose-600 border border-rose-600 flex items-center justify-center text-white font-bold text-[10px] transition-all active:scale-95"
+      >
+        +
+      </button>
+      <div className={`w-10 h-6 flex items-center justify-center font-bold text-[13px] tabular-nums ${hasValue ? 'text-rose-700' : 'text-gray-400'}`}>
+        {value}
+      </div>
+      <button
+        onClick={dec}
+        disabled={value <= 0}
+        className="w-10 h-5 rounded-b bg-white border hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-[10px] transition-all active:scale-95"
+      >
+        −
+      </button>
+    </div>
+  )
+}
+
+/* ======== Clean Sheet Counter (Legacy - kept for compatibility) ======== */
 function CleanSheetCounter({ player, teamIdx, draft, setDraft }) {
   const pid = toStr(player.id)
   const rec = draft[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0 }
@@ -1453,6 +1640,100 @@ function CleanSheetCounter({ player, teamIdx, draft, setDraft }) {
       <button
         onClick={inc}
         className="w-6 h-6 rounded bg-emerald-500 hover:bg-emerald-600 border border-emerald-600 flex items-center justify-center text-white font-bold text-[11px] transition-all shadow-sm"
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
+function YellowCardCounter({ player, draft, setDraft }) {
+  const pid = toStr(player.id)
+  const rec = draft[pid] || { yellowCards: 0 }
+
+  const dec = () => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      base.yellowCards = Math.max(0, Number(base.yellowCards || 0) - 1)
+      next[pid] = base
+      return next
+    })
+  }
+
+  const inc = () => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      base.yellowCards = Math.max(0, Number(base.yellowCards || 0) + 1)
+      next[pid] = base
+      return next
+    })
+  }
+
+  return (
+    <div className="flex items-center gap-1 bg-yellow-50 rounded-lg px-1.5 py-1 shrink-0 border border-yellow-300" title="옐로우 카드">
+      <button
+        onClick={dec}
+        disabled={!rec.yellowCards || rec.yellowCards <= 0}
+        className="w-6 h-6 rounded bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-[11px] transition-all"
+      >
+        −
+      </button>
+      <div className="flex items-center gap-0.5 px-1">
+        <span className="text-[11px] font-bold text-yellow-700">YC</span>
+        <span className="w-5 text-center font-bold text-[12px] tabular-nums text-yellow-800">{Number(rec.yellowCards || 0)}</span>
+      </div>
+      <button
+        onClick={inc}
+        className="w-6 h-6 rounded bg-yellow-500 hover:bg-yellow-600 border border-yellow-600 flex items-center justify-center text-white font-bold text-[11px] transition-all shadow-sm"
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
+function RedCardCounter({ player, draft, setDraft }) {
+  const pid = toStr(player.id)
+  const rec = draft[pid] || { redCards: 0 }
+
+  const dec = () => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      base.redCards = Math.max(0, Number(base.redCards || 0) - 1)
+      next[pid] = base
+      return next
+    })
+  }
+
+  const inc = () => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      base.redCards = Math.max(0, Number(base.redCards || 0) + 1)
+      next[pid] = base
+      return next
+    })
+  }
+
+  return (
+    <div className="flex items-center gap-1 bg-rose-50 rounded-lg px-1.5 py-1 shrink-0 border border-rose-300" title="레드 카드">
+      <button
+        onClick={dec}
+        disabled={!rec.redCards || rec.redCards <= 0}
+        className="w-6 h-6 rounded bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-[11px] transition-all"
+      >
+        −
+      </button>
+      <div className="flex items-center gap-0.5 px-1">
+        <span className="text-[11px] font-bold text-rose-700">RC</span>
+        <span className="w-5 text-center font-bold text-[12px] tabular-nums text-rose-800">{Number(rec.redCards || 0)}</span>
+      </div>
+      <button
+        onClick={inc}
+        className="w-6 h-6 rounded bg-rose-500 hover:bg-rose-600 border border-rose-600 flex items-center justify-center text-white font-bold text-[11px] transition-all shadow-sm"
       >
         +
       </button>

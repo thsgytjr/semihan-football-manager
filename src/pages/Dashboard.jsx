@@ -1,5 +1,5 @@
 // src/pages/Dashboard.jsx
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import { Tab } from '@headlessui/react'
 import Card from '../components/Card'
 import InitialAvatar from '../components/InitialAvatar'
@@ -25,9 +25,11 @@ import {
   computeDuoRows,
   computeDraftPlayerStatsRows,
   computeCaptainStatsRows,
-  computeDraftAttackRows
+  computeDraftAttackRows,
+  computeCardsRows
 } from '../lib/leaderboardComputations'
 import { getMembershipBadge } from '../lib/membershipConfig'
+import MobileCategoryCarousel from '../components/MobileCategoryCarousel'
 
 // 멤버십 helper 함수
 const S = (v) => v == null ? '' : String(v)
@@ -110,6 +112,7 @@ export default function Dashboard({
   onUpdateUpcomingMatch,
   membershipSettings = [],
   momFeatureEnabled = true,
+  leaderboardToggles = {},
 }) {
   const customMemberships = membershipSettings.length > 0 ? membershipSettings : []
   const isMoMEnabled = useMemo(() => {
@@ -177,11 +180,38 @@ export default function Dashboard({
 
   // 탭 구조 개편: 1차(종합|draft), 2차(종합: pts/g/a/gp | draft: playerWins/captainWins/attack)
   const [primaryTab, setPrimaryTab] = useState('pts') // 'pts' | 'draft' | 'mom'
-  const [apTab, setApTab] = useState('pts')           // 'pts' | 'g' | 'a' | 'gp' | 'cs' | 'duo'
+  const [apTab, setApTab] = useState('pts')           // 'pts' | 'g' | 'a' | 'gp' | 'cs' | 'duo' | 'cards'
   const [draftTab, setDraftTab] = useState('playerWins') // 'playerWins' | 'captainWins' | 'attack'
   const rankedRows = useMemo(() => addRanks(baseRows, apTab), [baseRows, apTab])
   const duoRows = useMemo(() => computeDuoRows(players, filteredMatches), [players, filteredMatches])
   const csRows = useMemo(() => addRanks(baseRows, 'cs'), [baseRows])
+  const cardsRows = useMemo(() => computeCardsRows(players, filteredMatches), [players, filteredMatches])
+  // 리더보드 카테고리 토글 반영
+  const isEnabled = useCallback((key) => {
+    const v = leaderboardToggles?.[key]
+    return v === undefined ? true : !!v
+  }, [leaderboardToggles])
+
+  const apOptions = useMemo(() => {
+    const base = [
+      { id: 'pts', label: '종합' },
+      { id: 'g', label: '득점' },
+      { id: 'a', label: '어시' },
+      { id: 'gp', label: '출전' },
+      { id: 'cs', label: '클린시트' },
+      { id: 'duo', label: '듀오' },
+      { id: 'cards', label: '카드' },
+    ]
+    return base.filter(o => isEnabled(o.id))
+  }, [leaderboardToggles, isEnabled])
+
+  // 비활성화된 탭을 보고 있다면, 첫 번째 활성 탭으로 이동
+  useEffect(() => {
+    if (!apOptions.find(o => o.id === apTab)) {
+      const next = apOptions[0]?.id || 'pts'
+      setApTab(next)
+    }
+  }, [apOptions])
 
   const [showAll, setShowAll] = useState(false)
   const [highlightedMatchId, setHighlightedMatchId] = useState(null) // 하이라이트할 매치 ID
@@ -472,6 +502,7 @@ export default function Dashboard({
           draftTab={draftTab}
           setDraftTab={(val)=>{ setDraftTab(val); setPrimaryTab('draft'); setShowAll(false) }}
           momEnabled={isMoMEnabled}
+          apOptions={apOptions}
         />
 
         {!isMoMEnabled && (
@@ -550,6 +581,16 @@ export default function Dashboard({
               initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.duo || null) : null}
               customMemberships={customMemberships}
             />
+          ) : apTab === 'cards' ? (
+            <CardsTable
+              key={`cards-${apDateKey}`}
+              rows={cardsRows}
+              showAll={showAll}
+              onToggle={() => setShowAll(s => !s)}
+              controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+              apDateKey={apDateKey}
+              customMemberships={customMemberships}
+            />
           ) : (
             <AttackPointsTable
               key={`ap-${apDateKey}-${apTab}`}
@@ -559,7 +600,10 @@ export default function Dashboard({
               rankBy={apTab}
               headHi={headHi}
               colHi={colHi}
-              onRequestTab={(id)=>{ setApTab(id); setPrimaryTab('pts'); setShowAll(false) }}
+              onRequestTab={(id)=>{
+                if (isEnabled(id)) { setApTab(id); setPrimaryTab('pts'); setShowAll(false) }
+                else { notify('이 카테고리는 설정에서 숨겨졌습니다.', 'info') }
+              }}
               controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
               apDateKey={apDateKey}
               initialBaselineRanks={apDateKey === 'all' ? (previousBaselineByMetric[apTab] || null) : null}
@@ -823,7 +867,7 @@ function ControlsLeft({ apDateKey, setApDateKey, dateOptions = [], showAll, setS
 }
 
 /* ----------------------- 모바일 탭 컴포넌트 ---------------------- */
-function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, setDraftTab, momEnabled = true }) {
+function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, setDraftTab, momEnabled = true, apOptions }) {
   const primaryOptions = useMemo(() => {
     const base = [
       { id: 'pts', label: '상위 종합' },
@@ -839,13 +883,14 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
     setPrimary && setPrimary(next)
   }
 
-  const ApOptions = [
+  const ApOptions = apOptions && Array.isArray(apOptions) && apOptions.length > 0 ? apOptions : [
     { id: 'pts', label: '종합' },
     { id: 'g', label: '득점' },
     { id: 'a', label: '어시' },
     { id: 'gp', label: '출전' },
     { id: 'cs', label: '클린시트' },
     { id: 'duo', label: '듀오' },
+    { id: 'cards', label: '카드' },
   ]
   const DraftOptions = [
     { id: 'playerWins', label: '선수승점' },
@@ -860,7 +905,7 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
         <Tab.List className="inline-flex rounded-full border border-stone-300 bg-white p-1 shadow-sm">
           {primaryOptions.map(t => (
             <Tab key={t.id} className={({ selected }) =>
-              `px-3 py-1.5 text-[13px] rounded-full outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${selected ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-50'}`
+              `px-3 py-1.5 text-[13px] rounded-full outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${selected ? 'bg-emerald-500 text-white' : 'text-stone-700 hover:bg-stone-50'}`
             }>
               {t.label}
             </Tab>
@@ -868,54 +913,73 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
         </Tab.List>
       </Tab.Group>
 
-      {/* Secondary controls: mobile select + desktop segmented */}
+      {/* Secondary controls: 모바일은 1줄 슬라이드, 데스크톱은 기존 세그먼트 */}
       {primary === 'pts' ? (
-        <div className="overflow-x-auto no-scrollbar">
-          <div className="inline-flex rounded-full border border-stone-300 bg-white p-1 shadow-sm">
-            {[
-              { id: 'pts', label: '종합' },
-              { id: 'g', label: '득점' },
-              { id: 'a', label: '어시' },
-              { id: 'gp', label: '출전' },
-              { id: 'cs', label: '클린시트' },
-              { id: 'duo', label: '듀오' },
-            ].map(o => {
-              const active = apTab === o.id
-              return (
-                <button
-                  key={o.id}
-                  onClick={()=>setApTab && setApTab(o.id)}
-                  className={`px-3 py-1.5 text-[13px] rounded-full ${active ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-50'}`}
-                  aria-pressed={active}
-                >
-                  {o.label}
-                </button>
-              )
-            })}
+        <>
+          {/* 모바일: 캐러셀 */}
+          <div className="sm:hidden">
+            <MobileCategoryCarousel
+              options={ApOptions}
+              activeId={apTab}
+              onSelect={(id)=>setApTab && setApTab(id)}
+            />
           </div>
-        </div>
+          {/* 데스크톱: 기존 세그먼트 */}
+          <div className="hidden sm:block overflow-x-auto no-scrollbar">
+            <div className="inline-flex rounded-full border border-stone-300 bg-white p-1 shadow-sm">
+              {ApOptions.map(o => {
+                const active = apTab === o.id
+                return (
+                  <button
+                    key={o.id}
+                    onClick={()=>setApTab && setApTab(o.id)}
+                    className={`px-3 py-1.5 text-[13px] rounded-full ${active ? 'bg-emerald-500 text-white' : 'text-stone-700 hover:bg-stone-50'}`}
+                    aria-pressed={active}
+                  >
+                    {o.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </>
       ) : primary === 'draft' ? (
-        <div className="overflow-x-auto no-scrollbar">
-          <div className="inline-flex rounded-full border border-stone-300 bg-white p-1 shadow-sm">
-            {[
-              { id: 'playerWins', label: '선수승점' },
-              { id: 'captainWins', label: '주장승점' },
-              { id: 'attack', label: '골/어시' },
-            ].map(o => {
-              const active = draftTab === o.id
-              return (
-                <button
-                  key={o.id}
-                  onClick={()=>setDraftTab && setDraftTab(o.id)}
-                  className={`px-3 py-1.5 text-[13px] rounded-full ${active ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-50'}`}
-                  aria-pressed={active}
-                >
-                  {o.label}
-                </button>
-              )
-            })}
+        <>
+          {/* 모바일: 캐러셀 */}
+          <div className="sm:hidden">
+            <MobileCategoryCarousel
+              options={[
+                { id: 'playerWins', label: '선수승점' },
+                { id: 'captainWins', label: '주장승점' },
+                { id: 'attack', label: '골/어시' },
+              ]}
+              activeId={draftTab}
+              onSelect={(id)=>setDraftTab && setDraftTab(id)}
+            />
           </div>
-        </div>
+          {/* 데스크톱: 기존 세그먼트 */}
+          <div className="hidden sm:block overflow-x-auto no-scrollbar">
+            <div className="inline-flex rounded-full border border-stone-300 bg-white p-1 shadow-sm">
+              {[
+                { id: 'playerWins', label: '선수승점' },
+                { id: 'captainWins', label: '주장승점' },
+                { id: 'attack', label: '골/어시' },
+              ].map(o => {
+                const active = draftTab === o.id
+                return (
+                  <button
+                    key={o.id}
+                    onClick={()=>setDraftTab && setDraftTab(o.id)}
+                    className={`px-3 py-1.5 text-[13px] rounded-full ${active ? 'bg-emerald-500 text-white' : 'text-stone-700 hover:bg-stone-50'}`}
+                    aria-pressed={active}
+                  >
+                    {o.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </>
       ) : null}
     </div>
   )
@@ -1262,3 +1326,35 @@ function CleanSheetTable({ rows, showAll, onToggle, controls, apDateKey, initial
 }
 
 /* ---------------------- Main Component --------------------- */
+
+function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMemberships = [] }) {
+  const data = showAll ? rows : rows.slice(0, 5)
+  const columns = [
+    { label: '순위', px: 1.5, align: 'center', className: 'w-[60px]' },
+    { label: '선수', px: 2 },
+    { label: 'YC', px: 1.5, align: 'center', className: 'w-[50px]' },
+    { label: 'RC', px: 1.5, align: 'center', className: 'w-[50px]' },
+  ]
+
+  const renderRow = (r, tone) => (
+    <>
+      <RankCell rank={r.rank} tone={tone} />
+      <PlayerNameCell id={r.id} name={r.name} membership={r.membership} tone={tone} photoUrl={r.photoUrl} customMemberships={customMemberships} />
+      <StatCell value={r.y || 0} tone={tone} align="center" width={50} />
+      <StatCell value={r.r || 0} tone={tone} align="center" width={50} />
+    </>
+  )
+
+  return (
+    <LeaderboardTable
+      rows={data}
+      showAll={showAll}
+      onToggle={onToggle}
+      controls={controls}
+      title="카드(Y/R)"
+      columns={columns}
+      renderRow={renderRow}
+      membershipSettings={customMemberships}
+    />
+  )
+}

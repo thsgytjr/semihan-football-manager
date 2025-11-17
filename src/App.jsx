@@ -21,7 +21,7 @@ import VisitorStats from"./components/VisitorStats"
 import ProdDataWarning from"./components/ProdDataWarning"
 import Dashboard from"./pages/Dashboard";import PlayersPage from"./pages/PlayersPage"
 import logoUrl from"./assets/GoalifyLogo.png"
-import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEnabled,updateFeatureEnabled}from"./lib/appSettings"
+import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEnabled,updateFeatureEnabled,updateLeaderboardCategoryEnabled}from"./lib/appSettings"
 
 const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden role="img" className="shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5"/><rect x="2" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/><rect x="18.5" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>)
 
@@ -773,6 +773,20 @@ export default function App(){
     }
   }
 
+  // 리더보드 카테고리 토글 핸들러
+  async function handleLeaderboardToggle(category, enabled){
+    setFeaturesEnabled(prev=>({
+      ...prev,
+      leaderboards: { ...(prev.leaderboards||{}), [category]: enabled }
+    }))
+    const success = await updateLeaderboardCategoryEnabled(category, enabled)
+    if(success){
+      notify(`리더보드 · ${category.toUpperCase()} 카테고리가 ${enabled?'표시':'숨김'}로 설정되었습니다.`,'success')
+    }else{
+      notify('설정 저장에 실패했습니다.','error')
+    }
+  }
+
   /* ──────────────────────────────────────────────────────────
    * FormationBoard용 fetchMatchTeams 빌더 (생략 없음)
    * ────────────────────────────────────────────────────────── */
@@ -1006,6 +1020,7 @@ export default function App(){
                   onUpdateUpcomingMatch={handleUpdateUpcomingMatch}
                   membershipSettings={db.membershipSettings||[]}
                   momFeatureEnabled={featuresEnabled?.mom ?? true}
+                  leaderboardToggles={featuresEnabled?.leaderboards || {}}
                 />
               )}
               {tab==="players"&&isAdmin&&featuresEnabled.players&&(
@@ -1069,7 +1084,7 @@ export default function App(){
     </footer>
 
     <AdminLoginDialog isOpen={loginOpen} onClose={()=>setLoginOpen(false)} onSuccess={onAdminSuccess}/>
-    <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle} tutorialEnabled={tutorialEnabled} onTutorialToggle={handleTutorialToggle} featuresEnabled={featuresEnabled} onFeatureToggle={handleFeatureToggle} isAdmin={isAdmin} isAnalyticsAdmin={isAnalyticsAdmin} visits={visits}/>
+  <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle} tutorialEnabled={tutorialEnabled} onTutorialToggle={handleTutorialToggle} featuresEnabled={featuresEnabled} onFeatureToggle={handleFeatureToggle} onLeaderboardToggle={handleLeaderboardToggle} isAdmin={isAdmin} isAnalyticsAdmin={isAnalyticsAdmin} visits={visits}/>
     {tutorialEnabled && <AppTutorial isOpen={tutorialOpen} onClose={()=>setTutorialOpen(false)} isAdmin={isAdmin}/>}
   </div>)}
 const TabButton = React.memo(function TabButton({icon,label,active,onClick,loading}){return(<button onClick={onClick} disabled={loading} title={label} aria-label={label} className={`flex items-center gap-1.5 rounded-md px-2.5 py-2.5 sm:px-3 sm:py-3 text-sm transition-all duration-200 min-h-[42px] sm:min-h-[44px] touch-manipulation whitespace-nowrap ${active?"bg-emerald-500 text-white shadow-md":"text-stone-700 hover:bg-stone-200 active:bg-stone-300 active:scale-95"} ${loading?"opacity-75 cursor-wait":""}`} style={{touchAction: 'manipulation'}} aria-pressed={active}>{loading && active ? <svg className="w-4 h-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg> : <span className="w-4 h-4 flex-shrink-0">{icon}</span>}{active && <span className="text-xs font-semibold hidden sm:inline">{label}</span>}</button>)})
@@ -1183,7 +1198,7 @@ const PageSkeleton = React.memo(function PageSkeleton({ tab }) {
 })
 
 /* ── Settings Dialog ─────────────────── */
-function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,onTutorialToggle,featuresEnabled,onFeatureToggle,isAdmin,isAnalyticsAdmin,visits}){
+function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,onTutorialToggle,featuresEnabled,onFeatureToggle,onLeaderboardToggle,isAdmin,isAnalyticsAdmin,visits}){
   const[newTitle,setNewTitle]=useState(appTitle)
   const[titleEditMode,setTitleEditMode]=useState(false)
   
@@ -1215,6 +1230,15 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
     mom: 'MOM 투표/리더보드',
     accounting: '회계',
     analytics: '방문자 분석'
+  }
+  const leaderboardLabels = {
+    pts: 'AP(공격포인트)',
+    g: '골',
+    a: '어시스트',
+    gp: '경기출전',
+    cs: '클린시트',
+    duo: '호흡(어→골)',
+    cards: '카드(Y/R)'
   }
   
   if(!isOpen)return null;
@@ -1354,6 +1378,42 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
 
               <div className="text-xs text-stone-500 bg-blue-50 rounded-lg p-3 border border-blue-200 mt-3">
                 ℹ️ 기능을 비활성화해도 저장된 매치와 선수 데이터는 유지됩니다. 기능을 다시 활성화하면 이전 데이터를 볼 수 있습니다.
+              </div>
+            </div>
+
+            {/* 리더보드 카테고리 표시 제어 */}
+            <div className="border-t border-stone-200 pt-4 mt-4">
+              <div className="mb-3">
+                <h4 className="text-sm font-semibold text-stone-800">리더보드 카테고리 표시</h4>
+                <p className="text-xs text-stone-500 mt-0.5">카테고리를 숨겨도 데이터는 유지됩니다 (UI만 숨김)</p>
+              </div>
+              <div className="grid grid-cols-1 gap-2">
+                {Object.entries(leaderboardLabels).map(([key,label])=>{
+                  const current = featuresEnabled?.leaderboards?.[key]
+                  const isOn = current === undefined ? true : !!current
+                  return (
+                    <div key={key} className="flex items-center justify-between py-2 px-3 rounded-lg bg-stone-50 hover:bg-stone-100 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-stone-700">{label}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-200 text-stone-700 font-medium">리더보드</span>
+                      </div>
+                      <button
+                        onClick={() => onLeaderboardToggle?.(key, !isOn)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+                          isOn ? 'bg-emerald-600' : 'bg-stone-300'
+                        }`}
+                        role="switch"
+                        aria-checked={isOn}
+                      >
+                        <span
+                          className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                            isOn ? 'translate-x-5' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  )
+                })}
               </div>
             </div>
             </>

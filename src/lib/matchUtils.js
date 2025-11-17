@@ -75,15 +75,15 @@ export function extractStatsByPlayer(m) {
       const pid = toStr(k)
       if (!pid) continue
        const csValue = Number(v?.cleanSheet || v?.cs || 0)
-       if (csValue > 0) {
-         console.log(`🔍 [matchUtils] Player ${pid} has cleanSheet in src:`, csValue, 'v:', v)
-       }
+       // remove debug console logging for cleanSheet values
       out[pid] = { 
         goals: Number(v?.goals || 0), 
         assists: Number(v?.assists || 0), 
         events: Array.isArray(v?.events) ? v.events.slice() : [],
         // Include clean sheet if present (manual entry via StatsInput)
-         cleanSheet: csValue
+         cleanSheet: csValue,
+         yellowCards: Number(v?.yellowCards || v?.yc || 0),
+         redCards: Number(v?.redCards || v?.rc || 0)
       }
     }
     return out
@@ -97,7 +97,7 @@ export function extractStatsByPlayer(m) {
       const date = rec?.dateISO || rec?.date || rec?.time || rec?.ts || null
       const isGoal = /goal/i.test(type)
       const isAssist = /assist/i.test(type)
-      out[pid] = out[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0 }
+      out[pid] = out[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
       if (isGoal) {
         out[pid].goals = (out[pid].goals || 0) + Number(rec?.goals || 1)
         out[pid].events.push({ type: 'goal', date })
@@ -108,6 +108,12 @@ export function extractStatsByPlayer(m) {
       // If array-form stats happen to carry cleanSheet value per record, sum it (rare)
       if (Number(rec?.cleanSheet || 0) > 0) {
         out[pid].cleanSheet = (out[pid].cleanSheet || 0) + Number(rec.cleanSheet)
+      }
+      if (Number(rec?.yellowCards || 0) > 0) {
+        out[pid].yellowCards = (out[pid].yellowCards || 0) + Number(rec.yellowCards)
+      }
+      if (Number(rec?.redCards || 0) > 0) {
+        out[pid].redCards = (out[pid].redCards || 0) + Number(rec.redCards)
       }
     }
   }

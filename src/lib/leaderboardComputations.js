@@ -1197,3 +1197,44 @@ export function computeDraftAttackRows(players = [], matches = []) {
     }
   })
 }
+
+/* --------------------- Cards (Yellow/Red) Computation --------------------- */
+/**
+ * Compute cards leaderboard rows (yellow/red)
+ */
+export function computeCardsRows(players = [], matches = []) {
+  const idToPlayer = new Map(players.map(p => [toStr(p.id), p]))
+  const tally = new Map()
+
+  for (const m of (matches || [])) {
+    const statsMap = extractStatsByPlayer(m)
+    for (const [pidRaw, rec] of Object.entries(statsMap)) {
+      const pid = toStr(pidRaw)
+      const p = idToPlayer.get(pid)
+      if (!p) continue
+      const row = tally.get(pid) || {
+        id: pid,
+        name: p.name,
+        membership: p.membership || '',
+        photoUrl: p.photoUrl || null,
+        y: 0,
+        r: 0
+      }
+      row.y += Number(rec?.yellowCards || 0)
+      row.r += Number(rec?.redCards || 0)
+      tally.set(pid, row)
+    }
+  }
+
+  const rows = Array.from(tally.values()).filter(r => (r.y + r.r) > 0)
+  rows.sort((a, b) => (b.r - a.r) || (b.y - a.y) || a.name.localeCompare(b.name))
+  let lastRank = 0
+  let lastKey = null
+  return rows.map((r, i) => {
+    const key = `${r.r}-${r.y}`
+    const rank = (i === 0) ? 1 : (key === lastKey ? lastRank : i + 1)
+    lastRank = rank
+    lastKey = key
+    return { ...r, rank }
+  })
+}
