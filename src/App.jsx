@@ -993,7 +993,21 @@ export default function App(){
             <PageSkeleton tab={tab} />
           ) : (
             <>
-              {tab==="dashboard"&&(<Dashboard totals={totals} players={players} matches={matches} isAdmin={isAdmin} onUpdateMatch={handleUpdateMatch} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch} membershipSettings={db.membershipSettings||[]}/>)}
+              {tab==="dashboard"&&(
+                <Dashboard
+                  totals={totals}
+                  players={players}
+                  matches={matches}
+                  isAdmin={isAdmin}
+                  onUpdateMatch={handleUpdateMatch}
+                  upcomingMatches={db.upcomingMatches}
+                  onSaveUpcomingMatch={handleSaveUpcomingMatch}
+                  onDeleteUpcomingMatch={handleDeleteUpcomingMatch}
+                  onUpdateUpcomingMatch={handleUpdateUpcomingMatch}
+                  membershipSettings={db.membershipSettings||[]}
+                  momFeatureEnabled={featuresEnabled?.mom ?? true}
+                />
+              )}
               {tab==="players"&&isAdmin&&featuresEnabled.players&&(
                 <PlayersPage
                   players={players}
@@ -1198,6 +1212,7 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
     draft: '드래프트',
     formation: '포메이션 보드',
     stats: '기록 입력',
+    mom: 'MOM 투표/리더보드',
     accounting: '회계',
     analytics: '방문자 분석'
   }

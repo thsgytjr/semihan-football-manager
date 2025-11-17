@@ -1,11 +1,15 @@
 // src/pages/StatsInput.jsx
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import ConfirmDialog from '../components/ConfirmDialog'
 import Card from '../components/Card'
 import InitialAvatar from '../components/InitialAvatar'
+import MoMAdminPanel from '../components/MoMAdminPanel'
+import { notify } from '../components/Toast'
 import { hydrateMatch } from '../lib/match'
 import MatchHelpers from '../lib/matchHelpers'
 import { formatMatchLabel } from '../lib/matchLabel'
+import { summarizeVotes, buildMoMTieBreakerScores, getMoMPhase } from '../lib/momUtils'
+import { fetchMoMVotes, submitMoMVote, deleteMoMVote, deleteMoMVotesByMatch } from '../services/momVotes.service'
 
 const toStr = (v) => (v === null || v === undefined) ? '' : String(v)
 
@@ -117,6 +121,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
   )
 
   const [draft, setDraft] = useState({})
+  const [momMatchId, setMomMatchId] = useState('')
   useEffect(() => {
     if (!editingMatch) { setDraft({}); return }
     console.log('🎯 Match object:', editingMatch)
@@ -143,11 +148,28 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     setDraft(next)
   }, [editingMatch, players])
 
+  useEffect(() => {
+    if (momMatchId) return
+    if (editingMatchId) {
+      setMomMatchId(toStr(editingMatchId))
+      return
+    }
+    const fallback = toStr(sortedMatches?.[0]?.id || '')
+    if (fallback) setMomMatchId(fallback)
+  }, [momMatchId, editingMatchId, sortedMatches])
+
   const [bulkText, setBulkText] = useState('')
   const [bulkMsg, setBulkMsg] = useState('')
   const [showSaved, setShowSaved] = useState(false)
   const [confirmState, setConfirmState] = useState({ open: false, kind: null })
   const [alertState, setAlertState] = useState({ open: false, title: '안내', message: '' })
+  const [momVotes, setMomVotes] = useState([])
+  const [momLoadingVotes, setMomLoadingVotes] = useState(false)
+
+  const momMatch = useMemo(() => {
+    if (!momMatchId) return editingMatch || null
+    return (sortedMatches || []).find(m => toStr(m.id) === toStr(momMatchId)) || null
+  }, [momMatchId, sortedMatches, editingMatch])
 
   const save = () => {
     if (!editingMatch) return
@@ -155,6 +177,33 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     setShowSaved(true)
     setTimeout(() => setShowSaved(false), 1200)
   }
+
+  const refreshMoMVotes = useCallback(async () => {
+    if (!momMatch?.id) {
+      setMomVotes([])
+      return []
+    }
+    setMomLoadingVotes(true)
+    try {
+      const data = await fetchMoMVotes(momMatch.id)
+      setMomVotes(data)
+      return data
+    } catch (err) {
+      console.error('[StatsInput] MOM votes fetch failed', err)
+      notify('MOM 투표 기록을 불러오는 데 실패했습니다.', 'error')
+      throw err
+    } finally {
+      setMomLoadingVotes(false)
+    }
+  }, [momMatch?.id])
+
+  useEffect(() => {
+    if (!momMatch?.id) {
+      setMomVotes([])
+      return
+    }
+    refreshMoMVotes()
+  }, [momMatch?.id, refreshMoMVotes])
 
   // Bulk parsing functions (simplified from original)
   function parseLooseDate(s) {
@@ -492,6 +541,135 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     return hydrated.teams || []
   }, [editingMatch, players])
 
+
+  const momMatchOptions = useMemo(() => {
+    return (sortedMatches || []).map(m => {
+      const label = typeof formatMatchLabel === 'function'
+        ? formatMatchLabel(m, { withDate: true, withCount: true })
+        : (m.label || m.title || m.name || `Match ${toStr(m.id)}`)
+      return { value: toStr(m.id), label }
+    })
+  }, [sortedMatches])
+
+  const momRoster = useMemo(() => {
+    if (!momMatch) return []
+    const attendeeIds = new Set(extractAttendeeIds(momMatch))
+    return players.filter(p => attendeeIds.has(toStr(p.id)))
+  }, [momMatch, players])
+
+  const momTieBreakerScores = useMemo(() => {
+    if (!momMatch) return null
+    try {
+      const statsByPlayer = extractStatsByPlayer(momMatch)
+      return buildMoMTieBreakerScores(statsByPlayer)
+    } catch (err) {
+      console.warn('[StatsInput] Failed to build MOM tie-breaker scores', err)
+      return null
+    }
+  }, [momMatch])
+
+  const momSummary = useMemo(
+    () => summarizeVotes(momVotes, { tieBreakerScores: momTieBreakerScores || undefined }),
+    [momVotes, momTieBreakerScores]
+  )
+
+  const momOverride = momMatch?.draft?.momOverride || null
+  const momPhase = momMatch ? getMoMPhase(momMatch) : 'hidden'
+  const momOverrideLocked = momPhase === 'vote'
+
+  const persistMomOverride = useCallback(async (overridePayload) => {
+    if (!momMatch) return
+    const currentDraft = momMatch.draft && typeof momMatch.draft === 'object' ? momMatch.draft : {}
+    const nextDraft = { ...currentDraft }
+    if (overridePayload) {
+      nextDraft.momOverride = overridePayload
+    } else {
+      delete nextDraft.momOverride
+    }
+    try {
+      await onUpdateMatch?.(momMatch.id, { draft: nextDraft })
+    } catch (err) {
+      console.error('[StatsInput] Failed to persist MOM override', err)
+      throw err
+    }
+  }, [momMatch, onUpdateMatch])
+
+  const handleMomAdminAddVote = async ({ playerId, note }) => {
+    if (!momMatch?.id || !playerId) return
+    try {
+      await submitMoMVote({
+        matchId: momMatch.id,
+        playerId,
+        voterLabel: note?.trim() || null,
+        ipHash: null,
+        visitorId: null
+      })
+      await refreshMoMVotes()
+      notify('관리자 투표를 기록했어요.', 'success')
+    } catch (err) {
+      console.error('[StatsInput] Admin add vote failed', err)
+      notify('관리자 투표 기록에 실패했습니다.', 'error')
+    }
+  }
+
+  const handleMomAdminOverrideVote = async ({ playerId, note }) => {
+    if (!momMatch?.id || !playerId) return
+    if (momOverrideLocked) {
+      notify('투표가 진행 중이라 MOM을 확정할 수 없습니다.', 'warning')
+      return
+    }
+    try {
+      await persistMomOverride({
+        playerId,
+        note: note?.trim() || '관리자 수동 확정',
+        confirmedAt: new Date().toISOString(),
+        source: 'admin',
+      })
+      notify('MOM 결과를 관리자 확정으로 저장했습니다.', 'success')
+    } catch (err) {
+      console.error('[StatsInput] Admin override vote failed', err)
+      notify('MOM 결과 갱신에 실패했습니다.', 'error')
+    }
+  }
+
+  const handleMomAdminDeleteVote = async (voteId) => {
+    if (!voteId) return
+    try {
+      await deleteMoMVote(voteId)
+      await refreshMoMVotes()
+      notify('선택한 기록을 삭제했습니다.', 'success')
+    } catch (err) {
+      console.error('[StatsInput] Admin delete vote failed', err)
+      notify('기록 삭제에 실패했습니다.', 'error')
+    }
+  }
+
+  const handleMomAdminResetVotes = async () => {
+    if (!momMatch?.id) return
+    try {
+      await deleteMoMVotesByMatch(momMatch.id)
+      if (momOverride) {
+        await persistMomOverride(null)
+      }
+      await refreshMoMVotes()
+      notify('MOM 투표 기록을 모두 삭제했습니다.', 'success')
+    } catch (err) {
+      console.error('[StatsInput] Admin reset votes failed', err)
+      notify('기록 삭제에 실패했습니다.', 'error')
+    }
+  }
+
+  const handleMomAdminClearOverride = async () => {
+    if (!momOverride) return
+    try {
+      await persistMomOverride(null)
+      notify('관리자 확정을 해제했습니다.', 'success')
+    } catch (err) {
+      console.error('[StatsInput] Admin clear override failed', err)
+      notify('확정 해제에 실패했습니다.', 'error')
+    }
+  }
+
   // Generate dynamic placeholder examples based on roster
   const bulkPlaceholder = useMemo(() => {
     if (!editingMatch) return "예시:\n[11/08/2025 9:07AM]goal:assist[득점자 도움자]\n[11/08/2025 9:16AM]goal[득점자]\n[11/08/2025 8:05AM]assist[도움자]"
@@ -635,6 +813,29 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
           </>
         )}
       </Card>
+      {momMatch && (
+        <MoMAdminPanel
+          match={momMatch}
+          matchOptions={momMatchOptions}
+          selectedMatchId={toStr(momMatchId) || toStr(momMatch?.id || '')}
+          onSelectMatch={(val) => {
+            if (!val) return
+            setMomMatchId(toStr(val))
+          }}
+          roster={momRoster}
+          votes={momVotes}
+          tally={momSummary.tally}
+          totalVotes={momSummary.total}
+          loading={momLoadingVotes}
+          onAddVote={handleMomAdminAddVote}
+          onOverrideVote={handleMomAdminOverrideVote}
+          onDeleteVote={handleMomAdminDeleteVote}
+          onResetVotes={handleMomAdminResetVotes}
+          momOverride={momOverride}
+          onClearOverride={handleMomAdminClearOverride}
+          overrideLocked={momOverrideLocked}
+        />
+      )}
     </div>
   )
 }

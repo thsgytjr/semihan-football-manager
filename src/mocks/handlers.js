@@ -4,6 +4,7 @@ import { logger } from '../lib/logger'
 
 // Mock 인증 상태
 let mockAuthSession = null
+const mockMoMVotes = []
 
 // SessionStorage 저장 함수
 function saveMockData() {
@@ -18,6 +19,7 @@ function saveMockData() {
     logger.warn('⚠️ SessionStorage 저장 실패:', e.message)
   }
 }
+
 
 export const handlers = [
   // ============ Auth API (Supabase) ============
@@ -409,6 +411,79 @@ export const handlers = [
     }
     
     return HttpResponse.json({ error: 'Membership not found' }, { status: 404 })
+  }),
+
+  // ============ MoM Votes API ============
+  http.get('*/rest/v1/mom_votes', async ({ request }) => {
+    await delay(200)
+    const url = new URL(request.url)
+    const matchParam = url.searchParams.get('match_id')
+    const roomParam = url.searchParams.get('room_id')
+    let results = [...mockMoMVotes]
+    if (matchParam) {
+      const matchId = matchParam.replace('eq.', '')
+      results = results.filter(v => v.match_id === matchId)
+    }
+    if (roomParam) {
+      const roomId = roomParam.replace('eq.', '')
+      results = results.filter(v => v.room_id === roomId)
+    }
+    return HttpResponse.json(results)
+  }),
+
+  http.post('*/rest/v1/mom_votes', async ({ request }) => {
+    await delay(200)
+    const body = await request.json()
+    const payloads = Array.isArray(body) ? body : [body]
+    const inserted = payloads.map(item => {
+      const vote = {
+        id: item.id || crypto.randomUUID(),
+        room_id: item.room_id,
+        match_id: item.match_id,
+        player_id: item.player_id,
+        voter_label: item.voter_label ?? null,
+        created_at: new Date().toISOString(),
+        ip_hash: item.ip_hash ?? null,
+        visitor_id: item.visitor_id ?? null,
+      }
+  mockMoMVotes.push(vote)
+      return vote
+    })
+    const select = new URL(request.url).searchParams.get('select')
+    const single = inserted[0]
+    if (select) {
+      return HttpResponse.json(single, { status: 201 })
+    }
+    return HttpResponse.json(inserted, { status: 201 })
+  }),
+
+  http.delete('*/rest/v1/mom_votes*', async ({ request }) => {
+    await delay(200)
+    const url = new URL(request.url)
+    const idParam = url.searchParams.get('id')
+    const matchParam = url.searchParams.get('match_id')
+    let deleted = 0
+
+    if (idParam) {
+      const idVal = idParam.replace('eq.', '')
+      const idx = mockMoMVotes.findIndex(v => v.id === idVal)
+      if (idx !== -1) {
+        mockMoMVotes.splice(idx, 1)
+        deleted += 1
+      }
+    } else if (matchParam) {
+      const matchId = matchParam.replace('eq.', '')
+      for (let i = mockMoMVotes.length - 1; i >= 0; i -= 1) {
+        if (mockMoMVotes[i].match_id === matchId) {
+          mockMoMVotes.splice(i, 1)
+          deleted += 1
+        }
+      }
+    }
+
+    return deleted > 0
+      ? HttpResponse.json({ success: true })
+      : HttpResponse.json({ error: 'Vote not found' }, { status: 404 })
   }),
 
   // ============ Realtime Subscriptions (더미 응답) ============

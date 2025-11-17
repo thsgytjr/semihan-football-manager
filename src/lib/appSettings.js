@@ -19,13 +19,30 @@ const DEFAULT_SETTINGS = {
     draft: true,        // 드래프트
     formation: true,    // 포메이션 보드
     stats: true,        // 기록 입력
-      accounting: true,   // 회계
+    mom: true,          // MOM 투표/리더보드
+    accounting: true,   // 회계
     analytics: true     // 방문자 분석
   },
   accounting: {
     memberFeeOverride: null,        // 숫자 또는 null
     guestSurchargeOverride: null,   // 숫자 또는 null
     venueTotalOverride: null        // 매치 전체 구장비 강제 설정 (멤버/게스트 계산에 사용)
+  }
+}
+
+function mergeSettings(partial = {}) {
+  const incoming = partial || {}
+  return {
+    ...DEFAULT_SETTINGS,
+    ...incoming,
+    features: {
+      ...DEFAULT_SETTINGS.features,
+      ...(incoming.features || {}),
+    },
+    accounting: {
+      ...DEFAULT_SETTINGS.accounting,
+      ...(incoming.accounting || {}),
+    },
   }
 }
 
@@ -39,10 +56,10 @@ export async function loadAppSettingsFromServer() {
       .single()
     
     if (error) {
-      return DEFAULT_SETTINGS
+      return mergeSettings({})
     }
     
-    const settings = data?.value || DEFAULT_SETTINGS
+    const settings = mergeSettings(data?.value || {})
     // 로컬에도 캐시
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
     return settings
@@ -83,12 +100,12 @@ export function getAppSettings() {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (raw) {
       const settings = JSON.parse(raw)
-      return { ...DEFAULT_SETTINGS, ...settings }
+      return mergeSettings(settings)
     }
   } catch (err) {
     logger.error('Failed to load app settings:', err)
   }
-  return DEFAULT_SETTINGS
+  return mergeSettings({})
 }
 
 // 로컬 스토리지에 저장 (폴백용)

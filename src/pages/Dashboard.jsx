@@ -8,7 +8,13 @@ import LeaderboardTable, { RankCell, PlayerNameCell, StatCell, FormDotsCell } fr
 import Medal from '../components/ranking/Medal'
 import FormDots from '../components/ranking/FormDots'
 import UpcomingMatchesWidget from '../components/UpcomingMatchesWidget'
+import MoMNoticeWidget from '../components/MoMNoticeWidget'
+import { MoMPopup } from '../components/MoMPopup'
+import { MoMLeaderboard } from '../components/MoMLeaderboard'
+import { useMoMPrompt } from '../hooks/useMoMPrompt'
+import { useMoMAwardsSummary } from '../hooks/useMoMAwardsSummary'
 import { toStr, extractDateKey, extractSeason } from '../lib/matchUtils'
+import { getCountdownParts } from '../lib/momUtils'
 import { rankTone } from '../lib/rankingUtils'
 import { notify } from '../components/Toast'
 import Select from '../components/Select'
@@ -102,9 +108,23 @@ export default function Dashboard({
   onSaveUpcomingMatch,
   onDeleteUpcomingMatch,
   onUpdateUpcomingMatch,
-  membershipSettings = []
+  membershipSettings = [],
+  momFeatureEnabled = true,
 }) {
   const customMemberships = membershipSettings.length > 0 ? membershipSettings : []
+  const isMoMEnabled = useMemo(() => {
+    if (momFeatureEnabled === undefined) return true
+    if (typeof momFeatureEnabled === 'string') {
+      const normalized = momFeatureEnabled.trim().toLowerCase()
+      if (['false', '0', 'off', 'disabled', 'no', 'n'].includes(normalized)) return false
+      if (['true', '1', 'on', 'enabled', 'yes', 'y'].includes(normalized)) return true
+      return normalized !== 'false'
+    }
+    if (typeof momFeatureEnabled === 'number') {
+      return momFeatureEnabled !== 0
+    }
+    return Boolean(momFeatureEnabled)
+  }, [momFeatureEnabled])
   
   // 시즌 필터 상태 (리더보드/히스토리 분리)
   const [leaderboardSeason, setLeaderboardSeason] = useState('all')
@@ -156,7 +176,7 @@ export default function Dashboard({
   const draftAttackRows = useMemo(() => computeDraftAttackRows(players, filteredMatches), [players, filteredMatches])
 
   // 탭 구조 개편: 1차(종합|draft), 2차(종합: pts/g/a/gp | draft: playerWins/captainWins/attack)
-  const [primaryTab, setPrimaryTab] = useState('pts') // 'pts' | 'draft'
+  const [primaryTab, setPrimaryTab] = useState('pts') // 'pts' | 'draft' | 'mom'
   const [apTab, setApTab] = useState('pts')           // 'pts' | 'g' | 'a' | 'gp' | 'cs' | 'duo'
   const [draftTab, setDraftTab] = useState('playerWins') // 'playerWins' | 'captainWins' | 'attack'
   const rankedRows = useMemo(() => addRanks(baseRows, apTab), [baseRows, apTab])
@@ -165,6 +185,124 @@ export default function Dashboard({
 
   const [showAll, setShowAll] = useState(false)
   const [highlightedMatchId, setHighlightedMatchId] = useState(null) // 하이라이트할 매치 ID
+  const [showMoM, setShowMoM] = useState(false)
+  const [manualMoMOpen, setManualMoMOpen] = useState(false)
+  const [dismissedMoMMatchId, setDismissedMoMMatchId] = useState(null)
+
+  useEffect(() => {
+    if (!isMoMEnabled && primaryTab === 'mom') {
+      setPrimaryTab('pts')
+    }
+  }, [isMoMEnabled, primaryTab])
+
+  const mom = useMoMPrompt({ matches, players })
+  const momAwards = useMoMAwardsSummary(matches)
+  const playerLookup = useMemo(() => {
+    const map = new Map()
+    players.forEach(p => {
+      if (p?.id != null) {
+        map.set(toStr(p.id), p)
+      }
+    })
+    return map
+  }, [players])
+
+  const momLeaders = useMemo(() => {
+    const entries = Object.entries(mom.tally || {})
+    return entries
+      .map(([pid, votes]) => {
+        const player = playerLookup.get(pid) || mom.roster?.find(p => toStr(p.id) === pid)
+        return {
+          playerId: pid,
+          votes,
+          name: player?.name || `Player ${pid}`,
+          photoUrl: player?.photoUrl || null,
+        }
+      })
+      .sort((a, b) => {
+        if (b.votes !== a.votes) return b.votes - a.votes
+        return a.name.localeCompare(b.name)
+      })
+  }, [mom.tally, playerLookup, mom.roster])
+
+  const momNoticeVisible = Boolean(
+    isMoMEnabled &&
+    mom.latestMatch &&
+    mom.windowMeta &&
+    mom.phase === 'vote' &&
+    mom.voteStatusReady &&
+    mom.hasRecordedStats
+  )
+
+  const momNotice = useMemo(() => {
+    if (!momNoticeVisible || !mom.latestMatch || !mom.windowMeta?.voteEnd) return null
+    const countdown = getCountdownParts(mom.windowMeta.voteEnd, mom.nowTs)
+    const matchLabel = new Date(mom.latestMatch.dateISO).toLocaleString('ko-KR', {
+      month: 'long',
+      day: 'numeric',
+      weekday: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+    const alreadyVoted = Boolean(mom.alreadyVoted)
+    const canVote = mom.phase === 'vote' && mom.voteStatusReady && !alreadyVoted
+    return {
+      visible: true,
+      matchLabel,
+      countdownLabel: countdown?.label ?? '마감',
+      urgent: countdown?.diffMs != null && countdown.diffMs <= 5 * 60 * 1000,
+      totalVotes: mom.totalVotes,
+      leaders: momLeaders.slice(0, 3),
+      deadlineTs: mom.windowMeta.voteEnd,
+      alreadyVoted,
+      canVote,
+      matchId: mom.latestMatch.id,
+    }
+  }, [momNoticeVisible, mom.latestMatch, mom.windowMeta, mom.nowTs, mom.totalVotes, momLeaders, mom.alreadyVoted, mom.phase, mom.voteStatusReady])
+
+  useEffect(() => {
+    if (!isMoMEnabled) {
+      setShowMoM(false)
+      return
+    }
+    if (manualMoMOpen) return
+    if (!mom.latestMatch || !mom.hasRecordedStats) {
+      setShowMoM(false)
+      return
+    }
+    const shouldShowVote = mom.phase === 'vote'
+      && mom.voteStatusReady
+      && !mom.alreadyVoted
+      && mom.hasRecordedStats
+      && mom.latestMatch.id !== dismissedMoMMatchId
+    setShowMoM(shouldShowVote)
+  }, [isMoMEnabled, mom.phase, mom.voteStatusReady, mom.alreadyVoted, mom.latestMatch?.id, dismissedMoMMatchId, manualMoMOpen, mom.hasRecordedStats])
+
+  useEffect(() => {
+    setManualMoMOpen(false)
+  }, [mom.latestMatch?.id])
+
+  const handleCloseMoM = () => {
+    if (!manualMoMOpen && mom.latestMatch?.id) {
+      setDismissedMoMMatchId(mom.latestMatch.id)
+    }
+    setManualMoMOpen(false)
+    setShowMoM(false)
+  }
+
+  const handleOpenMoMFromNotice = () => {
+    if (!mom.latestMatch || !mom.hasRecordedStats) return
+    if (mom.alreadyVoted && mom.phase === 'vote') {
+      notify('이미 투표를 완료했습니다. 리더보드에서 결과를 확인하세요.', 'info')
+      return
+    }
+    setManualMoMOpen(true)
+    setShowMoM(true)
+  }
+
+  const handleMoMNoticeAlreadyVoted = () => {
+    notify('이미 투표를 완료했습니다. 리더보드에서 결과를 확인하세요.', 'info')
+  }
 
   // Seed baselines …
   const previousBaselineByMetric = useMemo(() => {
@@ -275,6 +413,28 @@ export default function Dashboard({
 
   return (
     <div className="grid gap-4 sm:gap-6">
+      {isMoMEnabled && showMoM && mom.latestMatch && (
+        <MoMPopup
+          match={mom.latestMatch}
+          roster={mom.roster}
+          recommended={mom.recommended}
+          totalVotes={mom.totalVotes}
+          windowMeta={mom.windowMeta}
+          alreadyVoted={mom.alreadyVoted}
+          nowTs={mom.nowTs}
+          submitting={mom.submitting}
+          onClose={handleCloseMoM}
+          onSubmit={mom.submitVote}
+          error={mom.error}
+        />
+      )}
+      {isMoMEnabled && (
+        <MoMNoticeWidget
+          notice={momNotice}
+          onOpenMoM={handleOpenMoMFromNotice}
+          onAlreadyVoted={handleMoMNoticeAlreadyVoted}
+        />
+      )}
       {/* Upcoming Matches Widget */}
       <UpcomingMatchesWidget
         upcomingMatches={upcomingMatches}
@@ -311,9 +471,30 @@ export default function Dashboard({
           setApTab={(val)=>{ setApTab(val); setPrimaryTab('pts'); setShowAll(false) }}
           draftTab={draftTab}
           setDraftTab={(val)=>{ setDraftTab(val); setPrimaryTab('draft'); setShowAll(false) }}
+          momEnabled={isMoMEnabled}
         />
 
-        {primaryTab === 'draft' ? (
+        {!isMoMEnabled && (
+          <div className="mb-4 rounded-xl border border-dashed border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600">
+            MOM 기능이 꺼져 있어 투표와 리더보드가 숨겨진 상태입니다. 앱 설정에서 다시 활성화하면 기존 기록을 포함한 모든 데이터가 즉시 복구됩니다.
+          </div>
+        )}
+
+        {primaryTab === 'mom' ? (
+          isMoMEnabled ? (
+            <MoMLeaderboard
+              countsByPlayer={momAwards.countsByPlayer}
+              players={players}
+              showAll={showAll}
+              onToggle={() => setShowAll(s => !s)}
+              customMemberships={customMemberships}
+            />
+          ) : (
+            <div className="rounded-xl border border-dashed border-stone-200 bg-white px-4 py-8 text-center text-sm text-stone-500">
+              MOM 기능이 비활성화되어 있어 리더보드를 표시할 수 없습니다. 앱 설정에서 다시 활성화하면 기존 데이터가 그대로 복원됩니다.
+            </div>
+          )
+        ) : primaryTab === 'draft' ? (
           draftTab === 'captainWins' ? (
             <CaptainWinsTable
               key={`captain-${apDateKey}`}
@@ -642,9 +823,21 @@ function ControlsLeft({ apDateKey, setApDateKey, dateOptions = [], showAll, setS
 }
 
 /* ----------------------- 모바일 탭 컴포넌트 ---------------------- */
-function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, setDraftTab }) {
-  const primaryIndex = primary === 'draft' ? 1 : 0
-  const onPrimaryChange = (idx) => setPrimary && setPrimary(idx === 1 ? 'draft' : 'pts')
+function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, setDraftTab, momEnabled = true }) {
+  const primaryOptions = useMemo(() => {
+    const base = [
+      { id: 'pts', label: '상위 종합' },
+      { id: 'draft', label: 'Draft(주장전)' },
+      { id: 'mom', label: 'MOM 랭킹' },
+    ]
+    if (momEnabled) return base
+    return base.filter(opt => opt.id !== 'mom')
+  }, [momEnabled])
+  const primaryIndex = Math.max(primaryOptions.findIndex(opt => opt.id === primary), 0)
+  const onPrimaryChange = (idx) => {
+    const next = primaryOptions[idx]?.id || 'pts'
+    setPrimary && setPrimary(next)
+  }
 
   const ApOptions = [
     { id: 'pts', label: '종합' },
@@ -665,10 +858,7 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
       {/* Primary tabs */}
       <Tab.Group selectedIndex={primaryIndex} onChange={onPrimaryChange}>
         <Tab.List className="inline-flex rounded-full border border-stone-300 bg-white p-1 shadow-sm">
-          {[
-            { id: 'pts', label: '종합' },
-            { id: 'draft', label: 'Draft(주장전)' },
-          ].map((t, i) => (
+          {primaryOptions.map(t => (
             <Tab key={t.id} className={({ selected }) =>
               `px-3 py-1.5 text-[13px] rounded-full outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${selected ? 'bg-stone-900 text-white' : 'text-stone-700 hover:bg-stone-50'}`
             }>
@@ -704,7 +894,7 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
             })}
           </div>
         </div>
-      ) : (
+      ) : primary === 'draft' ? (
         <div className="overflow-x-auto no-scrollbar">
           <div className="inline-flex rounded-full border border-stone-300 bg-white p-1 shadow-sm">
             {[
@@ -726,7 +916,7 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
             })}
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -928,7 +1118,7 @@ function DuoTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselin
     const aBadgeInfo = getMembershipBadge(r.aMembership, customMemberships)
     const gBadges = getBadgesWithCustom(r.gMembership, customMemberships)
     const gBadgeInfo = getMembershipBadge(r.gMembership, customMemberships)
-    
+
     return (
       <>
         <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
@@ -946,19 +1136,21 @@ function DuoTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselin
                   badgeInfo={aBadgeInfo}
                 />
               </div>
-              <span
-                className="
-                  block font-medium text-xs whitespace-nowrap overflow-hidden text-ellipsis
-                  w-[3.6em]
-                  sm:w-[5.5em]
-                  md:w-[10em]
-                  lg:w-[14em]
-                  xl:w-auto xl:max-w-none xl:overflow-visible
-                "
-                title={r.aName}
-              >
-                {r.aName}
-              </span>
+              <div className="min-w-0">
+                <span
+                  className="
+                    block font-medium text-xs whitespace-nowrap overflow-hidden text-ellipsis
+                    w-[3.6em]
+                    sm:w-[5.5em]
+                    md:w-[10em]
+                    lg:w-[14em]
+                    xl:w-auto xl:max-w-none xl:overflow-visible
+                  "
+                  title={r.aName}
+                >
+                  {r.aName}
+                </span>
+              </div>
             </div>
             <span className="text-stone-400 flex-shrink-0 text-xs">→</span>
             <div className="flex items-center gap-1 min-w-0">
@@ -973,19 +1165,21 @@ function DuoTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselin
                   badgeInfo={gBadgeInfo}
                 />
               </div>
-              <span
-                className="
-                  block font-medium text-xs whitespace-nowrap overflow-hidden text-ellipsis
-                  w-[3.6em]
-                  sm:w-[5.5em]
-                  md:w-[10em]
-                  lg:w-[14em]
-                  xl:w-auto xl:max-w-none xl:overflow-visible
-                "
-                title={r.gName}
-              >
-                {r.gName}
-              </span>
+              <div className="min-w-0">
+                <span
+                  className="
+                    block font-medium text-xs whitespace-nowrap overflow-hidden text-ellipsis
+                    w-[3.6em]
+                    sm:w-[5.5em]
+                    md:w-[10em]
+                    lg:w-[14em]
+                    xl:w-auto xl:max-w-none xl:overflow-visible
+                  "
+                  title={r.gName}
+                >
+                  {r.gName}
+                </span>
+              </div>
             </div>
           </div>
         </td>
