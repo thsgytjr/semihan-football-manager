@@ -40,6 +40,33 @@ const getBadgesWithCustom = (membership, customMemberships = []) => {
   return badgeInfo ? [badgeInfo.badge] : []
 }
 
+const dateKeyToTimestamp = (key) => {
+  if (typeof key !== 'string') return Number.NaN
+  const parts = key.split('/')
+  if (parts.length !== 3) return Number.NaN
+  const [mm, dd, yyyy] = parts
+  const month = Number(mm)
+  const day = Number(dd)
+  const year = Number(yyyy)
+  if (!Number.isFinite(month) || !Number.isFinite(day) || !Number.isFinite(year)) return Number.NaN
+  if (month < 1 || month > 12 || day < 1 || day > 31) return Number.NaN
+  const ts = Date.UTC(year, month - 1, day)
+  return Number.isNaN(ts) ? Number.NaN : ts
+}
+
+const compareDateKeysAsc = (a, b) => {
+  const ta = dateKeyToTimestamp(a)
+  const tb = dateKeyToTimestamp(b)
+  const taNaN = Number.isNaN(ta)
+  const tbNaN = Number.isNaN(tb)
+  if (taNaN && tbNaN) return 0
+  if (taNaN) return 1
+  if (tbNaN) return -1
+  return ta - tb
+}
+
+const compareDateKeysDesc = (a, b) => compareDateKeysAsc(b, a)
+
 /* --------------------------------------------------------
    MOBILE-FIRST LEADERBOARD (Compact Segmented Tabs)
    - Tabs collapse into scrollable chips on small screens
@@ -112,7 +139,8 @@ export default function Dashboard({
       const k = extractDateKey(m)
       if (k) set.add(k)
     }
-    return ['all', ...Array.from(set).sort().reverse()]
+    const sortedKeys = Array.from(set).sort(compareDateKeysDesc)
+    return ['all', ...sortedKeys]
   }, [leaderboardSeasonFilteredMatches])
 
   const filteredMatches = useMemo(
@@ -141,9 +169,9 @@ export default function Dashboard({
   // Seed baselines …
   const previousBaselineByMetric = useMemo(() => {
     try {
-      const keys = Array.from(new Set((matches || []).map(m => extractDateKey(m)).filter(Boolean)))
+  const keys = Array.from(new Set((matches || []).map(m => extractDateKey(m)).filter(Boolean)))
       if (keys.length <= 1) return {}
-      const sorted = [...keys].sort() // ascending
+  const sorted = [...keys].sort(compareDateKeysAsc)
       const latest = sorted[sorted.length - 1]
       const prevMatches = (matches || []).filter(m => extractDateKey(m) !== latest)
       if (prevMatches.length === 0) return {}
@@ -169,9 +197,9 @@ export default function Dashboard({
 
   const previousBaselinesMisc = useMemo(() => {
     try {
-      const keys = Array.from(new Set((matches || []).map(m => extractDateKey(m)).filter(Boolean)))
+  const keys = Array.from(new Set((matches || []).map(m => extractDateKey(m)).filter(Boolean)))
       if (keys.length <= 1) return {}
-      const sorted = [...keys].sort()
+  const sorted = [...keys].sort(compareDateKeysAsc)
       const latest = sorted[sorted.length - 1]
       const prevMatches = (matches || []).filter(m => extractDateKey(m) !== latest)
       if (prevMatches.length === 0) return {}

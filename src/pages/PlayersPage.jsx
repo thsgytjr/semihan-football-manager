@@ -102,10 +102,11 @@ const ovrMeterColor = (ovr) => {
 
 // AI 파워 파워미터 색상 (진행 바용)
 const aiPowerMeterColor = (power) => {
-  if (power >= 1300) return 'bg-gradient-to-r from-purple-400 to-pink-400'
-  if (power >= 1100) return 'bg-gradient-to-r from-emerald-400 to-emerald-500'
-  if (power >= 900) return 'bg-gradient-to-r from-blue-400 to-blue-500'
-  if (power >= 700) return 'bg-gradient-to-r from-amber-400 to-amber-500'
+  if (power >= 95) return 'bg-gradient-to-r from-purple-400 to-pink-400'
+  if (power >= 90) return 'bg-gradient-to-r from-purple-500 to-purple-600'
+  if (power >= 85) return 'bg-gradient-to-r from-emerald-400 to-emerald-500'
+  if (power >= 80) return 'bg-gradient-to-r from-blue-400 to-blue-500'
+  if (power >= 70) return 'bg-gradient-to-r from-amber-400 to-amber-500'
   return 'bg-gradient-to-r from-stone-400 to-stone-500'
 }
 
@@ -1225,6 +1226,13 @@ export default function PlayersPage({
   const [positionFilter, setPositionFilter] = useState('all') // 'all' | 'GK' | 'DF' | 'MF' | 'FW'
   const [selectedTags, setSelectedTags] = useState([]) // 선택된 태그들
 
+  const resetFilters = () => {
+    setMembershipFilter('all')
+    setStatusFilter('all')
+    setPositionFilter('all')
+    setSelectedTags([])
+  }
+
   // 커스텀 멤버십 (없으면 기본값)
   const customMemberships = membershipSettings.length > 0 ? membershipSettings : DEFAULT_MEMBERSHIPS
 
@@ -1852,7 +1860,7 @@ export default function PlayersPage({
       </div>
 
       {/* 카드 뷰 */}
-      {viewMode === 'card' && (
+      {viewMode === 'card' && filtered.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map((p) => {
           const mem = S(p.membership).trim()
@@ -1860,6 +1868,8 @@ export default function PlayersPage({
           const badges = badgeInfo ? [badgeInfo.badge] : []
           const pos = posOf(p)
           const ovr = overall(p)
+          const aiOverall = calculateAIPower(p, matches)
+          const aiProgress = Math.max(0, Math.min(100, ((aiOverall - 50) / 50) * 100))
           // 오직 GK 포지션만 있는 선수인지 확인
           const isOnlyGK = p.positions && Array.isArray(p.positions) && p.positions.length > 0
             ? p.positions.length === 1 && p.positions[0] === 'GK'
@@ -1968,16 +1978,16 @@ export default function PlayersPage({
               )}
 
               {/* AI Overall 점수 */}
-              <div className={`mb-3 rounded-lg p-3 text-center bg-gradient-to-br ${aiPowerChipClass(calculateAIPower(p, matches)).replace('text-white', '').replace('shadow-sm', '').split(' ').filter(c => c.startsWith('from-') || c.startsWith('to-')).join(' ')} text-white shadow-md`}>
+              <div className={`mb-3 rounded-lg p-3 text-center bg-gradient-to-br ${aiPowerChipClass(aiOverall).replace('text-white', '').replace('shadow-sm', '').split(' ').filter(c => c.startsWith('from-') || c.startsWith('to-')).join(' ')} text-white shadow-md`}>
                 <div className="text-xs mb-1 text-white/80">AI Overall</div>
                 <div className="text-2xl font-bold text-white">
-                  {calculateAIPower(p, matches)}
+                  {aiOverall}
                 </div>
                 <div className="mt-2">
                   <div className="w-full bg-white/30 rounded-full h-2 overflow-hidden">
                     <div 
-                      className={`h-full ${aiPowerMeterColor(calculateAIPower(p, matches))} transition-all duration-300 rounded-full`}
-                      style={{ width: `${((calculateAIPower(p, matches) - 50) / 50) * 100}%` }}
+                      className={`h-full ${aiPowerMeterColor(aiOverall)} transition-all duration-300 rounded-full`}
+                      style={{ width: `${aiProgress}%` }}
                     ></div>
                   </div>
                   <div className="text-[10px] text-white/70 mt-1">50-100 Scale</div>
@@ -2012,7 +2022,7 @@ export default function PlayersPage({
       )}
 
       {/* 리스트 뷰 */}
-      {viewMode === 'list' && (
+      {viewMode === 'list' && filtered.length > 0 && (
         <ul className="rounded-lg border border-stone-200 bg-white divide-y divide-stone-200 shadow-sm">
           {filtered.map((p) => {
             const mem = S(p.membership).trim()
@@ -2024,6 +2034,7 @@ export default function PlayersPage({
               ? p.positions.length === 1 && p.positions[0] === 'GK'
               : pos === 'GK'
             const ovr = overall(p)
+            const aiOverall = calculateAIPower(p, matches)
             return (
               <li
                 key={p.id}
@@ -2096,8 +2107,8 @@ export default function PlayersPage({
                       <span className={`inline-flex items-center rounded px-3 py-1 text-sm font-bold ${ovr === 30 ? 'bg-stone-300 text-stone-700' : ovrChipClass(ovr)}`}>
                         {ovr === 30 ? '?' : ovr}
                       </span>
-                      <span className={`inline-flex items-center rounded-lg px-3 py-1 text-xs font-bold shadow-sm ${aiPowerChipClass(calculateAIPower(p, matches))}`} title="AI Overall (50-100)">
-                        AI {calculateAIPower(p, matches)}
+                      <span className={`inline-flex items-center rounded-lg px-3 py-1 text-xs font-bold shadow-sm ${aiPowerChipClass(aiOverall)}`} title="AI Overall (50-100)">
+                        AI {aiOverall}
                       </span>
                     </>
                   )}
@@ -2106,8 +2117,8 @@ export default function PlayersPage({
                       <span className="inline-flex items-center rounded px-3 py-1 text-sm font-bold bg-amber-100 text-amber-800 border border-amber-200">
                         GK
                       </span>
-                      <span className={`inline-flex items-center rounded-lg px-3 py-1 text-xs font-bold shadow-sm ${aiPowerChipClass(calculateAIPower(p, matches))}`} title="AI Overall (50-100)">
-                        AI {calculateAIPower(p, matches)}
+                      <span className={`inline-flex items-center rounded-lg px-3 py-1 text-xs font-bold shadow-sm ${aiPowerChipClass(aiOverall)}`} title="AI Overall (50-100)">
+                        AI {aiOverall}
                       </span>
                     </>
                   )}
@@ -2134,6 +2145,23 @@ export default function PlayersPage({
             )
           })}
         </ul>
+      )}
+
+      {players.length > 0 && filtered.length === 0 && (
+        <div className="text-center py-12 mt-4 rounded-2xl border-2 border-dashed border-stone-200 bg-stone-50">
+          <svg className="w-12 h-12 mx-auto mb-3 text-stone-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l2.5 1.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="text-sm font-semibold text-stone-700">선택한 조건에 맞는 선수가 없습니다.</p>
+          <p className="text-xs text-stone-500 mt-1">필터를 조정하거나 초기화해 주세요.</p>
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="mt-4 inline-flex items-center gap-1 rounded-lg border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-100"
+          >
+            필터 초기화
+          </button>
+        </div>
       )}
 
       {sorted.length === 0 && (

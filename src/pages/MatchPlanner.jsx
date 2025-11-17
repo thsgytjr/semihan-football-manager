@@ -10,30 +10,44 @@ import { localDateTimeToISO, getCurrentLocalDateTime } from '../lib/dateUtils'
 
 // 포지션 고려 팀 분배 함수 (splitKTeamsPosAware)
 function splitKTeamsPosAware(players = [], k = 2, shuffleSeed = 0) {
+  const createSeededRandom = (seed) => {
+    let s = Number(seed) || 0;
+    if (s <= 0) s = 1;
+    const MOD = 2147483647;
+    return () => {
+      s = (s * 16807) % MOD;
+      return (s - 1) / (MOD - 1);
+    };
+  };
+
+  const randomFn = shuffleSeed ? createSeededRandom(shuffleSeed) : () => Math.random();
+
   // 포지션별로 그룹화
   const grouped = { GK: [], DF: [], MF: [], FW: [], OTHER: [] };
   for (const p of players) {
     const positions = p.positions || (p.position ? [p.position] : [p.pos]);
     let cat = 'OTHER';
     if (positions.some(pos => /GK/i.test(pos))) cat = 'GK';
-    else if (positions.some(pos => /DF|CB|LB|RB|DF|WB|RWB|LWB/i.test(pos))) cat = 'DF';
+    else if (positions.some(pos => /DF|CB|LB|RB|WB|RWB|LWB/i.test(pos))) cat = 'DF';
     else if (positions.some(pos => /MF|CAM|CDM|CM|LM|RM/i.test(pos))) cat = 'MF';
     else if (positions.some(pos => /FW|ST|CF|LW|RW/i.test(pos))) cat = 'FW';
     grouped[cat].push(p);
   }
-  // 각 포지션 그룹을 셔플
+
+  const fisherYatesShuffle = (list) => {
+    const arr = list.slice();
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(randomFn() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  };
+
   const shuffled = {};
   Object.keys(grouped).forEach(cat => {
-    shuffled[cat] = grouped[cat].slice();
-    if (shuffleSeed) {
-      for (let i = shuffled[cat].length - 1; i > 0; i--) {
-        var j = (shuffleSeed + i) % shuffled[cat].length;
-        var temp = shuffled[cat][i];
-        shuffled[cat][i] = shuffled[cat][j];
-        shuffled[cat][j] = temp;
-      }
-    }
+    shuffled[cat] = fisherYatesShuffle(grouped[cat]);
   });
+
   // 팀별로 균등하게 분배
   const teams = Array.from({ length: k }, () => []);
   let idx = 0;
@@ -116,6 +130,7 @@ export default function MatchPlanner({
   
   // 시즌 필터 상태
   const [selectedSeason, setSelectedSeason] = useState('all')
+  const activeUpcomingMatches = useMemo(() => filterExpiredMatches(upcomingMatches), [upcomingMatches])
   
   // 시즌 옵션 생성
   const seasonOptions = useMemo(() => {
@@ -147,6 +162,16 @@ export default function MatchPlanner({
     })
     return Array.from(locMap.values())
   }, [matches])
+
+  useEffect(() => {
+    if (!Array.isArray(upcomingMatches) || upcomingMatches.length === 0) return
+    if (typeof onDeleteUpcomingMatch !== 'function') return
+    const activeIds = new Set(activeUpcomingMatches.map(m => m.id))
+    const expired = upcomingMatches.filter(m => !activeIds.has(m.id))
+    if (expired.length === 0) return
+    expired.forEach(match => onDeleteUpcomingMatch(match.id))
+    notify(`${expired.length}개의 만료된 예정 매치가 자동으로 제거되었습니다 🗑️`)
+  }, [upcomingMatches, activeUpcomingMatches, onDeleteUpcomingMatch])
   
   const count=attendeeIds.length,autoSuggestion=decideMode(count),mode=autoSuggestion.mode
   const attendees=useMemo(()=>players.filter(p=>attendeeIds.includes(p.id)),[players,attendeeIds])
@@ -444,6 +469,18 @@ export default function MatchPlanner({
     latestTeamsRef.current = next
     setShowAIPower(false)
     setActiveSortMode(null)
+  }
+
+  const resetTeams = () => {
+    setManualTeams(null)
+    latestTeamsRef.current = []
+    setCaptainIds(Array.from({ length: teams }, () => null))
+    setShowAIPower(false)
+    setActiveSortMode(null)
+    setAiDistributedTeams(null)
+    setPlacedByTeam([])
+    setFormations([])
+    notify('팀 배정이 초기화되었습니다 ♻️')
   }
   
   // AI 자동 배정 (포지션 밸런스 + 평균 + 인원수 균등)
@@ -1212,24 +1249,7 @@ export default function MatchPlanner({
 
     <div className="grid gap-4">
       {(() => {
-        const activeMatches = filterExpiredMatches(upcomingMatches)
-        
-        // 만료된 매치가 있다면 자동으로 DB에서 제거
-        if (activeMatches.length !== upcomingMatches.length && upcomingMatches.length > 0) {
-          const expiredCount = upcomingMatches.length - activeMatches.length
-          setTimeout(() => {
-            // 만료된 매치들 삭제만 수행 (정규화된 active 목록을 DB에 재저장하지 않음)
-            upcomingMatches.forEach(match => {
-              if (!activeMatches.find(m => m.id === match.id)) {
-                onDeleteUpcomingMatch(match.id)
-              }
-            })
-            
-            if (expiredCount > 0) {
-              notify(`${expiredCount}개의 만료된 예정 매치가 자동으로 제거되었습니다 🗑️`)
-            }
-          }, 100)
-        }
+        const activeMatches = activeUpcomingMatches
         
         return activeMatches.length > 0 ? (
           <Card title="예정된 매치">
@@ -1365,9 +1385,7 @@ export default function MatchPlanner({
       onCancel={()=>setConfirmDelete({open:false,id:null,kind:null})}
       onConfirm={()=>{
         if(confirmDelete.kind==='reset-teams'){
-          // 초기화 핸들러가 있는 위치에서 setManualTeams 등을 실행해야 하지만,
-          // 여기서는 신호만 내려서 실제 초기화 로직과 연결하세요.
-          // TODO: 필요 시 특정 핸들러 호출 연결
+          resetTeams()
         }else if(confirmDelete.id){
           onDeleteUpcomingMatch(confirmDelete.id);notify('예정된 매치가 삭제되었습니다 ✅')
         }

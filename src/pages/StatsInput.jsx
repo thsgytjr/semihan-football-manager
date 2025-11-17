@@ -4,6 +4,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import Card from '../components/Card'
 import InitialAvatar from '../components/InitialAvatar'
 import { hydrateMatch } from '../lib/match'
+import MatchHelpers from '../lib/matchHelpers'
 import { formatMatchLabel } from '../lib/matchLabel'
 
 const toStr = (v) => (v === null || v === undefined) ? '' : String(v)
@@ -16,6 +17,7 @@ function asTime(v) {
   return Number.isNaN(t) ? NaN : t
 }
 
+// Get comparable match time for sorting (prefers dateISO, falls back to date/created_at)
 function getMatchTime(m) {
   const candidates = [m?.dateISO, m?.date, m?.created_at]
   for (const c of candidates) {
@@ -25,6 +27,7 @@ function getMatchTime(m) {
   return 0
 }
 
+// Extract attendee IDs from various possible roster fields
 function extractAttendeeIds(m) {
   const candidates = [m?.snapshot, m?.attendeeIds, m?.attendees, m?.participants, m?.roster].filter(Boolean)
   let raw = []
@@ -50,32 +53,37 @@ function extractStatsByPlayer(m) {
       if (!pid) continue
       const goals = Number(v?.goals || v?.G || 0)
       const assists = Number(v?.assists || v?.A || 0)
+      const cleanSheet = Number(v?.cleanSheet || v?.cs || 0)
       const events = Array.isArray(v?.events) ? v.events.map(e => ({
         type: e.type || e.event || (e?.isAssist ? 'assist' : 'goal'),
         date: e.dateISO || e.date || e.ts || e.time,
         assistedBy: e.assistedBy,
         linkedToGoal: e.linkedToGoal
       })).filter(Boolean) : []
-      out[pid] = { goals, assists, events }
+      out[pid] = { goals, assists, events, cleanSheet }
     }
     return out
   }
-
+  
   if (Array.isArray(src)) {
+    // Legacy/array-form not expected here, but handle gracefully
     for (const rec of src) {
-      const pid = toStr(rec?.playerId ?? rec?.id ?? rec?.user_id ?? rec?.uid ?? rec?.player)
+      const pid = toStr(rec?.playerId ?? rec?.id ?? rec?.user_id ?? rec?.uid)
       if (!pid) continue
-      const type = (rec?.type || (rec?.goal ? 'goals' : rec?.assist ? 'assists' : null) || (rec?.action) || '').toString().toLowerCase()
+      const type = (rec?.type || (rec?.goal ? 'goal' : rec?.assist ? 'assist' : '')).toString().toLowerCase()
+      const date = rec?.dateISO || rec?.date || rec?.time || rec?.ts || null
       const isGoal = /goal/i.test(type)
       const isAssist = /assist/i.test(type)
-      const date = rec?.dateISO || rec?.date || rec?.time || rec?.ts || null
-      out[pid] = out[pid] || { goals: 0, assists: 0, events: [] }
+      out[pid] = out[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0 }
       if (isGoal) {
         out[pid].goals = (out[pid].goals || 0) + Number(rec?.goals || 1)
-        out[pid].events.push({ type: 'goal', date: date || null })
+        out[pid].events.push({ type: 'goal', date })
       } else if (isAssist) {
         out[pid].assists = (out[pid].assists || 0) + Number(rec?.assists || 1)
-        out[pid].events.push({ type: 'assist', date: date || null })
+        out[pid].events.push({ type: 'assist', date })
+      }
+      if (Number(rec?.cleanSheet || 0) > 0) {
+        out[pid].cleanSheet = (out[pid].cleanSheet || 0) + Number(rec.cleanSheet)
       }
     }
     return out
@@ -83,6 +91,7 @@ function extractStatsByPlayer(m) {
 
   return out
 }
+
 
 /* ======== Main Component ======== */
 export default function StatsInput({ players = [], matches = [], onUpdateMatch, isAdmin }) {
@@ -105,19 +114,27 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
   const [draft, setDraft] = useState({})
   useEffect(() => {
     if (!editingMatch) { setDraft({}); return }
+    console.log('🎯 Match object:', editingMatch)
+    console.log('📊 Match stats raw:', editingMatch.stats)
     const src = extractStatsByPlayer(editingMatch)
+    console.log('📊 extractStatsByPlayer result:', src)
     const next = {}
     const ids = new Set(extractAttendeeIds(editingMatch))
     for (const p of players) {
       if (!ids.has(toStr(p.id))) continue
       const rec = src?.[toStr(p.id)] || {}
+      const csValue = Number(rec.cleanSheet || 0)
+      if (csValue > 0) {
+        console.log(`✅ Player ${p.name} has CS:`, csValue, 'from rec:', rec)
+      }
       next[toStr(p.id)] = {
         goals: Number(rec.goals || 0),
         assists: Number(rec.assists || 0),
         events: Array.isArray(rec.events) ? rec.events.slice() : [],
-        cleanSheet: Number(rec.cleanSheet || 0)
+        cleanSheet: csValue
       }
     }
+    console.log('📝 Draft initialized:', next)
     setDraft(next)
   }, [editingMatch, players])
 
@@ -581,6 +598,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
 
             {/* Quick Stats Editor */}
             <QuickStatsEditor
+              key={editingMatchId}
               players={players}
               editingMatch={editingMatch}
               teams={teams}
@@ -793,12 +811,85 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
     })
   }
 
+  const autoCalculateCS = () => {
+    // 각 게임(쿼터)별로 실점 0인 팀의 DEF/GK에게 CS +1
+    const qs = MatchHelpers.getQuarterScores(editingMatch) // 형태: [ [team0_q1, team1_q1, ...], [team0_q2, team1_q2, ...], ... ]
+    const maxQ = Array.isArray(qs) ? qs.length : 0 // 쿼터 수
+    const teamCount = maxQ > 0 && Array.isArray(qs[0]) ? qs[0].length : (Array.isArray(teams) ? teams.length : 0)
+    const gameMatchups = editingMatch?.gameMatchups || null
+
+    const getOpponentFor = (ti, qi) => {
+      // 게임 매치업 정보가 있으면 우선 사용
+      if (Array.isArray(gameMatchups?.[qi])) {
+        for (const pair of gameMatchups[qi]) {
+          if (!Array.isArray(pair) || pair.length !== 2) continue
+          const [a, b] = pair
+          if (a === ti) return b
+          if (b === ti) return a
+        }
+      }
+      // 2팀 매치 기본
+      if (teamCount === 2) return ti === 0 ? 1 : 0
+      return null
+    }
+
+    const isDefOrGk = (p) => {
+      const pos = (p?.position || p?.pos || '').toString().toUpperCase()
+      const positions = Array.isArray(p?.positions) ? p.positions.map(x => String(x).toUpperCase()) : []
+      const all = [pos, ...positions]
+      return all.some(s => s.includes('GK') || s.includes('골키퍼') || s.includes('KEEPER') || s.includes('DF') || s.includes('DEF') || s.includes('수비'))
+    }
+
+    // 각 팀/쿼터별 클린시트 카운트
+    const csCount = new Map()
+
+    for (let qi = 0; qi < maxQ; qi++) {
+      for (let ti = 0; ti < teamCount; ti++) {
+        const opp = getOpponentFor(ti, qi)
+        if (opp == null || opp < 0 || opp >= teamCount) continue
+        const oppScore = Number(qs?.[qi]?.[opp] ?? 0)
+        if (oppScore === 0) {
+          // 이 팀(ti)은 이번 게임(qi)에서 실점 0
+          const roster = Array.isArray(teams?.[ti]) ? teams[ti] : (teams?.[ti]?.players || [])
+          roster.forEach(p => {
+            if (!isDefOrGk(p)) return
+            const pid = toStr(p.id)
+            csCount.set(pid, (csCount.get(pid) || 0) + 1)
+          })
+        }
+      }
+    }
+
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev || {}))
+      csCount.forEach((count, pid) => {
+        const rec = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0 }
+        rec.cleanSheet = count
+        next[pid] = rec
+      })
+      return next
+    })
+
+    setAlertState({
+      open: true,
+      title: '자동 계산 완료',
+      message: `게임별 실점 0 기준으로 ${csCount.size}명의 DEF/GK에게 클린시트를 부여했습니다.`
+    })
+  }
+
   return (
     <div className="space-y-4">
       {/* Header with Save Button */}
       <div className="flex items-center justify-between">
         <div className="text-base font-bold text-gray-800">⚽ 수동 입력</div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={autoCalculateCS}
+            className="rounded-lg border-2 border-emerald-400 bg-emerald-50 hover:bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-700 transition-all"
+            title="각 게임(G1,G2,G3...)별로 실점 0인 팀의 수비/골키퍼에게 자동으로 클린시트 부여"
+          >
+            🧮 CS 자동 계산
+          </button>
           <button
             onClick={resetAllCS}
             className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700 transition-all"
@@ -1001,7 +1092,9 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
                         />
                         <div className="min-w-0 flex-1">
                           <div className="font-semibold text-sm text-gray-800 whitespace-normal break-words sm:whitespace-nowrap sm:truncate">{p.name}</div>
-                          <div className="text-xs text-gray-500">{p.position || p.pos || '-'}</div>
+                          { (p.position || p.pos) && (
+                            <div className="text-xs text-gray-500">{p.position || p.pos}</div>
+                          ) }
                         </div>
                       </div>
                       {/* Counters (compact; never push name) */}

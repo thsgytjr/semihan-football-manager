@@ -74,12 +74,16 @@ export function extractStatsByPlayer(m) {
     for (const [k, v] of Object.entries(src)) {
       const pid = toStr(k)
       if (!pid) continue
+       const csValue = Number(v?.cleanSheet || v?.cs || 0)
+       if (csValue > 0) {
+         console.log(`🔍 [matchUtils] Player ${pid} has cleanSheet in src:`, csValue, 'v:', v)
+       }
       out[pid] = { 
         goals: Number(v?.goals || 0), 
         assists: Number(v?.assists || 0), 
         events: Array.isArray(v?.events) ? v.events.slice() : [],
         // Include clean sheet if present (manual entry via StatsInput)
-        cleanSheet: Number(v?.cleanSheet || v?.cs || 0)
+         cleanSheet: csValue
       }
     }
     return out
