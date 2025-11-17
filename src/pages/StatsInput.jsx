@@ -132,19 +132,13 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
   const [momMatchId, setMomMatchId] = useState('')
   useEffect(() => {
     if (!editingMatch) { setDraft({}); return }
-    console.log('🎯 Match object:', editingMatch)
-    console.log('📊 Match stats raw:', editingMatch.stats)
     const src = extractStatsByPlayer(editingMatch)
-    console.log('📊 extractStatsByPlayer result:', src)
     const next = {}
     const ids = new Set(extractAttendeeIds(editingMatch))
     for (const p of players) {
       if (!ids.has(toStr(p.id))) continue
       const rec = src?.[toStr(p.id)] || {}
       const csValue = Number(rec.cleanSheet || 0)
-      if (csValue > 0) {
-        console.log(`✅ Player ${p.name} has CS:`, csValue, 'from rec:', rec)
-      }
       next[toStr(p.id)] = {
         goals: Number(rec.goals || 0),
         assists: Number(rec.assists || 0),
@@ -154,7 +148,6 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
         redCards: Number(rec.redCards || 0)
       }
     }
-    console.log('📝 Draft initialized:', next)
     setDraft(next)
   }, [editingMatch, players])
 
@@ -199,7 +192,6 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       setMomVotes(data)
       return data
     } catch (err) {
-      console.error('[StatsInput] MOM votes fetch failed', err)
       notify('MOM 투표 기록을 불러오는 데 실패했습니다.', 'error')
       throw err
     } finally {
@@ -573,7 +565,6 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       const statsByPlayer = extractStatsByPlayer(momMatch)
       return buildMoMTieBreakerScores(statsByPlayer)
     } catch (err) {
-      console.warn('[StatsInput] Failed to build MOM tie-breaker scores', err)
       return null
     }
   }, [momMatch])
@@ -599,7 +590,6 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     try {
       await onUpdateMatch?.(momMatch.id, { draft: nextDraft })
     } catch (err) {
-      console.error('[StatsInput] Failed to persist MOM override', err)
       throw err
     }
   }, [momMatch, onUpdateMatch])
@@ -617,7 +607,6 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       await refreshMoMVotes()
       notify('관리자 투표를 기록했어요.', 'success')
     } catch (err) {
-      console.error('[StatsInput] Admin add vote failed', err)
       notify('관리자 투표 기록에 실패했습니다.', 'error')
     }
   }
@@ -637,7 +626,6 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       })
       notify('MOM 결과를 관리자 확정으로 저장했습니다.', 'success')
     } catch (err) {
-      console.error('[StatsInput] Admin override vote failed', err)
       notify('MOM 결과 갱신에 실패했습니다.', 'error')
     }
   }
@@ -649,7 +637,6 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       await refreshMoMVotes()
       notify('선택한 기록을 삭제했습니다.', 'success')
     } catch (err) {
-      console.error('[StatsInput] Admin delete vote failed', err)
       notify('기록 삭제에 실패했습니다.', 'error')
     }
   }
@@ -664,7 +651,6 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       await refreshMoMVotes()
       notify('MOM 투표 기록을 모두 삭제했습니다.', 'success')
     } catch (err) {
-      console.error('[StatsInput] Admin reset votes failed', err)
       notify('기록 삭제에 실패했습니다.', 'error')
     }
   }
@@ -675,7 +661,6 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       await persistMomOverride(null)
       notify('관리자 확정을 해제했습니다.', 'success')
     } catch (err) {
-      console.error('[StatsInput] Admin clear override failed', err)
       notify('확정 해제에 실패했습니다.', 'error')
     }
   }
@@ -1049,57 +1034,128 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
 
   const autoCalculateCS = () => {
     // 각 게임(쿼터)별로 실점 0인 팀의 DEF/GK에게 CS +1
-    const qs = MatchHelpers.getQuarterScores(editingMatch) // 형태: [ [team0_q1, team1_q1, ...], [team0_q2, team1_q2, ...], ... ]
-    const maxQ = Array.isArray(qs) ? qs.length : 0 // 쿼터 수
-    const teamCount = maxQ > 0 && Array.isArray(qs[0]) ? qs[0].length : (Array.isArray(teams) ? teams.length : 0)
-    const gameMatchups = editingMatch?.gameMatchups || null
+    const qs = MatchHelpers.getQuarterScores(editingMatch)
+    
+    // 실제 팀 수는 teams 배열 길이로 결정
+    const teamCount = Array.isArray(teams) ? teams.length : 2
+    
+    // 점수 구조 해석 및 게임별로 분해
+    // 형태 A (팀 기준): qs.length === teamCount, 각 원소는 해당 팀의 게임별 점수 배열
+    //   예) [[0,1,0,1], [1,3,0,4]] -> G1:[0,1], G2:[1,3], G3:[0,0], G4:[1,4]
+    // 형태 B (게임 기준): qs.length === gameCount, 각 원소는 길이 teamCount의 배열
+    //   예) [[0,1],[1,3],[0,0],[1,4]]
+    const allGames = []
+    const isTeamMajor = Array.isArray(qs) && qs.length === teamCount && qs.every(Array.isArray)
+    const isGameMajor = Array.isArray(qs) && Array.isArray(qs[0]) && qs[0].length === teamCount
 
-    const getOpponentFor = (ti, qi) => {
-      // 게임 매치업 정보가 있으면 우선 사용
-      if (Array.isArray(gameMatchups?.[qi])) {
-        for (const pair of gameMatchups[qi]) {
-          if (!Array.isArray(pair) || pair.length !== 2) continue
-          const [a, b] = pair
-          if (a === ti) return b
-          if (b === ti) return a
+    if (isTeamMajor) {
+      const games = Math.min(...qs.map(arr => (Array.isArray(arr) ? arr.length : 0)))
+      for (let gi = 0; gi < games; gi++) {
+        const pair = qs.map(arr => Number(arr[gi]))
+        if (!pair.every(n => Number.isFinite(n))) {
+          continue
+        }
+        allGames.push({ quarter: Math.floor(gi / 2) + 1, game: gi + 1, scores: pair })
+      }
+    } else if (isGameMajor) {
+      for (let gi = 0; gi < qs.length; gi++) {
+        const row = qs[gi]
+        const pair = Array.from({ length: teamCount }, (_, ti) => Number(row[ti]))
+        if (!pair.every(n => Number.isFinite(n))) {
+          continue
+        }
+        allGames.push({ quarter: Math.floor(gi / 2) + 1, game: gi + 1, scores: pair })
+      }
+    } else {
+      for (let qi = 0; qi < qs.length; qi++) {
+        const arr = qs[qi]
+        if (!Array.isArray(arr)) continue
+        const gamesInEntry = Math.floor(arr.length / teamCount)
+        for (let gi = 0; gi < gamesInEntry; gi++) {
+          const pair = []
+          for (let ti = 0; ti < teamCount; ti++) {
+            const val = Number(arr[gi * teamCount + ti])
+            if (!Number.isFinite(val)) { pair.length = 0; break }
+            pair.push(val)
+          }
+          if (pair.length === teamCount) {
+            allGames.push({ quarter: qi + 1, game: gi + 1, scores: pair })
+          }
         }
       }
-      // 2팀 매치 기본
-      if (teamCount === 2) return ti === 0 ? 1 : 0
-      return null
     }
+
 
     const isDefOrGk = (p) => {
       const pos = (p?.position || p?.pos || '').toString().toUpperCase()
       const positions = Array.isArray(p?.positions) ? p.positions.map(x => String(x).toUpperCase()) : []
       const all = [pos, ...positions]
-      return all.some(s => s.includes('GK') || s.includes('골키퍼') || s.includes('KEEPER') || s.includes('DF') || s.includes('DEF') || s.includes('수비'))
+      
+      // GK, 골키퍼, KEEPER 체크
+      const isGK = all.some(s => 
+        s.includes('GK') || 
+        s.includes('골키퍼') || 
+        s.includes('KEEPER')
+      )
+      
+      // DF, 수비, CB (Center Back), LB (Left Back), RB (Right Back), LWB, RWB 체크
+      const isDef = all.some(s => 
+        s.includes('DF') || 
+        s.includes('DEF') || 
+        s.includes('수비') ||
+        s === 'CB' ||  // Center Back
+        s === 'LB' ||  // Left Back
+        s === 'RB' ||  // Right Back
+        s === 'LWB' || // Left Wing Back
+        s === 'RWB'    // Right Wing Back
+      )
+      
+      return isGK || isDef
     }
 
-    // 각 팀/쿼터별 클린시트 카운트
-    const csCount = new Map()
+  // 각 팀/게임별 클린시트 카운트
+  const csCount = new Map()
+  let csGamesTeam0 = 0
+  let csGamesTeam1 = 0
 
-    for (let qi = 0; qi < maxQ; qi++) {
-      for (let ti = 0; ti < teamCount; ti++) {
-        const opp = getOpponentFor(ti, qi)
-        if (opp == null || opp < 0 || opp >= teamCount) continue
-        const oppScore = Number(qs?.[qi]?.[opp] ?? 0)
-        if (oppScore === 0) {
-          // 이 팀(ti)은 이번 게임(qi)에서 실점 0
-          const roster = Array.isArray(teams?.[ti]) ? teams[ti] : (teams?.[ti]?.players || [])
-          roster.forEach(p => {
-            if (!isDefOrGk(p)) return
-            const pid = toStr(p.id)
-            csCount.set(pid, (csCount.get(pid) || 0) + 1)
-          })
-        }
+    // 모든 게임을 순회하며 클린시트 체크
+    for (const gameInfo of allGames) {
+  const { scores } = gameInfo
+      
+      // Team0 무실점 체크
+      if (scores[1] === 0) {
+        const roster = Array.isArray(teams?.[0]) ? teams[0] : (teams?.[0]?.players || [])
+        csGamesTeam0 += 1
+        
+        roster.forEach(p => {
+          const isDef = isDefOrGk(p)
+          if (!isDef) return
+          const pid = toStr(p.id)
+          const current = csCount.get(pid) || 0
+          csCount.set(pid, current + 1)
+        })
+      }
+      
+      // Team1 무실점 체크
+      if (scores[0] === 0) {
+        const roster = Array.isArray(teams?.[1]) ? teams[1] : (teams?.[1]?.players || [])
+        csGamesTeam1 += 1
+        
+        roster.forEach(p => {
+          const isDef = isDefOrGk(p)
+          if (!isDef) return
+          const pid = toStr(p.id)
+          const current = csCount.get(pid) || 0
+          csCount.set(pid, current + 1)
+        })
       }
     }
+
 
     setDraft(prev => {
       const next = JSON.parse(JSON.stringify(prev || {}))
       csCount.forEach((count, pid) => {
-        const rec = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0 }
+        const rec = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
         rec.cleanSheet = count
         next[pid] = rec
       })
