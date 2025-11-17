@@ -1033,7 +1033,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
   }
 
   const autoCalculateCS = () => {
-    // 각 게임(쿼터)별로 실점 0인 팀의 DEF/GK에게 CS +1
+  // 각 게임(쿼터)별로 실점 0인 팀의 비-공격수 전원에게 CS +1 (공격수만 제외)
     const qs = MatchHelpers.getQuarterScores(editingMatch)
     
     // 실제 팀 수는 teams 배열 길이로 결정
@@ -1086,31 +1086,18 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
     }
 
 
-    const isDefOrGk = (p) => {
+    const shouldReceiveCS = (p) => {
       const pos = (p?.position || p?.pos || '').toString().toUpperCase()
       const positions = Array.isArray(p?.positions) ? p.positions.map(x => String(x).toUpperCase()) : []
-      const all = [pos, ...positions]
-      
-      // GK, 골키퍼, KEEPER 체크
-      const isGK = all.some(s => 
-        s.includes('GK') || 
-        s.includes('골키퍼') || 
-        s.includes('KEEPER')
-      )
-      
-      // DF, 수비, CB (Center Back), LB (Left Back), RB (Right Back), LWB, RWB 체크
-      const isDef = all.some(s => 
-        s.includes('DF') || 
-        s.includes('DEF') || 
-        s.includes('수비') ||
-        s === 'CB' ||  // Center Back
-        s === 'LB' ||  // Left Back
-        s === 'RB' ||  // Right Back
-        s === 'LWB' || // Left Wing Back
-        s === 'RWB'    // Right Wing Back
-      )
-      
-      return isGK || isDef
+      const all = [pos, ...positions].filter(Boolean)
+
+      // 공격수(Forward/Striker/Winger 계열)만 제외
+      const isAttacker = all.some(s => (
+        s === 'ST' || s === 'CF' || s === 'SS' || s === 'FW' ||
+        s === 'LW' || s === 'RW' || s === 'LWF' || s === 'RWF' ||
+        s.includes('STRIKER') || s.includes('FORWARD') || s.includes('ATTACK')
+      ))
+      return !isAttacker
     }
 
   // 각 팀/게임별 클린시트 카운트
@@ -1128,8 +1115,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
         csGamesTeam0 += 1
         
         roster.forEach(p => {
-          const isDef = isDefOrGk(p)
-          if (!isDef) return
+          if (!shouldReceiveCS(p)) return
           const pid = toStr(p.id)
           const current = csCount.get(pid) || 0
           csCount.set(pid, current + 1)
@@ -1142,8 +1128,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
         csGamesTeam1 += 1
         
         roster.forEach(p => {
-          const isDef = isDefOrGk(p)
-          if (!isDef) return
+          if (!shouldReceiveCS(p)) return
           const pid = toStr(p.id)
           const current = csCount.get(pid) || 0
           csCount.set(pid, current + 1)
@@ -1165,7 +1150,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
     setAlertState({
       open: true,
       title: '자동 계산 완료',
-      message: `게임별 실점 0 기준으로 ${csCount.size}명의 DEF/GK에게 클린시트를 부여했습니다.`
+  message: `게임별 실점 0 기준으로 공격수를 제외한 ${csCount.size}명의 선수에게 클린시트를 부여했습니다.`
     })
   }
 
@@ -1178,7 +1163,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
           <button
             onClick={autoCalculateCS}
             className="rounded-lg border-2 border-emerald-400 bg-emerald-50 hover:bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-700 transition-all"
-            title="각 게임(G1,G2,G3...)별로 실점 0인 팀의 수비/골키퍼에게 자동으로 클린시트 부여"
+            title="각 게임(G1,G2,G3...)별로 실점 0인 팀의 공격수를 제외한 모든 선수에게 자동으로 클린시트 부여"
           >
             🧮 CS 자동 계산
           </button>

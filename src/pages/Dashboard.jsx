@@ -1317,7 +1317,7 @@ function CleanSheetTable({ rows, showAll, onToggle, controls, apDateKey, initial
       showAll={showAll}
       onToggle={onToggle}
       controls={controls}
-      title="클린시트"
+  title="클린시트 (공격수 제외)"
       columns={columns}
       renderRow={renderRow}
       membershipSettings={customMemberships}
