@@ -1,5 +1,5 @@
 // src/App.jsx
-import React,{useEffect,useMemo,useState,useCallback,useRef}from"react"
+import React,{useEffect,useMemo,useState,useCallback,useRef,lazy,Suspense}from"react"
 import{Home,Users,CalendarDays,ListChecks,ShieldCheck,Lock,Eye,EyeOff,AlertCircle,CheckCircle2,X,Settings,BookOpen,Shuffle,DollarSign}from"lucide-react"
 import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB,incrementVisits,logVisit,getVisitStats,getTotalVisits,USE_MATCHES_TABLE}from"./services/storage.service"
 import { supabase } from './lib/supabaseClient'
@@ -20,16 +20,19 @@ import AdminLoginDialog from"./components/AdminLoginDialog"
 import VisitorStats from"./components/VisitorStats"
 import ProdDataWarning from"./components/ProdDataWarning"
 import Dashboard from"./pages/Dashboard";import PlayersPage from"./pages/PlayersPage"
-import MatchPlanner from"./pages/MatchPlanner";import StatsInput from"./pages/StatsInput"
-import FormationBoard from"./pages/FormationBoard";import DraftPage from"./pages/DraftPage"
-import AnalyticsPage from"./pages/AnalyticsPage"
-import AccountingPage from"./pages/AccountingPage"
-import InviteSetupPage from"./pages/InviteSetupPage"
-import AuthLinkErrorPage from"./pages/AuthLinkErrorPage"
 import logoUrl from"./assets/GoalifyLogo.png"
 import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEnabled,updateFeatureEnabled}from"./lib/appSettings"
 
 const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden role="img" className="shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5"/><rect x="2" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/><rect x="18.5" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>)
+
+const MatchPlanner=lazy(()=>import("./pages/MatchPlanner"))
+const DraftPage=lazy(()=>import("./pages/DraftPage"))
+const FormationBoard=lazy(()=>import("./pages/FormationBoard"))
+const StatsInput=lazy(()=>import("./pages/StatsInput"))
+const AccountingPage=lazy(()=>import("./pages/AccountingPage"))
+const AnalyticsPage=lazy(()=>import("./pages/AnalyticsPage"))
+const InviteSetupPage=lazy(()=>import("./pages/InviteSetupPage"))
+const AuthLinkErrorPage=lazy(()=>import("./pages/AuthLinkErrorPage"))
 
 // 타임아웃 래퍼 유틸리티
 const withTimeout = (promise, ms, label) => {
@@ -934,15 +937,19 @@ export default function App(){
 
     <main className="mx-auto max-w-6xl p-4">
       {showAuthError ? (
-        <AuthLinkErrorPage 
-          error={authError.error}
-          errorCode={authError.errorCode}
-          description={authError.description}
-          onHome={handleAuthErrorHome}
-          onLogin={handleAuthErrorLogin}
-        />
+        <Suspense fallback={<div className="py-16 text-center text-sm text-stone-500">링크 정보를 불러오는 중...</div>}>
+          <AuthLinkErrorPage 
+            error={authError.error}
+            errorCode={authError.errorCode}
+            description={authError.description}
+            onHome={handleAuthErrorHome}
+            onLogin={handleAuthErrorLogin}
+          />
+        </Suspense>
       ) : showInviteSetup ? (
-        <InviteSetupPage onComplete={handleInviteComplete} />
+        <Suspense fallback={<div className="py-16 text-center text-sm text-stone-500">초대 설정 페이지 로딩 중...</div>}>
+          <InviteSetupPage onComplete={handleInviteComplete} />
+        </Suspense>
       ) : loadError ? (
         <div className="flex min-h-[40vh] flex-col items-center justify-center rounded-2xl border border-amber-200 bg-white p-6 text-center shadow-md">
           <h2 className="text-lg font-semibold text-stone-900">앱 로딩에 문제가 생겼어요</h2>
@@ -1007,12 +1014,36 @@ export default function App(){
                   isAdmin={isAdmin}
                 />
               )}
-              {tab==="planner"&&isAdmin&&featuresEnabled.planner&&(<MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch} membershipSettings={db.membershipSettings||[]}/>)}
-              {tab==="draft"&&isAdmin&&featuresEnabled.draft&&(<DraftPage players={players} upcomingMatches={db.upcomingMatches} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>)}
-              {tab==="formation"&&featuresEnabled.formation&&(<FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>)}
-              {tab==="stats"&&isAdmin&&featuresEnabled.stats&&(<StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>)}
-                {tab==="accounting"&&isAdmin&&featuresEnabled.accounting&&(<AccountingPage players={players} matches={matches} upcomingMatches={db.upcomingMatches} isAdmin={isAdmin}/>)}
-              {tab==="analytics"&&isAdmin&&featuresEnabled.analytics&&(<AnalyticsPage visits={visits} isAdmin={isAnalyticsAdmin}/>)}
+              {tab==="planner"&&isAdmin&&featuresEnabled.planner&&(
+                <Suspense fallback={<div className="p-6 text-sm text-stone-500">매치 플래너를 불러오는 중...</div>}>
+                  <MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch} membershipSettings={db.membershipSettings||[]}/>
+                </Suspense>
+              )}
+              {tab==="draft"&&isAdmin&&featuresEnabled.draft&&(
+                <Suspense fallback={<div className="p-6 text-sm text-stone-500">드래프트 보드를 불러오는 중...</div>}>
+                  <DraftPage players={players} upcomingMatches={db.upcomingMatches} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>
+                </Suspense>
+              )}
+              {tab==="formation"&&featuresEnabled.formation&&(
+                <Suspense fallback={<div className="p-6 text-sm text-stone-500">포메이션 보드를 불러오는 중...</div>}>
+                  <FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>
+                </Suspense>
+              )}
+              {tab==="stats"&&isAdmin&&featuresEnabled.stats&&(
+                <Suspense fallback={<div className="p-6 text-sm text-stone-500">기록 입력 페이지를 불러오는 중...</div>}>
+                  <StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>
+                </Suspense>
+              )}
+                {tab==="accounting"&&isAdmin&&featuresEnabled.accounting&&(
+                  <Suspense fallback={<div className="p-6 text-sm text-stone-500">회계 페이지를 불러오는 중...</div>}>
+                    <AccountingPage players={players} matches={matches} upcomingMatches={db.upcomingMatches} isAdmin={isAdmin}/>
+                  </Suspense>
+                )}
+              {tab==="analytics"&&isAdmin&&featuresEnabled.analytics&&(
+                <Suspense fallback={<div className="p-6 text-sm text-stone-500">분석 페이지를 불러오는 중...</div>}>
+                  <AnalyticsPage visits={visits} isAdmin={isAnalyticsAdmin}/>
+                </Suspense>
+              )}
             </>
           )}
         </div>

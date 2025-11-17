@@ -45,6 +45,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
 
   const [renewals, setRenewals] = useState({})
   const [matchesLocal, setMatchesLocal] = useState(matches)
+  const [allPayments, setAllPayments] = useState([])
   // 매치별 구장비 페이지네이션
   const [matchFeesPage, setMatchFeesPage] = useState(1)
   const matchFeesPerPage = 5
@@ -108,7 +109,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     try {
       // 회비 기본값 보장
       await ensureDuesDefaults()
-      const [paymentsData, duesData, summaryData] = await Promise.all([
+      const [paymentsData, duesData, summaryData, allPaymentsData] = await Promise.all([
         listPayments({ 
           startDate: dateRange.start || undefined, 
           endDate: dateRange.end || undefined 
@@ -117,11 +118,13 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
         getAccountingSummary({ 
           startDate: dateRange.start || undefined, 
           endDate: dateRange.end || undefined 
-        })
+        }),
+        listPayments({})
       ])
       setPayments(paymentsData)
       setDuesSettings(duesData)
       setSummary(summaryData)
+      setAllPayments(allPaymentsData)
       // 매치 데이터도 최신 상태로 동기화
       try {
         const latest = await listMatchesFromDB()
@@ -136,6 +139,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       setPayments([])
       setDuesSettings([])
       setSummary(null)
+      setAllPayments([])
       setLoadError(true)
     } finally {
       setLoading(false)
@@ -433,7 +437,9 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     annual_dues: '연회비',
     match_fee: '구장비',
     other_income: '기타 수입',
-    expense: '기타 지출'
+    expense: '기타 지출',
+    reimbursement: '상환',
+    registration_fee: '가입비'
   }
 
   const paymentMethodLabels = {
@@ -470,8 +476,9 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
 
   // 저장된 매치 정렬 (최신순)
   const sortedMatches = useMemo(() => {
-    return [...matches].sort((a, b) => new Date(b.dateISO) - new Date(a.dateISO))
-  }, [matches])
+    const source = Array.isArray(matchesLocal) && matchesLocal.length > 0 ? matchesLocal : matches
+    return [...(source || [])].sort((a, b) => new Date(b.dateISO) - new Date(a.dateISO))
+  }, [matchesLocal, matches])
 
   // 페이지네이션된 매치
   const paginatedMatches = useMemo(() => {
@@ -1256,6 +1263,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                         payment.payment_type === 'match_fee' ? 'bg-orange-100 text-orange-700' :
                         payment.payment_type === 'other_income' ? 'bg-emerald-100 text-emerald-700' :
                         payment.payment_type === 'expense' ? 'bg-red-100 text-red-700' :
+                        payment.payment_type === 'reimbursement' ? 'bg-yellow-100 text-yellow-700' :
                         'bg-gray-100 text-gray-700'
                       }`}>
                         <span className="hidden sm:inline">{paymentTypeLabels[payment.payment_type] || payment.payment_type}</span>
@@ -1265,7 +1273,8 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                            payment.payment_type === 'annual_dues' ? '연' :
                            payment.payment_type === 'match_fee' ? '구장' :
                            payment.payment_type === 'other_income' ? '수입' :
-                           payment.payment_type === 'expense' ? '지출' : '기타'}
+                           payment.payment_type === 'expense' ? '지출' :
+                           payment.payment_type === 'reimbursement' ? '상환' : '기타'}
                         </span>
                       </span>
                     </td>
@@ -1397,6 +1406,8 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                     let isOverdue = false
                     let missedMonths = []
                     
+                    const paymentsForRenewals = allPayments?.length ? allPayments : payments
+
                     if (hasMonthly) {
                       paymentMode = '월회비'
                       lastPaid = fmt(r.lastMonthly)
@@ -1411,7 +1422,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                         window.push({ y: d.getFullYear(), m: d.getMonth()+1 })
                       }
                       const paidMonths = new Set(
-                        payments
+                        paymentsForRenewals
                           .filter(pay => pay.player_id === p.id && pay.payment_type === 'monthly_dues')
                           .map(pay => {
                             const d = new Date(pay.payment_date)

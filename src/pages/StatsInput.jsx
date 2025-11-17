@@ -103,7 +103,12 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
   const [editingMatchId, setEditingMatchId] = useState('')
   useEffect(() => {
     const latestId = toStr(sortedMatches?.[0]?.id || '')
-    setEditingMatchId(latestId)
+    if (!latestId) return
+    setEditingMatchId((prev) => {
+      if (!prev) return latestId
+      const stillExists = sortedMatches.some(m => toStr(m.id) === toStr(prev))
+      return stillExists ? prev : latestId
+    })
   }, [sortedMatches])
 
   const editingMatch = useMemo(
@@ -327,25 +332,44 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     if (weekKeys.length !== 1) { setBulkMsg('여러 주의 데이터가 포함되어 있습니다. 한 번에 하나의 주만 처리하세요.'); return }
     const wk = weekKeys[0]
 
-    const matchForWeek = sortedMatches.find(m => {
+    const dayKeys = Array.from(new Set(parsed.map(p => dayKeyOfDate(p.date))))
+    if (dayKeys.length !== 1) { setBulkMsg('여러 날짜의 데이터가 섞여 있습니다. 한 번에 한 날짜씩 붙여넣어주세요.'); return }
+    const dk = dayKeys[0]
+
+    const matchForDay = sortedMatches.find(m => {
+      const mt = getMatchTime(m)
+      if (!mt) return false
+      const dayKey = dayKeyOfDate(new Date(mt))
+      return dayKey === dk
+    })
+
+    const matchForWeek = matchForDay ? matchForDay : sortedMatches.find(m => {
       const mt = getMatchTime(m)
       if (!mt) return false
       const k = weekKeyOfDate(new Date(mt))
       return k === wk
     })
-    if (!matchForWeek) { setBulkMsg('해당 주에 저장된 매치를 찾을 수 없습니다.'); return }
 
-    if (editingMatchId && toStr(editingMatchId) !== toStr(matchForWeek.id)) {
-      setBulkMsg('현재 선택된 매치와 붙여넣은 데이터의 날짜(주)가 일치하지 않습니다.')
+    if (!matchForDay) {
+      if (matchForWeek) {
+        setBulkMsg('현재 선택된 매치와 붙여넣은 데이터의 날짜(주)가 일치하지 않습니다. 붙여넣은 날짜와 동일한 경기를 직접 선택하거나 해당 경기를 추가로 저장해 주세요.');
+      } else {
+        setBulkMsg('붙여넣은 날짜에 맞는 경기를 찾을 수 없습니다. 경기 정보가 저장되어 있는지 확인해 주세요.');
+      }
       return
     }
 
-    if (!editingMatchId) setEditingMatchId(toStr(matchForWeek.id))
+    const desiredMatchId = toStr(matchForDay.id)
+    const alreadySelectedId = toStr(editingMatchId)
+    const willSwitchMatch = alreadySelectedId && alreadySelectedId !== desiredMatchId
+    if (!alreadySelectedId || willSwitchMatch) {
+      setEditingMatchId(desiredMatchId)
+    }
 
-    const selectedMatchObj = (editingMatch && toStr(editingMatch.id) === toStr(editingMatchId)) ? editingMatch : matchForWeek
-    const selectedDateKey = dayKeyOfDate(new Date(getMatchTime(selectedMatchObj)))
+    const targetMatchObj = (editingMatch && toStr(editingMatch.id) === desiredMatchId) ? editingMatch : matchForDay
+    const selectedDateKey = dayKeyOfDate(new Date(getMatchTime(targetMatchObj)))
 
-    if (editingMatchId) {
+    if (selectedDateKey) {
       const mismatched = parsed.filter(item => dayKeyOfDate(item.date) !== selectedDateKey)
       if (mismatched.length > 0) {
         const names = Array.from(new Set(mismatched.map(x => x.name))).slice(0, 10)
@@ -458,7 +482,8 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       return p ? p.name : ''
     }).filter(Boolean).slice(0, 5)
 
-    setBulkMsg(`✅ 초안에 적용 완료: ${deltas.size}명 (${playerNames.join(', ')}${deltas.size > 5 ? ' 외' : ''}) - 아래 "💾 저장하기" 버튼을 눌러주세요!`)
+    const switchSuffix = willSwitchMatch ? ' (붙여넣은 날짜에 맞춰 경기 탭을 자동으로 전환했습니다)' : ''
+    setBulkMsg(`✅ 초안에 적용 완료: ${deltas.size}명 (${playerNames.join(', ')}${deltas.size > 5 ? ' 외' : ''})${switchSuffix} - 아래 "💾 저장하기" 버튼을 눌러주세요!`)
   }
 
   const teams = useMemo(() => {
