@@ -119,34 +119,43 @@ export async function getDeviceFingerprint() {
 
 /**
  * 기존 visitor ID 생성 함수 개선
- * localStorage에 저장된 ID가 있으면 재사용, 없으면 새로 생성
+ * Private 창에서도 동일한 기기면 같은 ID 반환 (fingerprint 기반)
+ * localStorage 캐싱은 성능 최적화용으로만 사용
  * 
  * @returns {Promise<string>} Visitor ID
  */
 export async function getOrCreateEnhancedVisitorId() {
-  const key = 'sfm_visitor_id_v2'
+  const key = 'sfm_visitor_id_v3'
   
   try {
-    // 기존 ID가 있는지 확인
-    let visitorId = localStorage.getItem(key)
+    // localStorage 캐싱 확인 (성능 최적화)
+    let cachedId = null
+    try {
+      cachedId = localStorage.getItem(key)
+    } catch (e) {
+      // Private 모드에서는 localStorage 접근 불가, 무시
+    }
     
-    if (!visitorId) {
-      // 새로운 ID 생성: fingerprint + timestamp + random
-      const fingerprint = await getDeviceFingerprint()
-      const timestamp = Date.now()
-      const random = Math.random().toString(36).substr(2, 6)
-      visitorId = `v2-${fingerprint.substr(0, 16)}-${timestamp}-${random}`
-      localStorage.setItem(key, visitorId)
+    // Fingerprint 생성 (Private 창에서도 동일)
+    const fingerprint = await getDeviceFingerprint()
+    
+    // fingerprint만 사용 (timestamp, random 제거)
+    const visitorId = `v3-${fingerprint}`
+    
+    // 캐싱 시도 (실패해도 무시)
+    try {
+      if (!cachedId || cachedId !== visitorId) {
+        localStorage.setItem(key, visitorId)
+      }
+    } catch (e) {
+      // Private 모드 무시
     }
     
     return visitorId
   } catch (e) {
-    console.warn('Failed to create visitor ID, using session-based ID:', e)
-    // localStorage 실패 시 세션 기반 ID
-    if (!window._tempVisitorId) {
-      window._tempVisitorId = 'temp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9)
-    }
-    return window._tempVisitorId
+    console.warn('Failed to create visitor ID:', e)
+    // Fingerprint 실패 시에만 fallback
+    return 'fallback-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9)
   }
 }
 
