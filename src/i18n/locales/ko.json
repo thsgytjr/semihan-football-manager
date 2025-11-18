@@ -149,6 +149,7 @@
     "topScorers": "득점왕",
     "topAssisters": "도움왕",
     "mostAppearances": "최다 출전",
+    "totalPoints": "종합",
     "attackPoints": "공격 포인트",
     "cleanSheets": "클린시트",
     "chemistry": "호흡",
@@ -194,7 +195,10 @@
     "draftAttack": "Draft 골/어시",
     "draftCaptainPoints": "Draft 주장 승점",
     "captainLabel": "주장",
-    "pointsLabel": "승점"
+    "pointsLabel": "승점",
+    "playerWins": "선수승점",
+    "captainWins": "주장승점",
+    "attackLabel": "골/어시"
   },
   "matchHistory": {
     "title": "매치 히스토리",

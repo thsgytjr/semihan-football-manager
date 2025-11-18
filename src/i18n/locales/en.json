@@ -149,6 +149,7 @@
     "topScorers": "Top Scorers",
     "topAssisters": "Top Assisters",
     "mostAppearances": "Most Appearances",
+    "totalPoints": "Total Points",
     "attackPoints": "Attack Points",
     "cleanSheets": "Clean Sheets",
     "chemistry": "Chemistry",
@@ -194,7 +195,10 @@
     "draftAttack": "Draft Goals/Assists",
     "draftCaptainPoints": "Draft Captain Points",
     "captainLabel": "Captain",
-    "pointsLabel": "Points"
+    "pointsLabel": "Points",
+    "playerWins": "Player Points",
+    "captainWins": "Captain Points",
+    "attackLabel": "Goals/Assists"
   },
   "matchHistory": {
     "title": "Match History",

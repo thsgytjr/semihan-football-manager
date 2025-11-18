@@ -877,7 +877,7 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
   const { t } = useTranslation()
   const primaryOptions = useMemo(() => {
     const base = [
-      { id: 'pts', label: t('leaderboard.attackPoints') },
+      { id: 'pts', label: t('leaderboard.totalPoints') },
       { id: 'draft', label: t('leaderboard.draft') },
       { id: 'mom', label: 'MOM' },
     ]
@@ -956,9 +956,9 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
           <div className="sm:hidden">
             <MobileCategoryCarousel
               options={[
-                { id: 'playerWins', label: '선수승점' },
-                { id: 'captainWins', label: '주장승점' },
-                { id: 'attack', label: '골/어시' },
+                { id: 'playerWins', label: t('leaderboard.playerWins') },
+                { id: 'captainWins', label: t('leaderboard.captainWins') },
+                { id: 'attack', label: t('leaderboard.attackLabel') },
               ]}
               activeId={draftTab}
               onSelect={(id)=>setDraftTab && setDraftTab(id)}
@@ -968,9 +968,9 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
           <div className="hidden sm:block overflow-x-auto no-scrollbar">
             <div className="inline-flex rounded-full border border-stone-300 bg-white p-1 shadow-sm">
               {[
-                { id: 'playerWins', label: '선수승점' },
-                { id: 'captainWins', label: '주장승점' },
-                { id: 'attack', label: '골/어시' },
+                { id: 'playerWins', label: t('leaderboard.playerWins') },
+                { id: 'captainWins', label: t('leaderboard.captainWins') },
+                { id: 'attack', label: t('leaderboard.attackLabel') },
               ].map(o => {
                 const active = draftTab === o.id
                 return (
