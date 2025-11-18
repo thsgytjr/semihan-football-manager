@@ -44,31 +44,6 @@ export default function MoMAdminPanel({
   const hasMatchOptions = Array.isArray(matchOptions) && matchOptions.length > 0
   const resolvedSelectedMatchId = selectedMatchId ?? (match?.id != null ? String(match.id) : '')
 
-  if (!match) {
-    if (hasMatchOptions) {
-      return (
-        <Card title="관리자 MOM 기록 / 선정">
-          <div className="space-y-3">
-            <div className="text-sm text-stone-500">관리할 경기를 선택하세요.</div>
-            <div className="max-w-sm">
-              <select
-                value={resolvedSelectedMatchId}
-                onChange={(e) => onSelectMatch?.(e.target.value)}
-                className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
-              >
-                <option value="">경기 선택</option>
-                {matchOptions.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </Card>
-      )
-    }
-    return null
-  }
-
   const rosterMap = useMemo(() => {
     const map = new Map()
     roster.forEach(player => {
@@ -93,6 +68,33 @@ export default function MoMAdminPanel({
       .sort((a, b) => b.count - a.count)
       .slice(0, 3)
   }, [tally, rosterMap])
+
+  // match가 없는 렌더 경로에서도 훅이 동일하게 호출되도록 위에서 early return을 제거하고,
+  // 렌더 직전에 분기 처리합니다.
+  if (!match) {
+    if (hasMatchOptions) {
+      return (
+        <Card title="관리자 MOM 기록 / 선정">
+          <div className="space-y-3">
+            <div className="text-sm text-stone-500">관리할 경기를 선택하세요.</div>
+            <div className="max-w-sm">
+              <select
+                value={resolvedSelectedMatchId}
+                onChange={(e) => onSelectMatch?.(e.target.value)}
+                className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm"
+              >
+                <option value="">경기 선택</option>
+                {matchOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </Card>
+      )
+    }
+    return null
+  }
 
   const matchLabel = formatDateTime(match.dateISO || match.date || match.created_at)
   const disableActions = !selectedPlayerId || !note.trim()
@@ -192,7 +194,7 @@ export default function MoMAdminPanel({
               </span>
               {currentLeader && (
                 <span className="text-xs text-stone-500">
-                  1위: {currentLeader.player?.name || currentLeader.playerId} ({currentLeader.count}표)
+                  1위: <span className="notranslate" translate="no">{currentLeader.player?.name || currentLeader.playerId}</span> ({currentLeader.count}표)
                 </span>
               )}
             </div>
@@ -200,7 +202,7 @@ export default function MoMAdminPanel({
               <div className="mt-2 flex flex-wrap gap-2 text-xs text-stone-500">
                 {leaders.slice(1).map((leader) => (
                   <span key={leader.playerId} className="rounded-full bg-white px-2 py-0.5 shadow">
-                    #{leader.player?.name || leader.playerId} {leader.count}표
+                    #<span className="notranslate" translate="no">{leader.player?.name || leader.playerId}</span> {leader.count}표
                   </span>
                 ))}
               </div>
@@ -213,7 +215,7 @@ export default function MoMAdminPanel({
                 <div>
                   <div className="text-sm font-semibold text-amber-900">관리자 확정 완료</div>
                   <p className="text-xs text-amber-800">
-                    {overridePlayer?.name || momOverride.playerId}
+                    <span className="notranslate" translate="no">{overridePlayer?.name || momOverride.playerId}</span>
                     {momOverride.note ? ` · ${momOverride.note}` : ''}
                   </p>
                   {momOverride.confirmedAt && (
@@ -250,7 +252,7 @@ export default function MoMAdminPanel({
                 >
                   <option value="">선수를 선택하세요</option>
                   {roster.map((player) => (
-                    <option key={player.id} value={player.id}>
+                    <option key={player.id} value={player.id} className="notranslate" translate="no">
                       {player.name}
                     </option>
                   ))}
@@ -324,7 +326,7 @@ export default function MoMAdminPanel({
                       <div className="flex items-center gap-3">
                         <InitialAvatar id={vote.playerId} name={player?.name || vote.playerId} size={36} photoUrl={player?.photoUrl} />
                         <div>
-                          <div className="text-sm font-semibold text-stone-900">{player?.name || vote.playerId}</div>
+                          <div className="text-sm font-semibold text-stone-900 notranslate" translate="no">{player?.name || vote.playerId}</div>
                           <div className="text-xs text-stone-500">{vote.voterLabel || '메모 없음'}</div>
                         </div>
                       </div>

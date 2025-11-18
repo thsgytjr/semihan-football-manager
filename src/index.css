@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 :root { 
   color-scheme: light; 
 }
@@ -226,4 +228,10 @@ nav {
   opacity: 1;
   transform: translateY(0);
   transition: opacity 0.3s ease-out, transform 0.3s ease-out;
+}
+
+.notranslate,
+[translate="no"],
+[data-player-name] {
+  translate: no;
 }

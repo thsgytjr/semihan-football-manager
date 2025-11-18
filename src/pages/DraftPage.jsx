@@ -1158,7 +1158,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                         badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
                       />
                       <div className="w-full text-center">
-                        <p className="font-semibold text-xs truncate leading-tight">{player.name}</p>
+                        <p className="font-semibold text-xs truncate leading-tight notranslate" translate="no">{player.name}</p>
                         <p className="text-[10px] text-gray-500 truncate">{player.position}</p>
                       </div>
                     </button>
@@ -1255,7 +1255,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                           badges={captain.membership && captain.membership.includes('게스트') ? ['G'] : []} 
                         />
                         <div>
-                          <p className="font-semibold">{captain.name}</p>
+                          <p className="font-semibold notranslate" translate="no">{captain.name}</p>
                           <p className="text-xs text-gray-500">{captain.position}</p>
                         </div>
                       </div>
@@ -1328,7 +1328,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                         badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
                       />
                       <div className="w-full text-center">
-                        <p className="font-semibold text-xs truncate leading-tight">{player.name}</p>
+                        <p className="font-semibold text-xs truncate leading-tight notranslate" translate="no">{player.name}</p>
                         <p className="text-[10px] text-gray-500 truncate">{player.position}</p>
                       </div>
                     </button>
@@ -1440,7 +1440,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                           badges={captain.membership && captain.membership.includes('게스트') ? ['G'] : []} 
                         />
                       </div>
-                      <p className="text-lg font-bold text-gray-900">{captain.name}</p>
+                      <p className="text-lg font-bold text-gray-900 notranslate" translate="no">{captain.name}</p>
                       {orderNumber && orderNumber !== 1 && (
                         <span className="inline-block mt-1 text-xs bg-gray-800 text-white px-3 py-1 rounded-full font-semibold">
                           {orderNumber}번 픽
@@ -1607,7 +1607,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                           badges={captain.membership && captain.membership.includes('게스트') ? ['G'] : []} 
                         />
                         <div>
-                          <p className="font-bold text-lg">{captain.name}</p>
+                          <p className="font-bold text-lg notranslate" translate="no">{captain.name}</p>
                           <p className="text-sm text-gray-600 mt-1">{captain.position}</p>
                           {displayIdx === 0 ? (
                             <span className="inline-block mt-2 text-xs bg-yellow-400 text-yellow-900 px-3 py-1 rounded-full font-semibold">
@@ -1783,7 +1783,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                               <div key={player.id} className={`p-3 rounded-lg flex items-center gap-3 ${pIdx === 0 ? `${colors.light} border-2` : 'bg-white border'} border-gray-200`}>
                                 <InitialAvatar id={player.id} name={player.name} size={36} photoUrl={player.photoUrl} badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} />
                                 <div className="flex-1 min-w-0">
-                                  <p className="font-semibold truncate">{player.name}</p>
+                                  <p className="font-semibold truncate notranslate" translate="no">{player.name}</p>
                                   <p className="text-xs text-gray-500">{player.position}</p>
                                 </div>
                                 {pIdx === 0 && (
@@ -1897,7 +1897,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                             <div key={player.id} className={`p-3 rounded-lg flex items-center gap-3 relative ${idx === 0 ? 'bg-emerald-100 border-2 border-emerald-300' : 'bg-white border border-gray-200'}`}>
                               <InitialAvatar id={player.id} name={player.name} size={36} photoUrl={player.photoUrl} badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} />
                               <div className="flex-1 min-w-0">
-                                <p className="font-semibold truncate">{player.name}</p>
+                                <p className="font-semibold truncate notranslate" translate="no">{player.name}</p>
                                 <p className="text-xs text-gray-500">{player.position}</p>
                               </div>
                               {idx === 0 ? (
@@ -1939,7 +1939,7 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                             >
                               <InitialAvatar id={player.id} name={player.name} size={56} photoUrl={player.photoUrl} badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} />
                               <div className="w-full text-center">
-                                <p className="font-semibold text-xs truncate leading-tight">{player.name}</p>
+                                <p className="font-semibold text-xs truncate leading-tight notranslate" translate="no">{player.name}</p>
                                 <p className="text-[10px] text-gray-500 truncate">{player.position}</p>
                               </div>
                             </button>

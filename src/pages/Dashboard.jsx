@@ -1,5 +1,6 @@
 // src/pages/Dashboard.jsx
 import React, { useMemo, useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Tab } from '@headlessui/react'
 import Card from '../components/Card'
 import InitialAvatar from '../components/InitialAvatar'
@@ -114,6 +115,7 @@ export default function Dashboard({
   momFeatureEnabled = true,
   leaderboardToggles = {},
 }) {
+  const { t } = useTranslation()
   const customMemberships = membershipSettings.length > 0 ? membershipSettings : []
   const isMoMEnabled = useMemo(() => {
     if (momFeatureEnabled === undefined) return true
@@ -194,16 +196,16 @@ export default function Dashboard({
 
   const apOptions = useMemo(() => {
     const base = [
-      { id: 'pts', label: '종합' },
-      { id: 'g', label: '득점' },
-      { id: 'a', label: '어시' },
-      { id: 'gp', label: '출전' },
-      { id: 'cs', label: '클린시트' },
-      { id: 'duo', label: '듀오' },
-      { id: 'cards', label: '카드' },
+      { id: 'pts', label: t('leaderboard.attackPoints') },
+      { id: 'g', label: t('leaderboard.goals') },
+      { id: 'a', label: t('leaderboard.assists') },
+      { id: 'gp', label: t('leaderboard.appearances') },
+      { id: 'cs', label: t('leaderboard.cleanSheets') },
+      { id: 'duo', label: t('leaderboard.chemistry') },
+      { id: 'cards', label: t('leaderboard.cards') },
     ]
     return base.filter(o => isEnabled(o.id))
-  }, [leaderboardToggles, isEnabled])
+  }, [leaderboardToggles, isEnabled, t])
 
   // 비활성화된 탭을 보고 있다면, 첫 번째 활성 탭으로 이동
   useEffect(() => {
@@ -437,7 +439,7 @@ export default function Dashboard({
       setHighlightedMatchId(matchingMatch.id)
       setTimeout(() => setHighlightedMatchId(null), 5000)
     } else {
-      notify('⚠️ 매치 히스토리에서 해당하는 매치를 찾을 수 없습니다.', 'error', 3000)
+      notify(t('error.matchNotFound'), 'error', 3000)
     }
   }
 
@@ -481,12 +483,12 @@ export default function Dashboard({
       <Card 
         title={
           <div className="flex items-center gap-2">
-            <span>리더보드</span>
+            <span>{t('leaderboard.title')}</span>
             <div className="w-[120px]">
               <Select
                 value={leaderboardSeason}
                 onChange={(val) => { setLeaderboardSeason(val); setApDateKey('all') }}
-                options={seasonOptions.map(v => ({ value: v, label: v === 'all' ? '전체 시즌' : `${v}년` }))}
+                options={seasonOptions.map(v => ({ value: v, label: v === 'all' ? t('leaderboard.allTime') : `${v}년` }))}
                 size="sm"
               />
             </div>
@@ -617,19 +619,19 @@ export default function Dashboard({
       <Card 
         title={
           <div className="flex items-center gap-2">
-            <span>매치 히스토리</span>
+            <span>{t('matchHistory.title')}</span>
             <div className="w-[120px]">
               <Select
                 value={historySeason}
                 onChange={(val) => setHistorySeason(val)}
-                options={seasonOptions.map(v => ({ value: v, label: v === 'all' ? '전체 시즌' : `${v}년` }))}
+                options={seasonOptions.map(v => ({ value: v, label: v === 'all' ? t('leaderboard.allTime') : `${v}년` }))}
                 size="sm"
               />
             </div>
           </div>
         }
       >
-        <ErrorBoundary fallback={<div className="text-sm text-stone-500">목록을 불러오는 중 문제가 발생했어요.</div>}>
+        <ErrorBoundary fallback={<div className="text-sm text-stone-500">{t('leaderboard.errorOccurred')}</div>}>
           <div className="saved-matches-no-ovr text-[13px] leading-tight">
             <SavedMatchesList
               matches={historySeasonFilteredMatches}
@@ -668,6 +670,7 @@ export default function Dashboard({
 }
 
 function CaptainWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null, customMemberships = [] }) {
+  const { t } = useTranslation()
   const baselineKey = 'draft_captain_points_v1'
   const [baselineRanks] = useState(() => {
     try {
@@ -695,9 +698,9 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls, apDateKey, initia
     return { diff, dir: diff > 0 ? 'up' : 'down' }
   }
   const columns = [
-    { label: '순위', px: 1.5, align: 'center', className: 'w-[60px]' },
-    { label: '주장', px: 2, className: 'w-[110px] sm:w-[150px] md:w-[220px] lg:w-[280px] xl:w-[340px]' },
-    { label: '승점', px: 1.5, align: 'center', className: 'w-[52px]' },
+    { label: t('leaderboard.rank'), px: 1.5, align: 'center', className: 'w-[60px]' },
+    { label: t('leaderboard.captainLabel'), px: 2, className: 'w-[110px] sm:w-[150px] md:w-[220px] lg:w-[280px] xl:w-[340px]' },
+    { label: t('leaderboard.pointsLabel'), px: 1.5, align: 'center', className: 'w-[52px]' },
     { label: 'Last 5', px: 2, align: 'center', className: 'w-[120px]' }
   ]
 
@@ -716,7 +719,7 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls, apDateKey, initia
       showAll={showAll}
       onToggle={onToggle}
       controls={controls}
-      title="Draft 주장 승점"
+      title={t('leaderboard.draftCaptainPoints')}
       columns={columns}
       renderRow={renderRow}
       membershipSettings={customMemberships}
@@ -725,6 +728,7 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls, apDateKey, initia
 }
 
 function DraftWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null, customMemberships = [] }) {
+  const { t } = useTranslation()
   const baselineKey = 'draft_player_points_v1'
   const [baselineRanks] = useState(() => {
     try {
@@ -752,9 +756,9 @@ function DraftWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialB
     return { diff, dir: diff > 0 ? 'up' : 'down' }
   }
   const columns = [
-    { label: '순위', px: 1.5, align: 'center', className: 'w-[60px]' },
-    { label: '선수', px: 2, className: 'w-[110px] sm:w-[150px] md:w-[220px] lg:w-[280px] xl:w-[340px]' },
-    { label: '승점', px: 1.5, align: 'center', className: 'w-[52px]' },
+    { label: t('leaderboard.rank'), px: 1.5, align: 'center', className: 'w-[60px]' },
+    { label: t('leaderboard.player'), px: 2, className: 'w-[110px] sm:w-[150px] md:w-[220px] lg:w-[280px] xl:w-[340px]' },
+    { label: t('leaderboard.pointsLabel'), px: 1.5, align: 'center', className: 'w-[52px]' },
     { label: 'Last 5', px: 2, align: 'center', className: 'w-[120px]' }
   ]
 
@@ -773,7 +777,7 @@ function DraftWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialB
       showAll={showAll}
       onToggle={onToggle}
       controls={controls}
-      title="Draft 선수 승점"
+      title={t('leaderboard.draftPlayerPoints')}
       columns={columns}
       renderRow={renderRow}
       membershipSettings={customMemberships}
@@ -782,6 +786,7 @@ function DraftWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialB
 }
 
 function DraftAttackTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null, customMemberships = [] }) {
+  const { t } = useTranslation()
   const baselineKey = 'draft_attack_pts_v1'
   const [baselineRanks] = useState(() => {
     try {
@@ -809,8 +814,8 @@ function DraftAttackTable({ rows, showAll, onToggle, controls, apDateKey, initia
     return { diff, dir: diff > 0 ? 'up' : 'down' }
   }
   const columns = [
-    { label: '순위', px: 1.5, align: 'center', className: 'w-[60px]' },
-    { label: '선수', px: 2, className: 'w-[110px] sm:w-[150px] md:w-[220px] lg:w-[280px] xl:w-[340px]' },
+    { label: t('leaderboard.rank'), px: 1.5, align: 'center', className: 'w-[60px]' },
+    { label: t('leaderboard.player'), px: 2, className: 'w-[110px] sm:w-[150px] md:w-[220px] lg:w-[280px] xl:w-[340px]' },
     { label: 'GP', px: 1, align: 'center', className: 'w-[45px]' },
     { label: 'G', px: 1, align: 'center', className: 'w-[40px]' },
     { label: 'A', px: 1, align: 'center', className: 'w-[40px]' },
@@ -834,7 +839,7 @@ function DraftAttackTable({ rows, showAll, onToggle, controls, apDateKey, initia
       showAll={showAll}
       onToggle={onToggle}
       controls={controls}
-      title="Draft 골/어시"
+      title={t('leaderboard.draftAttack')}
       columns={columns}
       renderRow={renderRow}
       membershipSettings={customMemberships}
@@ -844,6 +849,7 @@ function DraftAttackTable({ rows, showAll, onToggle, controls, apDateKey, initia
 
 /* ----------------------- 컨트롤 (좌측 정렬) ---------------------- */
 function ControlsLeft({ apDateKey, setApDateKey, dateOptions = [], showAll, setShowAll }) {
+  const { t } = useTranslation()
   return (
     <div className="flex items-center gap-2 flex-wrap">
       {/* 날짜 선택 - 앱 커스텀 드롭다운 */}
@@ -851,16 +857,16 @@ function ControlsLeft({ apDateKey, setApDateKey, dateOptions = [], showAll, setS
         <Select
           value={apDateKey}
           onChange={(val)=>setApDateKey(val)}
-          options={dateOptions.map(v => ({ value: v, label: v === 'all' ? '모든 날짜' : v }))}
+          options={dateOptions.map(v => ({ value: v, label: v === 'all' ? t('matchHistory.allDates') : v }))}
           className="w-[160px]"
         />
       </div>
       <button
         onClick={() => setShowAll(s => !s)}
         className="rounded border border-stone-300 bg-white px-3 py-1.5 text-sm hover:bg-stone-50"
-        title={showAll ? '접기' : '전체 보기'}
+        title={showAll ? t('leaderboard.collapse') : t('leaderboard.viewAll')}
       >
-        {showAll ? '접기' : '전체 보기'}
+        {showAll ? t('leaderboard.collapse') : t('leaderboard.viewAll')}
       </button>
     </div>
   )
@@ -868,15 +874,16 @@ function ControlsLeft({ apDateKey, setApDateKey, dateOptions = [], showAll, setS
 
 /* ----------------------- 모바일 탭 컴포넌트 ---------------------- */
 function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, setDraftTab, momEnabled = true, apOptions }) {
+  const { t } = useTranslation()
   const primaryOptions = useMemo(() => {
     const base = [
-      { id: 'pts', label: '상위 종합' },
-      { id: 'draft', label: 'Draft(주장전)' },
-      { id: 'mom', label: 'MOM 랭킹' },
+      { id: 'pts', label: t('leaderboard.attackPoints') },
+      { id: 'draft', label: t('leaderboard.draft') },
+      { id: 'mom', label: 'MOM' },
     ]
     if (momEnabled) return base
     return base.filter(opt => opt.id !== 'mom')
-  }, [momEnabled])
+  }, [momEnabled, t])
   const primaryIndex = Math.max(primaryOptions.findIndex(opt => opt.id === primary), 0)
   const onPrimaryChange = (idx) => {
     const next = primaryOptions[idx]?.id || 'pts'
@@ -893,9 +900,9 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
     { id: 'cards', label: '카드' },
   ]
   const DraftOptions = [
-    { id: 'playerWins', label: '선수승점' },
-    { id: 'captainWins', label: '주장승점' },
-    { id: 'attack', label: '골/어시' },
+    { id: 'playerWins', label: t('leaderboard.wins') },
+    { id: 'captainWins', label: t('leaderboard.captain') },
+    { id: 'attack', label: `${t('leaderboard.goals')}/${t('leaderboard.assists')}` },
   ]
 
   return (
@@ -1035,6 +1042,7 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
 
   const totalPlayers = rows.length
   const headerBtnCls = "inline-flex items-center gap-1 hover:underline cursor-pointer select-none"
+  const { t } = useTranslation()
 
   return (
     <div className="overflow-x-auto rounded-lg border border-stone-200 scrollbar-hide">
@@ -1043,14 +1051,14 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
           <tr>
             <th colSpan={7} className="border-b px-2 py-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="text-xs text-stone-600">총 선수 <span className="font-semibold">{totalPlayers}</span>명</div>
+                <div className="text-xs text-stone-600">{t('leaderboard.totalPlayers')} <span className="font-semibold">{totalPlayers}</span>{t('leaderboard.playersCount')}</div>
                 <div className="ml-auto">{controls}</div>
               </div>
             </th>
           </tr>
           <tr className="text-[13px] text-stone-600">
-            <th className="border-b px-1.5 py-1.5 text-center">순위</th>
-            <th className="border-b px-2 py-1.5 text-left">선수</th>
+            <th className="border-b px-1.5 py-1.5 text-center">{t('leaderboard.rank')}</th>
+            <th className="border-b px-2 py-1.5 text-left">{t('leaderboard.player')}</th>
 
             <th className={`border-b px-2 py-1.5 text-center ${headHi('gp')}`} scope="col">
               <button type="button" onClick={() => onRequestTab && onRequestTab('gp')} className={headerBtnCls} title="Most Appearances 보기">
@@ -1145,6 +1153,7 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
 
 /* ---------------------- 듀오 테이블 --------------------- */
 function DuoTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null, customMemberships = [] }) {
+  const { t } = useTranslation()
   const baselineKey = 'duo_count_v1'
   const [baselineRanks] = useState(() => {
     try {
@@ -1172,9 +1181,9 @@ function DuoTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselin
     return { diff, dir: diff > 0 ? 'up' : 'down' }
   }
   const columns = [
-    { label: '순위', px: 1.5, align: 'center', className: 'w-[60px]' },
-    { label: '듀오 (Assist → Goal)', px: 2 },
-    { label: '회수', px: 1.5, align: 'center', className: 'w-[50px]' }
+    { label: t('leaderboard.rank'), px: 1.5, align: 'center', className: 'w-[60px]' },
+    { label: t('leaderboard.duoPair'), px: 2 },
+    { label: t('leaderboard.count'), px: 1.5, align: 'center', className: 'w-[50px]' }
   ]
 
   const renderRow = (r, tone) => {
@@ -1258,7 +1267,7 @@ function DuoTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselin
       showAll={showAll}
       onToggle={onToggle}
       controls={controls}
-      title="총 듀오"
+      title={t('leaderboard.totalDuo')}
       columns={columns}
       renderRow={renderRow}
       membershipSettings={customMemberships}
@@ -1270,6 +1279,7 @@ function DuoTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselin
 
 /* ---------------------- 클린시트 카드 --------------------- */
 function CleanSheetTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null, customMemberships = [] }) {
+  const { t } = useTranslation()
   const baselineKey = 'cs_count_v1'
   const [baselineRanks] = useState(() => {
     try {
@@ -1298,8 +1308,8 @@ function CleanSheetTable({ rows, showAll, onToggle, controls, apDateKey, initial
   }
 
   const columns = [
-    { label: '순위', px: 1.5, align: 'center', className: 'w-[60px]' },
-    { label: '선수', px: 2 },
+    { label: t('leaderboard.rank'), px: 1.5, align: 'center', className: 'w-[60px]' },
+    { label: t('leaderboard.player'), px: 2 },
     { label: 'CS', px: 1.5, align: 'center', className: 'w-[50px]' }
   ]
 
@@ -1317,7 +1327,7 @@ function CleanSheetTable({ rows, showAll, onToggle, controls, apDateKey, initial
       showAll={showAll}
       onToggle={onToggle}
       controls={controls}
-  title="클린시트 (공격수 제외)"
+      title={t('leaderboard.cleanSheetTitle')}
       columns={columns}
       renderRow={renderRow}
       membershipSettings={customMemberships}
@@ -1328,10 +1338,11 @@ function CleanSheetTable({ rows, showAll, onToggle, controls, apDateKey, initial
 /* ---------------------- Main Component --------------------- */
 
 function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMemberships = [] }) {
+  const { t } = useTranslation()
   const data = showAll ? rows : rows.slice(0, 5)
   const columns = [
-    { label: '순위', px: 1.5, align: 'center', className: 'w-[60px]' },
-    { label: '선수', px: 2 },
+    { label: t('leaderboard.rank'), px: 1.5, align: 'center', className: 'w-[60px]' },
+    { label: t('leaderboard.player'), px: 2 },
     { label: 'YC', px: 1.5, align: 'center', className: 'w-[50px]' },
     { label: 'RC', px: 1.5, align: 'center', className: 'w-[50px]' },
   ]
@@ -1351,7 +1362,7 @@ function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMember
       showAll={showAll}
       onToggle={onToggle}
       controls={controls}
-      title="카드(Y/R)"
+      title={t('leaderboard.cardsTitle')}
       columns={columns}
       renderRow={renderRow}
       membershipSettings={customMemberships}

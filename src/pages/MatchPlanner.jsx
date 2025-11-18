@@ -1948,7 +1948,7 @@ function PlayerRow({player,showOVR,isAdmin,teamIndex,isDraftMode,isCaptain,onRem
     <li ref={setNodeRef} style={style} className="flex items-start gap-2 border-t border-gray-100 pt-1 first:border-0 first:pt-0 touch-manipulation cursor-grab active:cursor-grabbing" {...attributes}{...listeners}>
       <span className="flex items-center gap-2 min-w-0 flex-1">
         <InitialAvatar id={player.id} name={player.name} size={24} badges={badges} photoUrl={player.photoUrl} customMemberships={customMemberships} badgeInfo={badgeInfo} />
-        <span className="whitespace-normal break-words">{player.name}</span>
+  <span className="whitespace-normal break-words notranslate" translate="no">{player.name}</span>
         {showPositions && (
           <PositionChips positions={player.positions || []} size="sm" maxDisplay={2} />
         )}
@@ -2031,7 +2031,7 @@ function DragGhost({player,showOVR,customMemberships=[]}){
   <div className="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 shadow-lg">
     <div className="flex items-center gap-2 text-sm">
   <InitialAvatar id={player.id} name={player.name} size={22} badges={badges} photoUrl={player.photoUrl} customMemberships={customMemberships} badgeInfo={badgeInfo} />
-      <span className="truncate">{player.name}</span>
+  <span className="truncate notranslate" translate="no">{player.name}</span>
   {/* guest badge is shown on avatar */}
       <span className={`ml-1 inline-flex items-center rounded-full px-2 py-[2px] text-[11px] ${isGK?'bg-amber-100 text-amber-800':pos==='DF'?'bg-blue-100 text-blue-800':pos==='MF'?'bg-emerald-100 text-emerald-800':pos==='FW'?'bg-purple-100 text-purple-800':'bg-stone-100 text-stone-700'}`}>{pos}</span>
       {showOVR&&!isGK&&<span className="text-xs text-gray-600">OVR {ovrVal}</span>}

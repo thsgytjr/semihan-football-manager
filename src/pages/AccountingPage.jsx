@@ -732,7 +732,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                           photoUrl={player.photoUrl}
                           badges={badges}
                         />
-                        <span className="font-medium">{player.name}</span>
+                        <span className="font-medium notranslate" translate="no">{player.name}</span>
                       </div>
                     </td>
                     <td className="py-3 px-4">
@@ -1251,7 +1251,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                           <div className="hidden sm:block">
                             <InitialAvatar id={player?.id} name={player?.name||'Unknown'} size={20} photoUrl={player?.photoUrl} />
                           </div>
-                          <span className="text-[9px] sm:text-sm truncate max-w-[60px] sm:max-w-none">{player?.name || 'Unknown'}</span>
+                          <span className="text-[9px] sm:text-sm truncate max-w-[60px] sm:max-w-none notranslate" translate="no">{player?.name || 'Unknown'}</span>
                         </div>
                       )}
                     </td>
@@ -1845,7 +1845,7 @@ function MatchFeesSection({ match, players }) {
                     <td className="py-2 px-2">
                       <div className="flex items-center gap-2">
                         <InitialAvatar id={player?.id} name={player?.name||'?'} size={24} photoUrl={player?.photoUrl} />
-                        <span className="font-medium">{player?.name || 'Unknown'}</span>
+                        <span className="font-medium notranslate" translate="no">{player?.name || 'Unknown'}</span>
                       </div>
                     </td>
                     <td className="py-2 px-2">

@@ -1,10 +1,11 @@
 // src/components/UpcomingMatchCard.jsx
 import React, { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import InitialAvatar from './InitialAvatar'
 import { getMatchStatus } from '../lib/upcomingMatch'
 import { computeCaptainStatsRows } from '../lib/leaderboardComputations'
 
-const formatDateDisplay = (dateISO) => {
+const formatDateDisplay = (dateISO, lang = 'en') => {
   if (!dateISO) return ''
   
   try {
@@ -20,28 +21,31 @@ const formatDateDisplay = (dateISO) => {
     const isTomorrow = date.toDateString() === tomorrow.toDateString()
     
     // 시간 표시
-    const timeStr = date.toLocaleTimeString('ko-KR', { 
+    const locale = lang === 'ko' ? 'ko-KR' : 'en-US'
+    const timeStr = date.toLocaleTimeString(locale, { 
       hour: '2-digit', 
       minute: '2-digit',
       hour12: false 
     })
     
     // 날짜 표시
-    const monthDay = date.toLocaleDateString('ko-KR', {
+    const monthDay = date.toLocaleDateString(locale, {
       month: 'short',
       day: 'numeric'
     })
     
     // 요일 표시
-    const dayNames = ['일', '월', '화', '수', '목', '금', '토']
+    const dayNames = lang === 'ko' 
+      ? ['일', '월', '화', '수', '목', '금', '토'] 
+      : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
     const dayName = dayNames[date.getDay()]
     
     if (isToday) {
-      return `오늘 (${monthDay}) ${timeStr}`
+      return lang === 'ko' ? `오늘 (${monthDay}) ${timeStr}` : `Today (${monthDay}) ${timeStr}`
     }
     
     if (isTomorrow) {
-      return `내일 (${monthDay}) ${timeStr}`
+      return lang === 'ko' ? `내일 (${monthDay}) ${timeStr}` : `Tomorrow (${monthDay}) ${timeStr}`
     }
     
     // 이번 주인지 확인 (7일 이내)
@@ -49,19 +53,19 @@ const formatDateDisplay = (dateISO) => {
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
     
     if (diffDays <= 7 && diffDays > 0) {
-      return `${monthDay} (${dayName}요일) ${timeStr}`
+      return lang === 'ko' ? `${monthDay} (${dayName}요일) ${timeStr}` : `${monthDay} (${dayName}) ${timeStr}`
     }
     
     // 그 외에는 전체 날짜 표시
-    return `${monthDay} (${dayName}요일) ${timeStr}`
+    return lang === 'ko' ? `${monthDay} (${dayName}요일) ${timeStr}` : `${monthDay} (${dayName}) ${timeStr}`
     
   } catch (error) {
     return dateISO
   }
 }
 
-const getLocationDisplayName = (location) => {
-  if (!location) return '미정'
+const getLocationDisplayName = (location, t) => {
+  if (!location) return t('upcoming.tbd')
   
   if (location.preset === 'coppell-west') {
     return 'Coppell Middle School - West'
@@ -71,10 +75,11 @@ const getLocationDisplayName = (location) => {
     return location.name
   }
   
-  return '미정'
+  return t('upcoming.tbd')
 }
 
 const StatusBadge = ({ status, isDraftMode = false, isDraftComplete = false }) => {
+  const { t } = useTranslation()
   // 사파리 호환성을 위해 인라인 스타일 사용
   const getStatusStyle = (status, isDraftMode, isDraftComplete) => {
     // 드래프트 모드에서 완료 상태
@@ -119,20 +124,20 @@ const StatusBadge = ({ status, isDraftMode = false, isDraftComplete = false }) =
   
   const getLabel = (status, isDraftMode, isDraftComplete) => {
     if (isDraftMode && isDraftComplete) {
-      return 'Draft Complete'
+      return t('upcoming.status.draftComplete')
     }
     
     if (isDraftMode && status === 'upcoming') {
-      return 'Draft in Progress'
+      return t('upcoming.status.drafting')
     }
     
     switch(status) {
       case 'drafting':
-        return 'Draft in Progress'
+        return t('upcoming.status.drafting')
       case 'completed':
-        return '완료'
+        return t('upcoming.status.completed')
       default:
-        return 'Upcoming'
+        return t('upcoming.status.upcoming')
     }
   }
   
@@ -169,9 +174,11 @@ export default function UpcomingMatchCard({
   onUpdateCaptains, 
   onStartDraft, 
   onCreateMatch, 
-  onDeleteMatch,
+  onDelete,
+  onEdit,
   onShowTeams // 팀 보기 버튼 클릭 시 콜백
 }) {
+  const { t, i18n } = useTranslation()
   const {
     id,
     dateISO,
@@ -191,8 +198,8 @@ export default function UpcomingMatchCard({
   
   const matchStatus = getMatchStatus(upcomingMatch)
   
-  const dateDisplay = formatDateDisplay(dateISO)
-  const locationDisplay = getLocationDisplayName(location)
+  const dateDisplay = formatDateDisplay(dateISO, i18n.language)
+  const locationDisplay = getLocationDisplayName(location, t)
   
   // ✅ 매칭되는 매치가 있는지 확인
   const hasMatchingHistoricalMatch = useMemo(() => {
@@ -297,7 +304,7 @@ export default function UpcomingMatchCard({
                     backgroundColor: 'transparent',
                     cursor: 'pointer'
                   }}
-                  title="드래프트 시작"
+                  title={t('upcoming.draftStart')}
                 >
                   ⚔️
                 </button>
@@ -312,7 +319,7 @@ export default function UpcomingMatchCard({
                     backgroundColor: 'transparent',
                     cursor: 'pointer'
                   }}
-                  title="매치 생성"
+                  title={t('upcoming.createMatch')}
                 >
                   ⚽
                 </button>
@@ -329,7 +336,7 @@ export default function UpcomingMatchCard({
                 backgroundColor: 'transparent',
                 cursor: 'pointer'
               }}
-              title="편집"
+              title={t('upcoming.edit')}
             >
               ✏️
             </button>
@@ -344,7 +351,7 @@ export default function UpcomingMatchCard({
                 backgroundColor: 'transparent',
                 cursor: 'pointer'
               }}
-              title="삭제"
+              title={t('upcoming.remove')}
             >
               🗑️
             </button>
@@ -419,9 +426,9 @@ export default function UpcomingMatchCard({
                     }}
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#059669'}
                     onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#10b981'}
-                    title="매치 히스토리에서 해당 팀 보기"
+                    title={t('upcoming.viewTeamsTitle')}
                   >
-                    팀 보기
+                    {t('upcoming.viewTeams')}
                   </button>
                 )}
               </div>
@@ -448,7 +455,7 @@ export default function UpcomingMatchCard({
           // 일반 사용자이고 주장이 선택되지 않은 경우
           return (
             <div style={{textAlign: 'center', padding: '12px', backgroundColor: '#f9fafb', borderRadius: '6px'}}>
-              <span style={{fontSize: '12px', color: '#6b7280'}}>주장 선택 대기중</span>
+              <span style={{fontSize: '12px', color: '#6b7280'}}>{t('upcoming.waitingCaptain')}</span>
             </div>
           )
         })()}
@@ -463,7 +470,7 @@ export default function UpcomingMatchCard({
       {/* 빈 상태 */}
       {attendees.length === 0 && (
         <div style={{marginTop: '8px', paddingTop: '8px', borderTop: '1px solid #f3f4f6', textAlign: 'center'}}>
-          <div style={{fontSize: '12px', color: '#6b7280'}}>참가자 없음</div>
+          <div style={{fontSize: '12px', color: '#6b7280'}}>{t('upcoming.noAttendees')}</div>
         </div>
       )}
       
@@ -575,6 +582,7 @@ export default function UpcomingMatchCard({
 
 // 주장 대결 표시 컴포넌트
 function CaptainVsDisplay({ captains, players, matches = [], teamCount = 2 }) {
+  const { t } = useTranslation()
   // 개선된 주장 통계 데이터 계산
   const captainStats = useMemo(() => {
     const captainStatsRows = computeCaptainStatsRows(players, matches)
@@ -615,7 +623,7 @@ function CaptainVsDisplay({ captains, players, matches = [], teamCount = 2 }) {
     return (
       <div style={{display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px', backgroundColor: '#f9fafb', borderRadius: '8px'}}>
         <div style={{fontSize: '12px', fontWeight: '600', color: '#374151', textAlign: 'center', marginBottom: '4px'}}>
-          주장 전적 ({captains.length}팀)
+          {t('upcoming.captainRecord', { count: captains.length })}
         </div>
         <div style={{display: 'grid', gridTemplateColumns: `repeat(${Math.min(captains.length, 3)}, 1fr)`, gap: '8px'}}>
           {captains.map((captain, idx) => {
@@ -630,12 +638,14 @@ function CaptainVsDisplay({ captains, players, matches = [], teamCount = 2 }) {
                     photoUrl={idToPlayer.get(captain.id)?.photoUrl || captain.photoUrl || null}
                     badges={['C']}
                   />
-                  <span style={{fontSize: '11px', fontWeight: '700', color: '#1f2937'}}>팀{idx + 1}: {captain.name}</span>
+                  <span style={{fontSize: '11px', fontWeight: '700', color: '#1f2937'}}>
+                    {t('upcoming.teamLabel', { index: idx + 1 })}: <span className="notranslate" translate="no">{captain.name}</span>
+                  </span>
                 </div>
                 
                 {/* 전적 */}
                 <div style={{fontSize: '9px', color: '#6b7280', marginBottom: '3px'}}>
-                  {stats.totalGames > 0 ? `${stats.wins}승 ${stats.draws}무 ${stats.losses}패` : '전적 없음'}
+                  {stats.totalGames > 0 ? t('upcoming.recordLine', { wins: stats.wins, draws: stats.draws, losses: stats.losses }) : t('upcoming.noRecord')}
                 </div>
                 
                 {/* Recent Form */}
@@ -678,7 +688,7 @@ function CaptainVsDisplay({ captains, players, matches = [], teamCount = 2 }) {
   return (
     <div style={{display: 'flex', flexDirection: 'column', gap: '10px'}}>
       {/* 주장 전적 비교 */}
-      <div style={{display: 'flex', gap: '8px', padding: '10px', backgroundColor: '#f9fafb', borderRadius: '8px'}}>
+          <div style={{display: 'flex', gap: '8px', padding: '10px', backgroundColor: '#f9fafb', borderRadius: '8px'}}>
         {/* 주장 1 */}
         <div style={{flex: 1, textAlign: 'center'}}>
           <div style={{display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', marginBottom: '6px'}}>
@@ -689,16 +699,16 @@ function CaptainVsDisplay({ captains, players, matches = [], teamCount = 2 }) {
               photoUrl={idToPlayer.get(captains[0].id)?.photoUrl || captains[0].photoUrl || null}
               badges={['C']}
             />
-            <span style={{fontSize: '13px', fontWeight: '700', color: '#1f2937'}}>{captains[0].name}</span>
+            <span className="notranslate" translate="no" style={{fontSize: '13px', fontWeight: '700', color: '#1f2937'}}>{captains[0].name}</span>
           </div>
           
           {/* 전적 */}
           <div style={{fontSize: '10px', color: '#6b7280', marginBottom: '4px'}}>
-            {captain1Stats.totalGames > 0 ? `${captain1Stats.wins}승 ${captain1Stats.draws}무 ${captain1Stats.losses}패` : '전적 없음'}
+            {captain1Stats.totalGames > 0 ? t('upcoming.recordLine', { wins: captain1Stats.wins, draws: captain1Stats.draws, losses: captain1Stats.losses }) : t('upcoming.noRecord')}
           </div>
           
           {/* Recent Form */}
-          <div style={{fontSize: '9px', color: '#6b7280', marginBottom: '3px'}}>Recent Form</div>
+          <div style={{fontSize: '9px', color: '#6b7280', marginBottom: '3px'}}>{t('upcoming.recentForm')}</div>
           <div style={{display: 'flex', justifyContent: 'center', gap: '2px'}}>
             {Array.from({ length: 5 }, (_, i) => {
               const result = captain1Stats.last5[captain1Stats.last5.length - 5 + i]
@@ -762,16 +772,16 @@ function CaptainVsDisplay({ captains, players, matches = [], teamCount = 2 }) {
               photoUrl={idToPlayer.get(captains[1].id)?.photoUrl || captains[1].photoUrl || null}
               badges={['C']}
             />
-            <span style={{fontSize: '13px', fontWeight: '700', color: '#1f2937'}}>{captains[1].name}</span>
+            <span className="notranslate" translate="no" style={{fontSize: '13px', fontWeight: '700', color: '#1f2937'}}>{captains[1].name}</span>
           </div>
           
           {/* 전적 */}
           <div style={{fontSize: '10px', color: '#6b7280', marginBottom: '4px'}}>
-            {captain2Stats.totalGames > 0 ? `${captain2Stats.wins}승 ${captain2Stats.draws}무 ${captain2Stats.losses}패` : '전적 없음'}
+            {captain2Stats.totalGames > 0 ? t('upcoming.recordLine', { wins: captain2Stats.wins, draws: captain2Stats.draws, losses: captain2Stats.losses }) : t('upcoming.noRecord')}
           </div>
           
           {/* Recent Form */}
-          <div style={{fontSize: '9px', color: '#6b7280', marginBottom: '3px'}}>Recent Form</div>
+          <div style={{fontSize: '9px', color: '#6b7280', marginBottom: '3px'}}>{t('upcoming.recentForm')}</div>
           <div style={{display: 'flex', justifyContent: 'center', gap: '2px'}}>
             {Array.from({ length: 5 }, (_, i) => {
               const result = captain2Stats.last5[captain2Stats.last5.length - 5 + i]
@@ -804,6 +814,7 @@ function CaptainVsDisplay({ captains, players, matches = [], teamCount = 2 }) {
 
 // 주장 선택 컴포넌트
 function CaptainSelector({ attendees, currentCaptainIds = [], onUpdateCaptains, upcomingMatch, players }) {
+  const { t } = useTranslation()
   // 팀 수 확인 (snapshot 또는 teamCount 기반)
   const teamCount = upcomingMatch.teamCount || (upcomingMatch.snapshot?.length || 2)
   
@@ -852,14 +863,14 @@ function CaptainSelector({ attendees, currentCaptainIds = [], onUpdateCaptains, 
   return (
     <div style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
       <div style={{fontSize: '12px', fontWeight: '600', color: '#374151', textAlign: 'center'}}>
-        주장 선택 ({teamCount}팀)
+        {t('upcoming.selectCaptainTitle', { count: teamCount })}
       </div>
       <div style={{display: 'grid', gridTemplateColumns: `repeat(${Math.min(teamCount, 3)}, 1fr)`, gap: '8px'}}>
         {Array.from({ length: teamCount }).map((_, teamIdx) => (
           <div key={teamIdx} style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
             {hasTeamData && (
               <div style={{fontSize: '10px', color: '#6b7280', fontWeight: '500'}}>
-                팀 {teamIdx + 1} 주장
+                {t('upcoming.teamCaptainLabel', { index: teamIdx + 1 })}
               </div>
             )}
             <select
@@ -873,12 +884,14 @@ function CaptainSelector({ attendees, currentCaptainIds = [], onUpdateCaptains, 
                 border: '1px solid #d1d5db'
               }}
             >
-              <option value="">선택...</option>
+              <option value="">{t('upcoming.selectPlaceholder')}</option>
               {(teamPlayers[teamIdx] || attendees).map(player => (
                 <option 
                   key={player.id} 
                   value={player.id} 
                   disabled={captainIds.some((id, idx) => idx !== teamIdx && id === player.id)}
+                  className="notranslate"
+                  translate="no"
                 >
                   {player.name}
                 </option>
@@ -900,12 +913,12 @@ function CaptainSelector({ attendees, currentCaptainIds = [], onUpdateCaptains, 
             cursor: 'pointer'
           }}
         >
-          주장 설정
+          {t('upcoming.setCaptains')}
         </button>
       )}
       {!hasTeamData && (
         <div style={{fontSize: '10px', color: '#9ca3af', textAlign: 'center', marginTop: '4px'}}>
-          💡 팀 배정 후 주장을 선택하세요
+          {t('upcoming.chooseAfterAssignment')}
         </div>
       )}
     </div>
@@ -914,6 +927,7 @@ function CaptainSelector({ attendees, currentCaptainIds = [], onUpdateCaptains, 
 
 // ✨ 복권 추첨 애니메이션 컴포넌트 (최적화 버전)
 function BouncingPlayersLottery({ attendees, isDraftComplete }) {
+  const { t } = useTranslation()
   const ballsRef = React.useRef([])
   const animationFrameRef = React.useRef(null)
   const lastUpdateRef = React.useRef(0)
@@ -1000,7 +1014,7 @@ function BouncingPlayersLottery({ attendees, isDraftComplete }) {
         color: '#d97706',
         animation: 'lotteryBlink 1.5s ease-in-out infinite'
       }}>
-        {isDraftComplete ? '팀 매칭 확정중...' : '팀 추첨 대기중...'} ({attendees.length}명)
+        {isDraftComplete ? t('upcoming.matchingInProgress') : t('upcoming.lotteryWaiting')} ({t('upcoming.attendeesCount', { count: attendees.length })})
       </div>
       
       <div 

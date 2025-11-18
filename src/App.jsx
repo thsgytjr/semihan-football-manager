@@ -1,6 +1,7 @@
 // src/App.jsx
 import React,{useEffect,useMemo,useState,useCallback,useRef,lazy,Suspense}from"react"
 import{Home,Users,CalendarDays,ListChecks,ShieldCheck,Lock,Eye,EyeOff,AlertCircle,CheckCircle2,X,Settings,BookOpen,Shuffle,DollarSign}from"lucide-react"
+import{useTranslation}from"react-i18next"
 import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB,incrementVisits,logVisit,getVisitStats,getTotalVisits,USE_MATCHES_TABLE}from"./services/storage.service"
 import { supabase } from './lib/supabaseClient'
 import{saveMatchToDB,updateMatchInDB,deleteMatchFromDB,listMatchesFromDB,subscribeMatches}from"./services/matches.service"
@@ -19,6 +20,7 @@ import AppTutorial,{TutorialButton,useAutoTutorial}from"./components/AppTutorial
 import AdminLoginDialog from"./components/AdminLoginDialog"
 import VisitorStats from"./components/VisitorStats"
 import ProdDataWarning from"./components/ProdDataWarning"
+import LanguageSwitcher from"./components/LanguageSwitcherNew"
 import Dashboard from"./pages/Dashboard";import PlayersPage from"./pages/PlayersPage"
 import logoUrl from"./assets/GoalifyLogo.png"
 import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEnabled,updateFeatureEnabled,updateLeaderboardCategoryEnabled}from"./lib/appSettings"
@@ -48,6 +50,7 @@ const withTimeout = (promise, ms, label) => {
 }
 
 export default function App(){
+  const { t } = useTranslation()
   const[tab,setTab]=useState("dashboard"),[db,setDb]=useState({players:[],matches:[],visits:0,upcomingMatches:[],tagPresets:[],membershipSettings:[]}),[selectedPlayerId,setSelectedPlayerId]=useState(null)
   const[isAdmin,setIsAdmin]=useState(false),[isAnalyticsAdmin,setIsAnalyticsAdmin]=useState(false),[loginOpen,setLoginOpen]=useState(false)
   const[loading,setLoading]=useState(true)
@@ -421,23 +424,23 @@ export default function App(){
 
   // 메모이제이션된 탭 버튼들
   const tabButtons = useMemo(() => [
-    { key: 'dashboard', icon: <Home size={16}/>, label: '대시보드', show: true },
-    { key: 'players', icon: <Users size={16}/>, label: '선수 관리', show: isAdmin && featuresEnabled.players },
-    { key: 'planner', icon: <CalendarDays size={16}/>, label: '매치 플래너', show: isAdmin && featuresEnabled.planner },
-    { key: 'draft', icon: <Shuffle size={16}/>, label: '드래프트', show: isAdmin && featuresEnabled.draft },
-    { key: 'formation', icon: <IconPitch size={16}/>, label: '포메이션 보드', show: featuresEnabled.formation },
-    { key: 'stats', icon: <ListChecks size={16}/>, label: '기록 입력', show: isAdmin && featuresEnabled.stats },
-  { key: 'accounting', icon: <DollarSign size={16}/>, label: '회계', show: isAdmin && (featuresEnabled.accounting ?? true) },
-    { key: 'analytics', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, label: '방문자 분석', show: isAnalyticsAdmin && featuresEnabled.analytics }
-  ], [isAdmin, isAnalyticsAdmin, featuresEnabled]);
+    { key: 'dashboard', icon: <Home size={16}/>, label: t('nav.dashboard'), show: true },
+    { key: 'players', icon: <Users size={16}/>, label: t('nav.players'), show: isAdmin && featuresEnabled.players },
+    { key: 'planner', icon: <CalendarDays size={16}/>, label: t('nav.planner'), show: isAdmin && featuresEnabled.planner },
+    { key: 'draft', icon: <Shuffle size={16}/>, label: t('nav.draft'), show: isAdmin && featuresEnabled.draft },
+    { key: 'formation', icon: <IconPitch size={16}/>, label: t('nav.formation'), show: featuresEnabled.formation },
+    { key: 'stats', icon: <ListChecks size={16}/>, label: t('nav.stats'), show: isAdmin && featuresEnabled.stats },
+  { key: 'accounting', icon: <DollarSign size={16}/>, label: t('nav.accounting'), show: isAdmin && (featuresEnabled.accounting ?? true) },
+    { key: 'analytics', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, label: t('nav.analytics'), show: isAnalyticsAdmin && featuresEnabled.analytics }
+  ], [isAdmin, isAnalyticsAdmin, featuresEnabled, t]);
 
   // ⬇️ 기존 기본값 생성 방식은 유지(필요시 다른 곳에서 사용)
-  async function handleCreatePlayer(){if(!isAdmin)return notify("Admin만 가능합니다.");const p=mkPlayer("새 선수","MF");setDb(prev=>({...prev,players:[p,...(prev.players||[])]}));setSelectedPlayerId(p.id);notify("새 선수를 추가했습니다.");try{await upsertPlayer(p)}catch(e){logger.error(e)}}
+  async function handleCreatePlayer(){if(!isAdmin)return notify(t('auth.adminOnly'));const p=mkPlayer(t('player.newPlayer'),"MF");setDb(prev=>({...prev,players:[p,...(prev.players||[])]}));setSelectedPlayerId(p.id);notify(t('player.playerAdded'));try{await upsertPlayer(p)}catch(e){logger.error(e)}}
 
   // ✅ 모달에서 넘어온 patch를 그대로 저장(OVR=50 초기화 문제 해결)
   async function handleCreatePlayerFromModal(patch){
-    if(!isAdmin) return notify("Admin만 가능합니다.");
-    const base = mkPlayer(patch?.name || "새 선수", patch?.position || "");
+    if(!isAdmin) return notify(t('auth.adminOnly'));
+    const base = mkPlayer(patch?.name || t('player.newPlayer'), patch?.position || "");
     const playerToSave = {
       ...base,
       ...patch,
@@ -872,18 +875,18 @@ export default function App(){
   <div className={`min-h-screen bg-stone-100 text-stone-800 antialiased leading-relaxed w-full max-w-full overflow-x-auto ${
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && new URLSearchParams(window.location.search).has('nomock') ? 'pt-[50px]' : ''
   }`}>
-    <ToastHub/>
-    <ProdDataWarning />
+  <ToastHub/>
+  <ProdDataWarning />
     {/* 개발 모드 표시 배너 (localhost) */}
     {isDev && !previewMode && (
       <div className="bg-blue-500 text-white text-center py-1 px-4 text-xs font-medium sticky top-0 z-[201]">
-        🚧 개발 모드 (localhost) - 방문자 추적 비활성화됨
+        🚧 {t('dev.mode')} (localhost) - {t('dev.modeDesc')}
       </div>
     )}
     {/* 프리뷰 모드 표시 배너 */}
     {previewMode && (
       <div className="bg-amber-500 text-white text-center py-1 px-4 text-xs font-medium sticky top-0 z-[201]">
-        🔍 프리뷰 모드 - 방문자 추적 비활성화됨
+        🔍 {t('dev.preview')} - {t('dev.previewDesc')}
       </div>
     )}
     <header className="sticky top-0 z-[50] border-b border-stone-300 bg-white/90 backdrop-blur-md backdrop-saturate-150 will-change-transform">
@@ -909,14 +912,15 @@ export default function App(){
             ))}
           </div>
           <div className="ml-2 sm:ml-3 pl-2 sm:pl-3 border-l border-stone-300 flex-shrink-0 relative z-10">
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
+              <LanguageSwitcher />
               {tutorialEnabled && <TutorialButton onClick={()=>setTutorialOpen(true)}/>}
               {isAdmin?(
                 <>
                   <button
                     onClick={()=>setSettingsOpen(true)}
-                    aria-label="설정"
-                    title="설정"
+                    aria-label={t('common.settings')}
+                    title={t('common.settings')}
                     className="inline-flex items-center rounded-lg bg-stone-100 p-2.5 sm:p-3 text-sm font-semibold text-stone-700 shadow-sm hover:bg-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-400 min-h-[42px] min-w-[42px] sm:min-h-[44px] sm:min-w-[44px] touch-manipulation transition-all duration-200 active:scale-95"
                     style={{touchAction: 'manipulation'}}
                   >
@@ -924,8 +928,8 @@ export default function App(){
                   </button>
                   <button
                     onClick={adminLogout}
-                    aria-label="Admin 로그아웃"
-                    title="Admin 로그아웃"
+                    aria-label={t('auth.logout')}
+                    title={t('auth.logout')}
                     className="inline-flex items-center rounded-lg bg-stone-900 p-2.5 sm:p-3 text-sm font-semibold text-white shadow-sm hover:bg-stone-800 focus:outline-none focus:ring-2 focus:ring-stone-400 min-h-[42px] min-w-[42px] sm:min-h-[44px] sm:min-w-[44px] touch-manipulation transition-all duration-200 active:scale-95"
                     style={{touchAction: 'manipulation'}}
                   >
@@ -935,8 +939,8 @@ export default function App(){
               ):(
                 <button
                   onClick={()=>setLoginOpen(true)}
-                  aria-label="Admin 로그인"
-                  title="Admin 로그인"
+                  aria-label={t('auth.login')}
+                  title={t('auth.login')}
                   className="inline-flex items-center rounded-lg border border-stone-300 bg-gradient-to-r from-emerald-500 to-emerald-600 p-2.5 sm:p-3 text-sm font-semibold text-white shadow-sm hover:from-emerald-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 min-h-[42px] min-w-[42px] sm:min-h-[44px] sm:min-w-[44px] touch-manipulation transition-all duration-200 active:scale-95"
                   style={{touchAction: 'manipulation'}}
                 >
@@ -951,7 +955,7 @@ export default function App(){
 
     <main className="mx-auto max-w-6xl p-4">
       {showAuthError ? (
-        <Suspense fallback={<div className="py-16 text-center text-sm text-stone-500">링크 정보를 불러오는 중...</div>}>
+        <Suspense fallback={<div className="py-16 text-center text-sm text-stone-500">{t('skeleton.authError')}</div>}>
           <AuthLinkErrorPage 
             error={authError.error}
             errorCode={authError.errorCode}
@@ -961,25 +965,25 @@ export default function App(){
           />
         </Suspense>
       ) : showInviteSetup ? (
-        <Suspense fallback={<div className="py-16 text-center text-sm text-stone-500">초대 설정 페이지 로딩 중...</div>}>
+        <Suspense fallback={<div className="py-16 text-center text-sm text-stone-500">{t('skeleton.invite')}</div>}>
           <InviteSetupPage onComplete={handleInviteComplete} />
         </Suspense>
       ) : loadError ? (
         <div className="flex min-h-[40vh] flex-col items-center justify-center rounded-2xl border border-amber-200 bg-white p-6 text-center shadow-md">
-          <h2 className="text-lg font-semibold text-stone-900">앱 로딩에 문제가 생겼어요</h2>
+          <h2 className="text-lg font-semibold text-stone-900">{t('error.loadFailed')}</h2>
           <p className="text-sm text-stone-600 mt-2 whitespace-pre-line">{loadError}</p>
           <div className="mt-4 flex flex-wrap justify-center gap-3">
             <button
               onClick={handleRetryLoading}
               className="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
             >
-              다시 시도하기
+              {t('common.retryLoading')}
             </button>
             <button
               onClick={() => window.location.reload()}
               className="inline-flex items-center justify-center rounded-lg border border-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 transition hover:border-stone-300"
             >
-              창 새로고침
+              {t('common.refreshWindow')}
             </button>
           </div>
         </div>
@@ -1044,32 +1048,32 @@ export default function App(){
                 />
               )}
               {tab==="planner"&&isAdmin&&featuresEnabled.planner&&(
-                <Suspense fallback={<div className="p-6 text-sm text-stone-500">매치 플래너를 불러오는 중...</div>}>
+                <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.planner')}</div>}>
                   <MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch} membershipSettings={db.membershipSettings||[]}/>
                 </Suspense>
               )}
               {tab==="draft"&&isAdmin&&featuresEnabled.draft&&(
-                <Suspense fallback={<div className="p-6 text-sm text-stone-500">드래프트 보드를 불러오는 중...</div>}>
+                <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.draft')}</div>}>
                   <DraftPage players={players} upcomingMatches={db.upcomingMatches} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>
                 </Suspense>
               )}
               {tab==="formation"&&featuresEnabled.formation&&(
-                <Suspense fallback={<div className="p-6 text-sm text-stone-500">포메이션 보드를 불러오는 중...</div>}>
+                <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.formation')}</div>}>
                   <FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>
                 </Suspense>
               )}
               {tab==="stats"&&isAdmin&&featuresEnabled.stats&&(
-                <Suspense fallback={<div className="p-6 text-sm text-stone-500">기록 입력 페이지를 불러오는 중...</div>}>
+                <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.stats')}</div>}>
                   <StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>
                 </Suspense>
               )}
                 {tab==="accounting"&&isAdmin&&featuresEnabled.accounting&&(
-                  <Suspense fallback={<div className="p-6 text-sm text-stone-500">회계 페이지를 불러오는 중...</div>}>
+                  <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.accounting')}</div>}>
                     <AccountingPage players={players} matches={matches} upcomingMatches={db.upcomingMatches} isAdmin={isAdmin}/>
                   </Suspense>
                 )}
               {tab==="analytics"&&isAdmin&&featuresEnabled.analytics&&(
-                <Suspense fallback={<div className="p-6 text-sm text-stone-500">분석 페이지를 불러오는 중...</div>}>
+                <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.analytics')}</div>}>
                   <AnalyticsPage visits={visits} isAdmin={isAnalyticsAdmin}/>
                 </Suspense>
               )}
@@ -1199,6 +1203,7 @@ const PageSkeleton = React.memo(function PageSkeleton({ tab }) {
 
 /* ── Settings Dialog ─────────────────── */
 function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,onTutorialToggle,featuresEnabled,onFeatureToggle,onLeaderboardToggle,isAdmin,isAnalyticsAdmin,visits}){
+  const { t } = useTranslation()
   const[newTitle,setNewTitle]=useState(appTitle)
   const[titleEditMode,setTitleEditMode]=useState(false)
   
@@ -1214,22 +1219,22 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
       if(updateAppTitle(newTitle.trim())){
         onTitleChange(newTitle.trim())
         setTitleEditMode(false)
-        notify("앱 타이틀이 변경되었습니다.","success")
+        notify(t('settings.titleChanged'),"success")
       }else{
-        notify("타이틀 변경에 실패했습니다.","error")
+        notify(t('settings.titleChangeFailed'),"error")
       }
     }
   }
   
   const featureLabels = {
-    players: '선수 관리',
-    planner: '매치 플래너',
-    draft: '드래프트',
-    formation: '포메이션 보드',
-    stats: '기록 입력',
+    players: t('nav.players'),
+    planner: t('nav.planner'),
+    draft: t('nav.draft'),
+    formation: t('nav.formation'),
+    stats: t('nav.stats'),
     mom: 'MOM 투표/리더보드',
-    accounting: '회계',
-    analytics: '방문자 분석'
+    accounting: t('nav.accounting'),
+    analytics: t('nav.analytics')
   }
   const leaderboardLabels = {
     pts: 'AP(공격포인트)',
@@ -1246,7 +1251,7 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
   return(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
       <div className="relative w-full max-w-md rounded-2xl border border-stone-200 bg-white shadow-xl max-h-[90vh] overflow-y-auto">
-        <button className="absolute right-3 top-3 rounded-md p-1 text-stone-500 hover:bg-stone-100" onClick={onClose} aria-label="닫기">
+        <button className="absolute right-3 top-3 rounded-md p-1 text-stone-500 hover:bg-stone-100" onClick={onClose} aria-label={t('common.close')}>
           <X size={18}/>
         </button>
         <div className="flex items-center gap-3 border-b border-stone-200 px-5 py-4">
@@ -1254,17 +1259,17 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
             <Settings size={20}/>
           </div>
           <div>
-            <h3 className="text-base font-semibold">앱 설정</h3>
-            <p className="text-xs text-stone-500">앱 타이틀, 튜토리얼 및 기능 설정을 관리합니다.</p>
+            <h3 className="text-base font-semibold">{t('settings.title')}</h3>
+            <p className="text-xs text-stone-500">{t('settings.description')}</p>
           </div>
         </div>
         <div className="space-y-4 px-5 py-4">
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="block text-sm font-medium text-stone-700">앱 타이틀</label>
+              <label className="block text-sm font-medium text-stone-700">{t('settings.appTitle')}</label>
               {!titleEditMode && (
                 <button onClick={()=>setTitleEditMode(true)} className="text-xs text-emerald-600 hover:text-emerald-700 font-medium">
-                  수정
+                  {t('common.edit')}
                 </button>
               )}
             </div>

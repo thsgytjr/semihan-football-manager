@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react'
 import InitialAvatar from './InitialAvatar'
 import { getMembershipBadge } from '../lib/membershipConfig'
+import { useTranslation } from 'react-i18next'
 
 export function MoMLeaderboard({
   countsByPlayer = {},
@@ -9,6 +10,7 @@ export function MoMLeaderboard({
   onToggle,
   customMemberships = [],
 }) {
+  const { t } = useTranslation()
   const playerMap = useMemo(() => {
     const map = new Map()
     players.forEach(player => {
@@ -46,7 +48,7 @@ export function MoMLeaderboard({
   if (rows.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-stone-200 bg-white px-4 py-8 text-center text-sm text-stone-500">
-        아직 MOM 수상 기록이 없습니다.
+        {t('mom.leaderboard.empty')}
       </div>
     )
   }
@@ -57,13 +59,13 @@ export function MoMLeaderboard({
     <div className="overflow-hidden rounded-2xl border border-amber-100 bg-white shadow-sm">
       <div className="flex items-center justify-between border-b border-amber-100 px-4 py-3">
         <div className="text-sm font-semibold text-stone-800">
-          MOM 누적 랭킹 <span className="text-xs font-normal text-stone-500">(선수 {totalPlayers}명)</span>
+          {t('mom.leaderboard.title')} <span className="text-xs font-normal text-stone-500">({t('leaderboard.totalPlayers')} {totalPlayers})</span>
         </div>
         <button
           onClick={() => onToggle?.()}
           className="text-xs font-semibold text-amber-600 hover:text-amber-700"
         >
-          {showAll ? '상위만 보기' : '전체 보기'}
+          {showAll ? t('leaderboard.collapse') : t('leaderboard.viewAll')}
         </button>
       </div>
       <ul className="divide-y divide-amber-50">
@@ -81,11 +83,11 @@ export function MoMLeaderboard({
                 badgeInfo={getMembershipBadge(row.membership, customMemberships)}
               />
               <div>
-                <div className="text-sm font-semibold text-stone-900">{row.name}</div>
-                <div className="text-xs text-stone-500">누적 {row.count}회 수상</div>
+                <div className="text-sm font-semibold text-stone-900 notranslate" translate="no">{row.name}</div>
+                <div className="text-xs text-stone-500">{t('mom.leaderboard.awardCount', { count: row.count })}</div>
               </div>
             </div>
-            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">{row.count}회</span>
+            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">{t('mom.leaderboard.countBadge', { count: row.count })}</span>
           </li>
         ))}
       </ul>

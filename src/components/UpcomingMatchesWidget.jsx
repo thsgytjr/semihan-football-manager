@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import ConfirmDialog from './ConfirmDialog'
 import UpcomingMatchCard from './UpcomingMatchCard'
 import { updateMatchStatus, convertToRegularMatch, filterExpiredMatches } from '../lib/upcomingMatch'
@@ -12,11 +13,12 @@ export default function UpcomingMatchesWidget({
   onUpdateUpcomingMatch,
   onShowTeams // 팀 보기 버튼 클릭 시 콜백
 }) {
+  const { t } = useTranslation()
   const [isMinimized, setIsMinimized] = useState(true)
   const [hasBounced, setHasBounced] = useState(false)
   const [notificationCleared, setNotificationCleared] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState({ open: false, id: null })
-  const [alertState, setAlertState] = useState({ open: false, title: '안내', message: '' })
+  const [alertState, setAlertState] = useState({ open: false, title: t('upcoming.info'), message: '' })
   // Removed opening animation state
   
   // 실시간으로 만료된 매치들을 필터링
@@ -193,7 +195,7 @@ export default function UpcomingMatchesWidget({
                 <circle cx="12" cy="16" r="2" fill="currentColor"/>
               </svg>
             </span>
-            <span>예정된 매치</span>
+            <span>{t('match.upcoming')}</span>
           </h3>
           <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
             <span 
@@ -206,7 +208,7 @@ export default function UpcomingMatchesWidget({
                 color: '#1d4ed8'
               }}
             >
-              {activeMatches.length}개
+              {t('upcoming.count', { count: activeMatches.length })}
             </span>
             <button
               onClick={() => setIsMinimized(true)}
@@ -222,7 +224,7 @@ export default function UpcomingMatchesWidget({
                 justifyContent: 'center',
                 transition: 'color 0.2s ease'
               }}
-              title="최소화"
+              title={t('upcoming.minimize')}
               onMouseEnter={(e) => e.target.style.color = '#374151'}
               onMouseLeave={(e) => e.target.style.color = '#6b7280'}
             >
@@ -262,7 +264,7 @@ export default function UpcomingMatchesWidget({
                 }}
                 onCreateMatch={(match) => {
                   const regularMatch = convertToRegularMatch(match)
-                  setAlertState({ open: true, title: '안내', message: '매치 생성 기능은 MatchPlanner에서 "불러오기" 버튼을 사용하세요!' })
+                  setAlertState({ open: true, title: t('upcoming.info'), message: t('upcoming.createMatchInfo') })
                 }}
                 onUpdateCaptains={(match, updatedMatch) => {
                   // updatedMatch에 captainIds가 포함되어 있음
@@ -276,10 +278,10 @@ export default function UpcomingMatchesWidget({
       )}
       <ConfirmDialog
         open={confirmDelete.open}
-        title="예정된 매치 삭제"
-        message={'정말로 이 예정된 매치를 삭제하시겠습니까?'}
-        confirmLabel="삭제하기"
-        cancelLabel="취소"
+        title={t('upcoming.deleteTitle')}
+        message={t('upcoming.deleteMessage')}
+        confirmLabel={t('upcoming.delete')}
+        cancelLabel={t('upcoming.cancel')}
         tone="danger"
         onCancel={() => setConfirmDelete({ open: false, id: null })}
         onConfirm={() => {
@@ -291,10 +293,10 @@ export default function UpcomingMatchesWidget({
         open={alertState.open}
         title={alertState.title}
         message={alertState.message}
-        confirmLabel="확인"
+        confirmLabel={t('upcoming.ok')}
         cancelLabel={null}
         tone="default"
-        onConfirm={() => setAlertState({ open: false, title: '안내', message: '' })}
+        onConfirm={() => setAlertState({ open: false, title: t('upcoming.info'), message: '' })}
       />
     </div>
   )

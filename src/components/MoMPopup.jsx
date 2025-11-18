@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import Card from './Card'
 import InitialAvatar from './InitialAvatar'
 import { getCountdownParts } from '../lib/momUtils'
+import { useTranslation } from 'react-i18next'
 
 export function MoMPopup({
   match,
@@ -17,18 +18,22 @@ export function MoMPopup({
   onSubmit,
   error,
 }) {
+  const { t, i18n } = useTranslation()
   const [selected, setSelected] = React.useState('')
   const [voterName, setVoterName] = React.useState('')
   const [viewAll, setViewAll] = React.useState(false)
 
   const selectList = viewAll || recommended.length === 0 ? roster : recommended
-  const totalVotesLabel = totalVotes > 0 ? `${totalVotes}명이 참여했습니다` : '아직 투표가 없습니다'
+  const totalVotesLabel = totalVotes > 0
+    ? t('mom.popup.totalVotes', { count: totalVotes })
+    : t('mom.popup.noVotes')
 
   const voteDeadline = windowMeta?.voteEnd ? new Date(windowMeta.voteEnd) : null
 
   const formatDateTime = (date) => {
     if (!date || Number.isNaN(date.getTime())) return null
-    return date.toLocaleString('ko-KR', {
+    const locale = i18n.language === 'ko' ? 'ko-KR' : 'en-US'
+    return date.toLocaleString(locale, {
       month: 'long',
       day: 'numeric',
       weekday: 'short',
@@ -50,8 +55,6 @@ export function MoMPopup({
     if (fallback) setSelected(fallback)
   }, [recommended, roster, selected])
 
-  if (!match) return null
-
   React.useEffect(() => {
     if (!match || typeof document === 'undefined') return undefined
     const previous = document.body.style.overflow
@@ -62,10 +65,10 @@ export function MoMPopup({
   }, [match])
 
   const portalTarget = typeof document !== 'undefined' ? document.body : null
-  if (!portalTarget) return null
+  if (!portalTarget || !match) return null
 
   const list = selectList
-  const matchLabel = new Date(match.dateISO).toLocaleString('ko-KR', {
+  const matchLabel = new Date(match.dateISO).toLocaleString(i18n.language === 'ko' ? 'ko-KR' : 'en-US', {
     month: 'long',
     day: 'numeric',
     weekday: 'short',
@@ -84,10 +87,10 @@ export function MoMPopup({
         <Card className="w-full max-w-lg sm:max-w-xl border-2 border-amber-200 bg-white shadow-2xl flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-3xl min-h-[320px]">
           <div className="flex items-start justify-between gap-4 border-b border-amber-100 px-5 py-4">
               <div>
-                <div className="text-xs uppercase tracking-wide text-amber-600">오늘의 MOM 투표</div>
+                <div className="text-xs uppercase tracking-wide text-amber-600">{t('mom.popup.title')}</div>
                 <div className="text-lg font-bold text-stone-900">{matchLabel}</div>
                 <div className="text-sm text-stone-600">
-                  득점이 입력된 후 24시간 동안만 투표할 수 있어요.
+                  {t('mom.popup.subText')}
                 </div>
               </div>
             <button onClick={onClose} className="rounded-full p-2 text-stone-500 hover:bg-stone-100">✕</button>
@@ -95,21 +98,21 @@ export function MoMPopup({
 
           <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4 min-h-0">
             <div className="rounded-lg border border-stone-100 bg-stone-50 px-4 py-3 text-xs text-stone-600 flex flex-col gap-1">
-              <span className="font-semibold text-stone-700">총 참여 현황</span>
+              <span className="font-semibold text-stone-700">{t('mom.popup.summaryTitle')}</span>
               <span className="text-sm font-medium text-stone-900">{totalVotesLabel}</span>
               {voteDeadlineLabel && (
-                <span>투표 마감: {voteDeadlineLabel}</span>
+                <span>{t('mom.popup.deadline', { date: voteDeadlineLabel })}</span>
               )}
               {countdownLabel && (
                 <span className={`text-sm font-semibold ${countdown?.diffMs <= 5 * 60 * 1000 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                  남은 시간 {countdownLabel}
+                  {t('mom.popup.timeLeft', { label: i18n.language === 'ko' ? countdownLabel : countdownLabel?.replace('일', 'd') })}
                 </span>
               )}
             </div>
 
           {recommended.length > 0 && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-              <div className="text-xs font-semibold text-amber-700">추천 후보 (득점/도움 TOP 5)</div>
+              <div className="text-xs font-semibold text-amber-700">{t('mom.popup.recommended')}</div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {recommended.map(player => (
                   <button
@@ -122,7 +125,7 @@ export function MoMPopup({
                     }`}
                   >
                     <InitialAvatar id={player.id} name={player.name} size={24} photoUrl={player.photoUrl} />
-                    <span>{player.name}</span>
+                    <span className="notranslate" translate="no">{player.name}</span>
                   </button>
                 ))}
               </div>
@@ -131,22 +134,22 @@ export function MoMPopup({
 
           {alreadyVoted && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              이미 투표를 완료한 기록이 있어요. 결과는 리더보드에서 확인할 수 있습니다.
+              {t('mom.popup.alreadyVoted')}
             </div>
           )}
           <div>
             <div className="mb-2 flex items-center justify-between text-sm font-semibold text-stone-700">
-              <span>투표할 선수 선택</span>
+              <span>{t('mom.popup.selectPlayer')}</span>
               <button
                 className="text-xs text-amber-600 hover:text-amber-800"
                 onClick={() => setViewAll(v => !v)}
               >
-                {viewAll ? '추천만 보기' : '모든 선수 보기'}
+                {viewAll ? t('mom.popup.viewRecommended') : t('mom.popup.viewAll')}
               </button>
             </div>
             {list.length === 0 ? (
               <div className="rounded-lg border border-dashed border-stone-200 px-3 py-4 text-center text-sm text-stone-500">
-                참석자 명단을 불러오는 중이거나 아직 등록되지 않았습니다.
+                {t('mom.popup.loadingRoster')}
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-2 max-h-[320px] overflow-y-auto pr-1">
@@ -167,7 +170,7 @@ export function MoMPopup({
                     />
                     <InitialAvatar id={player.id} name={player.name} size={32} photoUrl={player.photoUrl} />
                     <div className="flex-1">
-                      <div className="font-semibold text-stone-800">{player.name}</div>
+                      <div className="font-semibold text-stone-800 notranslate" translate="no">{player.name}</div>
                     </div>
                   </label>
                 ))}
@@ -176,12 +179,12 @@ export function MoMPopup({
           </div>
 
           <div className="grid gap-2">
-            <label className="text-xs font-semibold text-stone-600">투표자 이름 (선택)</label>
+            <label className="text-xs font-semibold text-stone-600">{t('mom.popup.voterLabel')}</label>
             <input
               type="text"
               value={voterName}
               onChange={e => setVoterName(e.target.value)}
-              placeholder="익명으로 투표하려면 비워두세요"
+              placeholder={t('mom.popup.voterPlaceholder')}
               className="rounded-lg border border-stone-200 px-3 py-2 text-sm"
             />
           </div>
@@ -189,8 +192,8 @@ export function MoMPopup({
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {error.code === 'duplicate_vote'
-                ? '이미 투표를 완료했습니다. (동일 IP/디바이스 기준)'
-                : '투표 중 오류가 발생했습니다.'}
+                ? t('mom.popup.errorDuplicate')
+                : t('mom.popup.errorGeneric')}
             </div>
           )}
 
@@ -199,14 +202,14 @@ export function MoMPopup({
             onClick={() => onSubmit({ playerId: selected, voterLabel: voterName.trim() })}
             className="w-full rounded-lg bg-amber-500 py-3 text-center text-base font-semibold text-white shadow-md transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {submitting ? '투표 중...' : alreadyVoted ? '이미 투표 완료' : '투표 제출하기'}
+            {submitting ? t('mom.popup.submitVoting') : alreadyVoted ? t('mom.popup.submitAlready') : t('mom.popup.submit')}
           </button>
 
           <div className="rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600">
-            • 1회만 투표할 수 있습니다.<br />
-            • 추천 후보는 골/어시 합계 Top5 기준이며, 참석자 누구에게나 투표할 수 있습니다.<br />
-            • 이미 투표한 경우 동일 IP/디바이스에서는 다시 표시되지 않습니다.<br />
-            • 득표가 동률이면 골/어시 기록이 더 좋은 선수가 자동으로 선정됩니다.
+            • {t('mom.popup.rule1')}<br />
+            • {t('mom.popup.rule2')}<br />
+            • {t('mom.popup.rule3')}<br />
+            • {t('mom.popup.rule4')}
           </div>
         </div>
       </Card>

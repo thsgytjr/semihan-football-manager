@@ -1,5 +1,6 @@
 // src/components/SavedMatchesList.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react"
+import { useTranslation } from 'react-i18next'
 import ConfirmDialog from './ConfirmDialog'
 import InitialAvatar from "./InitialAvatar"
 import { overall } from "../lib/players"
@@ -665,6 +666,7 @@ function VideoAdder({ onAdd }){
 
 /* 빠른 출석 편집(드래프트만 수정) */
 function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMemberships }){
+  const { t } = useTranslation()
   const [teamIdx,setTeamIdx]=useState(0),[q,setQ]=useState(""),[open,setOpen]=useState(false),[hi,setHi]=useState(-1)
   const wrapRef=useRef(null), listRef=useRef(null)
   const cands=useMemo(()=>notInMatchPlayers(players,snapshot),[players,snapshot])
@@ -705,7 +707,7 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-xs text-gray-600">빠른 출석 편집</label>
         <select className="rounded border border-gray-300 bg-white px-2 py-1 text-xs" value={teamIdx} onChange={e=>setTeamIdx(Number(e.target.value))}>
-          {snapshot.map((_,i)=><option key={i} value={i}>팀 {i+1}</option>)}
+          {snapshot.map((_,i)=><option key={i} value={i}>{t('matchHistory.team')} {i+1}</option>)}
         </select>
         <div className="relative min-w-[220px] flex-1">
           <input className="w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm" placeholder="이름 검색 후 추가 (Enter)"
@@ -744,6 +746,7 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
 
 /* ------------------------- 매치 카드 ------------------------- */
 const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, onDeleteMatch, onUpdateMatch, onUpdateVideos, showTeamOVRForAdmin, hideOVR, latestDraftId, isHighlighted, customMemberships }, ref){
+  const { t } = useTranslation()
   const hydrated=useMemo(()=>hydrateMatch(m,players),[m,players])
   const initialSnap=useMemo(()=>normalizeSnapshot(m,hydrated.teams||[]),[m,hydrated.teams])
   const [draftSnap,setDraftSnap]=useState(initialSnap), [dirty,setDirty]=useState(false)
@@ -1056,7 +1059,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
         {/* 요금 표시: 구장비 미사용 매치(feesDisabled) 또는 total 0이면 숨김 */}
         {!(m.feesDisabled || (fees?.total ?? 0) === 0) ? (
           <>
-            {m.teamCount}팀 ·💰총액 ${fees?.total??0}
+            {m.teamCount}{t('matchHistory.teams')} ·💰{t('matchHistory.totalFees')} ${fees?.total??0}
             {typeof fees?.memberFee==="number" && (
               <> · 정회원 ${fees.memberFee}/인</>
             )}
@@ -1329,15 +1332,15 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   <div className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-500 text-white text-xs font-bold">
                     🏆
                   </div>
-                  <span className="text-xs font-bold text-blue-900">경기 결과</span>
+                  <span className="text-xs font-bold text-blue-900">{t('matchHistory.matchResults')}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   {isThreeTeams && (()=>{
                     const unequal = currentStats.some(s=>s.gp!==currentStats[0].gp)
                     const minGames = unequal ? Math.min(...currentStats.map(s=>s.gp)) : 0
                     return unequal ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-purple-300 bg-purple-50 px-2 py-0.5 text-[10px] text-purple-800" title={`팀별 경기수가 달라 가중 승점 적용: 각 팀의 최고 성적 ${minGames}경기만 비교`}>
-                        가중 승점 적용
+                      <span className="inline-flex items-center gap-1 rounded-full border border-purple-300 bg-purple-50 px-2 py-0.5 text-[10px] text-purple-800" title={t('matchHistory.weightedPointsTooltip', { minGames })}>
+                        {t('matchHistory.weightedPoints')}
                       </span>
                     ) : null
                   })()}
@@ -1349,11 +1352,11 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                         // 구장별로 승자 표시
                         const field1Leaders = leaders.filter(i => currentStats[i]?.fieldName === '구장1')
                         const field2Leaders = leaders.filter(i => currentStats[i]?.fieldName === '구장2')
-                        const f1Text = field1Leaders.length > 1 ? '동률' : `팀${field1Leaders[0] + 1}`
-                        const f2Text = field2Leaders.length > 1 ? '동률' : `팀${field2Leaders[0] + 1}`
-                        return `🏆 구장1: ${f1Text} | 구장2: ${f2Text}`
+                        const f1Text = field1Leaders.length > 1 ? t('matchHistory.tied') : `${t('matchHistory.team')} ${field1Leaders[0] + 1}`
+                        const f2Text = field2Leaders.length > 1 ? t('matchHistory.tied') : `${t('matchHistory.team')} ${field2Leaders[0] + 1}`
+                        return `🏆 ${t('matchHistory.fieldN',{n:1})}: ${f1Text} | ${t('matchHistory.fieldN',{n:2})}: ${f2Text}`
                       }
-                      return leaders.length > 1 ? '동률!' : `팀${leaders[0] + 1} 승리`
+                      return leaders.length > 1 ? `${t('matchHistory.tied')}!` : `${t('matchHistory.team')}${leaders[0] + 1} ${t('matchHistory.victory')}`
                     })()}
                   </div>
                 </div>
@@ -1387,16 +1390,16 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                                 >
                                   <div className="flex items-center gap-2">
                                     <span className={`text-sm font-bold ${isLeader ? 'text-amber-900' : 'text-gray-700'}`}>
-                                      팀 {ti + 1}
+                                      {t('matchHistory.team')} {ti + 1}
                                     </span>
                                     {isLeader && <span className="text-base">🏆</span>}
                                   </div>
                                   
                                   <div className="flex items-center gap-3">
                                     <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
-                                      승점 {score.totalPoints}
+                                      {t('matchHistory.points')} {score.totalPoints}
                                     </span>
-                                    <span className="text-xs text-gray-600">총 {score.total}골</span>
+                                    <span className="text-xs text-gray-600">{t('matchHistory.totalGoals',{count: score.total})}</span>
                                   </div>
                                 </div>
                               )
@@ -1406,7 +1409,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                         
                         {/* 구장2 */}
                         <div>
-                          <div className="text-xs font-bold text-indigo-700 mb-1.5 px-2">🏟️ 구장 2</div>
+                          <div className="text-xs font-bold text-indigo-700 mb-1.5 px-2">🏟️ {t('matchHistory.fieldN',{n:2})}</div>
                           <div className="space-y-1">
                             {field2Teams.map(({ index: ti, ...score }) => {
                               const isLeader = leaders.includes(ti)
@@ -1421,16 +1424,16 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                                 >
                                   <div className="flex items-center gap-2">
                                     <span className={`text-sm font-bold ${isLeader ? 'text-amber-900' : 'text-gray-700'}`}>
-                                      팀 {ti + 1}
+                                      {t('matchHistory.team')} {ti + 1}
                                     </span>
                                     {isLeader && <span className="text-base">🏆</span>}
                                   </div>
                                   
                                   <div className="flex items-center gap-3">
                                     <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
-                                      승점 {score.totalPoints}
+                                      {t('matchHistory.points')} {score.totalPoints}
                                     </span>
-                                    <span className="text-xs text-gray-600">총 {score.total}골</span>
+                                    <span className="text-xs text-gray-600">{t('matchHistory.totalGoals',{count: score.total})}</span>
                                   </div>
                                 </div>
                               )
@@ -1456,7 +1459,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       >
                         <div className="flex items-center gap-2">
                           <span className={`text-sm font-bold ${isLeader ? 'text-amber-900' : 'text-gray-700'}`}>
-                            팀 {ti + 1}
+                            {t('matchHistory.team')} {ti + 1}
                           </span>
                           {isLeader && <span className="text-base">🏆</span>}
                         </div>
@@ -1465,11 +1468,11 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                           {isThreeTeams || (score.totalPoints !== undefined) ? (
                             <>
                               <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
-                                승점 {score.totalPoints}
+                                {t('matchHistory.points')} {score.totalPoints}
                               </span>
                               {score.gp && (currentStats.some(s=>s.gp!==currentStats[0].gp)) && (
-                                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-purple-100 text-purple-700" title={`${score.gp}경기 중 최고 성적 ${score.minGames}경기 = ${score.weightedPoints}점`}>
-                                  가중 {score.weightedPoints}점
+                                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-purple-100 text-purple-700" title={t('matchHistory.weightedCalc', { gp: score.gp, minGames: score.minGames, weightedPoints: score.weightedPoints })}>
+                                  {t('matchHistory.weightedShort', { points: score.weightedPoints })}
                                 </span>
                               )}
                             </>
@@ -1479,10 +1482,10 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                               (score.bestDiff ?? 0) < 0 ? 'bg-red-100 text-red-700' :
                               'bg-gray-100 text-gray-600'
                             }`}>
-                              골득실 {(score.bestDiff ?? 0) > 0 ? '+' : ''}{((score.bestDiff ?? 0)).toFixed(1)}
+                              {t('matchHistory.goalDiff')} {(score.bestDiff ?? 0) > 0 ? '+' : ''}{((score.bestDiff ?? 0)).toFixed(1)}
                             </span>
                           )}
-                          <span className="text-xs text-gray-600">총 {score.total}골</span>
+                          <span className="text-xs text-gray-600">{t('matchHistory.totalGoals',{count: score.total})}</span>
                         </div>
                       </div>
                     )
@@ -1493,9 +1496,9 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               <div className="mt-2 text-[10px] text-blue-600 text-center">
                 {isThreeTeams || (currentStats[0]?.totalPoints !== undefined)
                   ? (currentStats.some(s=>s.gp!==currentStats[0].gp)
-                      ? `💡 팀별 경기수가 다르면 각 팀의 최고 성적 ${currentStats[0].minGames}경기만 비교 (가중 승점)`
-                      : '💡 승점(승3·무1·패0)으로 승자를 결정합니다')
-                  : '💡 각 팀의 최고 골득실로 승자를 결정합니다'}
+                      ? t('matchHistory.weightedPointsInfo', { minGames: currentStats[0].minGames })
+                      : t('matchHistory.pointsSystemInfo'))
+                  : t('matchHistory.goalDiffInfo')}
               </div>
               {(isThreeTeams || currentStats[0]?.totalPoints !== undefined) && currentStats.some(s=>s.gp!==currentStats[0].gp) && (
                 <div className="mt-1 text-[10px] text-purple-700 text-center font-medium">
@@ -3099,6 +3102,7 @@ export default function SavedMatchesList({
   highlightedMatchId=null, // 하이라이트할 매치 ID
   customMemberships=[] // 커스텀 멤버십 설정
 }){
+  const { t } = useTranslation()
   const highlightedMatchRef = useRef(null)
   const ordered = useMemo(()=>matches.slice().sort((a,b)=>_ts(b)-_ts(a)),[matches])
   // ✅ 가장 최신 draft 매치의 ID를 계산

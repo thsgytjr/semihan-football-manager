@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { getCountdownParts } from '../lib/momUtils'
 import InitialAvatar from './InitialAvatar'
+import { useTranslation } from 'react-i18next'
 
 const FIVE_MINUTES_MS = 5 * 60 * 1000
 
@@ -19,6 +20,7 @@ const computeCountdownState = (deadlineTs) => {
 }
 
 export function MoMNoticeWidget({ notice, onOpenMoM, onAlreadyVoted }) {
+  const { t, i18n } = useTranslation()
   const [isMinimized, setIsMinimized] = useState(true)
   const [hasBounced, setHasBounced] = useState(false)
   const [countdownState, setCountdownState] = useState(() => computeCountdownState(notice?.deadlineTs))
@@ -45,12 +47,17 @@ export function MoMNoticeWidget({ notice, onOpenMoM, onAlreadyVoted }) {
   }
 
   const urgent = countdownState?.urgent ?? notice.urgent
-  const badgeText = countdownState?.badge ?? '마감'
-  const longCountdown = countdownState?.label ?? notice.countdownLabel
+  const badgeText = countdownState?.badge ?? t('mom.notice.badgeDeadline')
+  let longCountdown = countdownState?.label ?? notice.countdownLabel
+  if (longCountdown && i18n.language !== 'ko') {
+    longCountdown = longCountdown.replace('일', 'd')
+  }
   const canVote = Boolean(notice?.canVote)
   const alreadyVoted = Boolean(notice?.alreadyVoted)
 
-  const ctaLabel = canVote ? '투표하러 가기' : (alreadyVoted ? '투표 완료' : '결과 확인하기')
+  const ctaLabel = canVote
+    ? t('mom.notice.ctaVote')
+    : (alreadyVoted ? t('mom.notice.ctaVoted') : t('mom.notice.ctaAnnounce'))
 
   const handleCtaClick = () => {
     if (canVote) {
@@ -162,14 +169,14 @@ export function MoMNoticeWidget({ notice, onOpenMoM, onAlreadyVoted }) {
                 </svg>
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-amber-600">MoM 투표 안내</p>
+                <p className="text-xs font-semibold uppercase tracking-widest text-amber-600">{t('mom.notice.header')}</p>
                 <p className="text-base font-bold text-slate-900">{notice.matchLabel}</p>
               </div>
             </div>
             <button
               onClick={() => setIsMinimized(true)}
               className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
-              title="최소화"
+              title={t('upcoming.minimize')}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="6,9 12,15 18,9"></polyline>
@@ -178,16 +185,16 @@ export function MoMNoticeWidget({ notice, onOpenMoM, onAlreadyVoted }) {
           </div>
           <div className="space-y-4 px-5 py-4">
             <div className={`rounded-2xl border px-4 py-3 text-sm ${urgent ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
-              <span className="font-semibold">남은 시간</span>
+              <span className="font-semibold">{t('mom.notice.timeLeftLabel')}</span>
               <span className="ml-2 font-mono text-base">{longCountdown}</span>
             </div>
             <div className="rounded-2xl border border-amber-100 bg-amber-50/60 p-4 shadow-inner">
-              <div className="text-xs font-semibold uppercase tracking-wide text-amber-600">참여 현황</div>
+              <div className="text-xs font-semibold uppercase tracking-wide text-amber-600">{t('mom.notice.participation')}</div>
               <div className="mt-1 text-3xl font-extrabold text-slate-900">{notice.totalVotes ?? 0}</div>
-              <div className="text-xs text-slate-500">명이 투표에 참여했어요.</div>
+              <div className="text-xs text-slate-500">{t('mom.notice.votedSuffix')}</div>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">현재 순위</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{t('mom.notice.currentRanking')}</p>
               {memoizedLeaders.length > 0 ? (
                 <div className="mt-2 space-y-2">
                   {memoizedLeaders.map((leader, idx) => (
@@ -203,15 +210,15 @@ export function MoMNoticeWidget({ notice, onOpenMoM, onAlreadyVoted }) {
                           size={32}
                           photoUrl={leader.photoUrl}
                         />
-                        <span>{leader.name}</span>
+                        <span className="notranslate" translate="no">{leader.name}</span>
                       </div>
-                      <span className="text-xs text-slate-500">{leader.votes ?? 0}표</span>
+                      <span className="text-xs text-slate-500">{t('mom.notice.votesLabel', { count: leader.votes ?? 0 })}</span>
                     </div>
                   ))}
                 </div>
               ) : (
                 <div className="mt-2 rounded-2xl border border-dashed border-slate-200 px-3 py-2 text-xs text-slate-500">
-                  아직 집계 중이에요. 잠시 후에 다시 확인해 주세요.
+                  {t('mom.notice.counting')}
                 </div>
               )}
             </div>

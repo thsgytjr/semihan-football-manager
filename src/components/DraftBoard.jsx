@@ -104,7 +104,9 @@ export default function DraftBoard({
               <div>
                 <p className="text-sm text-gray-600">현재 턴</p>
                 <p className="text-xl font-bold text-gray-900">
-                  {currentTurn === 'captain1' ? captain1?.name : captain2?.name} 주장
+                  <span className="notranslate" translate="no">
+                    {currentTurn === 'captain1' ? captain1?.name : captain2?.name}
+                  </span>{' '}주장
                 </p>
                 <p className="text-xs text-gray-500">
                   {pickCount}/{maxPicks} 선택 완료 {isVeryFirstTurn && '(첫 턴: 1명만)'}
@@ -183,7 +185,7 @@ export default function DraftBoard({
                   1
                 </div>
                 <div>
-                  <p className="font-bold text-lg">{captain1?.name}</p>
+                  <p className="font-bold text-lg notranslate" translate="no">{captain1?.name}</p>
                   <p className="text-xs text-gray-500">
                     주장 {firstPick === 'captain1' && '(선공)'}
                   </p>
@@ -204,7 +206,7 @@ export default function DraftBoard({
                       badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate">{player.name}</p>
+                      <p className="font-semibold truncate notranslate" translate="no">{player.name}</p>
                       <p className="text-xs text-gray-500">{player.position}</p>
                     </div>
                     {idx === 0 ? (
@@ -245,7 +247,7 @@ export default function DraftBoard({
                   2
                 </div>
                 <div>
-                  <p className="font-bold text-lg">{captain2?.name}</p>
+                  <p className="font-bold text-lg notranslate" translate="no">{captain2?.name}</p>
                   <p className="text-xs text-gray-500">
                     주장 {firstPick === 'captain2' && '(선공)'}
                   </p>
@@ -266,7 +268,7 @@ export default function DraftBoard({
                       badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate">{player.name}</p>
+                      <p className="font-semibold truncate notranslate" translate="no">{player.name}</p>
                       <p className="text-xs text-gray-500">{player.position}</p>
                     </div>
                     {idx === 0 ? (
@@ -340,7 +342,7 @@ export default function DraftBoard({
                       badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
                     />
                     <div className="w-full text-center">
-                      <p className="font-semibold text-xs truncate leading-tight">{player.name}</p>
+                      <p className="font-semibold text-xs truncate leading-tight notranslate" translate="no">{player.name}</p>
                       <p className="text-[10px] text-gray-500 truncate">{player.position}</p>
                     </div>
                   </button>
@@ -365,7 +367,7 @@ export default function DraftBoard({
                 1
               </div>
               <div>
-                <p className="font-bold text-lg">{captain1?.name}</p>
+                <p className="font-bold text-lg notranslate" translate="no">{captain1?.name}</p>
                 <p className="text-xs text-gray-500">
                   주장 {firstPick === 'captain1' && '(선공)'}
                 </p>
@@ -386,7 +388,7 @@ export default function DraftBoard({
                     badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">{player.name}</p>
+                    <p className="font-semibold truncate notranslate" translate="no">{player.name}</p>
                     <p className="text-xs text-gray-500">{player.position}</p>
                   </div>
                   {idx === 0 && (
@@ -409,7 +411,7 @@ export default function DraftBoard({
                 2
               </div>
               <div>
-                <p className="font-bold text-lg">{captain2?.name}</p>
+                <p className="font-bold text-lg notranslate" translate="no">{captain2?.name}</p>
                 <p className="text-xs text-gray-500">
                   주장 {firstPick === 'captain2' && '(선공)'}
                 </p>
@@ -430,7 +432,7 @@ export default function DraftBoard({
                     badges={player.membership && player.membership.includes('게스트') ? ['G'] : []} 
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">{player.name}</p>
+                    <p className="font-semibold truncate notranslate" translate="no">{player.name}</p>
                     <p className="text-xs text-gray-500">{player.position}</p>
                   </div>
                   {idx === 0 && (

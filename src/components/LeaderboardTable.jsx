@@ -1,5 +1,6 @@
 // src/components/LeaderboardTable.jsx
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import InitialAvatar from './InitialAvatar'
 import Medal from './ranking/Medal'
 import FormDots from './ranking/FormDots'
@@ -40,6 +41,7 @@ export default function LeaderboardTable({
   renderRow,
   membershipSettings = []
 }) {
+  const { t } = useTranslation()
   const customMemberships = membershipSettings.length > 0 ? membershipSettings : []
   const data = showAll ? rows : rows.slice(0, 5)
   const totalPlayers = rows.length
@@ -52,7 +54,7 @@ export default function LeaderboardTable({
             <th colSpan={columns.length} className="border-b px-2 py-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="text-xs text-stone-600">
-                  {title} <span className="font-semibold">{totalPlayers}</span>명
+                  {title} <span className="font-semibold">{totalPlayers}</span>{t('leaderboard.playersCount')}
                 </div>
                 <div className="ml-auto">{controls}</div>
               </div>
@@ -85,7 +87,7 @@ export default function LeaderboardTable({
           {data.length === 0 && (
             <tr>
               <td className="px-3 py-4 text-sm text-stone-500" colSpan={columns.length}>
-                표시할 기록이 없습니다.
+                {t('leaderboard.noData')}
               </td>
             </tr>
           )}
@@ -147,8 +149,10 @@ export function PlayerNameCell({ id, name, isGuest, membership, tone, photoUrl, 
         </div>
         <div className="min-w-0 flex-1 overflow-x-auto scrollbar-hide">
           <span 
-            className="font-medium text-sm whitespace-nowrap" 
+            className="font-medium text-sm whitespace-nowrap notranslate" 
             title={name}
+            translate="no"
+            data-player-name
           >
             {name}
           </span>
