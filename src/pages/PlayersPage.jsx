@@ -1225,13 +1225,25 @@ export default function PlayersPage({
   const [statusFilter, setStatusFilter] = useState('all') // 'all' | 'active' | 'injured' | etc.
   const [positionFilter, setPositionFilter] = useState('all') // 'all' | 'GK' | 'DF' | 'MF' | 'FW'
   const [selectedTags, setSelectedTags] = useState([]) // 선택된 태그들
+  const [searchQuery, setSearchQuery] = useState('') // 검색어
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false) // 고급 필터 표시 여부
 
   const resetFilters = () => {
     setMembershipFilter('all')
     setStatusFilter('all')
     setPositionFilter('all')
     setSelectedTags([])
+    setSearchQuery('')
   }
+  
+  // 활성화된 필터 개수 계산
+  const activeFiltersCount = useMemo(() => {
+    let count = 0
+    if (statusFilter !== 'all') count++
+    if (positionFilter !== 'all') count++
+    if (selectedTags.length > 0) count++
+    return count
+  }, [statusFilter, positionFilter, selectedTags])
 
   // 커스텀 멤버십 (없으면 기본값)
   const customMemberships = membershipSettings.length > 0 ? membershipSettings : DEFAULT_MEMBERSHIPS
@@ -1343,9 +1355,17 @@ export default function PlayersPage({
     return arr
   }, [players, sortKey, sortDir])
 
-  // 멤버십, 상태, 포지션, 태그 필터 적용
+  // 멤버십, 상태, 포지션, 태그, 검색어 필터 적용
   const filtered = useMemo(() => {
     let result = sorted
+    
+    // 검색어 필터 (이름으로 검색)
+    if (searchQuery.trim()) {
+      const query = searchQuery.trim().toLowerCase()
+      result = result.filter(p => 
+        (p.name || '').toLowerCase().includes(query)
+      )
+    }
     
     // 멤버십 필터
     if (membershipFilter === 'member') {
@@ -1390,7 +1410,7 @@ export default function PlayersPage({
     }
     
     return result
-  }, [sorted, membershipFilter, statusFilter, positionFilter, selectedTags])
+  }, [sorted, searchQuery, membershipFilter, statusFilter, positionFilter, selectedTags])
 
   const counts = useMemo(() => {
     const total = players.length
@@ -1632,147 +1652,253 @@ export default function PlayersPage({
           })}
         </div>
 
-        {/* 상태, 포지션, 태그 필터 */}
-        <div className="mb-4 space-y-3">
-          {/* 상태 필터 */}
-          <div>
-            <label className="block text-xs font-semibold text-stone-700 mb-2">상태 필터</label>
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={() => setStatusFilter('all')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
-                  statusFilter === 'all'
-                    ? 'border-blue-500 bg-blue-500 text-white shadow-sm'
-                    : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
-                }`}
+        {/* 검색 & 필터 통합 바 */}
+        <div className="mb-6 space-y-3">
+          {/* 검색창 & 고급 필터 토글 */}
+          <div className="flex items-center gap-3">
+            <div className="flex-1 relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="선수 이름으로 검색..."
+                className="w-full pl-11 pr-10 py-3.5 text-sm border-2 border-stone-300 rounded-xl bg-white text-stone-900 placeholder-stone-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-100 transition-all outline-none shadow-sm"
+              />
+              <svg 
+                className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-stone-400"
+                fill="none" 
+                stroke="currentColor" 
+                viewBox="0 0 24 24"
               >
-                전체
-              </button>
-              {PLAYER_STATUS.map(status => {
-                const isActive = statusFilter === status.value
-                let buttonClass = 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
-                
-                if (isActive) {
-                  if (status.color === 'emerald') {
-                    buttonClass = 'border-emerald-500 bg-emerald-500 text-white shadow-sm'
-                  } else if (status.color === 'red') {
-                    buttonClass = 'border-red-500 bg-red-500 text-white shadow-sm'
-                  } else if (status.color === 'blue') {
-                    buttonClass = 'border-blue-500 bg-blue-500 text-white shadow-sm'
-                  } else if (status.color === 'amber') {
-                    buttonClass = 'border-amber-500 bg-amber-500 text-white shadow-sm'
-                  } else if (status.color === 'slate') {
-                    buttonClass = 'border-slate-500 bg-slate-500 text-white shadow-sm'
-                  } else {
-                    buttonClass = 'border-stone-500 bg-stone-500 text-white shadow-sm'
-                  }
-                }
-                
-                return (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-full hover:bg-stone-100 transition-colors"
+                  title="검색어 지우기"
+                >
+                  <svg className="w-4 h-4 text-stone-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            
+            {/* 고급 필터 토글 버튼 */}
+            <button
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className={`flex items-center gap-2 px-4 py-3.5 rounded-xl text-sm font-medium transition-all shadow-sm ${
+                showAdvancedFilters
+                  ? 'bg-emerald-500 text-white border-2 border-emerald-500'
+                  : activeFiltersCount > 0
+                  ? 'bg-blue-500 text-white border-2 border-blue-500'
+                  : 'bg-white text-stone-700 border-2 border-stone-300 hover:border-stone-400'
+              }`}
+              title={showAdvancedFilters ? '필터 숨기기' : '고급 필터 표시'}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+              <span className="hidden sm:inline">필터</span>
+              {activeFiltersCount > 0 && (
+                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-white text-blue-600 text-xs font-bold">
+                  {activeFiltersCount}
+                </span>
+              )}
+            </button>
+          </div>
+
+          {/* 고급 필터 패널 (접이식) */}
+          {showAdvancedFilters && (
+            <div className="bg-gradient-to-br from-stone-50 to-stone-100 rounded-xl border-2 border-stone-200 p-5 space-y-4 animate-slideDown">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-stone-900 flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                  </svg>
+                  고급 필터
+                </h3>
+                {activeFiltersCount > 0 && (
                   <button
-                    key={status.value}
-                    onClick={() => setStatusFilter(status.value)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${buttonClass}`}
+                    onClick={() => {
+                      setStatusFilter('all')
+                      setPositionFilter('all')
+                      setSelectedTags([])
+                    }}
+                    className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline"
                   >
-                    {status.label}
+                    필터 초기화
                   </button>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* 포지션 필터 */}
-          <div>
-            <label className="block text-xs font-semibold text-stone-700 mb-2">포지션 필터</label>
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                onClick={() => setPositionFilter('all')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
-                  positionFilter === 'all'
-                    ? 'border-blue-500 bg-blue-500 text-white shadow-sm'
-                    : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
-                }`}
-              >
-                전체
-              </button>
-              <button
-                onClick={() => setPositionFilter('GK')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
-                  positionFilter === 'GK'
-                    ? 'border-yellow-500 bg-yellow-500 text-white shadow-sm'
-                    : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
-                }`}
-              >
-                GK
-              </button>
-              <button
-                onClick={() => setPositionFilter('DF')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
-                  positionFilter === 'DF'
-                    ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm'
-                    : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
-                }`}
-              >
-                DF
-              </button>
-              <button
-                onClick={() => setPositionFilter('MF')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
-                  positionFilter === 'MF'
-                    ? 'border-cyan-500 bg-cyan-500 text-white shadow-sm'
-                    : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
-                }`}
-              >
-                MF
-              </button>
-              <button
-                onClick={() => setPositionFilter('FW')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
-                  positionFilter === 'FW'
-                    ? 'border-red-500 bg-red-500 text-white shadow-sm'
-                    : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
-                }`}
-              >
-                FW
-              </button>
-            </div>
-          </div>
-
-          {/* 태그 필터 */}
-          {allTags.length > 0 && (
-            <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-2">
-                태그 필터 
-                {selectedTags.length > 0 && (
-                  <span className="ml-2 text-[10px] font-normal text-blue-600">
-                    ({selectedTags.length}개 선택됨)
-                  </span>
                 )}
-              </label>
-              <div className="flex items-center gap-2 flex-wrap">
-                {allTags.map(tagName => {
-                  const isSelected = selectedTags.includes(tagName)
-                  return (
-                    <button
-                      key={tagName}
-                      onClick={() => {
-                        if (isSelected) {
-                          setSelectedTags(selectedTags.filter(t => t !== tagName))
-                        } else {
-                          setSelectedTags([...selectedTags, tagName])
-                        }
-                      }}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${
-                        isSelected
-                          ? 'border-blue-500 bg-blue-500 text-white shadow-sm'
-                          : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'
-                      }`}
-                    >
-                      {tagName}
-                    </button>
-                  )
-                })}
               </div>
+
+              {/* 상태 필터 */}
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-2">상태</label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => setStatusFilter('all')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border-2 transition-all ${
+                      statusFilter === 'all'
+                        ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm'
+                        : 'border-stone-300 bg-white text-stone-700 hover:border-stone-400'
+                    }`}
+                  >
+                    전체
+                  </button>
+                  {PLAYER_STATUS.map(status => {
+                    const isActive = statusFilter === status.value
+                    let buttonClass = 'border-stone-300 bg-white text-stone-700 hover:border-stone-400'
+                    
+                    if (isActive) {
+                      if (status.color === 'emerald') {
+                        buttonClass = 'border-emerald-500 bg-emerald-500 text-white shadow-sm'
+                      } else if (status.color === 'red') {
+                        buttonClass = 'border-red-500 bg-red-500 text-white shadow-sm'
+                      } else if (status.color === 'blue') {
+                        buttonClass = 'border-blue-500 bg-blue-500 text-white shadow-sm'
+                      } else if (status.color === 'amber') {
+                        buttonClass = 'border-amber-500 bg-amber-500 text-white shadow-sm'
+                      } else if (status.color === 'slate') {
+                        buttonClass = 'border-slate-500 bg-slate-500 text-white shadow-sm'
+                      } else {
+                        buttonClass = 'border-stone-500 bg-stone-500 text-white shadow-sm'
+                      }
+                    }
+                    
+                    return (
+                      <button
+                        key={status.value}
+                        onClick={() => setStatusFilter(status.value)}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-lg border-2 transition-all ${buttonClass}`}
+                      >
+                        {status.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* 포지션 필터 */}
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-2">포지션</label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => setPositionFilter('all')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border-2 transition-all ${
+                      positionFilter === 'all'
+                        ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm'
+                        : 'border-stone-300 bg-white text-stone-700 hover:border-stone-400'
+                    }`}
+                  >
+                    전체
+                  </button>
+                  <button
+                    onClick={() => setPositionFilter('GK')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border-2 transition-all ${
+                      positionFilter === 'GK'
+                        ? 'border-amber-500 bg-amber-500 text-white shadow-sm'
+                        : 'border-stone-300 bg-white text-stone-700 hover:border-stone-400'
+                    }`}
+                  >
+                    GK
+                  </button>
+                  <button
+                    onClick={() => setPositionFilter('DF')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border-2 transition-all ${
+                      positionFilter === 'DF'
+                        ? 'border-blue-500 bg-blue-500 text-white shadow-sm'
+                        : 'border-stone-300 bg-white text-stone-700 hover:border-stone-400'
+                    }`}
+                  >
+                    DF
+                  </button>
+                  <button
+                    onClick={() => setPositionFilter('MF')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border-2 transition-all ${
+                      positionFilter === 'MF'
+                        ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm'
+                        : 'border-stone-300 bg-white text-stone-700 hover:border-stone-400'
+                    }`}
+                  >
+                    MF
+                  </button>
+                  <button
+                    onClick={() => setPositionFilter('FW')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-lg border-2 transition-all ${
+                      positionFilter === 'FW'
+                        ? 'border-purple-500 bg-purple-500 text-white shadow-sm'
+                        : 'border-stone-300 bg-white text-stone-700 hover:border-stone-400'
+                    }`}
+                  >
+                    FW
+                  </button>
+                </div>
+              </div>
+
+              {/* 태그 필터 */}
+              {allTags.length > 0 && (
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-2">
+                    태그
+                    {selectedTags.length > 0 && (
+                      <span className="ml-2 text-[10px] font-normal text-blue-600">
+                        ({selectedTags.length}개 선택됨)
+                      </span>
+                    )}
+                  </label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {allTags.map(tagName => {
+                      const isSelected = selectedTags.includes(tagName)
+                      return (
+                        <button
+                          key={tagName}
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedTags(selectedTags.filter(t => t !== tagName))
+                            } else {
+                              setSelectedTags([...selectedTags, tagName])
+                            }
+                          }}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-lg border-2 transition-all ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-500 text-white shadow-sm'
+                              : 'border-stone-300 bg-white text-stone-700 hover:border-stone-400'
+                          }`}
+                        >
+                          {tagName}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* 검색 결과 요약 */}
+          {(searchQuery || activeFiltersCount > 0) && (
+            <div className="flex items-center gap-2 text-xs text-stone-600 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5">
+              <svg className="w-4 h-4 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="flex-1">
+                {searchQuery && (
+                  <span className="font-medium text-blue-900">"{searchQuery}"</span>
+                )}
+                {searchQuery && activeFiltersCount > 0 && <span> 및 </span>}
+                {activeFiltersCount > 0 && (
+                  <span className="font-medium text-blue-900">{activeFiltersCount}개 필터</span>
+                )}
+                {' '}검색 결과: <span className="font-bold text-blue-900">{filtered.length}명</span>
+              </span>
+              <button
+                onClick={resetFilters}
+                className="text-blue-600 hover:text-blue-700 font-medium hover:underline whitespace-nowrap"
+              >
+                전체 보기
+              </button>
             </div>
           )}
         </div>
@@ -1817,13 +1943,6 @@ export default function PlayersPage({
                 title="포지션 정렬 (토글: 오름/내림)"
               >
                 포지션 {arrowFor('pos')}
-              </button>
-              <button
-                className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='status' ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
-                onClick={()=>onSortClick('status')}
-                title="상태 정렬 (토글: 오름/내림)"
-              >
-                상태 {arrowFor('status')}
               </button>
               <button
                 className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-all ${sortKey==='name' ? 'border-emerald-500 bg-emerald-500 text-white shadow-sm' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50'}`}
@@ -2243,6 +2362,22 @@ export default function PlayersPage({
           players={players}
         />
       )}
+      
+      <style>{`
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        .animate-slideDown {
+          animation: slideDown 0.2s ease-out;
+        }
+      `}</style>
     </div>
   )
 }
