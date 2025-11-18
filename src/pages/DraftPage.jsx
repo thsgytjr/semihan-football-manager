@@ -181,8 +181,8 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
           }
         }
       }
-    } else if (!selectedUpcomingMatchId) {
-      // 매치 선택 해제 시 데이터 초기화
+    } else if (!selectedUpcomingMatchId && draftState === 'setup') {
+      // 매치 선택 해제 시 데이터 초기화 (setup 단계에서만)
       setParticipatingPlayers([])
       setCaptains([])
       setTeams([])
@@ -236,31 +236,25 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
 
   // 주장 선택 토글
   const toggleCaptain = (player) => {
-    // 이미 선택된 주장인지 확인
-    const existingIndex = captains.findIndex(c => c?.id === player.id)
-    
-    if (existingIndex !== -1) {
-      // 이미 선택되어 있으면 제거
-      const newCaptains = [...captains]
-      newCaptains[existingIndex] = null
-      setCaptains(newCaptains)
-      return
-    }
-    
-    // 빈 슬롯 찾기
-    const emptySlotIndex = captains.findIndex((c, idx) => idx < teamCount && !c)
-    
-    if (emptySlotIndex !== -1) {
-      // 빈 슬롯에 할당
-      const newCaptains = [...captains]
-      newCaptains[emptySlotIndex] = player
-      setCaptains(newCaptains)
-    } else {
-      // 모든 슬롯이 차있으면 첫 번째 슬롯 교체
-      const newCaptains = [...captains]
-      newCaptains[0] = player
-      setCaptains(newCaptains)
-    }
+    setCaptains(prev => {
+      const normalized = Array.from({ length: teamCount }, (_, idx) => prev[idx] || null)
+      const existingIndex = normalized.findIndex(c => c?.id === player.id)
+
+      if (existingIndex !== -1) {
+        const next = [...normalized]
+        next[existingIndex] = null
+        return next
+      }
+
+      const emptySlotIndex = normalized.findIndex(c => !c)
+      const next = [...normalized]
+      if (emptySlotIndex !== -1) {
+        next[emptySlotIndex] = player
+      } else {
+        next[0] = player
+      }
+      return next
+    })
   }
 
   // 주장 선택 완료 후 순서 뽑기 단계로 이동 (통합)
@@ -785,8 +779,10 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
     player.position?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  // 검색 필터링 - 주장 선택 시
-  const filteredPoolPlayers = participatingPlayers.filter(player => 
+  // 검색 필터링 - 주장 선택 시 (playerPool 사용 - 주장을 제외한 참여 선수들)
+  // participatingPlayers가 비어있으면 playerPool 사용
+  const captainSelectionPool = participatingPlayers.length > 0 ? participatingPlayers : playerPool
+  const filteredPoolPlayers = captainSelectionPool.filter(player => 
     player.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     player.position?.toLowerCase().includes(searchTerm.toLowerCase())
   )
@@ -1197,6 +1193,15 @@ export default function DraftPage({ players, upcomingMatches, onUpdateUpcomingMa
                   setDraftState('selectParticipants')
                   setCaptains([])
                   setSearchTerm('')
+                  // playerPool에 있는 선수들 + 이미 선택된 주장들을 participatingPlayers로 복원
+                  const allParticipants = [...playerPool]
+                  const captainIds = captains.filter(Boolean).map(c => c.id)
+                  captains.filter(Boolean).forEach(captain => {
+                    if (!allParticipants.some(p => p.id === captain.id)) {
+                      allParticipants.push(captain)
+                    }
+                  })
+                  setParticipatingPlayers(allParticipants)
                 }}
                 className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
               >
