@@ -1783,7 +1783,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               {/* Responsive scoreboard header: wrap when narrow to avoid horizontal scroll */}
               <div className="flex items-center justify-between text-[11px] text-gray-600 mb-1 px-2 gap-y-1">
                 <span>팀</span>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3">
                   <div className="flex gap-1">
                     {Array.from({length:maxQ}).map((_,qi)=>(
                       <span key={qi} className="w-6 text-center font-medium">G{qi+1}</span>
