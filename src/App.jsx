@@ -1242,7 +1242,7 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
     a: '어시스트',
     gp: '경기출전',
     cs: '클린시트',
-    duo: '호흡(어→골)',
+    duo: '듀오(어→골)',
     cards: '카드(Y/R)'
   }
   

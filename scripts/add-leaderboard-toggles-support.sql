@@ -32,7 +32,7 @@
 --         "a": true/false,             -- Assists (어시스트)
 --         "gp": true/false,            -- Games Played (출전)
 --         "cs": true/false,            -- Clean Sheets (클린시트)
---         "duo": true/false,           -- Duo (호흡)
+--         "duo": true/false,           -- Duo (듀오)
 --         "cards": true/false          -- Cards Y/R (카드)
 --       }
 --     }
