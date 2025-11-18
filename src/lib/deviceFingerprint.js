@@ -60,19 +60,33 @@ export async function getDeviceFingerprint() {
       components.push('ls:no')
     }
     
-    // 10. 랜덤 시드 (초기 생성 시에만, 이후엔 localStorage에 저장)
-    const storageKey = 'sfm_device_seed'
-    let seed = null
+    // 10. SessionStorage 사용 가능 여부
     try {
-      seed = localStorage.getItem(storageKey)
-      if (!seed) {
-        seed = Math.random().toString(36).substr(2, 9)
-        localStorage.setItem(storageKey, seed)
+      const test = '__test__'
+      sessionStorage.setItem(test, test)
+      sessionStorage.removeItem(test)
+      components.push('ss:yes')
+    } catch (e) {
+      components.push('ss:no')
+    }
+    
+    // 11. WebGL Fingerprint (GPU 정보)
+    try {
+      const canvas = document.createElement('canvas')
+      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
+      if (gl) {
+        const debugInfo = gl.getExtension('WEBGL_debug_renderer_info')
+        if (debugInfo) {
+          const vendor = gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL)
+          const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL)
+          components.push(`gpu:${vendor}|${renderer}`)
+        } else {
+          components.push('gpu:unknown')
+        }
       }
     } catch (e) {
-      seed = 'temp-' + Date.now()
+      components.push('gpu:error')
     }
-    components.push(`seed:${seed}`)
     
     // 모든 컴포넌트를 조합해서 문자열로 만들기
     const fingerprintString = components.join('|')
