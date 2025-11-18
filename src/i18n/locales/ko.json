@@ -282,7 +282,7 @@
       "loadingRoster": "참석자 명단을 불러오는 중이거나 아직 등록되지 않았습니다.",
       "voterLabel": "투표자 이름 (선택)",
       "voterPlaceholder": "익명으로 투표하려면 비워두세요",
-      "errorDuplicate": "이미 투표를 완료했습니다. (동일 IP/디바이스 기준)",
+      "errorDuplicate": "이 디바이스에서 이미 투표를 완료했습니다.",
       "errorGeneric": "투표 중 오류가 발생했습니다.",
       "submitVoting": "투표 중...",
       "submitAlready": "이미 투표 완료",

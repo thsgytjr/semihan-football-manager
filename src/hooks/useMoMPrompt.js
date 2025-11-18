@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { extractStatsByPlayer, extractAttendeeIds, toStr } from '../lib/matchUtils'
 import { hashText } from '../lib/hash'
-import { getOrCreateVisitorId, getVisitorIP } from '../lib/visitorTracking'
+import { getOrCreateEnhancedVisitorId } from '../lib/deviceFingerprint'
+import { getVisitorIP } from '../lib/visitorTracking'
 import { fetchMoMVotes, submitMoMVote } from '../services/momVotes.service'
 import { findLatestMatchWithScores, getMoMPhase, getMoMWindow, summarizeVotes, buildMoMTieBreakerScores } from '../lib/momUtils'
 
@@ -137,7 +138,16 @@ export function useMoMPrompt({ matches = [], players = [] }) {
 
 
   useEffect(() => {
-    setVisitorId(getOrCreateVisitorId())
+    ;(async () => {
+      try {
+        const vid = await getOrCreateEnhancedVisitorId()
+        setVisitorId(vid)
+      } catch (error) {
+        console.error('Failed to get visitor ID:', error)
+        setVisitorId(null)
+      }
+    })()
+    
     getVisitorIP()
       .then(ip => ip ? hashText(ip) : null)
       .then(setIpHash)
@@ -167,11 +177,26 @@ export function useMoMPrompt({ matches = [], players = [] }) {
       setVoteStatusReady(false)
       return
     }
+    
+    // ⭐ 개선된 중복 체크: IP **AND** Visitor ID가 모두 일치해야 중복으로 판단
+    // 같은 와이파이(같은 IP)를 쓰는 여러 디바이스(다른 visitor_id)는 각각 투표 가능
     const hasVote = votes.some(v => {
-      const ipMatch = ipHash && v.ipHash && v.ipHash === ipHash
-      const visitorMatch = visitorId && v.visitorId && v.visitorId === visitorId
-      return ipMatch || visitorMatch
+      // 둘 다 있는 경우: 둘 다 일치해야 중복
+      if (ipHash && visitorId && v.ipHash && v.visitorId) {
+        return v.ipHash === ipHash && v.visitorId === visitorId
+      }
+      
+      // 하나만 있는 경우 (레거시 호환성)
+      if (ipHash && v.ipHash && !v.visitorId) {
+        return v.ipHash === ipHash
+      }
+      if (visitorId && v.visitorId && !v.ipHash) {
+        return v.visitorId === visitorId
+      }
+      
+      return false
     })
+    
     setAlreadyVoted(hasVote)
     setVoteStatusReady(true)
   }, [latestMatch?.id, votes, ipHash, visitorId, loadingVotes])

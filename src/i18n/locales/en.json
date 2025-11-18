@@ -241,7 +241,7 @@
       "loadingRoster": "Loading attendees or not registered yet.",
       "voterLabel": "Voter name (optional)",
       "voterPlaceholder": "Leave blank to vote anonymously",
-      "errorDuplicate": "You have already voted. (Same IP/device)",
+      "errorDuplicate": "You have already voted from this device.",
       "errorGeneric": "An error occurred while submitting your vote.",
       "submitVoting": "Submitting...",
       "submitAlready": "Already voted",
