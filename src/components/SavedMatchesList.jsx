@@ -770,6 +770,9 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
   // ✅ G/A 표시 토글: 기본 꺼짐
   const [showGA, setShowGA] = useState(false)
   
+  // ✅ 상태 수동 제어 (Admin 전용)
+  const [statusOverride, setStatusOverride] = useState(m?.statusOverride || null) // 'live', 'updating', null
+  
   // ✅ 2개 경기장 모드 토글
   const [multiFieldMode, setMultiFieldMode] = useState(m?.multiField || false)
   // 삭제 확인 모달
@@ -818,7 +821,8 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
       snapshot: draftSnap,
       attendeeIds: draftSnap.flat(),
       multiField: multiFieldMode,
-      gameMatchups: gameMatchups
+      gameMatchups: gameMatchups,
+      statusOverride: statusOverride
     }
     
     // Draft 모드 저장
@@ -896,6 +900,11 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
 
   // ✅ Determine match status based on dateISO and stats
   const matchStatus = useMemo(() => {
+    // ✅ 수동 오버라이드가 'off'면 배지를 표시하지 않음
+    if (statusOverride === 'off') return null
+    // ✅ 수동 오버라이드가 있으면 우선 사용
+    if (statusOverride) return statusOverride
+    
     if (hasStats) return 'completed' // Has stats = already finished
     if (!m?.dateISO) return null // No date = can't determine
     
@@ -914,7 +923,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
     if (diffHours <= -3) return 'updating'
     
     return null
-  }, [m?.dateISO, hasStats, currentTime])
+  }, [m?.dateISO, hasStats, currentTime, statusOverride])
 
   // ✅ Countdown timer for upcoming matches
   const [countdown, setCountdown] = useState('')
@@ -1035,13 +1044,32 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
         </div>
         <div className="flex items-center gap-2">
           {isAdmin && (
-            <label className="flex items-center gap-1 text-[10px] leading-tight">
-              <input type="checkbox" className="w-3 h-3" checked={localDraftMode} onChange={e=>{
-                setLocalDraftMode(e.target.checked)
-                setDirty(true)
-              }} />
-              <span>Draft</span>
-            </label>
+            <>
+              <label className="flex items-center gap-1 text-[10px] leading-tight">
+                <input type="checkbox" className="w-3 h-3" checked={localDraftMode} onChange={e=>{
+                  setLocalDraftMode(e.target.checked)
+                  setDirty(true)
+                }} />
+                <span>Draft</span>
+              </label>
+              <div className="flex items-center gap-1 text-[10px] leading-tight">
+                <select 
+                  className="w-16 h-5 text-[10px] rounded border border-gray-300 bg-white"
+                  value={statusOverride || ''}
+                  onChange={e => {
+                    const val = e.target.value || null
+                    setStatusOverride(val)
+                    setDirty(true)
+                  }}
+                  title="상태 배지 수동 설정"
+                >
+                  <option value="">Auto</option>
+                  <option value="live">Live</option>
+                  <option value="updating">Update</option>
+                  <option value="off">Off</option>
+                </select>
+              </div>
+            </>
           )}
           {enableLoadToPlanner&&<button className="text-[10px] rounded border border-blue-300 bg-blue-50 text-blue-700 px-1.5 py-0.5 hover:bg-blue-100 transition-colors leading-tight" onClick={()=>onLoadToPlanner?.(m)}>로드</button>}
           {isAdmin&&onDeleteMatch&&(

@@ -84,7 +84,10 @@ export const mockAppDB = {
 // Prod DB에서 데이터 로드 (Read-Only) + Mock으로 전환
 export async function loadSemihanDataToMock() {
   try {
-    logger.log('📥 Prod DB에서 Semihan 데이터 로드 중... (서버 시작 시마다 최신 데이터 로드)')
+    const { TEAM_CONFIG } = await import('../lib/teamConfig')
+    const teamName = TEAM_CONFIG.shortName || 'semihan'
+    
+    logger.log(`📥 Prod DB에서 ${teamName} 데이터 로드 중... (서버 시작 시마다 최신 데이터 로드)`)
     
     // 항상 Prod에서 최신 데이터 로드 (서버 재시작할 때마다)
     const { supabase } = await import('../lib/supabaseClient')
