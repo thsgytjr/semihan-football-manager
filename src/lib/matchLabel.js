@@ -1,6 +1,8 @@
 // src/lib/matchLabel.js
 // 월-주차 프리픽스(예: 9-2)와 함께 매치 라벨을 통일해서 만들어주는 유틸
 
+import i18n from '../i18n/config'
+
 function parseDateISO(dateISO) {
     if (!dateISO) return null
     // "YYYY-MM-DDTHH:MM" or ISO string
@@ -45,9 +47,10 @@ function parseDateISO(dateISO) {
    *   - withDate: 날짜/시간 텍스트 포함 여부
    *   - withCount: 참석자 수 텍스트 포함 여부
    *   - count: 참석자 수 (계산되어 넘어오는 값 사용)
+   *   - t: translation function (optional, defaults to i18n.t)
    */
   export function formatMatchLabel(m, opts = {}) {
-    const { withDate = true, withCount = false, count = 0 } = opts
+    const { withDate = true, withCount = false, count = 0, t = i18n.t.bind(i18n) } = opts
     const code = monthWeekCode(m?.dateISO)
     const bits = [code] // 항상 월-주차 프리픽스
   
@@ -56,7 +59,7 @@ function parseDateISO(dateISO) {
       if (dt) bits.push(dt)
     }
     if (withCount) {
-      bits.push(`참석 ${count}명`)
+        bits.push(t('match.attendeesCount', { count }))
     }
     return bits.join(' · ')
   }

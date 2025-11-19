@@ -759,7 +759,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
   const byId=useMemo(()=>new Map(players.map(p=>[String(p.id),p])),[players])
   const draftTeams=useMemo(()=>draftSnap.map(ids=>ids.map(id=>byId.get(String(id))).filter(Boolean)),[draftSnap,byId])
   const draftCount=useMemo(()=>draftSnap.flat().length,[draftSnap])
-  const label=useMemo(()=>formatMatchLabel({...m,snapshot:draftSnap},{withDate:true,withCount:true,count:draftCount}),[m,draftSnap,draftCount])
+  const label=useMemo(()=>formatMatchLabel({...m,snapshot:draftSnap},{withDate:true,withCount:true,count:draftCount,t}),[m,draftSnap,draftCount,t])
   const fees=useMemo(()=>deriveFeesFromSnapshot({...m,snapshot:draftSnap},players),[m,draftSnap,players])
   const formatLabel=deriveFormatByLocation(m)
   const isDraftMode = localDraftMode
@@ -1707,7 +1707,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
           return (
             <div className="mb-3 rounded border border-gray-200 bg-gray-50 p-3">
                 <div className="flex items-center justify-between mb-3">
-                <div className="text-xs font-medium text-gray-700">경기 결과</div>
+                <div className="text-xs font-medium text-gray-700">{t('matchHistory.resultHeader')}</div>
                  <div className="flex items-center gap-2">
                    {/* 승자 표시 */}
                    {(isThreeTeams || isFourPlusWithMatchups) ? (
@@ -1717,12 +1717,12 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                          // 구장별 승자 표시
                          const field1Winners = pointWinners.filter(i => points.fieldNames[i] === '구장1')
                          const field2Winners = pointWinners.filter(i => points.fieldNames[i] === '구장2')
-                         const f1Text = field1Winners.length > 1 ? '동률' : field1Winners.length === 1 ? `팀${field1Winners[0] + 1}` : '-'
-                         const f2Text = field2Winners.length > 1 ? '동률' : field2Winners.length === 1 ? `팀${field2Winners[0] + 1}` : '-'
+                         const f1Text = field1Winners.length > 1 ? t('matchHistory.tied') : field1Winners.length === 1 ? t('matchHistory.teamN', { n: field1Winners[0] + 1 }) : '-'
+                         const f2Text = field2Winners.length > 1 ? t('matchHistory.tied') : field2Winners.length === 1 ? t('matchHistory.teamN', { n: field2Winners[0] + 1 }) : '-'
                          return (
                            <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 border border-amber-300">
                              <span className="text-amber-600 text-xs">🏆</span>
-                             <span className="text-xs font-bold text-amber-900">구장1: {f1Text} | 구장2: {f2Text}</span>
+                             <span className="text-xs font-bold text-amber-900">{t('matchHistory.field1')}: {f1Text} | {t('matchHistory.field2')}: {f2Text}</span>
                            </div>
                          )
                        }
@@ -1730,12 +1730,12 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                        return pointWinners.length === 1 ? (
                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 border border-amber-300">
                            <span className="text-amber-600 text-xs">🏆</span>
-                           <span className="text-xs font-bold text-amber-900">팀{pointWinners[0] + 1} 승리</span>
+                           <span className="text-xs font-bold text-amber-900">{t('matchHistory.teamWin',{ n: pointWinners[0] + 1 })}</span>
                          </div>
                        ) : pointWinners.length > 1 ? (
                          <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-200 border border-gray-300">
                            <span className="text-xs font-bold text-gray-700">
-                             {pointWinners.map(i => `팀${i + 1}`).join(', ')} 무승부
+                             {t('matchHistory.teamsDraw',{ teams: pointWinners.map(i => `${t('matchHistory.team')} ${i + 1}`).join(', ') })}
                            </span>
                          </div>
                        ) : null
@@ -1744,12 +1744,12 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                      bestDiffWinners.length === 1 ? (
                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 border border-amber-300">
                          <span className="text-amber-600 text-xs">🏆</span>
-                         <span className="text-xs font-bold text-amber-900">팀{bestDiffWinners[0] + 1} 승리</span>
+                         <span className="text-xs font-bold text-amber-900">{t('matchHistory.teamWin',{ n: bestDiffWinners[0] + 1 })}</span>
                        </div>
                      ) : bestDiffWinners.length > 1 ? (
                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-200 border border-gray-300">
                          <span className="text-xs font-bold text-gray-700">
-                           {bestDiffWinners.map(i => `팀${i + 1}`).join(', ')} 무승부
+                           {t('matchHistory.teamsDraw',{ teams: bestDiffWinners.map(i => `${t('matchHistory.team')} ${i + 1}`).join(', ') })}
                          </span>
                        </div>
                      ) : null
@@ -1757,12 +1757,12 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                      winners.length === 1 ? (
                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 border border-amber-300">
                          <span className="text-amber-600 text-xs">🏆</span>
-                         <span className="text-xs font-bold text-amber-900">팀{winners[0] + 1} 승리</span>
+                         <span className="text-xs font-bold text-amber-900">{t('matchHistory.teamWin',{ n: winners[0] + 1 })}</span>
                        </div>
                      ) : winners.length > 1 ? (
                        <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-200 border border-gray-300">
                          <span className="text-xs font-bold text-gray-700">
-                           {winners.map(i => `팀${i + 1}`).join(', ')} 무승부
+                           {t('matchHistory.teamsDraw',{ teams: winners.map(i => `${t('matchHistory.team')} ${i + 1}`).join(', ') })}
                          </span>
                        </div>
                      ) : null
@@ -1770,11 +1770,11 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                    <div className="text-[10px] text-gray-500">
                      <span className="inline-flex items-center gap-1">
                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                      {(isThreeTeams || isFourPlusWithMatchups) ? (unequalGP ? '가중 승점' : '승점') : (isMultiTeam ? '최고 골득실' : '게임승리')}
+                      {(isThreeTeams || isFourPlusWithMatchups) ? (unequalGP ? t('matchHistory.weightedPointsShort') : t('matchHistory.points')) : (isMultiTeam ? t('matchHistory.bestGoalDiff') : t('matchHistory.gameWins'))}
                      </span>
                      {(isThreeTeams || isFourPlusWithMatchups) && unequalGP && (
-                       <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-purple-300 bg-purple-50 px-1.5 py-0.5 text-purple-800" title={`각 팀의 최고 ${points.minGames}경기만 승점 비교`}>
-                         ⚖︎ 가중 승점 적용
+                       <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-purple-300 bg-purple-50 px-1.5 py-0.5 text-purple-800" title={t('matchHistory.compareTopMatches', { minGames: points.minGames })}>
+                         {t('matchHistory.weightedPointsAppliedBadge')}
                        </span>
                      )}
                    </div>
@@ -1782,19 +1782,19 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               </div>              {/* 컬럼 헤더 */}
               {/* Responsive scoreboard header: wrap when narrow to avoid horizontal scroll */}
               <div className="flex items-center justify-between text-[11px] text-gray-600 mb-1 px-2 gap-y-1">
-                <span>팀</span>
+                <span>{t('matchHistory.team')}</span>
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div className="flex gap-1">
                     {Array.from({length:maxQ}).map((_,qi)=>(
                       <span key={qi} className="w-6 text-center font-medium">G{qi+1}</span>
                     ))}
                   </div>
-                  {(isThreeTeams || isFourPlusWithMatchups) && <span className="w-10 text-center">승점</span>}
-                  {(isThreeTeams || isFourPlusWithMatchups) && unequalGP && <span className="w-12 text-center">가중승점</span>}
-                  {(isThreeTeams || isFourPlusWithMatchups) && <span className="w-12 text-center">골득실</span>}
-                  {(!isMultiTeam) && <span className="w-8 text-center">승리</span>}
-                  {(!isThreeTeams && !isFourPlusWithMatchups && isMultiTeam) && <span className="w-12 text-center">최고득실</span>}
-                  <span className="w-8 text-right">합계</span>
+                  {(isThreeTeams || isFourPlusWithMatchups) && <span className="w-10 text-center">{t('matchHistory.points')}</span>}
+                  {(isThreeTeams || isFourPlusWithMatchups) && unequalGP && <span className="w-12 text-center">{t('matchHistory.weightedShort',{ points: '' }).trim() || t('matchHistory.points')}</span>}
+                  {(isThreeTeams || isFourPlusWithMatchups) && <span className="w-12 text-center">{t('matchHistory.goalDiff')}</span>}
+                  {(!isMultiTeam) && <span className="w-8 text-center">{t('matchHistory.victory')}</span>}
+                  {(!isThreeTeams && !isFourPlusWithMatchups && isMultiTeam) && <span className="w-12 text-center">{t('matchHistory.bestGoalDiff')}</span>}
+                  <span className="w-8 text-right">{t('matchHistory.total')}</span>
                 </div>
               </div>
               
@@ -1873,7 +1873,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                             : `bg-white ${fieldColor}`
                         }`}>
                           <span className="flex items-center gap-2">
-                            <span className="font-semibold">팀 {ti+1}</span>
+                            <span className="font-semibold">{t('matchHistory.teamN', { n: ti+1 })}</span>
                             {matchResult && (
                               <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] font-bold ${
                                 matchResult === 'W' ? 'bg-blue-500 text-white' :
@@ -2083,10 +2083,10 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   return (
                     <div key={ti} className={`flex items-center justify-between text-xs sm:text-sm py-1.5 sm:py-2 px-2 rounded ${isWinner ? 'bg-amber-100 font-medium' : 'bg-white'}`}> 
                       <span className="flex items-center gap-2">
-                        <span>팀 {ti+1}</span>
+                        <span>{t('matchHistory.teamN', { n: ti+1 })}</span>
                         {points && points.fieldNames[ti] && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-medium">
-                            {points.fieldNames[ti]}
+                            {points.fieldNames[ti] === '구장1' ? t('matchHistory.field1') : points.fieldNames[ti] === '구장2' ? t('matchHistory.field2') : points.fieldNames[ti]}
                           </span>
                         )}
                         {matchResult && (
@@ -2501,7 +2501,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                 style={teamColor ? headerStyle : {}}
               >
                 <div className="font-semibold">
-                  팀 {i+1} {isWinner && <span className="ml-2">🏆</span>}
+                  {t('matchHistory.teamN', { n: i+1 })} {isWinner && <span className="ml-2">🏆</span>}
                 </div>
                 {isAdmin && !hideOVR
                   ? <div className="opacity-80">{teamColor ? teamColor.label : kit.label} · {list.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</div>
@@ -3069,7 +3069,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
             ))}
           </div>
         ) : (
-          <div className="text-xs text-gray-500">등록된 비디오 링크가 없습니다.</div>
+          <div className="text-xs text-gray-500">{t('matchHistory.noVideoLinks')}</div>
         )}
 
         {/* 어드민: 링크+제목 추가 */}

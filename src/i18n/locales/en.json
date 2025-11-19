@@ -81,7 +81,8 @@
     "deleteFailed": "Failed to delete match.",
     "updateFailed": "Failed to update.",
     "upcomingUpdated": "Upcoming match updated.",
-    "noChanges": "No changes."
+    "noChanges": "No changes.",
+    "attendeesCount": "Attendees: {{count}}"
   },
   "settings": {
     "title": "App Settings",
@@ -212,11 +213,14 @@
     "editMatch": "Edit Match",
     "viewDetails": "View Details",
     "matchResults": "Match Results",
+    "resultHeader": "Match Results",
     "weightedPoints": "Weighted Points Applied",
     "team": "Team",
     "points": "Points",
     "tied": "Tied",
     "victory": "Victory",
+    "teamWin": "Team {{n}} wins",
+    "teamsDraw": "{{teams}} draw",
     "fieldN": "Field {{n}}",
     "totalGoals": "Total {{count}} goals",
     "goalDiff": "Goal Diff",
@@ -226,7 +230,17 @@
     "pointsSystemInfo": "💡 Winner determined by points (Win 3 · Draw 1 · Loss 0)",
     "goalDiffInfo": "💡 Winner determined by best goal difference per team",
     "weightedCalc": "{{gp}} matches → top {{minGames}} matches = {{weightedPoints}} pts",
-    "totalFees": "Total"
+    "totalFees": "Total",
+    "bestGoalDiff": "Best Goal Diff",
+    "total": "Total",
+    "gameWins": "Game Wins",
+    "weightedPointsAppliedBadge": "⚖︎ Weighted points applied",
+    "noVideoLinks": "No video links available.",
+    "field1": "Field 1",
+    "field2": "Field 2",
+    "teamN": "Team {{n}}",
+    "weightedPointsShort": "Weighted Pts",
+    "compareTopMatches": "Only top {{minGames}} matches per team are compared"
   },
   "mom": {
     "popup": {
@@ -312,7 +326,6 @@
     "recentForm": "Recent Form",
     "matchingInProgress": "Team matching in progress...",
     "lotteryWaiting": "Waiting for team lottery...",
-    "attendeesCount": "{{count}} players",
     "status": {
       "upcoming": "Upcoming",
       "completed": "Completed",

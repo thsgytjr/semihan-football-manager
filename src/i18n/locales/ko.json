@@ -81,7 +81,8 @@
     "deleteFailed": "매치 삭제에 실패했습니다.",
     "updateFailed": "업데이트에 실패했습니다.",
     "upcomingUpdated": "예정된 매치가 업데이트되었습니다.",
-    "noChanges": "변경사항이 없습니다."
+    "noChanges": "변경사항이 없습니다.",
+    "attendeesCount": "참석 {{count}}명"
   },
   "settings": {
     "title": "앱 설정",
@@ -212,11 +213,14 @@
     "editMatch": "매치 수정",
     "viewDetails": "상세보기",
     "matchResults": "경기 결과",
+    "resultHeader": "경기 결과",
     "weightedPoints": "가중 승점 적용",
     "team": "팀",
     "points": "승점",
     "tied": "동률",
     "victory": "승리",
+    "teamWin": "팀{{n}} 승리",
+    "teamsDraw": "{{teams}} 무승부",
     "fieldN": "구장 {{n}}",
     "totalGoals": "총 {{count}}골",
     "goalDiff": "골득실",
@@ -226,7 +230,17 @@
     "pointsSystemInfo": "💡 승점(승3·무1·패0)으로 승자를 결정합니다",
     "goalDiffInfo": "💡 각 팀의 최고 골득실로 승자를 결정합니다",
     "weightedCalc": "{{gp}}경기 중 최고 성적 {{minGames}}경기 = {{weightedPoints}}점",
-    "totalFees": "총액"
+    "totalFees": "총액",
+    "bestGoalDiff": "최고 골득실",
+    "total": "합계",
+    "gameWins": "게임승리",
+    "weightedPointsAppliedBadge": "⚖︎ 가중 승점 적용",
+    "noVideoLinks": "등록된 비디오 링크가 없습니다.",
+    "field1": "구장1",
+    "field2": "구장2",
+    "teamN": "팀 {{n}}",
+    "weightedPointsShort": "가중 승점",
+    "compareTopMatches": "각 팀의 최고 {{minGames}}경기만 승점 비교"
   },
   "upcoming": {
     "title": "예정된 매치",
@@ -259,7 +273,6 @@
     "recentForm": "최근 폼",
     "matchingInProgress": "팀 매칭 확정중...",
     "lotteryWaiting": "팀 추첨 대기중...",
-    "attendeesCount": "{{count}}명",
     "status": {
       "upcoming": "예정",
       "completed": "완료",

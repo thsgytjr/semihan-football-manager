@@ -1,5 +1,6 @@
 // src/pages/StatsInput.jsx
 import React, { useMemo, useState, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 import ConfirmDialog from '../components/ConfirmDialog'
 import Card from '../components/Card'
 import InitialAvatar from '../components/InitialAvatar'
@@ -107,6 +108,7 @@ function extractStatsByPlayer(m) {
 
 /* ======== Main Component ======== */
 export default function StatsInput({ players = [], matches = [], onUpdateMatch, isAdmin }) {
+  const { t } = useTranslation()
   const sortedMatches = useMemo(() => {
     const arr = Array.isArray(matches) ? [...matches] : []
     return arr.sort((a, b) => getMatchTime(b) - getMatchTime(a))
@@ -547,11 +549,11 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
   const momMatchOptions = useMemo(() => {
     return (sortedMatches || []).map(m => {
       const label = typeof formatMatchLabel === 'function'
-        ? formatMatchLabel(m, { withDate: true, withCount: true })
+        ? formatMatchLabel(m, { withDate: true, withCount: true, t })
         : (m.label || m.title || m.name || `Match ${toStr(m.id)}`)
       return { value: toStr(m.id), label }
     })
-  }, [sortedMatches])
+  }, [sortedMatches, t])
 
   const momRoster = useMemo(() => {
     if (!momMatch) return []
@@ -727,7 +729,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
                   const count = extractAttendeeIds(m).length
                   const label =
                     (typeof formatMatchLabel === 'function'
-                      ? formatMatchLabel(m, { withDate: true, withCount: true, count })
+                      ? formatMatchLabel(m, { withDate: true, withCount: true, count, t })
                       : (m.label || m.title || m.name || `Match ${toStr(m.id)}`))
                   return (
                     <option key={toStr(m.id)} value={toStr(m.id)}>{label}</option>
