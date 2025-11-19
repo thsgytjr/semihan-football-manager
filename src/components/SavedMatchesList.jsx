@@ -1059,7 +1059,8 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   onChange={e => {
                     const val = e.target.value || null
                     setStatusOverride(val)
-                    setDirty(true)
+                    // 즉시 저장
+                    onUpdateMatch?.(m.id, { statusOverride: val })
                   }}
                   title="상태 배지 수동 설정"
                 >
