@@ -50,6 +50,7 @@ function toAppFormat(row) {
     fees: row.fees || null, // 📊 비용 정보 추가
     multiField: row.multiField || row.multi_field || false, // 2개 경기장 모드
     gameMatchups: row.gameMatchups || row.game_matchups || null, // 게임별 매치업
+    statusOverride: row.statusOverride || row.status_override || null, // 상태 배지 수동 설정
     created_at: row.created_at,
     updated_at: row.updated_at,
   }
@@ -138,6 +139,7 @@ export async function updateMatchInDB(matchId, patch) {
     if ('fees' in patch) payload.fees = patch.fees // 📊 비용 정보 추가
     if ('multiField' in patch) payload.multiField = patch.multiField // 2개 경기장 모드
     if ('gameMatchups' in patch) payload.gameMatchups = patch.gameMatchups // 게임별 매치업
+    if ('statusOverride' in patch) payload.statusOverride = patch.statusOverride // 상태 배지 수동 설정
     
     payload.updated_at = new Date().toISOString()
 
