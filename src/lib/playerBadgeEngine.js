@@ -3,6 +3,7 @@
 
 import { toStr, extractStatsByPlayer, extractAttendeeIds } from './matchUtils'
 import { computeDraftPlayerStatsRows, computeCaptainStatsRows } from './leaderboardComputations'
+import { getAppSettings } from './appSettings'
 
 const themeByCategory = {
   goals: { category: 'goals', icon: '⚽️', colors: ['#f97316', '#fb923c'] },
@@ -169,10 +170,55 @@ export function buildPlayerBadgeFactsMap(players = [], matches = []) {
 }
 
 const rarityByTier = {
+  5: 'diamond',
   4: 'platinum',
   3: 'gold',
   2: 'silver',
   1: 'bronze'
+}
+
+const normalizeThresholdValue = (value) => {
+  const num = Number(value)
+  if (!Number.isFinite(num)) return null
+  return Math.max(0, num)
+}
+
+const readBadgeTierOverrides = () => {
+  try {
+    const settings = getAppSettings()
+    return settings?.badgeTierOverrides || {}
+  } catch (err) {
+    return {}
+  }
+}
+
+const resolveTieredRuleTiers = (rule, overrides = {}) => {
+  const overrideEntry = overrides?.[rule.slug]?.tiers || {}
+  return (rule.tiers || []).map((tierDef) => {
+    const overrideValue = normalizeThresholdValue(overrideEntry[tierDef.tier])
+    return {
+      ...tierDef,
+      min: overrideValue ?? tierDef.min
+    }
+  })
+}
+
+const resolveSingleRuleThresholds = (rule, overrides = {}) => {
+  const base = {}
+  Object.entries(rule.thresholds || {}).forEach(([tier, threshold]) => {
+    const tierNum = Number(tier)
+    const normalized = normalizeThresholdValue(threshold)
+    if (!Number.isFinite(tierNum) || normalized == null) return
+    base[tierNum] = normalized
+  })
+  const overrideEntry = overrides?.[rule.slug]?.tiers || {}
+  Object.entries(overrideEntry).forEach(([tier, threshold]) => {
+    const tierNum = Number(tier)
+    const normalized = normalizeThresholdValue(threshold)
+    if (!Number.isFinite(tierNum) || normalized == null) return
+    base[tierNum] = normalized
+  })
+  return base
 }
 
 const resolveAwardTimestamp = (facts, valueKey, threshold, fallbackTs = null) => {
@@ -195,7 +241,8 @@ const tieredRules = [
       { tier: 1, min: 5 },
       { tier: 2, min: 10 },
       { tier: 3, min: 18 },
-      { tier: 4, min: 26 }
+      { tier: 4, min: 26 },
+      { tier: 5, min: 40 }
     ],
     value: (facts) => facts.goals
   },
@@ -210,7 +257,8 @@ const tieredRules = [
       { tier: 1, min: 4 },
       { tier: 2, min: 8 },
       { tier: 3, min: 14 },
-      { tier: 4, min: 20 }
+      { tier: 4, min: 20 },
+      { tier: 5, min: 30 }
     ],
     value: (facts) => facts.assists
   },
@@ -225,7 +273,8 @@ const tieredRules = [
       { tier: 1, min: 12 },
       { tier: 2, min: 20 },
       { tier: 3, min: 30 },
-      { tier: 4, min: 40 }
+      { tier: 4, min: 40 },
+      { tier: 5, min: 65 }
     ],
     value: (facts) => facts.points
   },
@@ -240,7 +289,8 @@ const tieredRules = [
       { tier: 1, min: 6 },
       { tier: 2, min: 12 },
       { tier: 3, min: 20 },
-      { tier: 4, min: 30 }
+      { tier: 4, min: 30 },
+      { tier: 5, min: 50 }
     ],
     value: (facts) => facts.appearances
   },
@@ -255,7 +305,8 @@ const tieredRules = [
       { tier: 1, min: 2 },
       { tier: 2, min: 5 },
       { tier: 3, min: 9 },
-      { tier: 4, min: 14 }
+      { tier: 4, min: 14 },
+      { tier: 5, min: 22 }
     ],
     value: (facts) => facts.cleanSheets
   },
@@ -270,7 +321,8 @@ const tieredRules = [
       { tier: 1, min: 5 },
       { tier: 2, min: 12 },
       { tier: 3, min: 20 },
-      { tier: 4, min: 30 }
+      { tier: 4, min: 30 },
+      { tier: 5, min: 55 }
     ],
     value: (facts) => facts.draftPlayerPoints
   },
@@ -285,7 +337,8 @@ const tieredRules = [
       { tier: 1, min: 5 },
       { tier: 2, min: 12 },
       { tier: 3, min: 20 },
-      { tier: 4, min: 30 }
+      { tier: 4, min: 30 },
+      { tier: 5, min: 55 }
     ],
     value: (facts) => facts.draftCaptainPoints
   },
@@ -300,7 +353,8 @@ const tieredRules = [
       { tier: 1, min: 1 },
       { tier: 2, min: 3 },
       { tier: 3, min: 6 },
-      { tier: 4, min: 10 }
+      { tier: 4, min: 10 },
+      { tier: 5, min: 18 }
     ],
     value: (facts) => facts.momAwards
   }
@@ -312,8 +366,6 @@ const singleRules = [
     categoryKey: 'goals',
     name: '첫 골 신고식',
     description: '공식 경기 첫 득점 기록',
-    predicate: (facts) => facts.goals >= 1,
-    tier: 1,
     valueKey: 'goals',
     value: (facts) => facts.goals,
     importance: 'core',
@@ -325,57 +377,47 @@ const singleRules = [
     categoryKey: 'special',
     name: '해트트릭 히어로',
     description: (facts) => `해트트릭 ${facts.hatTricks}회`,
-    predicate: (facts) => facts.hatTricks > 0,
-    tier: (facts) => (facts.hatTricks >= 4 ? 4 : facts.hatTricks >= 3 ? 3 : facts.hatTricks >= 2 ? 2 : 1),
     value: (facts) => facts.hatTricks,
     valueKey: 'hatTricks',
     importance: 'high',
-    thresholds: { 1: 1, 2: 2, 3: 3, 4: 4 }
+    thresholds: { 1: 1, 2: 2, 3: 3, 4: 4, 5: 7 }
   },
   {
     slug: 'multi-goal-collector',
     categoryKey: 'special',
     name: '멀티골 콜렉터',
     description: (facts) => `2골 이상 경기 ${facts.braces}회`,
-    predicate: (facts) => facts.braces >= 2,
-    tier: (facts) => (facts.braces >= 7 ? 4 : facts.braces >= 5 ? 3 : facts.braces >= 3 ? 2 : 1),
     value: (facts) => facts.braces,
     valueKey: 'braces',
-    thresholds: { 1: 2, 2: 3, 3: 5, 4: 7 }
+    thresholds: { 1: 2, 2: 3, 3: 5, 4: 7, 5: 10 }
   },
   {
     slug: 'playmaker-night',
     categoryKey: 'assists',
     name: '플레이메이커 나이트',
     description: (facts) => `경기당 2도움 이상 ${facts.multiAssistMatches}회`,
-    predicate: (facts) => facts.multiAssistMatches >= 1,
-    tier: (facts) => (facts.multiAssistMatches >= 5 ? 4 : facts.multiAssistMatches >= 3 ? 3 : facts.multiAssistMatches >= 2 ? 2 : 1),
     value: (facts) => facts.multiAssistMatches,
     valueKey: 'multiAssistMatches',
-    thresholds: { 1: 1, 2: 2, 3: 3, 4: 5 }
+    thresholds: { 1: 1, 2: 2, 3: 3, 4: 5, 5: 8 }
   },
   {
     slug: 'consistent-scorer',
     categoryKey: 'goals',
     name: '꾸준한 스나이퍼',
     description: (facts) => `득점한 경기 ${facts.matchesWithGoal}회`,
-    predicate: (facts) => facts.matchesWithGoal >= 6,
-    tier: (facts) => (facts.matchesWithGoal >= 15 ? 4 : facts.matchesWithGoal >= 12 ? 3 : facts.matchesWithGoal >= 8 ? 2 : 1),
     value: (facts) => facts.matchesWithGoal,
     valueKey: 'matchesWithGoal',
-    thresholds: { 1: 6, 2: 8, 3: 12, 4: 15 }
+    thresholds: { 1: 6, 2: 8, 3: 12, 4: 15, 5: 24 }
   },
   {
     slug: 'attendance-streak',
     categoryKey: 'appearances',
     name: '출석체크 달인',
     description: (facts) => `연속 ${facts.bestAppearanceStreak}경기 출전`,
-    predicate: (facts) => facts.bestAppearanceStreak >= 4,
-    tier: (facts) => (facts.bestAppearanceStreak >= 14 ? 4 : facts.bestAppearanceStreak >= 10 ? 3 : facts.bestAppearanceStreak >= 7 ? 2 : 1),
     value: (facts) => facts.bestAppearanceStreak,
     valueKey: 'bestAppearanceStreak',
     importance: 'core',
-    thresholds: { 1: 4, 2: 7, 3: 10, 4: 14 }
+    thresholds: { 1: 4, 2: 7, 3: 10, 4: 14, 5: 24 }
   }
 ]
 
@@ -385,7 +427,6 @@ const buildBadge = (rule, theme, overrides = {}) => {
   const importance = overrides.importance || rule.importance || (tier >= 3 ? 'high' : 'normal')
   const showValue = overrides.showValue ?? rule.showValue ?? true
   const numericValue = showValue ? overrides.numericValue ?? null : null
-  // 진행도(다음 티어) 메타데이터 포함
   const nextTier = overrides.nextTier ?? null
   const nextThreshold = overrides.nextThreshold ?? null
   const remainingToNext = overrides.remainingToNext ?? null
@@ -411,28 +452,29 @@ const buildBadge = (rule, theme, overrides = {}) => {
   }
 }
 
-function applyTieredRule(rule, facts) {
+function applyTieredRule(rule, facts, overridesMap) {
+  if (!facts || !rule) return null
   const theme = themeByCategory[rule.categoryKey] || themeByCategory.special
-  const available = [...rule.tiers]
-    .filter((tierDef) => facts && rule && typeof tierDef?.min === 'number' && rule.value(facts) >= tierDef.min)
+  const resolvedTiers = resolveTieredRuleTiers(rule, overridesMap)
+  if (!resolvedTiers?.length) return null
+  const currentValue = typeof rule.value === 'function' ? rule.value(facts) : 0
+  const available = resolvedTiers
+    .filter((tierDef) => typeof tierDef?.min === 'number' && currentValue >= tierDef.min)
     .sort((a, b) => a.min - b.min)
-  if (available.length === 0) return null
+  if (!available.length) return null
   const highest = available[available.length - 1]
-  // 다음 티어 계산
-  const ordered = [...rule.tiers].sort((a, b) => a.min - b.min)
-  const highestIndex = ordered.findIndex(t => t.tier === highest.tier)
-  let nextTierMeta = null
-  if (highestIndex >= 0 && highestIndex < ordered.length - 1) {
-    nextTierMeta = ordered[highestIndex + 1]
-  }
+  const orderedByTier = [...resolvedTiers].sort((a, b) => a.tier - b.tier)
+  const highestIndex = orderedByTier.findIndex((t) => t.tier === highest.tier)
+  const nextTierMeta = highestIndex >= 0 && highestIndex < orderedByTier.length - 1
+    ? orderedByTier[highestIndex + 1]
+    : null
   const awardTs = resolveAwardTimestamp(facts, rule.valueKey, highest.min, facts?.lastContributionTs)
-  const currentValue = rule.value(facts)
   const remainingToNext = nextTierMeta ? Math.max(0, nextTierMeta.min - currentValue) : null
   return buildBadge(rule, theme, {
     playerId: facts?.playerId,
     facts,
     tier: highest.tier,
-    numericValue: rule.value(facts),
+    numericValue: currentValue,
     awardedAt: awardTs,
     valueKey: rule.valueKey,
     nextTier: nextTierMeta ? nextTierMeta.tier : null,
@@ -441,61 +483,59 @@ function applyTieredRule(rule, facts) {
   })
 }
 
-function applySingleRule(rule, facts) {
-  if (!rule?.predicate || !rule.predicate(facts)) return null
+function applySingleRule(rule, facts, overridesMap) {
+  if (!rule || !facts) return null
   const theme = themeByCategory[rule.categoryKey] || themeByCategory.special
-  const resolvedTier = typeof rule.tier === 'function' ? rule.tier(facts) : (rule.tier ?? 1)
-  const tiersNumericValue = rule.value ? rule.value(facts) : null
-  let threshold = null
-  if (rule.thresholds && resolvedTier in rule.thresholds) {
-    threshold = rule.thresholds[resolvedTier]
-  } else if (typeof rule.threshold === 'number') {
-    threshold = rule.threshold
+  const currentValue = typeof rule.value === 'function' ? rule.value(facts) : null
+  if (!Number.isFinite(currentValue)) return null
+  if (rule.predicate && !rule.predicate(facts)) return null
+  const thresholdsMap = resolveSingleRuleThresholds(rule, overridesMap)
+  const thresholdRows = Object.entries(thresholdsMap)
+    .map(([tier, threshold]) => ({ tier: Number(tier), threshold: Number(threshold) }))
+    .filter((row) => Number.isFinite(row.tier) && Number.isFinite(row.threshold))
+    .sort((a, b) => a.tier - b.tier)
+
+  let resolvedTier = null
+  let resolvedThreshold = null
+  if (thresholdRows.length > 0) {
+    const achieved = thresholdRows.filter((row) => currentValue >= row.threshold)
+    if (!achieved.length) return null
+    const highest = achieved[achieved.length - 1]
+    resolvedTier = highest.tier
+    resolvedThreshold = highest.threshold
   } else {
-    threshold = tiersNumericValue ?? 1
+    resolvedTier = typeof rule.tier === 'function' ? rule.tier(facts) : (rule.tier ?? 1)
+    resolvedThreshold = typeof rule.threshold === 'number' ? rule.threshold : currentValue
+    if (!rule.predicate && (currentValue ?? 0) < resolvedThreshold) return null
   }
-  const awardedTs = resolveAwardTimestamp(
-    facts,
-    rule.valueKey,
-    threshold,
-    facts?.lastContributionTs
-  )
-  // 다음 티어 계산 (thresholds 객체 기반)
-  let nextTier = null
-  let nextThreshold = null
-  let remainingToNext = null
-  if (rule.thresholds) {
-    const candidateTier = resolvedTier + 1
-    if (rule.thresholds[candidateTier]) {
-      nextTier = candidateTier
-      nextThreshold = rule.thresholds[candidateTier]
-      if (tiersNumericValue != null) {
-        remainingToNext = Math.max(0, nextThreshold - tiersNumericValue)
-      }
-    }
-  }
+
+  const nextRow = thresholdRows.find((row) => row.tier === resolvedTier + 1)
+  const remainingToNext = nextRow ? Math.max(0, nextRow.threshold - currentValue) : null
+  const awardedTs = resolveAwardTimestamp(facts, rule.valueKey, resolvedThreshold, facts?.lastContributionTs)
+
   return buildBadge(rule, theme, {
     playerId: facts?.playerId,
     facts,
     tier: resolvedTier,
-    numericValue: tiersNumericValue,
+    numericValue: currentValue,
     awardedAt: awardedTs,
     valueKey: rule.valueKey,
-    nextTier,
-    nextThreshold,
+    nextTier: nextRow ? nextRow.tier : null,
+    nextThreshold: nextRow ? nextRow.threshold : null,
     remainingToNext
   })
 }
 
 export function generateBadgesFromFacts(facts) {
   if (!facts) return []
+  const overrides = readBadgeTierOverrides()
   const badges = []
   tieredRules.forEach((rule) => {
-    const badge = applyTieredRule(rule, facts)
+    const badge = applyTieredRule(rule, facts, overrides)
     if (badge) badges.push(badge)
   })
   singleRules.forEach((rule) => {
-    const badge = applySingleRule(rule, facts)
+    const badge = applySingleRule(rule, facts, overrides)
     if (badge) badges.push(badge)
   })
   return badges
@@ -505,4 +545,51 @@ export function computeBadgesForPlayer(playerId, players = [], matches = []) {
   const map = buildPlayerBadgeFactsMap(players, matches)
   const key = toStr(playerId)
   return generateBadgesFromFacts(map.get(key))
+}
+
+export function getBadgeThresholds(slug) {
+  const overrides = readBadgeTierOverrides()
+  const tierRule = tieredRules.find((r) => r.slug === slug)
+  if (tierRule) {
+    return resolveTieredRuleTiers(tierRule, overrides)
+      .map((t) => ({ tier: t.tier, threshold: t.min }))
+      .sort((a, b) => a.tier - b.tier)
+  }
+  const singleRule = singleRules.find((r) => r.slug === slug)
+  if (singleRule) {
+    const thresholds = resolveSingleRuleThresholds(singleRule, overrides)
+    const entries = Object.entries(thresholds)
+      .map(([tier, threshold]) => ({ tier: Number(tier), threshold }))
+      .filter((row) => Number.isFinite(row.tier) && Number.isFinite(row.threshold))
+      .sort((a, b) => a.tier - b.tier)
+    if (entries.length) return entries
+    if (typeof singleRule.threshold === 'number') {
+      const tierVal = typeof singleRule.tier === 'function' ? 1 : (singleRule.tier || 1)
+      return [{ tier: tierVal, threshold: singleRule.threshold }]
+    }
+  }
+  return []
+}
+
+export function getBadgeTierRuleCatalog() {
+  const tiered = tieredRules.map((rule) => ({
+    slug: rule.slug,
+    name: typeof rule.name === 'string' ? rule.name : rule.slug,
+    categoryKey: rule.categoryKey,
+    type: 'tiered',
+    tiers: (rule.tiers || []).map((tier) => ({ tier: tier.tier, min: tier.min }))
+  }))
+  const single = singleRules
+    .filter((rule) => rule.thresholds && Object.keys(rule.thresholds).length > 0)
+    .map((rule) => ({
+      slug: rule.slug,
+      name: typeof rule.name === 'string' ? rule.name : rule.slug,
+      categoryKey: rule.categoryKey,
+      type: 'single',
+      tiers: Object.entries(rule.thresholds).map(([tier, threshold]) => ({ tier: Number(tier), min: threshold }))
+    }))
+  return [...tiered, ...single].map((entry) => ({
+    ...entry,
+    tiers: entry.tiers.sort((a, b) => a.tier - b.tier)
+  }))
 }

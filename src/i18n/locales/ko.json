@@ -303,7 +303,19 @@
       "nextTierLabel": "다음 {{tier}}",
       "needMore": "{{count}} 더 필요"
     },
+    "detail": {
+      "title": "티어 진행 현황",
+      "currentValue": "현재",
+      "threshold": "목표",
+      "status": "상태",
+      "achieved": "달성",
+      "locked": "잠김",
+      "remaining": "{{count}} 남음",
+      "progressToNext": "{{tier}} 달성까지 {{count}} 더",
+      "close": "닫기"
+    },
     "tiers": {
+      "diamond": "다이아몬드",
       "platinum": "플래티넘",
       "gold": "골드",
       "silver": "실버",
@@ -317,6 +329,17 @@
       "special": "스페셜",
       "draft": "드래프트",
       "mom": "MOM"
+    },
+    "view": {
+      "categories": "카테고리",
+      "all": "전체",
+      "highTier": "상위 티어",
+      "tiers": "티어별"
+    },
+    "group": {
+      "highTierHeader": "상위 티어 뱃지",
+      "allHeader": "전체 뱃지",
+      "tierLabel": "티어 {{tier}}"
     },
     "definitions": {
       "total-goals": {

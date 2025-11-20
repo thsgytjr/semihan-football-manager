@@ -23,7 +23,8 @@ import ProdDataWarning from"./components/ProdDataWarning"
 import LanguageSwitcher from"./components/LanguageSwitcherNew"
 import Dashboard from"./pages/Dashboard";import PlayersPage from"./pages/PlayersPage";import MaintenancePage from"./pages/MaintenancePage"
 import logoUrl from"./assets/GoalifyLogo.png"
-import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEnabled,updateMaintenanceMode,updateFeatureEnabled,updateLeaderboardCategoryEnabled}from"./lib/appSettings"
+import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEnabled,updateMaintenanceMode,updateFeatureEnabled,updateLeaderboardCategoryEnabled,updateBadgeTierOverrides}from"./lib/appSettings"
+import { getBadgeTierRuleCatalog } from './lib/playerBadgeEngine'
 
 const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden role="img" className="shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5"/><rect x="2" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/><rect x="18.5" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>)
 
@@ -63,6 +64,7 @@ export default function App(){
   const[tutorialEnabled,setTutorialEnabled]=useState(()=>getAppSettings().tutorialEnabled)
   const[maintenanceMode,setMaintenanceMode]=useState(()=>getAppSettings().maintenanceMode||false)
   const[featuresEnabled,setFeaturesEnabled]=useState(()=>getAppSettings().features||{})
+  const[badgeTierOverrides,setBadgeTierOverrides]=useState(()=>getAppSettings().badgeTierOverrides||{})
   const{shouldShowTutorial,setShouldShowTutorial}=useAutoTutorial(isAdmin)
   const[previewMode,setPreviewMode]=useState(()=>isPreviewMode())
   const[isDev,setIsDev]=useState(()=>isDevelopmentEnvironment())
@@ -207,6 +209,9 @@ export default function App(){
         }
         if(settings.features){
           setFeaturesEnabled(settings.features)
+        }
+        if(settings.badgeTierOverrides){
+          setBadgeTierOverrides(settings.badgeTierOverrides)
         }
         // 설정 로드 후 관리자 여부 재평가 (adminEmails 지원)
         const session = await getSession()
@@ -804,6 +809,18 @@ export default function App(){
     }
   }
 
+  async function handleSaveBadgeTierOverrides(nextOverrides){
+    setBadgeTierOverrides(nextOverrides)
+    const saved = await updateBadgeTierOverrides(nextOverrides)
+    if(saved){
+      notify('뱃지 티어 기준이 저장되었습니다.','success')
+      return true
+    }
+    notify('뱃지 티어 기준 저장에 실패했습니다.','error')
+    setBadgeTierOverrides(getAppSettings().badgeTierOverrides||{})
+    return false
+  }
+
   /* ──────────────────────────────────────────────────────────
    * FormationBoard용 fetchMatchTeams 빌더 (생략 없음)
    * ────────────────────────────────────────────────────────── */
@@ -1105,7 +1122,7 @@ export default function App(){
     </footer>
 
     <AdminLoginDialog isOpen={loginOpen} onClose={()=>setLoginOpen(false)} onSuccess={onAdminSuccess}/>
-  <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle} tutorialEnabled={tutorialEnabled} onTutorialToggle={handleTutorialToggle} maintenanceMode={maintenanceMode} onMaintenanceModeToggle={handleMaintenanceModeToggle} featuresEnabled={featuresEnabled} onFeatureToggle={handleFeatureToggle} onLeaderboardToggle={handleLeaderboardToggle} isAdmin={isAdmin} isAnalyticsAdmin={isAnalyticsAdmin} visits={visits}/>
+  <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle} tutorialEnabled={tutorialEnabled} onTutorialToggle={handleTutorialToggle} maintenanceMode={maintenanceMode} onMaintenanceModeToggle={handleMaintenanceModeToggle} featuresEnabled={featuresEnabled} onFeatureToggle={handleFeatureToggle} onLeaderboardToggle={handleLeaderboardToggle} badgeTierOverrides={badgeTierOverrides} onSaveBadgeTierOverrides={handleSaveBadgeTierOverrides} isAdmin={isAdmin} isAnalyticsAdmin={isAnalyticsAdmin} visits={visits}/>
     {tutorialEnabled && <AppTutorial isOpen={tutorialOpen} onClose={()=>setTutorialOpen(false)} isAdmin={isAdmin}/>}
   </div>)}
 const TabButton = React.memo(function TabButton({icon,label,active,onClick,loading}){return(<button onClick={onClick} disabled={loading} title={label} aria-label={label} className={`flex items-center gap-1.5 rounded-md px-2.5 py-2.5 sm:px-3 sm:py-3 text-sm transition-all duration-200 min-h-[42px] sm:min-h-[44px] touch-manipulation whitespace-nowrap ${active?"bg-emerald-500 text-white shadow-md":"text-stone-700 hover:bg-stone-200 active:bg-stone-300 active:scale-95"} ${loading?"opacity-75 cursor-wait":""}`} style={{touchAction: 'manipulation'}} aria-pressed={active}>{loading && active ? <svg className="w-4 h-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg> : <span className="w-4 h-4 flex-shrink-0">{icon}</span>}{active && <span className="text-xs font-semibold hidden sm:inline">{label}</span>}</button>)})
@@ -1218,11 +1235,99 @@ const PageSkeleton = React.memo(function PageSkeleton({ tab }) {
   );
 })
 
+function buildBadgeTierFormState(catalog = [], overrides = {}) {
+  const result = {}
+  if (!Array.isArray(catalog)) return result
+  catalog.forEach((rule) => {
+    const overrideEntry = overrides?.[rule.slug]?.tiers || {}
+    const tierValues = {};
+    (rule.tiers || []).forEach((tierDef) => {
+      const tierKey = tierDef.tier
+      const overrideValue = overrideEntry?.[tierKey]
+      const baseValue = tierDef.min ?? 0
+      const valueToUse = overrideValue ?? baseValue
+      tierValues[tierKey] = valueToUse === '' ? '' : String(valueToUse)
+    })
+    result[rule.slug] = tierValues
+  })
+  return result
+}
+
+function validateBadgeTierForm(catalog = [], values = {}) {
+  const errors = {}
+  if (!Array.isArray(catalog)) return errors
+  catalog.forEach((rule) => {
+    const tiers = [...(rule.tiers || [])].sort((a, b) => a.tier - b.tier)
+    let prev = null
+    for (const tierDef of tiers) {
+      const raw = values?.[rule.slug]?.[tierDef.tier]
+      const num = Number(raw)
+      if (!Number.isFinite(num) || num < 0) {
+        errors[rule.slug] = 'nonNumeric'
+        break
+      }
+      if (prev != null && num < prev) {
+        errors[rule.slug] = 'ascending'
+        break
+      }
+      prev = num
+    }
+  })
+  return errors
+}
+
+function mergeBadgeTierOverridesForSave(catalog = [], values = {}, existing = {}) {
+  if (!Array.isArray(catalog) || catalog.length === 0) {
+    return typeof existing === 'object' && existing !== null ? existing : {}
+  }
+  const preserved = {}
+  Object.entries(existing || {}).forEach(([slug, entry]) => {
+    const known = catalog.some((rule) => rule.slug === slug)
+    if (!known) {
+      preserved[slug] = entry
+    }
+  })
+
+  const payload = { ...preserved }
+  catalog.forEach((rule) => {
+    const baseMap = {}
+    ;(rule.tiers || []).forEach((tierDef) => {
+      baseMap[tierDef.tier] = Number(tierDef.min)
+    })
+    const userValues = values?.[rule.slug] || {}
+    const diffs = {}
+    Object.entries(baseMap).forEach(([tier, baseValue]) => {
+      const raw = userValues[tier]
+      const num = Number(raw)
+      if (!Number.isFinite(num)) return
+      if (num !== baseValue) {
+        diffs[tier] = num
+      }
+    })
+    if (Object.keys(diffs).length > 0) {
+      payload[rule.slug] = { tiers: diffs }
+    } else {
+      delete payload[rule.slug]
+    }
+  })
+
+  return payload
+}
+
 /* ── Settings Dialog ─────────────────── */
-function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,onTutorialToggle,maintenanceMode,onMaintenanceModeToggle,featuresEnabled,onFeatureToggle,onLeaderboardToggle,isAdmin,isAnalyticsAdmin,visits}){
+function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,onTutorialToggle,maintenanceMode,onMaintenanceModeToggle,featuresEnabled,onFeatureToggle,onLeaderboardToggle,badgeTierOverrides,onSaveBadgeTierOverrides,isAdmin,isAnalyticsAdmin,visits}){
   const { t } = useTranslation()
   const[newTitle,setNewTitle]=useState(appTitle)
   const[titleEditMode,setTitleEditMode]=useState(false)
+  const badgeTierCatalog = useMemo(() => {
+    const catalog = getBadgeTierRuleCatalog()
+    return Array.isArray(catalog) ? catalog : []
+  }, [])
+  const[tierFormValues,setTierFormValues]=useState(()=>buildBadgeTierFormState(badgeTierCatalog,badgeTierOverrides||{}))
+  const[tierDirty,setTierDirty]=useState(false)
+  const[tierErrors,setTierErrors]=useState({})
+  const[tierSaving,setTierSaving]=useState(false)
+  const canEditBadgeTiers = Boolean(isAdmin && badgeTierCatalog.length>0 && onSaveBadgeTierOverrides)
   
   useEffect(()=>{
     if(isOpen){
@@ -1230,6 +1335,13 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
       setTitleEditMode(false)
     }
   },[isOpen,appTitle])
+
+  useEffect(()=>{
+    if(!isOpen)return
+    setTierFormValues(buildBadgeTierFormState(badgeTierCatalog,badgeTierOverrides||{}))
+    setTierDirty(false)
+    setTierErrors({})
+  },[isOpen,badgeTierCatalog,badgeTierOverrides])
   
   const handleTitleUpdate=()=>{
     if(newTitle.trim()){
@@ -1240,6 +1352,63 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
       }else{
         notify(t('settings.titleChangeFailed'),"error")
       }
+    }
+  }
+
+  const tierName=(tier)=>{
+    switch(Number(tier)){
+      case 5:return t('badges.tiers.diamond')
+      case 4:return t('badges.tiers.platinum')
+      case 3:return t('badges.tiers.gold')
+      case 2:return t('badges.tiers.silver')
+      case 1:return t('badges.tiers.bronze')
+      default:return`Tier ${tier}`
+    }
+  }
+
+  const resolveTierError=(code)=>{
+    if(code==='ascending')return'상위 티어는 하위 티어보다 크거나 같아야 합니다.'
+    return'0 이상의 숫자를 입력하세요.'
+  }
+
+  const handleTierInputChange=(slug,tier,value)=>{
+    setTierDirty(true)
+    setTierFormValues(prev=>({
+      ...prev,
+      [slug]:{
+        ...(prev[slug]||{}),
+        [tier]:value
+      }
+    }))
+  }
+
+  const handleTierReset=(slug)=>{
+    const rule=badgeTierCatalog.find(r=>r.slug===slug)
+    if(!rule)return
+    const defaults={}
+    ;(rule.tiers||[]).forEach(tier=>{defaults[tier.tier]=String(tier.min)})
+    setTierFormValues(prev=>({...prev,[slug]:defaults}))
+    setTierDirty(true)
+    setTierErrors(prev=>{const next={...prev};delete next[slug];return next})
+  }
+
+  const handleTierResetAll=()=>{
+    setTierFormValues(buildBadgeTierFormState(badgeTierCatalog,{}))
+    setTierDirty(true)
+    setTierErrors({})
+  }
+
+  const handleTierSave=async()=>{
+    if(!canEditBadgeTiers)return
+    const validation=validateBadgeTierForm(badgeTierCatalog,tierFormValues)
+    setTierErrors(validation)
+    if(Object.keys(validation).length>0)return
+    setTierSaving(true)
+    const payload=mergeBadgeTierOverridesForSave(badgeTierCatalog,tierFormValues,badgeTierOverrides||{})
+    const success=await onSaveBadgeTierOverrides(payload)
+    setTierSaving(false)
+    if(success){
+      setTierDirty(false)
     }
   }
   
@@ -1491,6 +1660,67 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
                 })}
               </div>
             </div>
+            {canEditBadgeTiers && (
+              <div className="border-t border-stone-200 pt-4 mt-4">
+                <div className="mb-3">
+                  <h4 className="text-sm font-semibold text-stone-800">뱃지 티어 기준</h4>
+                  <p className="text-xs text-stone-500 mt-0.5">브론즈~다이아몬드 임계값을 조정하여 팀 분위기에 맞게 커스터마이징하세요.</p>
+                </div>
+                <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
+                  {badgeTierCatalog.map(rule => (
+                    <div key={rule.slug} className="rounded-xl border border-stone-200 bg-white/80 p-3">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-stone-900">{rule.name}</p>
+                          <p className="text-[11px] uppercase tracking-wide text-stone-400">slug · {rule.slug}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {badgeTierOverrides?.[rule.slug] && (
+                            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 ring-1 ring-emerald-200">커스텀</span>
+                          )}
+                          <button type="button" onClick={()=>handleTierReset(rule.slug)} className="text-xs font-semibold text-stone-500 hover:text-stone-700">기본값</button>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                        {rule.tiers.slice().sort((a,b)=>a.tier-b.tier).map(tier=>(
+                          <label key={`${rule.slug}-${tier.tier}`} className="flex flex-col gap-1 rounded-lg border border-stone-100 bg-stone-50 px-3 py-2">
+                            <span className="text-xs font-semibold text-stone-600">{tierName(tier.tier)}</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={tierFormValues?.[rule.slug]?.[tier.tier] ?? ''}
+                              onChange={(e)=>handleTierInputChange(rule.slug,tier.tier,e.target.value)}
+                              className="w-full rounded-md border border-stone-200 bg-white px-2 py-1 text-sm text-stone-800 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                      {tierErrors[rule.slug] && (
+                        <p className="mt-2 text-xs font-semibold text-rose-600">{resolveTierError(tierErrors[rule.slug])}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={handleTierSave}
+                    disabled={!tierDirty||tierSaving}
+                    className={`flex-1 rounded-lg px-3 py-2 text-sm font-semibold text-white ${(!tierDirty||tierSaving)?'bg-emerald-300 cursor-not-allowed':'bg-emerald-600 hover:bg-emerald-700'}`}
+                  >
+                    {tierSaving ? '저장 중...' : '티어 기준 저장'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleTierResetAll}
+                    className="rounded-lg border border-stone-200 px-3 py-2 text-sm font-semibold text-stone-600 hover:bg-stone-100"
+                  >
+                    전체 기본값 복원
+                  </button>
+                </div>
+                <p className="mt-1 text-[11px] text-stone-500">값을 저장하면 모든 선수의 뱃지 계산에 즉시 반영됩니다.</p>
+              </div>
+            )}
             </>
           )}
 

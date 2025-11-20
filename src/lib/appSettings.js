@@ -38,7 +38,8 @@ const DEFAULT_SETTINGS = {
     memberFeeOverride: null,        // 숫자 또는 null
     guestSurchargeOverride: null,   // 숫자 또는 null
     venueTotalOverride: null        // 매치 전체 구장비 강제 설정 (멤버/게스트 계산에 사용)
-  }
+  },
+  badgeTierOverrides: {}
 }
 
 function mergeSettings(partial = {}) {
@@ -54,6 +55,9 @@ function mergeSettings(partial = {}) {
       ...DEFAULT_SETTINGS.accounting,
       ...(incoming.accounting || {}),
     },
+    badgeTierOverrides: {
+      ...(incoming.badgeTierOverrides || {})
+    }
   }
 }
 
@@ -208,4 +212,18 @@ export async function updateAccountingOverrides(partial) {
 export function getAccountingOverrides() {
   const settings = getAppSettings()
   return settings.accounting || DEFAULT_SETTINGS.accounting
+}
+
+export function getBadgeTierOverrides() {
+  const settings = getAppSettings()
+  return settings.badgeTierOverrides || DEFAULT_SETTINGS.badgeTierOverrides
+}
+
+export async function updateBadgeTierOverrides(nextOverrides = {}) {
+  const settings = getAppSettings()
+  settings.badgeTierOverrides = typeof nextOverrides === 'object' && nextOverrides !== null
+    ? nextOverrides
+    : DEFAULT_SETTINGS.badgeTierOverrides
+  const success = await saveAppSettingsToServer(settings)
+  return success ? settings.badgeTierOverrides : null
 }

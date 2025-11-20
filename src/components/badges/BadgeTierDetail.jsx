@@ -1,0 +1,87 @@
+// src/components/badges/BadgeTierDetail.jsx
+import React from 'react'
+import { useTranslation } from 'react-i18next'
+import { X } from 'lucide-react'
+import { getBadgeThresholds } from '../../lib/playerBadgeEngine'
+
+export default function BadgeTierDetail({ badge, onClose }) {
+  const { t } = useTranslation()
+  if (!badge) return null
+  const { slug, numeric_value: value, tier: currentTier = 1 } = badge
+  const thresholds = getBadgeThresholds(slug)
+  const tierName = (tNum) => {
+    switch (tNum) {
+      case 5: return t('badges.tiers.diamond')
+      case 4: return t('badges.tiers.platinum')
+      case 3: return t('badges.tiers.gold')
+      case 2: return t('badges.tiers.silver')
+      case 1: return t('badges.tiers.bronze')
+      default: return `T${tNum}`
+    }
+  }
+  const nextRow = thresholds.find(th => th.tier === currentTier + 1)
+  const remainingToNext = nextRow ? Math.max(0, nextRow.threshold - (value || 0)) : null
+
+  return (
+    <div className="absolute inset-0 z-[1400] flex items-center justify-center bg-black/70 p-4">
+      <div className="relative w-full max-w-md rounded-3xl bg-white shadow-2xl ring-1 ring-stone-200">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-3 top-3 rounded-full p-2 text-stone-500 hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          aria-label={t('badges.detail.close')}
+        >
+          <X className="h-5 w-5" />
+        </button>
+        <div className="flex flex-col gap-4 p-5">
+          <h3 className="text-lg font-bold text-stone-900">{t('badges.detail.title')} – {t(`badges.definitions.${slug}.name`, { defaultValue: badge.name })}</h3>
+          <div className="rounded-xl border border-stone-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-stone-50 text-stone-600">
+                <tr>
+                  <th className="px-3 py-2 text-left w-20">{t('badges.detail.currentValue')}</th>
+                  <th className="px-3 py-2 text-left">{t('badges.detail.threshold')}</th>
+                  <th className="px-3 py-2 text-left">{t('badges.detail.status')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {thresholds.sort((a,b)=>a.tier-b.tier).map(row => {
+                  const achieved = (value || 0) >= row.threshold && currentTier >= row.tier
+                  const rowRemaining = achieved ? 0 : Math.max(0, row.threshold - (value || 0))
+                  const isCurrent = currentTier === row.tier
+                  return (
+                    <tr key={row.tier} className={isCurrent ? 'bg-emerald-50/70' : ''}>
+                      <td className="px-3 py-2 font-medium">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex items-center rounded-full bg-stone-100 px-2 py-0.5 text-xs font-semibold text-stone-600 ring-1 ring-stone-200">
+                            {tierName(row.tier)}
+                          </span>
+                          {isCurrent && <span className="text-[11px] text-emerald-600 font-semibold">{t('badges.detail.currentValue')}</span>}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-stone-700">{row.threshold}</td>
+                      <td className="px-3 py-2">
+                        {achieved ? (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-200">{t('badges.detail.achieved')}</span>
+                        ) : (
+                          <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[11px] font-medium text-stone-500 ring-1 ring-stone-200">
+                            {rowRemaining > 0 ? t('badges.detail.remaining', { count: rowRemaining }) : t('badges.detail.locked')}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          {remainingToNext != null && remainingToNext > 0 && (
+            <div className="text-xs text-emerald-700 font-medium">
+              {t('badges.detail.progressToNext', { count: remainingToNext, tier: tierName(currentTier + 1) })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}

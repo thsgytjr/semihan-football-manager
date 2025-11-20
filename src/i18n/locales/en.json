@@ -356,7 +356,19 @@
       "nextTierLabel": "Next {{tier}}",
       "needMore": "{{count}} to go"
     },
+    "detail": {
+      "title": "Tier Progress",
+      "currentValue": "Current",
+      "threshold": "Threshold",
+      "status": "Status",
+      "achieved": "Achieved",
+      "locked": "Locked",
+      "remaining": "{{count}} remaining",
+      "progressToNext": "Need {{count}} more for {{tier}}",
+      "close": "Close"
+    },
     "tiers": {
+      "diamond": "Diamond",
       "platinum": "Platinum",
       "gold": "Gold",
       "silver": "Silver",
@@ -370,6 +382,17 @@
       "special": "Special",
       "draft": "Draft",
       "mom": "MOM"
+    },
+    "view": {
+      "categories": "By Category",
+      "all": "All Badges",
+      "highTier": "High Tier",
+      "tiers": "By Tier"
+    },
+    "group": {
+      "highTierHeader": "High Tier Badges",
+      "allHeader": "All Badges",
+      "tierLabel": "Tier {{tier}}"
     },
     "definitions": {
       "total-goals": {
