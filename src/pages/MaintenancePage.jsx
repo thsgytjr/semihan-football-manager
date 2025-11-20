@@ -20,14 +20,19 @@ export default function MaintenancePage() {
   const highRef = useRef(0)
   const globalBestRef = useRef(0)
   const userRankRef = useRef(null)
+  const topPlayerNicknameRef = useRef('')
+  const [showNicknameDialog, setShowNicknameDialog] = useState(false)
+  const [pendingScore, setPendingScore] = useState(0)
+  const [nickname, setNickname] = useState('')
   const lastTsRef = useRef(0)
   const ballRef = useRef({ x: 70, y: 0, vy: 0, angle: 0 })
   const obstaclesRef = useRef([])
   const spawnRef = useRef(0)
-  const speedRef = useRef(320)
+  const speedRef = useRef(260)
   const patternIndexRef = useRef(0)
   const imgStandRef = useRef(null)
   const imgSlideRef = useRef(null)
+  const submitScoreRef = useRef(null)
   const W = 360, H = 200
   const groundY = 160
   const R = 12
@@ -46,14 +51,15 @@ export default function MaintenancePage() {
         console.log('[Runner] Fetching global best score...')
         const { data, error } = await supabase
           .from('runner_scores')
-          .select('score')
+          .select('score, user_id')
           .order('score', { ascending: false })
           .limit(1)
           .single()
         console.log('[Runner] Global best query result:', { data, error })
         if (!error && data) {
-          console.log('[Runner] Setting global best to:', data.score)
+          console.log('[Runner] Setting global best to:', data.score, 'by', data.user_id)
           globalBestRef.current = data.score
+          topPlayerNicknameRef.current = data.user_id || 'Anonymous'
         } else {
           console.log('[Runner] No global best found or error:', error)
         }
@@ -62,6 +68,11 @@ export default function MaintenancePage() {
       }
     }
     loadGlobalBest()
+    // Load saved nickname
+    try {
+      const savedNickname = localStorage.getItem('sfm:runner:nickname') || ''
+      setNickname(savedNickname)
+    } catch {}
     // Preload images from bundled assets
     const imgStand = new Image()
     imgStand.src = runnerRefImg
@@ -70,6 +81,28 @@ export default function MaintenancePage() {
     imgSlide.src = runnerTackleImg
     imgSlideRef.current = imgSlide
   }, [])
+
+  // Submit score function (defined at component level so dialog can access it)
+  const submitScore = async (score, playerNickname) => {
+    try {
+      console.log('[Runner] Submitting score:', score, 'with nickname:', playerNickname)
+      const userId = playerNickname || localStorage.getItem('user') || 'anonymous'
+      const { error: insertError } = await supabase.from('runner_scores').insert({ user_id: userId, score })
+      console.log('[Runner] Insert result:', insertError)
+      // Reload global best with nickname
+      const { data, error: fetchError } = await supabase.from('runner_scores').select('score, user_id').order('score', { ascending: false }).limit(1).single()
+      console.log('[Runner] Reloaded global best:', { data, error: fetchError })
+      if (data) {
+        globalBestRef.current = data.score
+        topPlayerNicknameRef.current = data.user_id || 'Anonymous'
+      }
+      // Get user rank
+      const { count } = await supabase.from('runner_scores').select('score', { count: 'exact', head: true }).gt('score', score)
+      if (count !== null) userRankRef.current = count + 1
+    } catch (e) {
+      console.log('[Runner] Score submission failed:', e)
+    }
+  }
 
   // Runner input and loop
   useEffect(() => {
@@ -82,7 +115,7 @@ export default function MaintenancePage() {
       scoreRef.current = 0
       obstaclesRef.current = []
       spawnRef.current = 0
-      speedRef.current = 320
+      speedRef.current = 260
       patternIndexRef.current = 0
       overRef.current = false
       runningRef.current = false
@@ -107,9 +140,14 @@ export default function MaintenancePage() {
     }
 
     function onKey(e) { if (e.code === 'Space') { e.preventDefault(); jump() } }
-    function onTouch(e) { e.preventDefault(); jump() }
+    function onTouch(e) { 
+      e.preventDefault()
+      e.stopPropagation()
+      jump()
+    }
     window.addEventListener('keydown', onKey, { passive: false })
     canvas.addEventListener('touchstart', onTouch, { passive: false })
+    canvas.addEventListener('touchend', (e) => { e.preventDefault(); e.stopPropagation() }, { passive: false })
     canvas.addEventListener('mousedown', onTouch)
 
     function loop(ts) {
@@ -156,9 +194,9 @@ export default function MaintenancePage() {
           const h = 16, w = 32
           obstaclesRef.current.push({ type: 'slide', x: W + 10, y: groundY - 55, w, h, passed: false })
         }
-        // Progressively shorter spawn intervals (much more difficult)
-        const baseInterval = Math.max(0.35, 0.7 - scoreRef.current * 0.02)
-        const variance = Math.max(0.15, 0.5 - scoreRef.current * 0.015)
+        // Progressively shorter spawn intervals (balanced difficulty)
+        const baseInterval = Math.max(0.5, 0.9 - scoreRef.current * 0.012)
+        const variance = Math.max(0.25, 0.6 - scoreRef.current * 0.008)
         spawnRef.current = baseInterval + Math.random() * variance
       }
 
@@ -172,13 +210,13 @@ export default function MaintenancePage() {
         if (!o.passed && o.x + o.w < ballRef.current.x - R) {
           o.passed = true
           scoreRef.current += 1
-          // Much more aggressive difficulty: speed increases every 2 points
-          if (scoreRef.current % 2 === 0) {
-            speedRef.current += 20
+          // Gradual difficulty: speed increases every 3 points
+          if (scoreRef.current % 3 === 0) {
+            speedRef.current += 12
           }
-          // Big speed burst every 5 points
-          if (scoreRef.current % 5 === 0) {
-            speedRef.current += 40
+          // Moderate speed burst every 10 points
+          if (scoreRef.current % 10 === 0) {
+            speedRef.current += 25
           }
         }
       })
@@ -196,8 +234,9 @@ export default function MaintenancePage() {
             const hs = Number(localStorage.getItem('sfm:runner:hs') || 0) || 0
             if (scoreRef.current > hs) {
               localStorage.setItem('sfm:runner:hs', String(scoreRef.current))
-              // Submit to server
-              submitScore(scoreRef.current)
+              // Show nickname dialog for new high score
+              setPendingScore(scoreRef.current)
+              setShowNicknameDialog(true)
             }
             highRef.current = Math.max(hs, scoreRef.current)
           } catch {}
@@ -241,27 +280,16 @@ export default function MaintenancePage() {
       ctx.fillText(`Score ${scoreRef.current}`, 12, 20)
       if (highRef.current > 0) ctx.fillText(`Your Best ${highRef.current}`, 12, 38)
       if (globalBestRef.current > 0) { ctx.fillStyle = '#f59e0b'; ctx.fillText(`🏆 Server Best ${globalBestRef.current}`, 12, 56) }
-      if (userRankRef.current) { ctx.fillStyle = '#8b5cf6'; ctx.fillText(`Rank #${userRankRef.current}`, W - 80, 20) }
+      // Top player nickname at top right
+      if (topPlayerNicknameRef.current) { 
+        ctx.fillStyle = '#8b5cf6'; ctx.font = 'bold 12px ui-sans-serif, system-ui'
+        ctx.textAlign = 'right'
+        ctx.fillText(`👑 ${topPlayerNicknameRef.current}`, W - 12, 20)
+        ctx.textAlign = 'left'
+      }
+      if (userRankRef.current) { ctx.fillStyle = '#8b5cf6'; ctx.font = 'bold 14px ui-sans-serif, system-ui'; ctx.fillText(`Rank #${userRankRef.current}`, W - 80, 38) }
       if (!runningRef.current && !overRef.current) { ctx.fillStyle = 'rgba(31,41,55,0.7)'; ctx.fillText('Tap/Space to start', W/2 - 60, 90) }
       if (overRef.current) { ctx.fillStyle = 'rgba(220,38,38,0.9)'; ctx.fillText('Game Over · Tap/Space', W/2 - 70, 90) }
-    }
-
-    async function submitScore(score) {
-      try {
-        console.log('[Runner] Submitting score:', score)
-        const userId = localStorage.getItem('user') || 'anonymous'
-        const { error: insertError } = await supabase.from('runner_scores').insert({ user_id: userId, score })
-        console.log('[Runner] Insert result:', insertError)
-        // Reload global best
-        const { data, error: fetchError } = await supabase.from('runner_scores').select('score').order('score', { ascending: false }).limit(1).single()
-        console.log('[Runner] Reloaded global best:', { data, error: fetchError })
-        if (data) globalBestRef.current = data.score
-        // Get user rank
-        const { count } = await supabase.from('runner_scores').select('score', { count: 'exact', head: true }).gt('score', score)
-        if (count !== null) userRankRef.current = count + 1
-      } catch (e) {
-        console.log('[Runner] Score submission failed:', e)
-      }
     }
 
     // init
@@ -269,6 +297,7 @@ export default function MaintenancePage() {
     return () => {
       window.removeEventListener('keydown', onKey)
       canvas.removeEventListener('touchstart', onTouch)
+      canvas.removeEventListener('touchend', (e) => { e.preventDefault(); e.stopPropagation() })
       canvas.removeEventListener('mousedown', onTouch)
       if (rafRef.current) cancelAnimationFrame(rafRef.current)
       rafRef.current = null
@@ -327,7 +356,7 @@ export default function MaintenancePage() {
             <div className="flex flex-col items-center">
               <div className="mb-2 text-xs text-stone-500">탭/스페이스로 점프해서 수비수를 피하세요!</div>
               <div className="rounded-2xl border border-emerald-200 bg-white shadow-sm overflow-hidden">
-                <canvas ref={runCanvasRef} width={360} height={200} className="block max-w-full" />
+                <canvas ref={runCanvasRef} width={360} height={200} className="block max-w-full touch-manipulation" style={{ touchAction: 'manipulation' }} />
               </div>
             </div>
           </div>
@@ -335,6 +364,57 @@ export default function MaintenancePage() {
 
         {/* Removed game switcher and old mini-games */}
       </div>
+
+      {/* Nickname Dialog */}
+      {showNicknameDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full mx-4">
+            <h2 className="text-2xl font-bold text-emerald-600 mb-2 text-center">🎉 신기록 달성!</h2>
+            <p className="text-stone-600 text-center mb-4">점수: <span className="font-bold text-emerald-600">{pendingScore}</span></p>
+            <p className="text-sm text-stone-500 text-center mb-4">리더보드에 표시될 닉네임을 입력하세요</p>
+            <input
+              type="text"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              placeholder="닉네임 입력 (예: 메시)"
+              maxLength={20}
+              className="w-full px-4 py-3 border-2 border-emerald-200 rounded-xl focus:outline-none focus:border-emerald-500 mb-4"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && nickname.trim()) {
+                  localStorage.setItem('sfm:runner:nickname', nickname.trim())
+                  submitScore(pendingScore, nickname.trim())
+                  setShowNicknameDialog(false)
+                }
+              }}
+              autoFocus
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowNicknameDialog(false)
+                  submitScore(pendingScore, 'Anonymous')
+                }}
+                className="flex-1 px-4 py-2 border border-stone-300 rounded-xl text-stone-600 hover:bg-stone-50 transition"
+              >
+                건너뛰기
+              </button>
+              <button
+                onClick={() => {
+                  if (nickname.trim()) {
+                    localStorage.setItem('sfm:runner:nickname', nickname.trim())
+                    submitScore(pendingScore, nickname.trim())
+                    setShowNicknameDialog(false)
+                  }
+                }}
+                disabled={!nickname.trim()}
+                className="flex-1 px-4 py-2 bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 transition disabled:bg-stone-300 disabled:cursor-not-allowed"
+              >
+                제출
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Background sparkles removed (no emojis) */}
 
