@@ -111,7 +111,9 @@
     "badgeAll": "모두",
     "badgeAdmin": "Admin",
     "badgeDev": "개발자",
-    "badgeLeaderboard": "리더보드"
+    "badgeLeaderboard": "리더보드",
+    "leaderboardCard": "리더보드 카드",
+    "leaderboardCardDesc": "리더보드 섹션 전체 표시/숨김"
   },
   "tags": {
     "saved": "태그 프리셋이 저장되었습니다.",

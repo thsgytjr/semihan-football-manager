@@ -111,7 +111,9 @@
     "badgeAll": "All",
     "badgeAdmin": "Admin",
     "badgeDev": "Developer",
-    "badgeLeaderboard": "Leaderboard"
+    "badgeLeaderboard": "Leaderboard",
+    "leaderboardCard": "Leaderboard Card",
+    "leaderboardCardDesc": "Show/hide entire leaderboard section"
   },
   "tags": {
     "saved": "Tag presets saved.",

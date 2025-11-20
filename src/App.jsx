@@ -1393,6 +1393,32 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
                 <p className="text-xs text-stone-500 mt-0.5">카테고리를 숨겨도 데이터는 유지됩니다 (UI만 숨김)</p>
               </div>
               <div className="grid grid-cols-1 gap-2">
+                {/* 리더보드 카드 전체 표시/숨김 */}
+                <div className="flex items-center justify-between py-2 px-3 rounded-lg bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-colors">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-emerald-900">리더보드 카드 전체</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-200 text-emerald-800 font-medium">전체</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const current = featuresEnabled?.leaderboards?.visible
+                      const isOn = current === undefined ? true : !!current
+                      onLeaderboardToggle?.('visible', !isOn)
+                    }}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+                      (featuresEnabled?.leaderboards?.visible === undefined ? true : !!featuresEnabled?.leaderboards?.visible) ? 'bg-emerald-600' : 'bg-stone-300'
+                    }`}
+                    role="switch"
+                    aria-checked={featuresEnabled?.leaderboards?.visible === undefined ? true : !!featuresEnabled?.leaderboards?.visible}
+                  >
+                    <span
+                      className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                        (featuresEnabled?.leaderboards?.visible === undefined ? true : !!featuresEnabled?.leaderboards?.visible) ? 'translate-x-5' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+                
                 {Object.entries(leaderboardLabels).map(([key,label])=>{
                   const current = featuresEnabled?.leaderboards?.[key]
                   const isOn = current === undefined ? true : !!current

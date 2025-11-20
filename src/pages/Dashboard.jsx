@@ -193,6 +193,12 @@ export default function Dashboard({
     const v = leaderboardToggles?.[key]
     return v === undefined ? true : !!v
   }, [leaderboardToggles])
+  
+  // 리더보드 카드 전체 표시 여부
+  const leaderboardVisible = useMemo(() => {
+    const v = leaderboardToggles?.visible
+    return v === undefined ? true : !!v
+  }, [leaderboardToggles])
 
   const apOptions = useMemo(() => {
     const base = [
@@ -480,6 +486,7 @@ export default function Dashboard({
       />
 
       {/* 리더보드 */}
+      {leaderboardVisible && (
       <Card 
         title={
           <div className="flex items-center gap-2">
@@ -614,6 +621,7 @@ export default function Dashboard({
           )
         )}
       </Card>
+      )}
 
       {/* 매치 히스토리 (OVR 표시 숨김) */}
       <Card 
