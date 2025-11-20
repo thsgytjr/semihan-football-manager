@@ -1486,41 +1486,41 @@ function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraft
   
   return(<div ref={setNodeRef} className={`rounded-lg border bg-white transition ${isOver?'border-emerald-500 ring-2 ring-emerald-200':'border-gray-200'}`}>
     <div 
-      className={`mb-1 flex items-center justify-between px-3 py-2 text-xs ${!teamColor ? labelKit.headerClass : ''}`}
+      className={`mb-1 px-3 py-2 text-xs h-[60px] grid grid-cols-[1fr_auto] gap-y-1 ${!teamColor ? labelKit.headerClass : ''}`}
       style={teamColor ? headerStyle : {}}
     >
-      <div className="font-semibold flex items-center gap-2">
-        <span>팀 {teamIndex+1}</span>
-      </div>
-      <div className="opacity-80 flex items-center gap-2">
-        <span>{teamColor ? teamColor.label : labelKit.label} · {players.length}명</span>
-        {isAdmin&&(
-            <span
-            className="
-              block sm:inline
-              text-[11px] mt-0.5 sm:mt-0
-              sm:before:content-['·']
-              sm:before:mx-1
-            "
-          >
-            <b>팀파워</b> {sum} · 평균 {avg}
-            </span>
-          )}
-        {isAdmin && (
-          <button
-            onClick={() => setShowColorPicker(true)}
-            className="ml-2 px-2 py-1 rounded-md text-[10px] font-medium border transition-all hover:shadow-md"
-            style={{
-              backgroundColor: teamColor ? teamColor.bg : '#f3f4f6',
-              color: teamColor ? teamColor.text : '#374151',
-              borderColor: teamColor ? teamColor.border : '#d1d5db'
-            }}
-            title="팀 색상 변경"
-          >
-            색상
-          </button>
-        )}
-      </div>
+      {/* 첫 번째 줄: 팀 번호 + 색상 버튼 자리 */}
+      <span className="font-semibold leading-none">팀 {teamIndex+1}</span>
+      {isAdmin ? (
+        <button
+          onClick={() => setShowColorPicker(true)}
+          className="justify-self-end px-2 py-0.5 rounded-md text-[10px] font-medium border transition-all hover:shadow-md"
+          style={{
+            backgroundColor: teamColor ? teamColor.bg : '#f3f4f6',
+            color: teamColor ? teamColor.text : '#374151',
+            borderColor: teamColor ? teamColor.border : '#d1d5db'
+          }}
+          title="팀 색상 변경"
+        >
+          색상
+        </button>
+      ) : (
+        <span className="justify-self-end text-[10px] opacity-0 select-none">색상</span>
+      )}
+
+      {/* 두 번째 줄: 색상 라벨 · 인원 수 / 팀파워 정보 */}
+      <span className="text-[11px] opacity-80 flex items-center gap-1">
+        <span className="font-medium">{teamColor ? teamColor.label : labelKit.label}</span>
+        <span>·</span>
+        <span>{players.length}명</span>
+      </span>
+      {isAdmin ? (
+        <span className="text-[11px] opacity-80 whitespace-nowrap justify-self-end">
+          팀파워 {sum} · 평균 {avg}
+        </span>
+      ) : (
+        <span className="text-[11px] opacity-0 select-none">placeholder</span>
+      )}
     </div>
     
     {/* Color Picker Modal - Using Portal for proper z-index */}

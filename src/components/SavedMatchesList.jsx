@@ -1811,7 +1811,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               </div>              {/* 컬럼 헤더 */}
               {/* Responsive scoreboard header: wrap when narrow to avoid horizontal scroll */}
               <div className="flex items-center justify-between text-[11px] text-gray-600 mb-1 px-2 gap-y-1">
-                <span>{t('matchHistory.team')}</span>
+                <span className="w-24 flex-shrink-0">{t('matchHistory.team')}</span>
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div className="flex gap-1">
                     {Array.from({length:maxQ}).map((_,qi)=>(
@@ -1901,10 +1901,10 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                             ? `bg-amber-50 font-medium ${fieldColor}` 
                             : `bg-white ${fieldColor}`
                         }`}>
-                          <span className="flex items-center gap-2">
-                            <span className="font-semibold">{t('matchHistory.teamN', { n: ti+1 })}</span>
+                          <div className="w-24 flex-shrink-0 flex items-center gap-1">
+                            <span className="font-semibold whitespace-nowrap">{t('matchHistory.teamN', { n: ti+1 })}</span>
                             {matchResult && (
-                              <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] font-bold ${
+                              <span className={`inline-flex items-center justify-center w-5 h-5 flex-shrink-0 rounded text-[10px] font-bold ${
                                 matchResult === 'W' ? 'bg-blue-500 text-white' :
                                 matchResult === 'D' ? 'bg-gray-400 text-white' :
                                 'bg-red-100 text-red-600'
@@ -1912,8 +1912,8 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                                 {matchResult}
                               </span>
                             )}
-                            {isWinner && <span className="text-amber-600">🏆</span>}
-                          </span>
+                            {isWinner && <span className="text-amber-600 flex-shrink-0">🏆</span>}
+                          </div>
                           <div className="flex items-center gap-2 sm:gap-3">
                             <div className="flex gap-1">
                               {Array.from({length:maxQ}).map((_,qi)=>{
@@ -2111,15 +2111,15 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   
                   return (
                     <div key={ti} className={`flex items-center justify-between text-xs sm:text-sm py-1.5 sm:py-2 px-2 rounded ${isWinner ? 'bg-amber-100 font-medium' : 'bg-white'}`}> 
-                      <span className="flex items-center gap-2">
-                        <span>{t('matchHistory.teamN', { n: ti+1 })}</span>
+                      <div className="w-24 flex-shrink-0 flex items-center gap-1">
+                        <span className="whitespace-nowrap">{t('matchHistory.teamN', { n: ti+1 })}</span>
                         {points && points.fieldNames[ti] && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-medium">
+                          <span className="text-[10px] px-1 py-0.5 rounded bg-indigo-100 text-indigo-700 font-medium whitespace-nowrap flex-shrink-0">
                             {points.fieldNames[ti] === '구장1' ? t('matchHistory.field1') : points.fieldNames[ti] === '구장2' ? t('matchHistory.field2') : points.fieldNames[ti]}
                           </span>
                         )}
                         {matchResult && (
-                          <span className={`inline-flex items-center justify-center w-5 h-5 rounded text-[10px] font-bold ${
+                          <span className={`inline-flex items-center justify-center w-5 h-5 flex-shrink-0 rounded text-[10px] font-bold ${
                             matchResult === 'W' ? 'bg-blue-500 text-white' :
                             matchResult === 'D' ? 'bg-gray-400 text-white' :
                             'bg-red-100 text-red-600'
@@ -2127,8 +2127,8 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                             {matchResult}
                           </span>
                         )}
-                        {isWinner && <span className="text-amber-600">🏆</span>}
-                      </span>
+                        {isWinner && <span className="text-amber-600 flex-shrink-0">🏆</span>}
+                      </div>
                       <div className="flex items-center gap-2 sm:gap-3">
                         <div className="flex gap-1">
                           {Array.from({length:maxQ}).map((_,qi)=>{

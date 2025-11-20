@@ -191,10 +191,6 @@ export default function AdminLoginDialog({
               </>
             )}
           </button>
-
-          <p className="pt-1 text-center text-[11px] text-stone-400">
-            {isLocalhost ? "개발 모드: 비밀번호 없이 로그인됩니다." : "이 기기에서만 유지됩니다. (로컬 스토리지)"}
-          </p>
         </div>
       </div>
     </div>
