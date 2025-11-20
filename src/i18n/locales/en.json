@@ -337,4 +337,98 @@
     },
     "tbd": "TBD"
   }
+  ,
+  "badges": {
+    "clickHint": "Click a player to view challenge badges",
+    "challengeTitle": "Challenge Badges",
+    "categoryFallback": "Featured Badges",
+    "categoryCount": "(Featured {{count}})",
+    "loading": "Loading badges…",
+    "error": "Failed to load badges. Please try again later.",
+    "empty": "No challenge badges earned yet.",
+    "timelineTitle": "Acquisition Timeline",
+    "timelineRecent": "Recent {{count}}",
+    "dateUnknown": "Unknown date",
+    "obtainedSuffix": "Obtained",
+    "closeAria": "Close",
+    "maxTierAchieved": "Max tier achieved",
+    "progress": {
+      "nextTierLabel": "Next {{tier}}",
+      "needMore": "{{count}} to go"
+    },
+    "tiers": {
+      "platinum": "Platinum",
+      "gold": "Gold",
+      "silver": "Silver",
+      "bronze": "Bronze"
+    },
+    "categories": {
+      "goals": "Goals",
+      "assists": "Assists",
+      "appearances": "Appearances",
+      "defense": "Defense",
+      "special": "Special",
+      "draft": "Draft",
+      "mom": "MOM"
+    },
+    "definitions": {
+      "total-goals": {
+        "name": "Goal Machine",
+        "description": "Total {{value}} goals"
+      },
+      "total-assists": {
+        "name": "Assist Maestro",
+        "description": "Total {{value}} assists"
+      },
+      "point-collector": {
+        "name": "Point Hunter",
+        "description": "Total {{value}} G+A points"
+      },
+      "appearance-ironman": {
+        "name": "Ironman",
+        "description": "{{value}} appearances"
+      },
+      "clean-sheet-guardian": {
+        "name": "Clean Sheet Guardian",
+        "description": "{{value}} clean sheets"
+      },
+      "first-goal": {
+        "name": "First Goal",
+        "description": "First official goal recorded"
+      },
+      "hat-trick-hero": {
+        "name": "Hat-trick Hero",
+        "description": "Hat-trick {{value}} time(s)"
+      },
+      "multi-goal-collector": {
+        "name": "Multi-goal Collector",
+        "description": "2+ goal matches {{value}}"
+      },
+      "playmaker-night": {
+        "name": "Playmaker Night",
+        "description": "2+ assist matches {{value}}"
+      },
+      "consistent-scorer": {
+        "name": "Consistent Sniper",
+        "description": "Matches with goal {{value}}"
+      },
+      "attendance-streak": {
+        "name": "Attendance Streak Master",
+        "description": "Consecutive appearances {{value}}"
+      }
+      ,
+      "draft-player-points": {
+        "name": "Draft Player Points",
+        "description": "Draft player points {{value}}"
+      },
+      "draft-captain-points": {
+        "name": "Draft Captain Points",
+        "description": "Draft captain points {{value}}"
+      },
+      "mom-awards": {
+        "name": "MOM Awards",
+        "description": "MOM awards {{value}} time(s)"
+      }
+    }
+  }
 }

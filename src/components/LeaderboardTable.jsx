@@ -128,14 +128,32 @@ export function RankCell({ rank, tone, delta }) {
  * - 데스크탑(md 이상): 전체 이름 항상 표시 (overflow-visible)
  * - 스크롤 시 높이 요동 방지를 위해 고정 라인-박스 + stable scrollbar gutter
  */
-export function PlayerNameCell({ id, name, isGuest, membership, tone, photoUrl, customMemberships = [] }) {
+export function PlayerNameCell({ id, name, isGuest, membership, tone, photoUrl, customMemberships = [], onSelect }) {
   // membership prop이 있으면 커스텀 배지 사용, 없으면 isGuest prop 사용 (하위 호환성)
   const badges = membership ? getBadgesWithCustom(membership, customMemberships) : (isGuest ? ['G'] : [])
   const badgeInfo = membership ? getMembershipBadge(membership, customMemberships) : null
+  const selectable = typeof onSelect === 'function'
+
+  const handleSelect = () => {
+    if (!selectable) return
+    onSelect({ id, name, membership, isGuest: !!isGuest, photoUrl })
+  }
+
+  const Wrapper = selectable ? 'button' : 'div'
+  const wrapperProps = selectable
+    ? {
+        type: 'button',
+        onClick: handleSelect,
+        className: 'group flex w-full items-center gap-1.5 rounded-xl px-0 py-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400',
+      }
+    : {
+        className: 'flex items-center gap-1.5',
+      }
   
   return (
     <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
-      <div className="flex items-center gap-1.5 min-w-0 w-[88px] sm:w-[140px] lg:w-auto lg:max-w-[250px]">
+      <Wrapper {...wrapperProps}>
+        <div className="flex items-center gap-1.5 min-w-0 w-[88px] sm:w-[140px] lg:w-auto lg:max-w-[250px]">
         <div className="flex-shrink-0">
           <InitialAvatar 
             id={id} 
@@ -157,7 +175,8 @@ export function PlayerNameCell({ id, name, isGuest, membership, tone, photoUrl, 
             {name}
           </span>
         </div>
-      </div>
+        </div>
+      </Wrapper>
     </td>
   )
 }/**

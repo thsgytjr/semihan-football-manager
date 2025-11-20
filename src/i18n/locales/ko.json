@@ -285,6 +285,99 @@
     "tbd": "미정"
   }
   ,
+  "badges": {
+    "clickHint": "선수를 클릭하면 챌린지 뱃지를 볼 수 있어요",
+    "challengeTitle": "챌린지 뱃지",
+    "categoryFallback": "주요 뱃지",
+    "categoryCount": "(주요 {{count}}건)",
+    "loading": "로딩 중…",
+    "error": "뱃지를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.",
+    "empty": "아직 획득한 챌린지 뱃지가 없습니다.",
+    "timelineTitle": "획득 타임라인",
+    "timelineRecent": "최근 {{count}}건",
+    "dateUnknown": "날짜 미상",
+    "obtainedSuffix": "획득",
+    "closeAria": "닫기",
+    "maxTierAchieved": "최고 티어 달성",
+    "progress": {
+      "nextTierLabel": "다음 {{tier}}",
+      "needMore": "{{count}} 더 필요"
+    },
+    "tiers": {
+      "platinum": "플래티넘",
+      "gold": "골드",
+      "silver": "실버",
+      "bronze": "브론즈"
+    },
+    "categories": {
+      "goals": "득점",
+      "assists": "도움",
+      "appearances": "출전",
+      "defense": "수비",
+      "special": "스페셜",
+      "draft": "드래프트",
+      "mom": "MOM"
+    },
+    "definitions": {
+      "total-goals": {
+        "name": "골 머신",
+        "description": "누적 {{value}}골 기록"
+      },
+      "total-assists": {
+        "name": "도움 장인",
+        "description": "누적 {{value}}도움"
+      },
+      "point-collector": {
+        "name": "포인트 헌터",
+        "description": "G+A {{value}}포인트"
+      },
+      "appearance-ironman": {
+        "name": "아이언맨",
+        "description": "{{value}}경기 출전"
+      },
+      "clean-sheet-guardian": {
+        "name": "클린시트 가디언",
+        "description": "무실점 {{value}}경기"
+      },
+      "first-goal": {
+        "name": "첫 골 신고식",
+        "description": "공식 경기 첫 득점 기록"
+      },
+      "hat-trick-hero": {
+        "name": "해트트릭 히어로",
+        "description": "해트트릭 {{value}}회"
+      },
+      "multi-goal-collector": {
+        "name": "멀티골 콜렉터",
+        "description": "2골 이상 경기 {{value}}회"
+      },
+      "playmaker-night": {
+        "name": "플레이메이커 나이트",
+        "description": "경기당 2도움 이상 {{value}}회"
+      },
+      "consistent-scorer": {
+        "name": "꾸준한 스나이퍼",
+        "description": "득점한 경기 {{value}}회"
+      },
+      "attendance-streak": {
+        "name": "출석체크 달인",
+        "description": "연속 {{value}}경기 출전"
+      }
+      ,
+      "draft-player-points": {
+        "name": "드래프트 선수 승점",
+        "description": "Draft 선수 승점 {{value}}"
+      },
+      "draft-captain-points": {
+        "name": "드래프트 주장 승점",
+        "description": "Draft 주장 승점 {{value}}"
+      },
+      "mom-awards": {
+        "name": "MOM 수상 기록",
+        "description": "MOM {{value}}회 수상"
+      }
+    }
+  },
   "mom": {
     "popup": {
       "title": "오늘의 MOM 투표",

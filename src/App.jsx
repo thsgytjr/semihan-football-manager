@@ -1041,6 +1041,7 @@ export default function App(){
                   membershipSettings={db.membershipSettings||[]}
                   momFeatureEnabled={featuresEnabled?.mom ?? true}
                   leaderboardToggles={featuresEnabled?.leaderboards || {}}
+                  badgesEnabled={featuresEnabled?.badges ?? true}
                 />
               )}
               {tab==="players"&&isAdmin&&featuresEnabled.players&&(
@@ -1249,6 +1250,7 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
     formation: t('nav.formation'),
     stats: t('nav.stats'),
     mom: 'MOM 투표/리더보드',
+    badges: '챌린지 뱃지',
     accounting: t('nav.accounting'),
     analytics: t('nav.analytics')
   }

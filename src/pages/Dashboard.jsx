@@ -12,6 +12,8 @@ import UpcomingMatchesWidget from '../components/UpcomingMatchesWidget'
 import MoMNoticeWidget from '../components/MoMNoticeWidget'
 import { MoMPopup } from '../components/MoMPopup'
 import { MoMLeaderboard } from '../components/MoMLeaderboard'
+import PlayerBadgeModal from '../components/badges/PlayerBadgeModal'
+import { Award } from 'lucide-react'
 import { useMoMPrompt } from '../hooks/useMoMPrompt'
 import { useMoMAwardsSummary } from '../hooks/useMoMAwardsSummary'
 import { toStr, extractDateKey, extractSeason } from '../lib/matchUtils'
@@ -31,6 +33,7 @@ import {
 } from '../lib/leaderboardComputations'
 import { getMembershipBadge } from '../lib/membershipConfig'
 import MobileCategoryCarousel from '../components/MobileCategoryCarousel'
+import { buildPlayerBadgeFactsMap, generateBadgesFromFacts } from '../lib/playerBadgeEngine'
 
 // 멤버십 helper 함수
 const S = (v) => v == null ? '' : String(v)
@@ -114,6 +117,7 @@ export default function Dashboard({
   membershipSettings = [],
   momFeatureEnabled = true,
   leaderboardToggles = {},
+  badgesEnabled = true,
 }) {
   const { t } = useTranslation()
   const customMemberships = membershipSettings.length > 0 ? membershipSettings : []
@@ -188,6 +192,10 @@ export default function Dashboard({
   const duoRows = useMemo(() => computeDuoRows(players, filteredMatches), [players, filteredMatches])
   const csRows = useMemo(() => addRanks(baseRows, 'cs'), [baseRows])
   const cardsRows = useMemo(() => computeCardsRows(players, filteredMatches), [players, filteredMatches])
+  const badgeFactsByPlayer = useMemo(
+    () => buildPlayerBadgeFactsMap(players, matches),
+    [players, matches]
+  )
   // 리더보드 카테고리 토글 반영
   const isEnabled = useCallback((key) => {
     const v = leaderboardToggles?.[key]
@@ -199,6 +207,51 @@ export default function Dashboard({
     const v = leaderboardToggles?.visible
     return v === undefined ? true : !!v
   }, [leaderboardToggles])
+
+  const [badgeModalPlayer, setBadgeModalPlayer] = useState(null)
+  const [badgeModalState, setBadgeModalState] = useState({ badges: [], loading: false, error: null })
+
+  const openBadgeModal = useCallback((player) => {
+    if (!player) {
+      notify('선수 정보가 없어 뱃지를 볼 수 없어요.', 'warning')
+      return
+    }
+    const playerId = player.id || player.playerId || player.player_id
+    if (!playerId) {
+      notify('선수 ID가 없어 뱃지를 볼 수 없어요.', 'warning')
+      return
+    }
+    const modalPlayer = {
+      id: playerId,
+      name: player.name || player.fullName || '선수',
+      photoUrl: player.photoUrl || player.avatarUrl || null,
+      membership: player.membership,
+    }
+    setBadgeModalPlayer(modalPlayer)
+    setBadgeModalState({ badges: [], loading: true, error: null })
+    const key = toStr(playerId)
+    const facts = badgeFactsByPlayer.get(key)
+    const computed = generateBadgesFromFacts(facts)
+    setBadgeModalState({ badges: computed, loading: false, error: null })
+  }, [badgeFactsByPlayer, badgesEnabled])
+
+  // 뱃지 기능이 비활성화되면 열린 모달 닫기
+  useEffect(() => {
+    if (!badgesEnabled && badgeModalPlayer) {
+      setBadgeModalPlayer(null)
+      setBadgeModalState({ badges: [], loading: false, error: null })
+    }
+  }, [badgesEnabled, badgeModalPlayer])
+
+  const refreshBadgeModal = useCallback(() => {
+    if (!badgeModalPlayer) return
+    openBadgeModal(badgeModalPlayer)
+  }, [badgeModalPlayer, openBadgeModal])
+
+  const closeBadgeModal = useCallback(() => {
+    setBadgeModalPlayer(null)
+    setBadgeModalState({ badges: [], loading: false, error: null })
+  }, [])
 
   const apOptions = useMemo(() => {
     const base = [
@@ -450,234 +503,258 @@ export default function Dashboard({
   }
 
   return (
-    <div className="grid gap-4 sm:gap-6">
-      {isMoMEnabled && showMoM && mom.latestMatch && (
-        <MoMPopup
-          match={mom.latestMatch}
-          roster={mom.roster}
-          recommended={mom.recommended}
-          totalVotes={mom.totalVotes}
-          windowMeta={mom.windowMeta}
-          alreadyVoted={mom.alreadyVoted}
-          nowTs={mom.nowTs}
-          submitting={mom.submitting}
-          onClose={handleCloseMoM}
-          onSubmit={mom.submitVote}
-          error={mom.error}
-        />
-      )}
-      {isMoMEnabled && (
-        <MoMNoticeWidget
-          notice={momNotice}
-          onOpenMoM={handleOpenMoMFromNotice}
-          onAlreadyVoted={handleMoMNoticeAlreadyVoted}
-        />
-      )}
-      {/* Upcoming Matches Widget */}
-      <UpcomingMatchesWidget
-        upcomingMatches={upcomingMatches}
-        players={players}
-        matches={matches}
-        isAdmin={isAdmin}
-        onSave={onSaveUpcomingMatch}
-        onDeleteUpcomingMatch={onDeleteUpcomingMatch}
-        onUpdateUpcomingMatch={onUpdateUpcomingMatch}
-        onShowTeams={handleShowTeams}
-      />
-
-      {/* 리더보드 */}
-      {leaderboardVisible && (
-      <Card 
-        title={
-          <div className="flex items-center gap-2">
-            <span>{t('leaderboard.title')}</span>
-            <div className="w-[120px]">
-              <Select
-                value={leaderboardSeason}
-                onChange={(val) => { setLeaderboardSeason(val); setApDateKey('all') }}
-                options={seasonOptions.map(v => ({ value: v, label: v === 'all' ? t('leaderboard.allTime') : `${v}년` }))}
-                size="sm"
-              />
-            </div>
-          </div>
-        }
-      >
-        {/* 상단: 1차 탭 (종합 | Draft) + 2차 탭 (조건부) */}
-        <PrimarySecondaryTabs
-          primary={primaryTab}
-          setPrimary={(val)=>{ setPrimaryTab(val); setShowAll(false) }}
-          apTab={apTab}
-          setApTab={(val)=>{ setApTab(val); setPrimaryTab('pts'); setShowAll(false) }}
-          draftTab={draftTab}
-          setDraftTab={(val)=>{ setDraftTab(val); setPrimaryTab('draft'); setShowAll(false) }}
-          momEnabled={isMoMEnabled}
-          apOptions={apOptions}
-        />
-
-        {!isMoMEnabled && (
-          <div className="mb-4 rounded-xl border border-dashed border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600">
-            MOM 기능이 꺼져 있어 투표와 리더보드가 숨겨진 상태입니다. 앱 설정에서 다시 활성화하면 기존 기록을 포함한 모든 데이터가 즉시 복구됩니다.
-          </div>
+    <>
+      <div className="grid gap-4 sm:gap-6">
+        {isMoMEnabled && showMoM && mom.latestMatch && (
+          <MoMPopup
+            match={mom.latestMatch}
+            roster={mom.roster}
+            recommended={mom.recommended}
+            totalVotes={mom.totalVotes}
+            windowMeta={mom.windowMeta}
+            alreadyVoted={mom.alreadyVoted}
+            nowTs={mom.nowTs}
+            submitting={mom.submitting}
+            onClose={handleCloseMoM}
+            onSubmit={mom.submitVote}
+            error={mom.error}
+          />
         )}
 
-        {primaryTab === 'mom' ? (
-          isMoMEnabled ? (
-            <MoMLeaderboard
-              countsByPlayer={momAwards.countsByPlayer}
-              players={players}
-              showAll={showAll}
-              onToggle={() => setShowAll(s => !s)}
-              customMemberships={customMemberships}
-            />
-          ) : (
-            <div className="rounded-xl border border-dashed border-stone-200 bg-white px-4 py-8 text-center text-sm text-stone-500">
-              MOM 기능이 비활성화되어 있어 리더보드를 표시할 수 없습니다. 앱 설정에서 다시 활성화하면 기존 데이터가 그대로 복원됩니다.
-            </div>
-          )
-        ) : primaryTab === 'draft' ? (
-          draftTab === 'captainWins' ? (
-            <CaptainWinsTable
-              key={`captain-${apDateKey}`}
-              rows={captainWinRows}
-              showAll={showAll}
-              onToggle={() => setShowAll(s => !s)}
-              controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
-              apDateKey={apDateKey}
-              initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.draftCaptain || null) : null}
-              customMemberships={customMemberships}
-            />
-          ) : draftTab === 'attack' ? (
-            <DraftAttackTable
-              key={`draftAttack-${apDateKey}`}
-              rows={draftAttackRows}
-              showAll={showAll}
-              onToggle={() => setShowAll(s => !s)}
-              controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
-              apDateKey={apDateKey}
-              initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.draftAttack || null) : null}
-              customMemberships={customMemberships}
-            />
-          ) : (
-            <DraftWinsTable
-              key={`draftWins-${apDateKey}`}
-              rows={draftWinRows}
-              showAll={showAll}
-              onToggle={() => setShowAll(s => !s)}
-              controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
-              apDateKey={apDateKey}
-              initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.draftPlayer || null) : null}
-              customMemberships={customMemberships}
-            />
-          )
-        ) : (
-          apTab === 'cs' ? (
-            <CleanSheetTable
-              key={`cs-${apDateKey}`}
-              rows={csRows}
-              showAll={showAll}
-              onToggle={() => setShowAll(s => !s)}
-              controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
-              apDateKey={apDateKey}
-            />
-          ) : apTab === 'duo' ? (
-            <DuoTable
-              key={`duo-${apDateKey}`}
-              rows={duoRows}
-              showAll={showAll}
-              onToggle={() => setShowAll(s => !s)}
-              controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
-              apDateKey={apDateKey}
-              initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.duo || null) : null}
-              customMemberships={customMemberships}
-            />
-          ) : apTab === 'cards' ? (
-            <CardsTable
-              key={`cards-${apDateKey}`}
-              rows={cardsRows}
-              showAll={showAll}
-              onToggle={() => setShowAll(s => !s)}
-              controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
-              apDateKey={apDateKey}
-              customMemberships={customMemberships}
-            />
-          ) : (
-            <AttackPointsTable
-              key={`ap-${apDateKey}-${apTab}`}
-              rows={rankedRows}
-              showAll={showAll}
-              onToggle={() => setShowAll(s => !s)}
-              rankBy={apTab}
-              headHi={headHi}
-              colHi={colHi}
-              onRequestTab={(id)=>{
-                if (isEnabled(id)) { setApTab(id); setPrimaryTab('pts'); setShowAll(false) }
-                else { notify('이 카테고리는 설정에서 숨겨졌습니다.', 'info') }
-              }}
-              controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
-              apDateKey={apDateKey}
-              initialBaselineRanks={apDateKey === 'all' ? (previousBaselineByMetric[apTab] || null) : null}
-              customMemberships={customMemberships}
-            />
-          )
+        {isMoMEnabled && (
+          <MoMNoticeWidget
+            notice={momNotice}
+            onOpenMoM={handleOpenMoMFromNotice}
+            onAlreadyVoted={handleMoMNoticeAlreadyVoted}
+          />
         )}
-      </Card>
-      )}
 
-      {/* 매치 히스토리 (OVR 표시 숨김) */}
-      <Card 
-        title={
-          <div className="flex items-center gap-2">
-            <span>{t('matchHistory.title')}</span>
-            <div className="w-[120px]">
-              <Select
-                value={historySeason}
-                onChange={(val) => setHistorySeason(val)}
-                options={seasonOptions.map(v => ({ value: v, label: v === 'all' ? t('leaderboard.allTime') : `${v}년` }))}
-                size="sm"
-              />
-            </div>
-          </div>
-        }
-      >
-        <ErrorBoundary fallback={<div className="text-sm text-stone-500">{t('leaderboard.errorOccurred')}</div>}>
-          <div className="saved-matches-no-ovr text-[13px] leading-tight">
-            <SavedMatchesList
-              matches={historySeasonFilteredMatches}
-              players={players}
-              isAdmin={isAdmin}
-              onUpdateMatch={onUpdateMatch}
-              hideOVR={true}
-              highlightedMatchId={highlightedMatchId}
-              customMemberships={customMemberships}
+        <UpcomingMatchesWidget
+          upcomingMatches={upcomingMatches}
+          players={players}
+          matches={matches}
+          isAdmin={isAdmin}
+          onSave={onSaveUpcomingMatch}
+          onDeleteUpcomingMatch={onDeleteUpcomingMatch}
+          onUpdateUpcomingMatch={onUpdateUpcomingMatch}
+          onShowTeams={handleShowTeams}
+        />
+
+        {leaderboardVisible && (
+          <Card 
+            title={
+              <div className="flex items-center gap-2">
+                <span>{t('leaderboard.title')}</span>
+                <div className="w-[120px]">
+                  <Select
+                    value={leaderboardSeason}
+                    onChange={(val) => { setLeaderboardSeason(val); setApDateKey('all') }}
+                    options={seasonOptions.map(v => ({ value: v, label: v === 'all' ? t('leaderboard.allTime') : `${v}년` }))}
+                    size="sm"
+                  />
+                </div>
+              </div>
+            }
+          >
+            <PrimarySecondaryTabs
+              primary={primaryTab}
+              setPrimary={(val)=>{ setPrimaryTab(val); setShowAll(false) }}
+              apTab={apTab}
+              setApTab={(val)=>{ setApTab(val); setPrimaryTab('pts'); setShowAll(false) }}
+              draftTab={draftTab}
+              setDraftTab={(val)=>{ setDraftTab(val); setPrimaryTab('draft'); setShowAll(false) }}
+              momEnabled={isMoMEnabled}
+              apOptions={apOptions}
             />
-          </div>
-        </ErrorBoundary>
 
-        <style>{`
-          /* 모바일 친화: 가로 스크롤 탭의 스크롤바 감춤 */
-          .no-scrollbar::-webkit-scrollbar { display: none; }
-          .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+            {!isMoMEnabled && (
+              <div className="mb-4 rounded-xl border border-dashed border-stone-200 bg-stone-50 px-4 py-3 text-xs text-stone-600">
+                MOM 기능이 꺼져 있어 투표와 리더보드가 숨겨진 상태입니다. 앱 설정에서 다시 활성화하면 기존 기록을 포함한 모든 데이터가 즉시 복구됩니다.
+              </div>
+            )}
 
-          /* 1등 챔피언: ... (생략: 기존 스타일 유지) */
+            {primaryTab === 'mom' ? (
+              isMoMEnabled ? (
+                <MoMLeaderboard
+                  countsByPlayer={momAwards.countsByPlayer}
+                  players={players}
+                  showAll={showAll}
+                  onToggle={() => setShowAll(s => !s)}
+                  customMemberships={customMemberships}
+                />
+              ) : (
+                <div className="rounded-xl border border-dashed border-stone-200 bg-white px-4 py-8 text-center text-sm text-stone-500">
+                  MOM 기능이 비활성화되어 있어 리더보드를 표시할 수 없습니다. 앱 설정에서 다시 활성화하면 기존 데이터가 그대로 복원됩니다.
+                </div>
+              )
+            ) : primaryTab === 'draft' ? (
+              draftTab === 'captainWins' ? (
+                <CaptainWinsTable
+                  key={`captain-${apDateKey}`}
+                  rows={captainWinRows}
+                  showAll={showAll}
+                  onToggle={() => setShowAll(s => !s)}
+                  controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+                  apDateKey={apDateKey}
+                  initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.draftCaptain || null) : null}
+                  customMemberships={customMemberships}
+                  onPlayerSelect={badgesEnabled ? openBadgeModal : undefined}
+                />
+              ) : draftTab === 'attack' ? (
+                <DraftAttackTable
+                  key={`draftAttack-${apDateKey}`}
+                  rows={draftAttackRows}
+                  showAll={showAll}
+                  onToggle={() => setShowAll(s => !s)}
+                  controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+                  apDateKey={apDateKey}
+                  initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.draftAttack || null) : null}
+                  customMemberships={customMemberships}
+                  onPlayerSelect={badgesEnabled ? openBadgeModal : undefined}
+                />
+              ) : (
+                <DraftWinsTable
+                  key={`draftWins-${apDateKey}`}
+                  rows={draftWinRows}
+                  showAll={showAll}
+                  onToggle={() => setShowAll(s => !s)}
+                  controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+                  apDateKey={apDateKey}
+                  initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.draftPlayer || null) : null}
+                  customMemberships={customMemberships}
+                  onPlayerSelect={badgesEnabled ? openBadgeModal : undefined}
+                />
+              )
+            ) : (
+              apTab === 'cs' ? (
+                <CleanSheetTable
+                  key={`cs-${apDateKey}`}
+                  rows={csRows}
+                  showAll={showAll}
+                  onToggle={() => setShowAll(s => !s)}
+                  controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+                  apDateKey={apDateKey}
+                  onPlayerSelect={badgesEnabled ? openBadgeModal : undefined}
+                />
+              ) : apTab === 'duo' ? (
+                <DuoTable
+                  key={`duo-${apDateKey}`}
+                  rows={duoRows}
+                  showAll={showAll}
+                  onToggle={() => setShowAll(s => !s)}
+                  controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+                  apDateKey={apDateKey}
+                  initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.duo || null) : null}
+                  customMemberships={customMemberships}
+                />
+              ) : apTab === 'cards' ? (
+                <CardsTable
+                  key={`cards-${apDateKey}`}
+                  rows={cardsRows}
+                  showAll={showAll}
+                  onToggle={() => setShowAll(s => !s)}
+                  controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+                  apDateKey={apDateKey}
+                  customMemberships={customMemberships}
+                  onPlayerSelect={badgesEnabled ? openBadgeModal : undefined}
+                />
+              ) : (
+                <AttackPointsTable
+                  key={`ap-${apDateKey}-${apTab}`}
+                  rows={rankedRows}
+                  showAll={showAll}
+                  onToggle={() => setShowAll(s => !s)}
+                  rankBy={apTab}
+                  headHi={headHi}
+                  colHi={colHi}
+                  onRequestTab={(id)=>{
+                    if (isEnabled(id)) { setApTab(id); setPrimaryTab('pts'); setShowAll(false) }
+                    else { notify('이 카테고리는 설정에서 숨겨졌습니다.', 'info') }
+                  }}
+                  controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
+                  apDateKey={apDateKey}
+                  initialBaselineRanks={apDateKey === 'all' ? (previousBaselineByMetric[apTab] || null) : null}
+                  customMemberships={customMemberships}
+                  onPlayerSelect={badgesEnabled ? openBadgeModal : undefined}
+                />
+              )
+            )}
+            {badgesEnabled && (
+              <div className="mt-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-700" data-testid="badges-hint">
+                <Award className="h-4 w-4 flex-shrink-0" />
+                <span>{t('badges.clickHint')}</span>
+              </div>
+            )}
+          </Card>
+        )}
 
-          /* SavedMatchesList 내 OVR 관련 요소 모두 숨김 */
-          .saved-matches-no-ovr [data-ovr],
-          .saved-matches-no-ovr .ovr,
-          .saved-matches-no-ovr .ovr-badge,
-          .saved-matches-no-ovr .ovr-chip,
-          .saved-matches-no-ovr .stat-ovr,
-          .saved-matches-no-ovr .text-ovr,
-          .saved-matches-no-ovr [class*="OVR"],
-          .saved-matches-no-ovr [class*="ovr"] {
-            display: none !important;
+        <Card 
+          title={
+            <div className="flex items-center gap-2">
+              <span>{t('matchHistory.title')}</span>
+              <div className="w-[120px]">
+                <Select
+                  value={historySeason}
+                  onChange={(val) => setHistorySeason(val)}
+                  options={seasonOptions.map(v => ({ value: v, label: v === 'all' ? t('leaderboard.allTime') : `${v}년` }))}
+                  size="sm"
+                />
+              </div>
+            </div>
           }
-        `}</style>
-      </Card>
-    </div>
+        >
+          <ErrorBoundary fallback={<div className="text-sm text-stone-500">{t('leaderboard.errorOccurred')}</div>}>
+            <div className="saved-matches-no-ovr text-[13px] leading-tight">
+              <SavedMatchesList
+                matches={historySeasonFilteredMatches}
+                players={players}
+                isAdmin={isAdmin}
+                onUpdateMatch={onUpdateMatch}
+                hideOVR={true}
+                highlightedMatchId={highlightedMatchId}
+                customMemberships={customMemberships}
+              />
+            </div>
+          </ErrorBoundary>
+
+          <style>{`
+            /* 모바일 친화: 가로 스크롤 탭의 스크롤바 감춤 */
+            .no-scrollbar::-webkit-scrollbar { display: none; }
+            .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+            /* 1등 챔피언: ... (생략: 기존 스타일 유지) */
+
+            /* SavedMatchesList 내 OVR 관련 요소 모두 숨김 */
+            .saved-matches-no-ovr [data-ovr],
+            .saved-matches-no-ovr .ovr,
+            .saved-matches-no-ovr .ovr-badge,
+            .saved-matches-no-ovr .ovr-chip,
+            .saved-matches-no-ovr .stat-ovr,
+            .saved-matches-no-ovr .text-ovr,
+            .saved-matches-no-ovr [class*="OVR"],
+            .saved-matches-no-ovr [class*="ovr"] {
+              display: none !important;
+            }
+          `}</style>
+        </Card>
+      </div>
+
+      {badgesEnabled && (
+        <PlayerBadgeModal
+          open={Boolean(badgeModalPlayer)}
+          player={badgeModalPlayer}
+          badges={badgeModalState.badges}
+          loading={badgeModalState.loading}
+          error={badgeModalState.error}
+          onClose={closeBadgeModal}
+          onRefresh={refreshBadgeModal}
+        />
+      )}
+    </>
   )
 }
 
-function CaptainWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null, customMemberships = [] }) {
+function CaptainWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null, customMemberships = [], onPlayerSelect }) {
   const { t } = useTranslation()
   const baselineKey = 'draft_captain_points_v1'
   const [baselineRanks] = useState(() => {
@@ -715,7 +792,15 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls, apDateKey, initia
   const renderRow = (r, tone) => (
     <>
       <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
-  <PlayerNameCell id={r.id} name={r.name} membership={r.membership} tone={tone} photoUrl={r.photoUrl} customMemberships={customMemberships} />
+      <PlayerNameCell
+        id={r.id}
+        name={r.name}
+        membership={r.membership}
+        tone={tone}
+        photoUrl={r.photoUrl}
+        customMemberships={customMemberships}
+        onSelect={onPlayerSelect ? () => onPlayerSelect(r) : undefined}
+      />
       <StatCell value={r.points} tone={tone} align="center" width={45} />
       <FormDotsCell form={r.last5} tone={tone} />
     </>
@@ -735,7 +820,7 @@ function CaptainWinsTable({ rows, showAll, onToggle, controls, apDateKey, initia
   )
 }
 
-function DraftWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null, customMemberships = [] }) {
+function DraftWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null, customMemberships = [], onPlayerSelect }) {
   const { t } = useTranslation()
   const baselineKey = 'draft_player_points_v1'
   const [baselineRanks] = useState(() => {
@@ -773,7 +858,15 @@ function DraftWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialB
   const renderRow = (r, tone) => (
     <>
       <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
-  <PlayerNameCell id={r.id} name={r.name} membership={r.membership} tone={tone} photoUrl={r.photoUrl} customMemberships={customMemberships} />
+      <PlayerNameCell
+        id={r.id}
+        name={r.name}
+        membership={r.membership}
+        tone={tone}
+        photoUrl={r.photoUrl}
+        customMemberships={customMemberships}
+        onSelect={onPlayerSelect ? () => onPlayerSelect(r) : undefined}
+      />
       <StatCell value={r.points} tone={tone} align="center" width={45} />
       <FormDotsCell form={r.last5} tone={tone} />
     </>
@@ -793,7 +886,7 @@ function DraftWinsTable({ rows, showAll, onToggle, controls, apDateKey, initialB
   )
 }
 
-function DraftAttackTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null, customMemberships = [] }) {
+function DraftAttackTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null, customMemberships = [], onPlayerSelect }) {
   const { t } = useTranslation()
   const baselineKey = 'draft_attack_pts_v1'
   const [baselineRanks] = useState(() => {
@@ -833,7 +926,15 @@ function DraftAttackTable({ rows, showAll, onToggle, controls, apDateKey, initia
   const renderRow = (r, tone) => (
     <>
       <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
-      <PlayerNameCell id={r.id} name={r.name} membership={r.membership} tone={tone} photoUrl={r.photoUrl} customMemberships={customMemberships} />
+      <PlayerNameCell
+        id={r.id}
+        name={r.name}
+        membership={r.membership}
+        tone={tone}
+        photoUrl={r.photoUrl}
+        customMemberships={customMemberships}
+        onSelect={onPlayerSelect ? () => onPlayerSelect(r) : undefined}
+      />
       <StatCell value={r.gp} tone={tone} align="center" width={40} />
       <StatCell value={r.g} tone={tone} align="center" width={35} />
       <StatCell value={r.a} tone={tone} align="center" width={35} />
@@ -1001,7 +1102,7 @@ function PrimarySecondaryTabs({ primary, setPrimary, apTab, setApTab, draftTab, 
 }
 
 /* --------------- 공격포인트 테이블 --------------- */
-function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', headHi, colHi, onRequestTab, apDateKey, initialBaselineRanks = null, customMemberships = [] }) {
+function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', headHi, colHi, onRequestTab, apDateKey, initialBaselineRanks = null, customMemberships = [], onPlayerSelect }) {
   const data = showAll ? rows : rows.slice(0, 5)
 
   // Baseline ranks for "모든 매치" only. …
@@ -1117,27 +1218,15 @@ function AttackPointsTable({ rows, showAll, onToggle, controls, rankBy = 'pts', 
                   </div>
                 </td>
 
-                {/* 이름 셀: 고정폭 + 가로 스크롤 */}
-                <td className={`border-b px-2 py-1.5 ${tone.cellBg}`}>
-                  <div className="flex items-center gap-1.5 min-w-0 w-[88px] sm:w-[140px] lg:w-auto lg:max-w-[250px]">
-                    <div className="flex-shrink-0">
-                      <InitialAvatar 
-                        id={r.id || r.name} 
-                        name={r.name} 
-                        size={32} 
-                        badges={getBadgesWithCustom(r.membership, customMemberships)}
-                        photoUrl={r.photoUrl}
-                        customMemberships={customMemberships}
-                        badgeInfo={getMembershipBadge(r.membership, customMemberships)}
-                      />
-                    </div>
-                    <div className="min-w-0 flex-1 overflow-x-auto scrollbar-hide">
-                      <span className="font-medium text-sm whitespace-nowrap" title={r.name}>
-                        {r.name}
-                      </span>
-                    </div>
-                  </div>
-                </td>
+                <PlayerNameCell
+                  id={r.id || r.name}
+                  name={r.name}
+                  membership={r.membership}
+                  tone={tone}
+                  photoUrl={r.photoUrl}
+                  customMemberships={customMemberships}
+                  onSelect={onPlayerSelect ? () => onPlayerSelect({ ...r, id: r.id || r.name }) : undefined}
+                />
 
                 <td className={`border-b px-2 py-1.5 text-center tabular-nums ${tone.cellBg} ${colHi('gp')}`}>{r.gp}</td>
                 <td className={`border-b px-2 py-1.5 text-center tabular-nums ${tone.cellBg} ${colHi('g')}`}>{r.g}</td>
@@ -1286,7 +1375,7 @@ function DuoTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselin
 /* ---------------------- Main Component --------------------- */
 
 /* ---------------------- 클린시트 카드 --------------------- */
-function CleanSheetTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null, customMemberships = [] }) {
+function CleanSheetTable({ rows, showAll, onToggle, controls, apDateKey, initialBaselineRanks = null, customMemberships = [], onPlayerSelect }) {
   const { t } = useTranslation()
   const baselineKey = 'cs_count_v1'
   const [baselineRanks] = useState(() => {
@@ -1324,7 +1413,15 @@ function CleanSheetTable({ rows, showAll, onToggle, controls, apDateKey, initial
   const renderRow = (r, tone) => (
     <>
       <RankCell rank={r.rank} tone={tone} delta={deltaFor(r.id || r.name, r.rank)} />
-      <PlayerNameCell id={r.id} name={r.name} membership={r.membership} tone={tone} photoUrl={r.photoUrl} customMemberships={customMemberships} />
+      <PlayerNameCell
+        id={r.id}
+        name={r.name}
+        membership={r.membership}
+        tone={tone}
+        photoUrl={r.photoUrl}
+        customMemberships={customMemberships}
+        onSelect={onPlayerSelect ? () => onPlayerSelect(r) : undefined}
+      />
       <StatCell value={r.cs || 0} tone={tone} align="center" width={50} />
     </>
   )
@@ -1345,7 +1442,7 @@ function CleanSheetTable({ rows, showAll, onToggle, controls, apDateKey, initial
 
 /* ---------------------- Main Component --------------------- */
 
-function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMemberships = [] }) {
+function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMemberships = [], onPlayerSelect }) {
   const { t } = useTranslation()
   const data = showAll ? rows : rows.slice(0, 5)
   const columns = [
@@ -1358,7 +1455,15 @@ function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMember
   const renderRow = (r, tone) => (
     <>
       <RankCell rank={r.rank} tone={tone} />
-      <PlayerNameCell id={r.id} name={r.name} membership={r.membership} tone={tone} photoUrl={r.photoUrl} customMemberships={customMemberships} />
+      <PlayerNameCell
+        id={r.id}
+        name={r.name}
+        membership={r.membership}
+        tone={tone}
+        photoUrl={r.photoUrl}
+        customMemberships={customMemberships}
+        onSelect={onPlayerSelect ? () => onPlayerSelect(r) : undefined}
+      />
       <StatCell value={r.y || 0} tone={tone} align="center" width={50} />
       <StatCell value={r.r || 0} tone={tone} align="center" width={50} />
     </>
