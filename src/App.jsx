@@ -21,9 +21,9 @@ import AdminLoginDialog from"./components/AdminLoginDialog"
 import VisitorStats from"./components/VisitorStats"
 import ProdDataWarning from"./components/ProdDataWarning"
 import LanguageSwitcher from"./components/LanguageSwitcherNew"
-import Dashboard from"./pages/Dashboard";import PlayersPage from"./pages/PlayersPage"
+import Dashboard from"./pages/Dashboard";import PlayersPage from"./pages/PlayersPage";import MaintenancePage from"./pages/MaintenancePage"
 import logoUrl from"./assets/GoalifyLogo.png"
-import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEnabled,updateFeatureEnabled,updateLeaderboardCategoryEnabled}from"./lib/appSettings"
+import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEnabled,updateMaintenanceMode,updateFeatureEnabled,updateLeaderboardCategoryEnabled}from"./lib/appSettings"
 
 const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden role="img" className="shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5"/><rect x="2" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/><rect x="18.5" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>)
 
@@ -61,6 +61,7 @@ export default function App(){
   const[settingsOpen,setSettingsOpen]=useState(false)
   const[tutorialOpen,setTutorialOpen]=useState(false)
   const[tutorialEnabled,setTutorialEnabled]=useState(()=>getAppSettings().tutorialEnabled)
+  const[maintenanceMode,setMaintenanceMode]=useState(()=>getAppSettings().maintenanceMode||false)
   const[featuresEnabled,setFeaturesEnabled]=useState(()=>getAppSettings().features||{})
   const{shouldShowTutorial,setShouldShowTutorial}=useAutoTutorial(isAdmin)
   const[previewMode,setPreviewMode]=useState(()=>isPreviewMode())
@@ -200,6 +201,9 @@ export default function App(){
         }
         if(settings.tutorialEnabled !== undefined && settings.tutorialEnabled !== tutorialEnabled){
           setTutorialEnabled(settings.tutorialEnabled)
+        }
+        if(settings.maintenanceMode !== undefined){
+          setMaintenanceMode(settings.maintenanceMode)
         }
         if(settings.features){
           setFeaturesEnabled(settings.features)
@@ -766,6 +770,16 @@ export default function App(){
     }
   }
 
+  async function handleMaintenanceModeToggle(enabled){
+    setMaintenanceMode(enabled)
+    const success = await updateMaintenanceMode(enabled)
+    if(success){
+      notify(enabled?"유지보수 모드가 활성화되었습니다. (개발자만 접근 가능)":"유지보수 모드가 해제되었습니다.","success")
+    }else{
+      notify("설정 저장에 실패했습니다.","error")
+    }
+  }
+
   async function handleFeatureToggle(featureName, enabled){
     setFeaturesEnabled(prev => ({...prev, [featureName]: enabled}))
     const success = await updateFeatureEnabled(featureName, enabled)
@@ -954,7 +968,9 @@ export default function App(){
     </header>
 
     <main className="mx-auto max-w-6xl p-4">
-      {showAuthError ? (
+      {(maintenanceMode || new URLSearchParams(window.location.search).has('maintenance')) && !isAnalyticsAdmin ? (
+        <MaintenancePage />
+      ) : showAuthError ? (
         <Suspense fallback={<div className="py-16 text-center text-sm text-stone-500">{t('skeleton.authError')}</div>}>
           <AuthLinkErrorPage 
             error={authError.error}
@@ -1088,7 +1104,7 @@ export default function App(){
     </footer>
 
     <AdminLoginDialog isOpen={loginOpen} onClose={()=>setLoginOpen(false)} onSuccess={onAdminSuccess}/>
-  <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle} tutorialEnabled={tutorialEnabled} onTutorialToggle={handleTutorialToggle} featuresEnabled={featuresEnabled} onFeatureToggle={handleFeatureToggle} onLeaderboardToggle={handleLeaderboardToggle} isAdmin={isAdmin} isAnalyticsAdmin={isAnalyticsAdmin} visits={visits}/>
+  <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle} tutorialEnabled={tutorialEnabled} onTutorialToggle={handleTutorialToggle} maintenanceMode={maintenanceMode} onMaintenanceModeToggle={handleMaintenanceModeToggle} featuresEnabled={featuresEnabled} onFeatureToggle={handleFeatureToggle} onLeaderboardToggle={handleLeaderboardToggle} isAdmin={isAdmin} isAnalyticsAdmin={isAnalyticsAdmin} visits={visits}/>
     {tutorialEnabled && <AppTutorial isOpen={tutorialOpen} onClose={()=>setTutorialOpen(false)} isAdmin={isAdmin}/>}
   </div>)}
 const TabButton = React.memo(function TabButton({icon,label,active,onClick,loading}){return(<button onClick={onClick} disabled={loading} title={label} aria-label={label} className={`flex items-center gap-1.5 rounded-md px-2.5 py-2.5 sm:px-3 sm:py-3 text-sm transition-all duration-200 min-h-[42px] sm:min-h-[44px] touch-manipulation whitespace-nowrap ${active?"bg-emerald-500 text-white shadow-md":"text-stone-700 hover:bg-stone-200 active:bg-stone-300 active:scale-95"} ${loading?"opacity-75 cursor-wait":""}`} style={{touchAction: 'manipulation'}} aria-pressed={active}>{loading && active ? <svg className="w-4 h-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg> : <span className="w-4 h-4 flex-shrink-0">{icon}</span>}{active && <span className="text-xs font-semibold hidden sm:inline">{label}</span>}</button>)})
@@ -1202,7 +1218,7 @@ const PageSkeleton = React.memo(function PageSkeleton({ tab }) {
 })
 
 /* ── Settings Dialog ─────────────────── */
-function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,onTutorialToggle,featuresEnabled,onFeatureToggle,onLeaderboardToggle,isAdmin,isAnalyticsAdmin,visits}){
+function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,onTutorialToggle,maintenanceMode,onMaintenanceModeToggle,featuresEnabled,onFeatureToggle,onLeaderboardToggle,isAdmin,isAnalyticsAdmin,visits}){
   const { t } = useTranslation()
   const[newTitle,setNewTitle]=useState(appTitle)
   const[titleEditMode,setTitleEditMode]=useState(false)
@@ -1328,6 +1344,35 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
               </button>
             </div>
           </div>
+
+          {/* 유지보수 모드 토글 (개발자용) */}
+          {isAnalyticsAdmin && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <label className="block text-sm font-medium text-stone-700">
+                    유지보수 모드
+                    <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">개발자</span>
+                  </label>
+                  <p className="text-xs text-stone-500 mt-0.5">일반 사용자에게 점검 페이지 표시 (개발자는 정상 접근)</p>
+                </div>
+                <button
+                  onClick={() => onMaintenanceModeToggle(!maintenanceMode)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
+                    maintenanceMode ? 'bg-purple-600' : 'bg-stone-300'
+                  }`}
+                  role="switch"
+                  aria-checked={maintenanceMode}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      maintenanceMode ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* 기능 활성화 설정 (Admin만, 방문자분석 토글은 개발자만) */}
           {isAdmin && (

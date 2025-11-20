@@ -11,6 +11,7 @@ const DEFAULT_SETTINGS = {
   appTitle: 'Semihan-FM',
   appName: 'Semihan Football Manager',
   tutorialEnabled: true,
+  maintenanceMode: false, // 유지보수 모드 (개발자만 접근 가능)
   // 선택: 관리자 이메일 화이트리스트(있으면 이 목록만 Admin 허용)
   adminEmails: [],
   features: {
@@ -148,6 +149,15 @@ export async function updateAppTitle(newTitle) {
 export async function updateTutorialEnabled(enabled) {
   const settings = getAppSettings()
   settings.tutorialEnabled = enabled
+  
+  const success = await saveAppSettingsToServer(settings)
+  return success
+}
+
+// 유지보수 모드 업데이트 (서버 + 로컬)
+export async function updateMaintenanceMode(enabled) {
+  const settings = getAppSettings()
+  settings.maintenanceMode = enabled
   
   const success = await saveAppSettingsToServer(settings)
   return success
