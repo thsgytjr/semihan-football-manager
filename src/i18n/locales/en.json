@@ -326,6 +326,7 @@
     "recentForm": "Recent Form",
     "matchingInProgress": "Team matching in progress...",
     "lotteryWaiting": "Waiting for team lottery...",
+    "attendeesCount": "Attendees: {{count}}",
     "status": {
       "upcoming": "Upcoming",
       "completed": "Completed",

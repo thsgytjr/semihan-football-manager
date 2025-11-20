@@ -271,8 +271,9 @@
     "recordLine": "{{wins}}승 {{draws}}무 {{losses}}패",
     "noRecord": "전적 없음",
     "recentForm": "최근 폼",
-    "matchingInProgress": "팀 매칭 확정중...",
-    "lotteryWaiting": "팀 추첨 대기중...",
+    "matchingInProgress": "팀 매칭 진행 중...",
+    "lotteryWaiting": "팀 추첨 대기 중...",
+    "attendeesCount": "참석 {{count}}명",
     "status": {
       "upcoming": "예정",
       "completed": "완료",
