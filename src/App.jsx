@@ -1397,9 +1397,6 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
                         {key === 'formation' && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">모두</span>
                         )}
-                        {key === 'accounting' && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-pink-100 text-pink-700 font-medium">Admin</span>
-                        )}
                         {key === 'analytics' && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">개발자</span>
                         )}
