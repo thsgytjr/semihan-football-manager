@@ -5,6 +5,39 @@ import { toStr, extractStatsByPlayer, extractAttendeeIds } from './matchUtils'
 import { computeDraftPlayerStatsRows, computeCaptainStatsRows } from './leaderboardComputations'
 import { getAppSettings } from './appSettings'
 
+const BADGE_FOLDER_MAP = {
+  'goalzilla': 'Goalzilla',
+  'the-giver': 'TheGiver',
+  'point-collector': 'PointCollector',
+  'fulltime-footballer': 'FulltimeFootballer',
+  'the-great-wall': 'TheGreatWall',
+  'draft-overlord': 'DraftOverlord',
+  'fantasy-nightmare': 'FantasyNightmare',
+  'mom-awards': 'MoM',
+  'first-strike': 'FirstStrike',
+  'hattrick-hero': 'HattrickHero',
+  'goal-spammer': 'GoalSpammer',
+  'the-ups': 'TheUPS',
+  'consistent-sniper': 'ConsistentSniper',
+  'never-missing': 'NeverMissing'
+}
+
+const TIER_FILE_MAP = {
+  1: 'Bronze.png',
+  2: 'Silver.png',
+  3: 'Gold.png',
+  4: 'Plat.png',
+  5: 'Diamond.png'
+}
+
+function getBadgeImageUrl(slug, tier) {
+  const folderName = BADGE_FOLDER_MAP[slug]
+  const fileName = TIER_FILE_MAP[tier]
+  if (!folderName || !fileName) return null
+  // 공용 뱃지 CDN (모든 팀 공유)
+  return `https://vupsurqljpuharihvtwf.supabase.co/storage/v1/object/public/challenge-bages/${folderName}/${fileName}`
+}
+
 const themeByCategory = {
   goals: { category: 'goals', icon: '⚽️', colors: ['#f97316', '#fb923c'] },
   assists: { category: 'assists', icon: '🎯', colors: ['#6366f1', '#a5b4fc'] },
@@ -231,9 +264,9 @@ const resolveAwardTimestamp = (facts, valueKey, threshold, fallbackTs = null) =>
 
 const tieredRules = [
   {
-    slug: 'total-goals',
+    slug: 'goalzilla',
     categoryKey: 'goals',
-    name: '골 머신',
+    name: '골질라',
     description: (facts) => `누적 ${facts.goals}골 기록`,
     importance: 'high',
     valueKey: 'goals',
@@ -247,9 +280,9 @@ const tieredRules = [
     value: (facts) => facts.goals
   },
   {
-    slug: 'total-assists',
+    slug: 'the-giver',
     categoryKey: 'assists',
-    name: '도움 장인',
+    name: '어시도사',
     description: (facts) => `누적 ${facts.assists}도움`,
     importance: 'high',
     valueKey: 'assists',
@@ -265,7 +298,7 @@ const tieredRules = [
   {
     slug: 'point-collector',
     categoryKey: 'special',
-    name: '포인트 헌터',
+    name: '스탯 수집가',
     description: (facts) => `G+A ${facts.points}포인트`,
      importance: 'high',
      valueKey: 'points',
@@ -279,9 +312,9 @@ const tieredRules = [
     value: (facts) => facts.points
   },
   {
-    slug: 'appearance-ironman',
+    slug: 'fulltime-footballer',
     categoryKey: 'appearances',
-    name: '아이언맨',
+    name: '필드거주자',
     description: (facts) => `${facts.appearances}경기 출전`,
     importance: 'core',
     valueKey: 'appearances',
@@ -295,9 +328,9 @@ const tieredRules = [
     value: (facts) => facts.appearances
   },
   {
-    slug: 'clean-sheet-guardian',
+    slug: 'the-great-wall',
     categoryKey: 'defense',
-    name: '클린시트 가디언',
+    name: '만리장성',
     description: (facts) => `무실점 ${facts.cleanSheets}경기`,
     importance: 'core',
     valueKey: 'cleanSheets',
@@ -311,9 +344,9 @@ const tieredRules = [
     value: (facts) => facts.cleanSheets
   },
   {
-    slug: 'draft-player-points',
+    slug: 'draft-overlord',
     categoryKey: 'draft',
-    name: '드래프트 선수 승점',
+    name: '축구 대통령',
     description: (facts) => `Draft 선수 승점 ${facts.draftPlayerPoints}`,
     importance: 'high',
     valueKey: 'draftPlayerPoints',
@@ -327,9 +360,9 @@ const tieredRules = [
     value: (facts) => facts.draftPlayerPoints
   },
   {
-    slug: 'draft-captain-points',
+    slug: 'fantasy-nightmare',
     categoryKey: 'draft',
-    name: '드래프트 주장 승점',
+    name: '승점도둑',
     description: (facts) => `Draft 주장 승점 ${facts.draftCaptainPoints}`,
     importance: 'high',
     valueKey: 'draftCaptainPoints',
@@ -345,7 +378,7 @@ const tieredRules = [
   {
     slug: 'mom-awards',
     categoryKey: 'mom',
-    name: 'MOM 수상 기록',
+    name: '엄마상',
     description: (facts) => `MOM ${facts.momAwards}회 수상`,
     importance: 'high',
     valueKey: 'momAwards',
@@ -362,9 +395,9 @@ const tieredRules = [
 
 const singleRules = [
   {
-    slug: 'first-goal',
+    slug: 'first-strike',
     categoryKey: 'goals',
-    name: '첫 골 신고식',
+    name: '무득점 탈출',
     description: '공식 경기 첫 득점 기록',
     valueKey: 'goals',
     value: (facts) => facts.goals,
@@ -373,7 +406,7 @@ const singleRules = [
     showValue: false
   },
   {
-    slug: 'hat-trick-hero',
+    slug: 'hattrick-hero',
     categoryKey: 'special',
     name: '해트트릭 히어로',
     description: (facts) => `해트트릭 ${facts.hatTricks}회`,
@@ -383,25 +416,25 @@ const singleRules = [
     thresholds: { 1: 1, 2: 2, 3: 3, 4: 4, 5: 7 }
   },
   {
-    slug: 'multi-goal-collector',
+    slug: 'goal-spammer',
     categoryKey: 'special',
-    name: '멀티골 콜렉터',
+    name: '골골남',
     description: (facts) => `2골 이상 경기 ${facts.braces}회`,
     value: (facts) => facts.braces,
     valueKey: 'braces',
     thresholds: { 1: 2, 2: 3, 3: 5, 4: 7, 5: 10 }
   },
   {
-    slug: 'playmaker-night',
+    slug: 'the-ups',
     categoryKey: 'assists',
-    name: '플레이메이커 나이트',
+    name: '택배왔어요!',
     description: (facts) => `경기당 2도움 이상 ${facts.multiAssistMatches}회`,
     value: (facts) => facts.multiAssistMatches,
     valueKey: 'multiAssistMatches',
     thresholds: { 1: 1, 2: 2, 3: 3, 4: 5, 5: 8 }
   },
   {
-    slug: 'consistent-scorer',
+    slug: 'consistent-sniper',
     categoryKey: 'goals',
     name: '꾸준한 스나이퍼',
     description: (facts) => `득점한 경기 ${facts.matchesWithGoal}회`,
@@ -410,9 +443,9 @@ const singleRules = [
     thresholds: { 1: 6, 2: 8, 3: 12, 4: 15, 5: 24 }
   },
   {
-    slug: 'attendance-streak',
+    slug: 'never-missing',
     categoryKey: 'appearances',
-    name: '출석체크 달인',
+    name: '필드캠퍼',
     description: (facts) => `연속 ${facts.bestAppearanceStreak}경기 출전`,
     value: (facts) => facts.bestAppearanceStreak,
     valueKey: 'bestAppearanceStreak',
@@ -430,6 +463,7 @@ const buildBadge = (rule, theme, overrides = {}) => {
   const nextTier = overrides.nextTier ?? null
   const nextThreshold = overrides.nextThreshold ?? null
   const remainingToNext = overrides.remainingToNext ?? null
+  const imageUrl = getBadgeImageUrl(rule.slug, tier)
   return {
     id: `local-${rule.slug}-${overrides.playerId || 'player'}-${tier}`,
     slug: rule.slug,
@@ -437,6 +471,7 @@ const buildBadge = (rule, theme, overrides = {}) => {
     description: typeof rule.description === 'function' ? rule.description(overrides.facts, tier) : rule.description,
     category: theme.category,
     icon: theme.icon,
+    image_url: imageUrl,
     color_primary: theme.colors[0],
     color_secondary: theme.colors[1],
     tier,

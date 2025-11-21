@@ -108,9 +108,13 @@ export default function BadgeIcon({ badge, size = 'md', onSelect }) {
               style={{ background: ringGradient }}
             />
             <div className="absolute inset-0 rounded-full ring-2 ring-white/30" />
-            <div className="absolute inset-[10%] md:inset-[12%] rounded-full overflow-hidden ring-1 ring-white/40 bg-[#111] flex items-center justify-center">
+            <div className="absolute inset-[10%] md:inset-[12%] rounded-full overflow-hidden ring-1 ring-white/40 bg-white flex items-center justify-center">
               <div className="absolute inset-0 opacity-40" style={{background:'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), transparent 70%)'}} />
-              <BadgeArt slug={slug} />
+              {badge.image_url ? (
+                <img src={badge.image_url} alt={name} className="w-[120%] h-[120%] object-cover" />
+              ) : (
+                <BadgeArt slug={slug} />
+              )}
             </div>
             {showNumeric && (
               <div className="pointer-events-none absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center">

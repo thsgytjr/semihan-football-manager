@@ -34,7 +34,14 @@ export default function BadgeTierDetail({ badge, onClose }) {
           <X className="h-5 w-5" />
         </button>
         <div className="flex flex-col gap-4 p-5">
-          <h3 className="text-lg font-bold text-stone-900">{t('badges.detail.title')} – {t(`badges.definitions.${slug}.name`, { defaultValue: badge.name })}</h3>
+          <div className="flex items-center gap-4">
+            {badge.image_url && (
+              <div className="flex-shrink-0 w-32 h-32 rounded-2xl overflow-hidden ring-2 ring-stone-200 bg-white">
+                <img src={badge.image_url} alt={badge.name} className="w-full h-full object-cover" />
+              </div>
+            )}
+            <h3 className="text-lg font-bold text-stone-900">{t('badges.detail.title')} – {t(`badges.definitions.${slug}.name`, { defaultValue: badge.name })}</h3>
+          </div>
           <div className="rounded-xl border border-stone-200 overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-stone-50 text-stone-600">

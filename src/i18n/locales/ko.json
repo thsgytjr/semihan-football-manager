@@ -342,61 +342,61 @@
       "tierLabel": "티어 {{tier}}"
     },
     "definitions": {
-      "total-goals": {
-        "name": "골 머신",
+      "goalzilla": {
+        "name": "골질라",
         "description": "누적 {{value}}골 기록"
       },
-      "total-assists": {
-        "name": "도움 장인",
+      "the-giver": {
+        "name": "어시도사",
         "description": "누적 {{value}}도움"
       },
       "point-collector": {
-        "name": "포인트 헌터",
+        "name": "스탯 수집가",
         "description": "G+A {{value}}포인트"
       },
-      "appearance-ironman": {
-        "name": "아이언맨",
+      "fulltime-footballer": {
+        "name": "필드거주자",
         "description": "{{value}}경기 출전"
       },
-      "clean-sheet-guardian": {
-        "name": "클린시트 가디언",
+      "the-great-wall": {
+        "name": "만리장성",
         "description": "무실점 {{value}}경기"
       },
-      "first-goal": {
-        "name": "첫 골 신고식",
+      "first-strike": {
+        "name": "무득점 탈출",
         "description": "공식 경기 첫 득점 기록"
       },
-      "hat-trick-hero": {
+      "hattrick-hero": {
         "name": "해트트릭 히어로",
         "description": "해트트릭 {{value}}회"
       },
-      "multi-goal-collector": {
-        "name": "멀티골 콜렉터",
+      "goal-spammer": {
+        "name": "골골남",
         "description": "2골 이상 경기 {{value}}회"
       },
-      "playmaker-night": {
-        "name": "플레이메이커 나이트",
+      "the-ups": {
+        "name": "택배왔어요!",
         "description": "경기당 2도움 이상 {{value}}회"
       },
-      "consistent-scorer": {
+      "consistent-sniper": {
         "name": "꾸준한 스나이퍼",
         "description": "득점한 경기 {{value}}회"
       },
-      "attendance-streak": {
-        "name": "출석체크 달인",
+      "never-missing": {
+        "name": "필드캠퍼",
         "description": "연속 {{value}}경기 출전"
       }
       ,
-      "draft-player-points": {
-        "name": "드래프트 선수 승점",
+      "draft-overlord": {
+        "name": "축구 대통령",
         "description": "Draft 선수 승점 {{value}}"
       },
-      "draft-captain-points": {
-        "name": "드래프트 주장 승점",
+      "fantasy-nightmare": {
+        "name": "승점도둑",
         "description": "Draft 주장 승점 {{value}}"
       },
       "mom-awards": {
-        "name": "MOM 수상 기록",
+        "name": "엄마상",
         "description": "MOM {{value}}회 수상"
       }
     }
