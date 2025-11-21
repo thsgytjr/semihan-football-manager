@@ -395,57 +395,57 @@
       "tierLabel": "Tier {{tier}}"
     },
     "definitions": {
-      "total-goals": {
-        "name": "Goal Machine",
+      "goalzilla": {
+        "name": "Goalzilla",
         "description": "Total {{value}} goals"
       },
-      "total-assists": {
-        "name": "Assist Maestro",
+      "the-giver": {
+        "name": "The Giver",
         "description": "Total {{value}} assists"
       },
       "point-collector": {
-        "name": "Point Hunter",
+        "name": "Stats Collector",
         "description": "Total {{value}} G+A points"
       },
-      "appearance-ironman": {
-        "name": "Ironman",
+      "fulltime-footballer": {
+        "name": "Full-time Footballer",
         "description": "{{value}} appearances"
       },
-      "clean-sheet-guardian": {
-        "name": "Clean Sheet Guardian",
+      "the-great-wall": {
+        "name": "The Great Wall",
         "description": "{{value}} clean sheets"
       },
-      "first-goal": {
-        "name": "First Goal",
+      "first-strike": {
+        "name": "First Strike",
         "description": "First official goal recorded"
       },
-      "hat-trick-hero": {
+      "hattrick-hero": {
         "name": "Hat-trick Hero",
         "description": "Hat-trick {{value}} time(s)"
       },
-      "multi-goal-collector": {
-        "name": "Multi-goal Collector",
+      "goal-spammer": {
+        "name": "Goal Spammer",
         "description": "2+ goal matches {{value}}"
       },
-      "playmaker-night": {
-        "name": "Playmaker Night",
+      "the-ups": {
+        "name": "The UPS",
         "description": "2+ assist matches {{value}}"
       },
-      "consistent-scorer": {
+      "consistent-sniper": {
         "name": "Consistent Sniper",
         "description": "Matches with goal {{value}}"
       },
-      "attendance-streak": {
-        "name": "Attendance Streak Master",
+      "never-missing": {
+        "name": "Field Camper",
         "description": "Consecutive appearances {{value}}"
       }
       ,
-      "draft-player-points": {
-        "name": "Draft Player Points",
+      "draft-overlord": {
+        "name": "Draft Overlord",
         "description": "Draft player points {{value}}"
       },
-      "draft-captain-points": {
-        "name": "Draft Captain Points",
+      "fantasy-nightmare": {
+        "name": "Fantasy Nightmare",
         "description": "Draft captain points {{value}}"
       },
       "mom-awards": {
