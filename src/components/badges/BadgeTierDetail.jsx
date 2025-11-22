@@ -1,14 +1,22 @@
 // src/components/badges/BadgeTierDetail.jsx
-import React from 'react'
+import React, { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
 import { getBadgeThresholds } from '../../lib/playerBadgeEngine'
+import BadgeImageViewer from './BadgeImageViewer'
 
 export default function BadgeTierDetail({ badge, onClose }) {
   const { t } = useTranslation()
   if (!badge) return null
   const { slug, numeric_value: value, tier: currentTier = 1 } = badge
   const thresholds = getBadgeThresholds(slug)
+  
+    // Get badge description from translations
+    const badgeName = t(`badges.definitions.${slug}.name`, { defaultValue: badge.name })
+    const badgeDescription = t(`badges.definitions.${slug}.description`, { defaultValue: '', value: value || 0 })
+
+    const [viewerOpen, setViewerOpen] = useState(false)
+  
   const tierName = (tNum) => {
     switch (tNum) {
       case 5: return t('badges.tiers.diamond')
@@ -23,8 +31,14 @@ export default function BadgeTierDetail({ badge, onClose }) {
   const remainingToNext = nextRow ? Math.max(0, nextRow.threshold - (value || 0)) : null
 
   return (
-    <div className="absolute inset-0 z-[1400] flex items-center justify-center bg-black/70 p-4">
-      <div className="relative w-full max-w-md rounded-3xl bg-white shadow-2xl ring-1 ring-stone-200">
+    <div 
+      className="absolute inset-0 z-[1400] flex items-center justify-center bg-black/70 p-4"
+      style={{ touchAction: 'manipulation' }}
+    >
+      <div 
+        className="relative w-full max-w-md rounded-3xl bg-white shadow-2xl ring-1 ring-stone-200"
+        style={{ touchAction: 'pan-y' }}
+      >
         <button
           type="button"
           onClick={onClose}
@@ -37,10 +51,27 @@ export default function BadgeTierDetail({ badge, onClose }) {
           <div className="flex items-center gap-4">
             {badge.image_url && (
               <div className="flex-shrink-0 w-32 h-32 rounded-2xl overflow-hidden ring-2 ring-stone-200 bg-white">
-                <img src={badge.image_url} alt={badge.name} className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  aria-label={`Open ${badgeName} image`}
+                  onClick={() => setViewerOpen(true)}
+                  className="w-full h-full p-0 m-0"
+                  style={{ background: 'transparent', border: 'none' }}
+                >
+                  <img src={badge.image_url} alt={badge.name} className="w-full h-full object-cover" />
+                </button>
               </div>
             )}
-            <h3 className="text-lg font-bold text-stone-900">{t('badges.detail.title')} – {t(`badges.definitions.${slug}.name`, { defaultValue: badge.name })}</h3>
+            <div className="flex-1 flex flex-col gap-2">
+              <h3 className="text-lg font-bold text-stone-900">
+                {badgeName}
+              </h3>
+              {badgeDescription && (
+                <p className="text-sm text-stone-600">
+                  {badgeDescription}
+                </p>
+              )}
+            </div>
           </div>
           <div className="rounded-xl border border-stone-200 overflow-hidden">
             <table className="w-full text-sm">
@@ -89,6 +120,9 @@ export default function BadgeTierDetail({ badge, onClose }) {
           )}
         </div>
       </div>
+      {viewerOpen && (
+        <BadgeImageViewer src={badge.image_url} alt={badgeName} onClose={() => setViewerOpen(false)} />
+      )}
     </div>
   )
 }
