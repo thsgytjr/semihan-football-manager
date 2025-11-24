@@ -50,15 +50,20 @@ export default function BadgeIcon({ badge, size = 'md', onSelect }) {
     : `conic-gradient(${ringStops[0]}, ${ringStops[1] || ringStops[0]}, ${ringStops[0]})`
 
   const cardGlowShadow = normalizedTier === 5
-    ? '0 0 30px rgba(0,240,255,0.75), 0 0 70px rgba(124,77,255,0.55), 0 0 120px rgba(255,77,219,0.5)'
+    ? '0 0 22px rgba(0,240,255,0.45), 0 0 40px rgba(124,77,255,0.3)'
     : normalizedTier === 4
       ? '0 0 18px rgba(181,225,255,0.65), 0 0 42px rgba(219,207,255,0.45)'
       : null
   const cardAuraGradient = normalizedTier === 5
-    ? 'radial-gradient(circle at 50% 50%, rgba(0,240,255,0.75), rgba(124,77,255,0.6), rgba(255,77,219,0.55), transparent 70%)'
+    ? 'radial-gradient(circle at 50% 50%, rgba(0,240,255,0.65), rgba(124,77,255,0.45), rgba(255,77,219,0.4), transparent 65%)'
     : normalizedTier === 4
       ? 'radial-gradient(circle at 50% 50%, rgba(213,241,255,0.65), rgba(183,206,255,0.45), transparent 70%)'
       : 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.6), rgba(210,220,230,0.45), transparent 70%)'
+
+  const cardStyle = {
+    ...(cardGlowShadow ? { boxShadow: cardGlowShadow } : {}),
+    ...(normalizedTier === 5 ? { overflow: 'hidden' } : {})
+  }
 
   return (
     <button
@@ -66,11 +71,11 @@ export default function BadgeIcon({ badge, size = 'md', onSelect }) {
       onClick={() => onSelect?.(badge)}
       className="relative flex flex-col gap-1 rounded-2xl bg-gradient-to-br from-white via-stone-50 to-stone-100 p-3 md:p-4 text-center shadow-[0_2px_6px_-1px_rgba(0,0,0,0.12)] ring-1 ring-stone-200/70 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
       data-badge-id={slug}
-      style={cardGlowShadow ? { boxShadow: cardGlowShadow } : undefined}
+      style={Object.keys(cardStyle).length ? cardStyle : undefined}
     >
       {normalizedTier >= 4 && (
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-2xl">
-          <div className="absolute inset-0" style={{background: cardAuraGradient, filter:'blur(14px)', opacity: normalizedTier === 5 ? 0.85 : 0.6}} />
+          <div className="absolute inset-0" style={{background: cardAuraGradient, filter:'blur(6px)', opacity: 0.75}} />
           <div className="absolute inset-[2px] rounded-[1.1rem] border border-white/60 opacity-70" />
           <div className="absolute inset-0">
             <span className="absolute left-3 top-2 h-px w-10 bg-gradient-to-r from-transparent via-white to-transparent opacity-40 animate-twinkle"></span>
@@ -95,9 +100,9 @@ export default function BadgeIcon({ badge, size = 'md', onSelect }) {
               )}
               {normalizedTier === 5 && (
                 <>
-                  <div className="absolute -inset-1.25 rounded-full" style={{background:'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.95), rgba(0,240,255,0.6), rgba(124,77,255,0.55), rgba(255,77,219,0.5), transparent 75%)', mixBlendMode:'screen', opacity: 0.9}} />
-                  <div className="absolute -inset-1.75 rounded-full animate-spin-slow" style={{background:'conic-gradient(from 0deg, rgba(255,255,255,0.85), rgba(0,240,255,0.55), rgba(124,77,255,0.5), rgba(255,77,219,0.55), rgba(255,255,255,0.85))', filter:'blur(7px)', mixBlendMode:'overlay'}} />
-                  <div className="pointer-events-none absolute inset-0" style={{background:'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0) 40%), radial-gradient(circle at 70% 65%, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 35%), radial-gradient(circle at 45% 80%, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0) 30%)', mixBlendMode:'screen'}} />
+                  <div className="absolute inset-[2px] rounded-full" style={{background:'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.9), rgba(0,240,255,0.55), rgba(124,77,255,0.45), rgba(255,77,219,0.4), transparent 70%)', mixBlendMode:'screen', opacity: 0.9}} />
+                  <div className="absolute inset-[6px] rounded-full animate-spin-slow" style={{background:'conic-gradient(from 0deg, rgba(255,255,255,0.75), rgba(0,240,255,0.45), rgba(124,77,255,0.45), rgba(255,77,219,0.5), rgba(255,255,255,0.75))', filter:'blur(4px)', mixBlendMode:'overlay'}} />
+                  <div className="pointer-events-none absolute inset-[14%]" style={{background:'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 45%), radial-gradient(circle at 70% 65%, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0) 35%), radial-gradient(circle at 45% 80%, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 30%)', mixBlendMode:'screen'}} />
                 </>
               )}
             </div>
@@ -117,7 +122,7 @@ export default function BadgeIcon({ badge, size = 'md', onSelect }) {
               )}
             </div>
             {showNumeric && (
-              <div className="pointer-events-none absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center">
+              <div className="pointer-events-none absolute -bottom-2 left-1/2 -translate-x-1/2 flex items-center z-10">
                 <span className="rounded-full bg-white/85 backdrop-blur px-2 py-0.5 text-xs font-semibold text-stone-700 shadow-sm ring-1 ring-stone-200/60">
                   {numericValue}
                 </span>

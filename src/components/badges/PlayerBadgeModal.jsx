@@ -109,7 +109,7 @@ export default function PlayerBadgeModal({
   }, {})
   const tierOrder = [5, 4, 3, 2, 1]
   const tierMeta = {
-    5: { key: 'diamond', swatch: 'linear-gradient(135deg,#5de0ff,#b7a8ff)' },
+    5: { key: 'diamond', swatch: 'linear-gradient(135deg,#8df0ff,#d3c7ff)' },
     4: { key: 'platinum', swatch: 'linear-gradient(135deg,#8ef1ff,#c1a8ff)' },
     3: { key: 'gold', swatch: 'linear-gradient(135deg,#fcd34d,#f97316)' },
     2: { key: 'silver', swatch: 'linear-gradient(135deg,#d1d5db,#9ca3af)' },

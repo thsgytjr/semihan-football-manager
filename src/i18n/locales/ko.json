@@ -339,7 +339,7 @@
     "group": {
       "highTierHeader": "상위 티어 뱃지",
       "allHeader": "전체 뱃지",
-      "tierLabel": "티어 {{tier}}"
+      "tierLabel": "{{tier}}"
     },
     "definitions": {
       "goalzilla": {
