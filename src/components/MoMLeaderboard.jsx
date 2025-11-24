@@ -9,6 +9,7 @@ export function MoMLeaderboard({
   showAll = false,
   onToggle,
   customMemberships = [],
+  onPlayerSelect,
 }) {
   const { t } = useTranslation()
   const playerMap = useMemo(() => {
@@ -25,13 +26,15 @@ export function MoMLeaderboard({
     const entries = Object.entries(countsByPlayer || {})
     const mapped = entries
       .map(([pid, count]) => {
-        const player = playerMap.get(String(pid)) || {}
+        const player = playerMap.get(String(pid)) || null
+        const name = player?.name || `Player ${pid}`
         return {
           playerId: pid,
           count,
-          name: player.name || `Player ${pid}`,
-          photoUrl: player.photoUrl,
-          membership: player.membership,
+          name,
+          photoUrl: player?.photoUrl,
+          membership: player?.membership,
+          player: player || { id: pid, name }
         }
       })
       .filter(item => item.count > 0)
@@ -70,24 +73,31 @@ export function MoMLeaderboard({
       </div>
       <ul className="divide-y divide-amber-50">
         {displayRows.map(row => (
-          <li key={row.playerId} className="flex items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="text-sm font-bold text-amber-600 w-5 text-center">{row.rank}</div>
-              <InitialAvatar
-                id={row.playerId}
-                name={row.name}
-                size={36}
-                photoUrl={row.photoUrl}
-                badges={getBadge(row.membership, customMemberships)}
-                customMemberships={customMemberships}
-                badgeInfo={getMembershipBadge(row.membership, customMemberships)}
-              />
-              <div>
-                <div className="text-sm font-semibold text-stone-900 notranslate" translate="no">{row.name}</div>
-                <div className="text-xs text-stone-500">{t('mom.leaderboard.awardCount', { count: row.count })}</div>
+          <li key={row.playerId} className="px-4 py-3">
+            <button
+              type="button"
+              onClick={() => onPlayerSelect?.(row.player)}
+              disabled={!onPlayerSelect}
+              className="flex w-full items-center justify-between gap-3 rounded-xl text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 disabled:cursor-default"
+            >
+              <div className="flex items-center gap-3">
+                <div className="text-sm font-bold text-amber-600 w-5 text-center">{row.rank}</div>
+                <InitialAvatar
+                  id={row.playerId}
+                  name={row.name}
+                  size={36}
+                  photoUrl={row.photoUrl}
+                  badges={getBadge(row.membership, customMemberships)}
+                  customMemberships={customMemberships}
+                  badgeInfo={getMembershipBadge(row.membership, customMemberships)}
+                />
+                <div>
+                  <div className="text-sm font-semibold text-stone-900 notranslate" translate="no">{row.name}</div>
+                  <div className="text-xs text-stone-500">{t('mom.leaderboard.awardCount', { count: row.count })}</div>
+                </div>
               </div>
-            </div>
-            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">{t('mom.leaderboard.countBadge', { count: row.count })}</span>
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">{t('mom.leaderboard.countBadge', { count: row.count })}</span>
+            </button>
           </li>
         ))}
       </ul>

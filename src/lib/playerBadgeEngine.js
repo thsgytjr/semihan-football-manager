@@ -97,8 +97,13 @@ const getMatchTimestamp = (match) => {
   return 0
 }
 
-export function buildPlayerBadgeFactsMap(players = [], matches = []) {
+export function buildPlayerBadgeFactsMap(players = [], matches = [], options = {}) {
+  const {
+    momAwardCounts = null,
+    momAwardTimeline = null
+  } = options || {}
   const map = new Map()
+  const momTimelineCounts = new Map()
   const ensure = (pid) => {
     const key = toStr(pid)
     if (!key) return null
@@ -113,8 +118,12 @@ export function buildPlayerBadgeFactsMap(players = [], matches = []) {
   })
 
   const sortedMatches = [...(matches || [])].sort((a, b) => getMatchTimestamp(a) - getMatchTimestamp(b))
+  const matchLookup = new Map()
 
   sortedMatches.forEach((match, matchIndex) => {
+    if (match?.id != null) {
+      matchLookup.set(toStr(match.id), match)
+    }
     const statsMap = extractStatsByPlayer(match) || {}
     const participantSet = new Set()
     const attendeeIds = extractAttendeeIds(match) || []
@@ -182,6 +191,61 @@ export function buildPlayerBadgeFactsMap(players = [], matches = []) {
       if (facts.momAwards > 0) recordMilestone(facts, 'momAwards', facts.momAwards, statsMatchTs)
     })
   })
+
+  if (momAwardTimeline && typeof momAwardTimeline === 'object') {
+    const timelineRows = Object.entries(momAwardTimeline)
+      .map(([matchIdRaw, summary]) => {
+        const matchId = toStr(matchIdRaw)
+        const winners = Array.isArray(summary?.winners) ? summary.winners : []
+        return {
+          matchId,
+          winners: winners.map(toStr).filter(Boolean),
+          ts: getMatchTimestamp(matchLookup.get(matchId))
+        }
+      })
+      .filter(row => row.matchId && row.winners.length > 0)
+      .sort((a, b) => a.ts - b.ts)
+
+    timelineRows.forEach(row => {
+      const awardTs = Number.isFinite(row.ts) ? row.ts : Date.now()
+      row.winners.forEach(pid => {
+        if (!pid) return
+        const facts = ensure(pid)
+        if (!facts) return
+        const nextCount = (momTimelineCounts.get(pid) || 0) + 1
+        momTimelineCounts.set(pid, nextCount)
+        if (!facts.timeline.momAwards || (facts.timeline.momAwards[facts.timeline.momAwards.length - 1]?.value ?? 0) < nextCount) {
+          recordMilestone(facts, 'momAwards', nextCount, awardTs)
+        }
+      })
+    })
+  }
+
+  momTimelineCounts.forEach((count, pid) => {
+    const facts = ensure(pid)
+    if (facts && facts.momAwards < count) {
+      facts.momAwards = count
+    }
+  })
+
+  if (momAwardCounts && typeof momAwardCounts === 'object') {
+    Object.entries(momAwardCounts).forEach(([pidRaw, total]) => {
+      const pid = toStr(pidRaw)
+      const normalized = Number(total)
+      if (!pid || !Number.isFinite(normalized) || normalized <= 0) return
+      const facts = ensure(pid)
+      if (!facts) return
+      if (facts.momAwards < normalized) {
+        facts.momAwards = normalized
+      }
+      const existingTimeline = facts.timeline.momAwards || []
+      const lastEntry = existingTimeline[existingTimeline.length - 1]
+      if (!lastEntry || lastEntry.value < normalized) {
+        const ts = lastEntry?.ts ?? facts.lastContributionTs ?? Date.now()
+        recordMilestone(facts, 'momAwards', normalized, ts)
+      }
+    })
+  }
 
   // Draft / Captain 승점 계산 추가
   try {
@@ -576,8 +640,8 @@ export function generateBadgesFromFacts(facts) {
   return badges
 }
 
-export function computeBadgesForPlayer(playerId, players = [], matches = []) {
-  const map = buildPlayerBadgeFactsMap(players, matches)
+export function computeBadgesForPlayer(playerId, players = [], matches = [], options = {}) {
+  const map = buildPlayerBadgeFactsMap(players, matches, options)
   const key = toStr(playerId)
   return generateBadgesFromFacts(map.get(key))
 }

@@ -184,6 +184,9 @@ export default function Dashboard({
   const captainWinRows = useMemo(() => computeCaptainStatsRows(players, filteredMatches), [players, filteredMatches])
   const draftAttackRows = useMemo(() => computeDraftAttackRows(players, filteredMatches), [players, filteredMatches])
 
+  const mom = useMoMPrompt({ matches, players })
+  const momAwards = useMoMAwardsSummary(matches, { limit: null })
+
   // 탭 구조 개편: 1차(종합|draft), 2차(종합: pts/g/a/gp | draft: playerWins/captainWins/attack)
   const [primaryTab, setPrimaryTab] = useState('pts') // 'pts' | 'draft' | 'mom'
   const [apTab, setApTab] = useState('pts')           // 'pts' | 'g' | 'a' | 'gp' | 'cs' | 'duo' | 'cards'
@@ -193,8 +196,11 @@ export default function Dashboard({
   const csRows = useMemo(() => addRanks(baseRows, 'cs'), [baseRows])
   const cardsRows = useMemo(() => computeCardsRows(players, filteredMatches), [players, filteredMatches])
   const badgeFactsByPlayer = useMemo(
-    () => buildPlayerBadgeFactsMap(players, matches),
-    [players, matches]
+    () => buildPlayerBadgeFactsMap(players, matches, {
+      momAwardCounts: momAwards.countsByPlayer,
+      momAwardTimeline: momAwards.winnersByMatch,
+    }),
+    [players, matches, momAwards.countsByPlayer, momAwards.winnersByMatch]
   )
   // 리더보드 카테고리 토글 반영
   const isEnabled = useCallback((key) => {
@@ -286,8 +292,6 @@ export default function Dashboard({
     }
   }, [isMoMEnabled, primaryTab])
 
-  const mom = useMoMPrompt({ matches, players })
-  const momAwards = useMoMAwardsSummary(matches)
   const playerLookup = useMemo(() => {
     const map = new Map()
     players.forEach(p => {
@@ -581,6 +585,7 @@ export default function Dashboard({
                   showAll={showAll}
                   onToggle={() => setShowAll(s => !s)}
                   customMemberships={customMemberships}
+                  onPlayerSelect={badgesEnabled ? openBadgeModal : undefined}
                 />
               ) : (
                 <div className="rounded-xl border border-dashed border-stone-200 bg-white px-4 py-8 text-center text-sm text-stone-500">
