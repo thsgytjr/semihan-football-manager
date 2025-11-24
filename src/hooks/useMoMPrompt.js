@@ -92,7 +92,7 @@ export function useMoMPrompt({ matches = [], players = [] }) {
     return map
   }, [players])
 
-  const tieBreakerScores = useMemo(() => buildMoMTieBreakerScores(statsByPlayer), [statsByPlayer])
+  const tieBreakerScores = useMemo(() => buildMoMTieBreakerScores(statsByPlayer, latestMatch), [statsByPlayer, latestMatch])
 
   const summary = useMemo(() => summarizeVotes(votes, { tieBreakerScores }), [votes, tieBreakerScores])
   const winners = useMemo(() => {

@@ -565,7 +565,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     if (!momMatch) return null
     try {
       const statsByPlayer = extractStatsByPlayer(momMatch)
-      return buildMoMTieBreakerScores(statsByPlayer)
+      return buildMoMTieBreakerScores(statsByPlayer, momMatch)
     } catch (err) {
       return null
     }
@@ -831,6 +831,12 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
           momOverride={momOverride}
           onClearOverride={handleMomAdminClearOverride}
           overrideLocked={momOverrideLocked}
+          tieBreakMeta={{
+            applied: momSummary.tieBreakApplied,
+            category: momSummary.tieBreakCategory,
+            requiresManual: momSummary.tieBreakRequiresManual,
+            pendingCandidates: momSummary.tieBreakRequiresManual ? momSummary.winners : [],
+          }}
         />
       )}
     </div>

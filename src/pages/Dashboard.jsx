@@ -12,6 +12,7 @@ import UpcomingMatchesWidget from '../components/UpcomingMatchesWidget'
 import MoMNoticeWidget from '../components/MoMNoticeWidget'
 import { MoMPopup } from '../components/MoMPopup'
 import { MoMLeaderboard } from '../components/MoMLeaderboard'
+import { MoMAwardDetailModal } from '../components/MoMAwardDetailModal'
 import PlayerBadgeModal from '../components/badges/PlayerBadgeModal'
 import { Award } from 'lucide-react'
 import { useMoMPrompt } from '../hooks/useMoMPrompt'
@@ -78,6 +79,54 @@ const compareDateKeysAsc = (a, b) => {
 }
 
 const compareDateKeysDesc = (a, b) => compareDateKeysAsc(b, a)
+
+const getMatchTimestamp = (match) => {
+  if (!match) return null
+  const candidates = [
+    match.momVoteAnchor,
+    match.draft?.momVoteAnchor,
+    match.dateISO,
+    match.date,
+    match.matchDate,
+    match.created_at,
+    match.createdAt,
+  ]
+  for (const value of candidates) {
+    if (!value) continue
+    const ts = Date.parse(value)
+    if (!Number.isNaN(ts)) {
+      return ts
+    }
+  }
+  return null
+}
+
+const toLabelString = (value) => {
+  if (value == null) return ''
+  if (typeof value === 'string') return value.trim()
+  if (typeof value === 'number') return String(value)
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const label = toLabelString(entry)
+      if (label) return label
+    }
+    return ''
+  }
+  if (typeof value === 'object') {
+    return toLabelString(
+      value.label ??
+      value.name ??
+      value.title ??
+      value.text ??
+      value.value ??
+      value.opponent ??
+      value.location ??
+      value.description ??
+      ''
+    )
+  }
+  return ''
+}
 
 /* --------------------------------------------------------
    MOBILE-FIRST LEADERBOARD (Compact Segmented Tabs)
@@ -202,6 +251,7 @@ export default function Dashboard({
     }),
     [players, matches, momAwards.countsByPlayer, momAwards.winnersByMatch]
   )
+
   // 리더보드 카테고리 토글 반영
   const isEnabled = useCallback((key) => {
     const v = leaderboardToggles?.[key]
@@ -216,6 +266,7 @@ export default function Dashboard({
 
   const [badgeModalPlayer, setBadgeModalPlayer] = useState(null)
   const [badgeModalState, setBadgeModalState] = useState({ badges: [], loading: false, error: null })
+  const [momDetailPlayer, setMoMDetailPlayer] = useState(null)
 
   const openBadgeModal = useCallback((player) => {
     if (!player) {
@@ -257,6 +308,29 @@ export default function Dashboard({
   const closeBadgeModal = useCallback(() => {
     setBadgeModalPlayer(null)
     setBadgeModalState({ badges: [], loading: false, error: null })
+  }, [])
+
+  const handleOpenMoMDetails = useCallback((player) => {
+    if (!player) {
+      notify('선수 정보가 없어 MOM 기록을 볼 수 없어요.', 'warning')
+      return
+    }
+    const playerId = player.id ?? player.playerId ?? player.player_id
+    if (playerId == null) {
+      notify('선수 ID가 없어 MOM 기록을 볼 수 없어요.', 'warning')
+      return
+    }
+    const modalPlayer = {
+      id: playerId,
+      name: player.name || player.fullName || '선수',
+      photoUrl: player.photoUrl || player.avatarUrl || null,
+      membership: player.membership,
+    }
+    setMoMDetailPlayer(modalPlayer)
+  }, [])
+
+  const closeMoMDetail = useCallback(() => {
+    setMoMDetailPlayer(null)
   }, [])
 
   const apOptions = useMemo(() => {
@@ -301,6 +375,121 @@ export default function Dashboard({
     })
     return map
   }, [players])
+
+  const matchLookup = useMemo(() => {
+    const map = new Map()
+    matches.forEach(match => {
+      if (match?.id != null) {
+        map.set(toStr(match.id), match)
+      }
+    })
+    return map
+  }, [matches])
+
+  const momDetailDataByPlayer = useMemo(() => {
+    const map = new Map()
+    const winnersByMatch = momAwards?.winnersByMatch || {}
+    const entries = Object.entries(winnersByMatch)
+    if (!entries.length) return map
+
+    const dateFormatter = (typeof Intl !== 'undefined' && Intl.DateTimeFormat)
+      ? new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric', weekday: 'short' })
+      : null
+    const formatDate = (ts) => {
+      if (!Number.isFinite(ts)) return null
+      try {
+        return dateFormatter ? dateFormatter.format(new Date(ts)) : new Date(ts).toLocaleDateString()
+      } catch {
+        return null
+      }
+    }
+
+    const orderedEntries = entries
+      .map(([matchId, summary]) => {
+        const match = matchLookup.get(matchId) || null
+        const rawTs = getMatchTimestamp(match)
+        return {
+          matchId,
+          summary,
+          match,
+          ts: Number.isFinite(rawTs) ? rawTs : 0,
+          hadTimestamp: Number.isFinite(rawTs),
+        }
+      })
+      .sort((a, b) => (b.ts || 0) - (a.ts || 0))
+
+    orderedEntries.forEach(({ matchId, summary, match, ts, hadTimestamp }, orderIndex) => {
+      if (summary?.manualResolutionRequired) {
+        return
+      }
+      const dateLabel = hadTimestamp && ts > 0 ? formatDate(ts) : null
+      const opponentLabel = (
+        [
+          match?.title,
+          match?.matchTitle,
+          match?.opponent,
+          match?.opponentName,
+          match?.opponent_label,
+          match?.meta?.opponent,
+          match?.meta?.opponentName,
+          match?.location,
+        ]
+          .map(toLabelString)
+          .find(Boolean)
+      ) || t('mom.detail.opponentUnknown')
+      const baseParts = [dateLabel, opponentLabel].filter(Boolean)
+      const baseLabel = baseParts.length > 0 ? baseParts.join(' · ') : t('mom.detail.matchFallback')
+
+      const winners = Array.isArray(summary?.winners) ? summary.winners : []
+      const tallyEntries = summary?.tally ? Object.entries(summary.tally) : []
+
+      winners.forEach((winnerId) => {
+        const pid = toStr(winnerId)
+        if (!pid) return
+        const playerVotes = Number(summary?.tally?.[pid] || 0)
+        const opponents = tallyEntries
+          .filter(([otherId]) => otherId !== pid)
+          .map(([otherId, votes]) => ({
+            playerId: otherId,
+            name: playerLookup.get(otherId)?.name || `Player ${otherId}`,
+            membership: playerLookup.get(otherId)?.membership,
+            photoUrl: playerLookup.get(otherId)?.photoUrl || playerLookup.get(otherId)?.avatarUrl || null,
+            votes: Number(votes) || 0,
+            diff: Math.max(0, playerVotes - Number(votes || 0)),
+          }))
+          .sort((a, b) => b.votes - a.votes)
+
+        const topVotes = opponents[0]?.votes ?? 0
+        const hasOpponents = opponents.length > 0
+        const detail = {
+          matchId,
+          matchLabel: baseLabel,
+          totalVotes: Number(summary?.total || 0),
+          playerVotes,
+          diff: hasOpponents ? Math.max(0, playerVotes - topVotes) : playerVotes,
+          tie: hasOpponents && playerVotes === topVotes,
+          hasOpponents,
+          opponents,
+          override: Boolean(summary?.override),
+          matchTs: ts,
+          fallbackOrder: orderIndex,
+          tieBreakCategory: summary?.tieBreakCategory || null,
+        }
+        if (!map.has(pid)) map.set(pid, [])
+        map.get(pid).push(detail)
+      })
+    })
+
+    map.forEach(list => list.sort((a, b) => (b.matchTs || 0) - (a.matchTs || 0) || (a.fallbackOrder ?? 0) - (b.fallbackOrder ?? 0)))
+    return map
+  }, [momAwards.winnersByMatch, matchLookup, playerLookup, t])
+
+  const selectedMoMAwards = useMemo(() => {
+    if (!momDetailPlayer) return []
+    const pid = toStr(momDetailPlayer.id)
+    if (!pid) return []
+    return momDetailDataByPlayer.get(pid) || []
+  }, [momDetailPlayer, momDetailDataByPlayer])
 
   const momLeaders = useMemo(() => {
     const entries = Object.entries(mom.tally || {})
@@ -585,7 +774,7 @@ export default function Dashboard({
                   showAll={showAll}
                   onToggle={() => setShowAll(s => !s)}
                   customMemberships={customMemberships}
-                  onPlayerSelect={badgesEnabled ? openBadgeModal : undefined}
+                  onPlayerSelect={handleOpenMoMDetails}
                 />
               ) : (
                 <div className="rounded-xl border border-dashed border-stone-200 bg-white px-4 py-8 text-center text-sm text-stone-500">
@@ -684,7 +873,7 @@ export default function Dashboard({
                 />
               )
             )}
-            {badgesEnabled && (
+            {badgesEnabled && primaryTab !== 'mom' && (
               <div className="mt-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-700" data-testid="badges-hint">
                 <Award className="h-4 w-4 flex-shrink-0" />
                 <span>{t('badges.clickHint')}</span>
@@ -743,6 +932,14 @@ export default function Dashboard({
           `}</style>
         </Card>
       </div>
+
+      <MoMAwardDetailModal
+        open={Boolean(momDetailPlayer)}
+        player={momDetailPlayer}
+        awards={selectedMoMAwards}
+        onClose={closeMoMDetail}
+        customMemberships={customMemberships}
+      />
 
       {badgesEnabled && (
         <PlayerBadgeModal

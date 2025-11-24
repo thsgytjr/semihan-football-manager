@@ -1,4 +1,4 @@
-import { toStr, extractStatsByPlayer } from './matchUtils'
+import { toStr, extractStatsByPlayer, extractAttendeeIds } from './matchUtils'
 
 const HOUR_MS = 60 * 60 * 1000
 export const MOM_VOTE_WINDOW_HOURS = 24
@@ -77,6 +77,44 @@ export function findLatestMatchWithScores(matches = []) {
     .find(hasScoreData) || null
 }
 
+const TIE_BREAKER_ORDER = ['goals', 'assists', 'cleanSheet', 'appearances']
+
+function normalizeTieRecord(raw) {
+  if (raw == null) {
+    return { goals: 0, assists: 0, cleanSheet: 0, appearances: 0 }
+  }
+  if (typeof raw === 'number') {
+    return { goals: raw, assists: 0, cleanSheet: 0, appearances: 0 }
+  }
+  return {
+    goals: Number(raw.goals || 0),
+    assists: Number(raw.assists || 0),
+    cleanSheet: Number(raw.cleanSheet || raw.cs || 0),
+    appearances: Number(raw.appearances || 0),
+  }
+}
+
+function resolveTieWithCriteria(winnerIds = [], tieRecords = {}) {
+  let remaining = winnerIds.map(pid => ({ pid, ...normalizeTieRecord(tieRecords[pid]) }))
+  let lastCategory = null
+  for (const category of TIE_BREAKER_ORDER) {
+    const maxVal = Math.max(...remaining.map(item => item[category] ?? 0))
+    const filtered = remaining.filter(item => (item[category] ?? 0) === maxVal)
+    if (filtered.length === 1) {
+      return {
+        winners: filtered.map(item => item.pid),
+        info: { applied: true, category, requiresManual: false }
+      }
+    }
+    remaining = filtered
+    lastCategory = category
+  }
+  return {
+    winners: remaining.map(item => item.pid),
+    info: { applied: true, category: lastCategory ?? 'manual', requiresManual: true }
+  }
+}
+
 export function summarizeVotes(votes = [], { tieBreakerScores = null } = {}) {
   const tally = {}
   votes.forEach(vote => {
@@ -90,36 +128,43 @@ export function summarizeVotes(votes = [], { tieBreakerScores = null } = {}) {
     .filter(([, cnt]) => cnt === maxVotes && cnt > 0)
     .map(([pid]) => pid)
 
+  let tieBreakApplied = false
+  let tieBreakCategory = null
+  let tieBreakRequiresManual = false
+
   if (winners.length > 1 && tieBreakerScores && typeof tieBreakerScores === 'object') {
-    const scored = winners.map(pid => {
-      const raw = Number(tieBreakerScores[pid])
-      return { pid, score: Number.isFinite(raw) ? raw : 0 }
-    })
-    const bestScore = Math.max(...scored.map(s => s.score))
-    if (Number.isFinite(bestScore)) {
-      const narrowed = scored.filter(s => s.score === bestScore).map(s => s.pid)
-      if (narrowed.length > 0 && narrowed.length <= winners.length) {
-        winners = narrowed
-      }
-    }
+    const { winners: resolved, info } = resolveTieWithCriteria(winners, tieBreakerScores)
+    winners = resolved
+    tieBreakApplied = info?.applied ?? false
+    tieBreakCategory = info?.category ?? null
+    tieBreakRequiresManual = Boolean(info?.requiresManual)
   }
   return {
     tally,
     total: votes.length,
     maxVotes,
     winners,
+    tieBreakApplied,
+    tieBreakCategory,
+    tieBreakRequiresManual,
   }
 }
 
-export function buildMoMTieBreakerScores(statsByPlayer = {}) {
+export function buildMoMTieBreakerScores(statsByPlayer = {}, match = null) {
   const map = {}
-  if (!statsByPlayer || typeof statsByPlayer !== 'object') return map
-  Object.entries(statsByPlayer).forEach(([pid, stat]) => {
+  if (!statsByPlayer || typeof statsByPlayer !== 'object') statsByPlayer = {}
+  const attendees = match ? extractAttendeeIds(match) : []
+  const attendeeSet = new Set(attendees.map(toStr))
+  const allIds = new Set([...Object.keys(statsByPlayer), ...Array.from(attendeeSet)])
+  allIds.forEach(pid => {
     if (!pid) return
-    const goals = Number(stat?.goals || 0)
-    const assists = Number(stat?.assists || 0)
-    const cleanSheet = Number(stat?.cleanSheet || 0)
-    map[toStr(pid)] = goals * 100 + assists * 10 + cleanSheet
+    const stat = statsByPlayer[pid] || {}
+    map[toStr(pid)] = {
+      goals: Number(stat?.goals || 0),
+      assists: Number(stat?.assists || 0),
+      cleanSheet: Number(stat?.cleanSheet || stat?.cs || 0),
+      appearances: attendeeSet.has(toStr(pid)) ? 1 : 0,
+    }
   })
   return map
 }
@@ -141,7 +186,7 @@ export function buildMoMAwardsSummary({ votes = [], matches = [], now = new Date
   matches.forEach(match => {
     if (!match?.id) return
     const statsByPlayer = extractStatsByPlayer(match)
-    tieBreakerCache.set(toStr(match.id), buildMoMTieBreakerScores(statsByPlayer))
+    tieBreakerCache.set(toStr(match.id), buildMoMTieBreakerScores(statsByPlayer, match))
   })
 
   const votesByMatch = new Map()
@@ -169,12 +214,25 @@ export function buildMoMAwardsSummary({ votes = [], matches = [], now = new Date
         ...summary,
         winners: [overridePid],
         override: overrideRecord,
+        manualResolutionRequired: false,
       }
       countsByPlayer[overridePid] = (countsByPlayer[overridePid] || 0) + 1
       return
     }
     if (!summary.total || summary.maxVotes === 0) return
-    winnersByMatch[matchId] = summary
+    if (summary.tieBreakRequiresManual) {
+      winnersByMatch[matchId] = {
+        ...summary,
+        winners: [],
+        manualResolutionRequired: true,
+        pendingWinners: summary.winners,
+      }
+      return
+    }
+    winnersByMatch[matchId] = {
+      ...summary,
+      manualResolutionRequired: false,
+    }
     summary.winners.forEach(pid => {
       countsByPlayer[pid] = (countsByPlayer[pid] || 0) + 1
     })

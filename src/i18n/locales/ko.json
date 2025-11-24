@@ -426,7 +426,7 @@
       "rule1": "1회만 투표할 수 있습니다.",
       "rule2": "추천 후보는 골/어시 합계 Top5 기준이며, 참석자 누구에게나 투표할 수 있습니다.",
       "rule3": "이미 투표한 경우 동일 현제 투표창은 다시 표시되지 않습니다.",
-      "rule4": "득표가 동률이면 골/어시 기록이 더 좋은 선수가 자동으로 선정됩니다."
+      "rule4": "득표가 동률이면 골→어시스트→클린시트→출전 순으로 비교하며, 그래도 동률이면 임원진 회의에서 최종 결정됩니다."
     },
     "notice": {
       "badgeDeadline": "마감",
@@ -452,6 +452,24 @@
       "empty": "아직 MOM 수상 기록이 없습니다.",
       "awardCount": "누적 {{count}}회 수상",
       "countBadge": "{{count}}회"
+    },
+    "detail": {
+      "title": "{{name}}님의 MOM 기록",
+      "subtitle": "수상 경기별 득표 상황",
+      "playerLabel": "선수",
+      "totalAwards": "총 {{count}}회 수상",
+      "empty": "표시할 수상 기록이 없습니다.",
+      "votes": "{{count}}표",
+      "totalVotes": "총 {{count}}표",
+      "margin": "+{{diff}}표 리드",
+      "marginShort": "+{{diff}}",
+      "solo": "단독 수상",
+      "tie": "동률",
+      "tieBreakNote": "득표가 같아 골→어시→클린시트→출전 순으로 비교했어요. 그래도 같으면 임원진이 수동 확정합니다.",
+      "override": "수동 지정",
+      "close": "닫기",
+      "matchFallback": "날짜 미상 경기",
+      "opponentUnknown": "상대 미정"
     }
   }
 }

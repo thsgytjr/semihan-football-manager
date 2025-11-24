@@ -269,7 +269,7 @@
       "rule1": "You can vote only once.",
       "rule2": "Recommended candidates are Top 5 by goals/assists, but you can vote for any attendee.",
       "rule3": "If you've already voted, this voting modal won't show again.",
-      "rule4": "If there's a tie, the player with better goals/assists is selected."
+      "rule4": "If votes tie, we compare goals → assists → clean sheets → appearances. If still tied, the leadership committee makes the final call."
     },
     "notice": {
       "badgeDeadline": "Closed",
@@ -295,6 +295,24 @@
       "empty": "No MOM award records yet.",
       "awardCount": "Total {{count}} awards",
       "countBadge": "{{count}}x"
+    },
+    "detail": {
+      "title": "MOM record for {{name}}",
+      "subtitle": "Per-match vote details",
+      "playerLabel": "Player",
+      "totalAwards": "{{count}} awards",
+      "empty": "No award history available.",
+      "votes": "{{count}} votes",
+      "totalVotes": "Total {{count}} votes",
+      "margin": "+{{diff}} vote lead",
+      "marginShort": "+{{diff}}",
+      "solo": "Only player with votes",
+      "tie": "Tie (decided by tiebreaker)",
+      "tieBreakNote": "Votes tied, so we compared goals → assists → clean sheets → appearances. If still tied, the committee confirms the winner manually.",
+      "override": "Manual override",
+      "close": "Close",
+      "matchFallback": "Match detail unavailable",
+      "opponentUnknown": "Unknown opponent"
     }
   },
   "upcoming": {

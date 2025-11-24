@@ -33,6 +33,7 @@ export default function MoMAdminPanel({
   momOverride,
   onClearOverride,
   overrideLocked = false,
+  tieBreakMeta = null,
 }) {
   const [selectedPlayerId, setSelectedPlayerId] = useState('')
   const [note, setNote] = useState('')
@@ -156,6 +157,10 @@ export default function MoMAdminPanel({
 
   const currentLeader = leaders[0]
   const overridePlayer = momOverride ? rosterMap.get(String(momOverride.playerId)) : null
+  const manualTiePending = tieBreakMeta?.requiresManual
+  const tiePendingNames = (tieBreakMeta?.pendingCandidates || [])
+    .map(pid => rosterMap.get(String(pid))?.name || pid)
+    .filter(Boolean)
 
   return (
     <>
@@ -205,6 +210,19 @@ export default function MoMAdminPanel({
                     #<span className="notranslate" translate="no">{leader.player?.name || leader.playerId}</span> {leader.count}표
                   </span>
                 ))}
+              </div>
+            )}
+            {manualTiePending && (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                <div className="font-semibold">득표 동률 – 임원진 결정 필요</div>
+                <p className="mt-1 leading-relaxed">
+                  골 → 어시스트 → 클린시트 → 출전까지 모두 동일합니다. 아래 <strong>"이 선수로 MOM 확정"</strong> 버튼으로 최종 결정을 저장해 주세요.
+                </p>
+                {tiePendingNames.length > 0 && (
+                  <p className="mt-1 text-amber-800">
+                    후보: <span className="notranslate" translate="no">{tiePendingNames.join(', ')}</span>
+                  </p>
+                )}
               </div>
             )}
           </section>
