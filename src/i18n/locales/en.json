@@ -218,8 +218,14 @@
       "discipline": "Discipline",
       "visual": "Scoring mix snapshot",
       "momentum": "Draft momentum",
+      "seasonSnapshot": "Season snapshot",
       "chemistry": "Chemistry spotlight",
       "facts": "Fun facts"
+    },
+    "seasons": {
+      "overall": "All seasons",
+      "unknown": "Other",
+      "named": "{{season}} season"
     },
     "chemistryRole": {
       "assist": "Assist supplier",

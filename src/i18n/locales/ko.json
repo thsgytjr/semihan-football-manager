@@ -218,8 +218,14 @@
       "discipline": "카드",
       "visual": "스코어링 스냅샷",
       "momentum": "드래프트 모멘텀",
+      "seasonSnapshot": "시즌 스냅샷",
       "chemistry": "케미 파트너",
       "facts": "흥미로운 기록"
+    },
+    "seasons": {
+      "overall": "전체 시즌",
+      "unknown": "기타",
+      "named": "{{season}} 시즌"
     },
     "chemistryRole": {
       "assist": "어시스트 공급원",

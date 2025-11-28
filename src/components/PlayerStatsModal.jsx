@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { X, BarChart3, Award } from 'lucide-react'
@@ -75,6 +75,24 @@ export default function PlayerStatsModal({
 }) {
   const { t } = useTranslation()
   const shouldRender = Boolean(open && player)
+  const seasonOrder = useMemo(() => {
+    if (Array.isArray(stats?.seasonOrder) && stats.seasonOrder.length > 0) {
+      return stats.seasonOrder
+    }
+    return stats?.attack ? ['overall'] : []
+  }, [stats])
+  const seasonStatsMap = stats?.seasonStats || {}
+  const preferredSeasonKey = useMemo(() => {
+    if (!seasonOrder || seasonOrder.length === 0) return 'overall'
+    const nonOverall = seasonOrder.find((key) => key && key !== 'overall')
+    return nonOverall || seasonOrder[0] || 'overall'
+  }, [seasonOrder])
+  const [seasonKey, setSeasonKey] = useState(() => preferredSeasonKey)
+
+  useEffect(() => {
+    if (!seasonOrder.length) return
+    setSeasonKey((prev) => (seasonOrder.includes(prev) ? prev : preferredSeasonKey))
+  }, [seasonOrder, preferredSeasonKey])
 
   useEffect(() => {
     if (!shouldRender) return undefined
@@ -89,11 +107,10 @@ export default function PlayerStatsModal({
   }, [shouldRender, onClose])
 
   const portalTarget = useMemo(() => (shouldRender ? ensurePortalTarget() : null), [shouldRender])
-
   const attack = stats?.attack || null
   const efficiency = stats?.efficiency || null
-  const draftRecord = stats?.draftRecord || null
-  const draftAttack = stats?.draftAttack || null
+  const baseDraftRecord = stats?.draftRecord || null
+  const baseDraftAttack = stats?.draftAttack || null
   const cards = stats?.cards || null
   const momAwards = Number(stats?.momAwards ?? 0)
   const contextLabel = stats?.filterDescription || ''
@@ -102,6 +119,33 @@ export default function PlayerStatsModal({
   const funFactsEnabled = stats?.factsEnabled !== false
   const membershipBadge = player?.membership ? getMembershipBadge(player.membership, customMemberships) : null
   const topPartners = stats?.chemistry?.topPartners || []
+  const seasonLookup = useMemo(() => {
+    const next = { ...seasonStatsMap }
+    const overallEntry = next.overall || {}
+    const mergedOverall = {
+      attack: overallEntry.attack || attack,
+      efficiency: overallEntry.efficiency || efficiency,
+      draftRecord: overallEntry.draftRecord || baseDraftRecord,
+      draftAttack: overallEntry.draftAttack || baseDraftAttack,
+    }
+    if (mergedOverall.attack || mergedOverall.efficiency || mergedOverall.draftRecord || mergedOverall.draftAttack) {
+      next.overall = mergedOverall
+    } else if (next.overall) {
+      delete next.overall
+    }
+    return next
+  }, [seasonStatsMap, attack, efficiency, baseDraftRecord, baseDraftAttack])
+
+  const fallbackSeasonKey = seasonOrder[0] || 'overall'
+  const fallbackOverall = (attack || efficiency || baseDraftRecord || baseDraftAttack)
+    ? { attack, efficiency, draftRecord: baseDraftRecord, draftAttack: baseDraftAttack }
+    : null
+  const activeSeasonEntry = seasonLookup[seasonKey] || seasonLookup[fallbackSeasonKey] || fallbackOverall
+  const seasonAttack = activeSeasonEntry?.attack || attack
+  const seasonEfficiency = activeSeasonEntry?.efficiency || efficiency
+  const draftRecord = activeSeasonEntry?.draftRecord || baseDraftRecord
+  const draftAttack = activeSeasonEntry?.draftAttack || baseDraftAttack
+
   const badgesPinned = Boolean(
     player?.challengeBadgesPinned ||
     player?.hasChallengeBadgePinned ||
@@ -111,20 +155,26 @@ export default function PlayerStatsModal({
   const hideBadgesButton = Boolean(player?.hideBadgesButton || player?.showBadgesButton === false || badgesPinned)
   const showBadgeCta = typeof onShowBadges === 'function' && !hideBadgesButton
 
+  const formatSeasonLabel = (key) => {
+    if (!key || key === 'unknown') return t('playerStatsModal.seasons.unknown')
+    if (key === 'overall') return t('playerStatsModal.seasons.overall')
+    return t('playerStatsModal.seasons.named', { season: key })
+  }
+
   const summaryItems = useMemo(() => ([
-    { label: t('playerStatsModal.labels.apps'), value: attack?.gp != null ? attack.gp : null, helper: t('playerStatsModal.helpers.apps') },
-    { label: t('playerStatsModal.labels.goals'), value: attack?.g != null ? attack.g : null, helper: t('playerStatsModal.helpers.goals') },
-    { label: t('playerStatsModal.labels.assists'), value: attack?.a != null ? attack.a : null, helper: t('playerStatsModal.helpers.assists') },
-    { label: t('playerStatsModal.labels.points'), value: attack?.pts != null ? attack.pts : null, helper: t('playerStatsModal.helpers.points') },
-    { label: t('playerStatsModal.labels.cleanSheets'), value: attack?.cs != null ? attack.cs : null, helper: t('playerStatsModal.helpers.cleanSheets') },
+    { label: t('playerStatsModal.labels.apps'), value: seasonAttack?.gp ?? null, helper: t('playerStatsModal.helpers.apps') },
+    { label: t('playerStatsModal.labels.goals'), value: seasonAttack?.g ?? null, helper: t('playerStatsModal.helpers.goals') },
+    { label: t('playerStatsModal.labels.assists'), value: seasonAttack?.a ?? null, helper: t('playerStatsModal.helpers.assists') },
+    { label: t('playerStatsModal.labels.points'), value: seasonAttack?.pts ?? null, helper: t('playerStatsModal.helpers.points') },
+    { label: t('playerStatsModal.labels.cleanSheets'), value: seasonAttack?.cs ?? null, helper: t('playerStatsModal.helpers.cleanSheets') },
     { label: t('playerStatsModal.labels.momAwards'), value: Number.isFinite(momAwards) ? momAwards : null, helper: t('playerStatsModal.helpers.momAwards') }
-  ]), [attack, momAwards, t])
+  ]), [seasonAttack, momAwards, t])
 
   const efficiencyItems = useMemo(() => ([
-    { label: t('playerStatsModal.labels.gPerGame'), value: efficiency?.gPerGame ?? null, helper: t('playerStatsModal.helpers.gPerGame') },
-    { label: t('playerStatsModal.labels.aPerGame'), value: efficiency?.aPerGame ?? null, helper: t('playerStatsModal.helpers.aPerGame') },
-    { label: t('playerStatsModal.labels.ptsPerGame'), value: efficiency?.ptsPerGame ?? null, helper: t('playerStatsModal.helpers.ptsPerGame') }
-  ]), [efficiency, t])
+    { label: t('playerStatsModal.labels.gPerGame'), value: seasonEfficiency?.gPerGame ?? null, helper: t('playerStatsModal.helpers.gPerGame') },
+    { label: t('playerStatsModal.labels.aPerGame'), value: seasonEfficiency?.aPerGame ?? null, helper: t('playerStatsModal.helpers.aPerGame') },
+    { label: t('playerStatsModal.labels.ptsPerGame'), value: seasonEfficiency?.ptsPerGame ?? null, helper: t('playerStatsModal.helpers.ptsPerGame') }
+  ]), [seasonEfficiency, t])
 
   const draftRecordItems = useMemo(() => ([
     { label: t('playerStatsModal.labels.wins'), value: draftRecord?.wins != null ? draftRecord.wins : null },
@@ -157,14 +207,14 @@ export default function PlayerStatsModal({
 
   const scoringBars = useMemo(() => {
     const entries = []
-    const goals = toNumber(attack?.g)
+    const goals = toNumber(seasonAttack?.g)
     if (goals != null) entries.push({ label: t('playerStatsModal.labels.goals'), value: goals, accent: 'bg-emerald-500' })
-    const assists = toNumber(attack?.a)
+    const assists = toNumber(seasonAttack?.a)
     if (assists != null) entries.push({ label: t('playerStatsModal.labels.assists'), value: assists, accent: 'bg-cyan-500' })
-    const points = toNumber(attack?.pts)
+    const points = toNumber(seasonAttack?.pts)
     if (points != null) entries.push({ label: t('playerStatsModal.labels.points'), value: points, accent: 'bg-amber-500' })
-    const cleanSheets = toNumber(attack?.cs)
-    const gamesPlayed = toNumber(attack?.gp)
+    const cleanSheets = toNumber(seasonAttack?.cs)
+    const gamesPlayed = toNumber(seasonAttack?.gp)
     if (cleanSheets != null) {
       entries.push({
         label: t('playerStatsModal.labels.cleanSheets'),
@@ -181,7 +231,7 @@ export default function PlayerStatsModal({
       percent: e.ratio != null ? e.ratio : (e.value / maxVal) * 100,
       accent: e.accent,
     }))
-  }, [attack, t])
+  }, [seasonAttack, t])
 
   const efficiencyBars = useMemo(() => {
     const entries = []
@@ -208,6 +258,8 @@ export default function PlayerStatsModal({
     })
     return entries
   }, [draftAttack, draftRecord, t])
+
+  const showDraftRecordSection = hasDraftRecord || efficiencyBars.length > 0
 
   const funFacts = useMemo(() => {
     if (!funFactsEnabled) return []
@@ -360,35 +412,50 @@ export default function PlayerStatsModal({
             </div>
           )}
 
-          {!noStats && hasSummary && (
-            <section className="space-y-3">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-stone-500">{t('playerStatsModal.sections.attack')}</h3>
-              <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-                {summaryItems.map((item) => (
-                  <StatBlock key={item.label} label={item.label} value={item.value} helper={item.helper} />
-                ))}
+          {!noStats && (hasSummary || scoringBars.length > 0 || efficiencyBars.length > 0) && (
+            <section className="space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-stone-500">{t('playerStatsModal.sections.seasonSnapshot')}</h3>
+                {seasonOrder.length > 0 && (
+                  <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+                    {seasonOrder.map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setSeasonKey(key)}
+                        className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${seasonKey === key ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-stone-200 text-stone-500 hover:border-stone-300'}`}
+                      >
+                        {formatSeasonLabel(key)}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
-            </section>
-          )}
-
-          {!noStats && hasEfficiency && (
-            <section className="space-y-3">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-stone-500">{t('playerStatsModal.sections.efficiency')}</h3>
-              <div className="grid gap-3 md:grid-cols-3">
-                {efficiencyItems.map((item) => (
-                  <StatBlock key={item.label} label={item.label} value={item.value} helper={item.helper} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {!noStats && scoringBars.length > 0 && (
-            <section className="space-y-3">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-stone-500">{t('playerStatsModal.sections.visual')}</h3>
-              <div className="space-y-3 rounded-3xl border border-stone-200 bg-white p-4">
-                {scoringBars.map((bar) => (
-                  <ChartBar key={bar.label} label={bar.label} valueLabel={bar.valueLabel} percent={bar.percent} accent={bar.accent} />
-                ))}
+              <div className="space-y-4 rounded-3xl border border-stone-200 bg-white/90 p-4 shadow-sm">
+                {hasSummary && (
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+                    {summaryItems.map((item) => (
+                      <StatBlock key={item.label} label={item.label} value={item.value} helper={item.helper} />
+                    ))}
+                  </div>
+                )}
+                {hasEfficiency && (
+                  <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                    {efficiencyItems.map((item) => (
+                      <StatBlock key={item.label} label={item.label} value={item.value} helper={item.helper} />
+                    ))}
+                  </div>
+                )}
+                {scoringBars.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">{t('playerStatsModal.sections.visual')}</p>
+                    <div className="space-y-2">
+                      {scoringBars.map((bar) => (
+                        <ChartBar key={bar.label} label={bar.label} valueLabel={bar.valueLabel} percent={bar.percent} accent={bar.accent} />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </section>
           )}
@@ -403,22 +470,22 @@ export default function PlayerStatsModal({
                     : `partner-${idx}`
                   return (
                     <div key={partnerKey} className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <InitialAvatar
-                        id={partner.id}
-                        name={partner.name}
-                        size={36}
-                        photoUrl={partner.photoUrl}
-                        customMemberships={customMemberships}
-                      />
-                      <div>
-                        <p className="font-semibold text-stone-800 notranslate" translate="no">{partner.name}</p>
-                        <p className="text-xs text-stone-500">{t(`playerStatsModal.chemistryRole.${partner.role}`)}</p>
+                      <div className="flex items-center gap-3">
+                        <InitialAvatar
+                          id={partner.id}
+                          name={partner.name}
+                          size={36}
+                          photoUrl={partner.photoUrl}
+                          customMemberships={customMemberships}
+                        />
+                        <div>
+                          <p className="font-semibold text-stone-800 notranslate" translate="no">{partner.name}</p>
+                          <p className="text-xs text-stone-500">{t(`playerStatsModal.chemistryRole.${partner.role}`)}</p>
+                        </div>
                       </div>
-                    </div>
-                    <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
-                      {t('playerStatsModal.labels.duoCount', { count: partner.count })}
-                    </span>
+                      <span className="rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+                        {t('playerStatsModal.labels.duoCount', { count: partner.count })}
+                      </span>
                     </div>
                   )
                 })}
@@ -426,11 +493,11 @@ export default function PlayerStatsModal({
             </section>
           )}
 
-          {!noStats && hasDraftRecord && (
+          {!noStats && showDraftRecordSection && (
             <section className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-stone-500">{t('playerStatsModal.sections.draftRecord')}</h3>
-                {draftRecord?.last5?.length > 0 && (
+                {hasDraftRecord && draftRecord?.last5?.length > 0 && (
                   <div className="flex flex-wrap items-center gap-1 text-xs text-stone-500">
                     {t('playerStatsModal.labels.last5')}
                     {draftRecord.last5.slice(-5).map((val, idx) => (
@@ -439,11 +506,23 @@ export default function PlayerStatsModal({
                   </div>
                 )}
               </div>
-              <div className="grid gap-3 md:grid-cols-5">
-                {draftRecordItems.map((item) => (
-                  <StatBlock key={item.label} label={item.label} value={item.value} />
-                ))}
-              </div>
+              {hasDraftRecord && (
+                <div className="grid gap-3 md:grid-cols-5">
+                  {draftRecordItems.map((item) => (
+                    <StatBlock key={item.label} label={item.label} value={item.value} />
+                  ))}
+                </div>
+              )}
+              {efficiencyBars.length > 0 && (
+                <div className="space-y-2 rounded-3xl border border-stone-200 bg-white/90 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">{t('playerStatsModal.sections.momentum')}</p>
+                  <div className="space-y-2">
+                    {efficiencyBars.map((bar) => (
+                      <ChartBar key={bar.label} label={bar.label} valueLabel={bar.valueLabel} percent={bar.percent} accent={bar.accent} />
+                    ))}
+                  </div>
+                </div>
+              )}
             </section>
           )}
 
@@ -453,17 +532,6 @@ export default function PlayerStatsModal({
               <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
                 {draftAttackItems.map((item) => (
                   <StatBlock key={item.label} label={item.label} value={item.value} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {!noStats && efficiencyBars.length > 0 && (
-            <section className="space-y-3">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-stone-500">{t('playerStatsModal.sections.momentum')}</h3>
-              <div className="space-y-3 rounded-3xl border border-stone-200 bg-white p-4">
-                {efficiencyBars.map((bar) => (
-                  <ChartBar key={bar.label} label={bar.label} valueLabel={bar.valueLabel} percent={bar.percent} accent={bar.accent} />
                 ))}
               </div>
             </section>

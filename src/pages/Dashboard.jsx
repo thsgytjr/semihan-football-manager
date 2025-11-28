@@ -212,6 +212,11 @@ export default function Dashboard({
     }
     return ['all', ...Array.from(seasons).sort().reverse()]
   }, [matches])
+
+  const leaderboardDefaultSeason = useMemo(() => {
+    const firstSeason = seasonOptions.find((option) => option !== 'all')
+    return firstSeason || 'all'
+  }, [seasonOptions])
   
   // 시즌별 필터링 (리더보드용)
   const leaderboardSeasonFilteredMatches = useMemo(() => {
@@ -363,6 +368,14 @@ export default function Dashboard({
   const [statsModalPlayer, setStatsModalPlayer] = useState(null)
   const [momDetailPlayer, setMoMDetailPlayer] = useState(null)
   const statsModalTipShownRef = useRef(false)
+  const leaderboardSeasonUserSetRef = useRef(false)
+
+  useEffect(() => {
+    if (leaderboardSeasonUserSetRef.current) return
+    if (!leaderboardDefaultSeason || leaderboardDefaultSeason === leaderboardSeason) return
+    setLeaderboardSeason(leaderboardDefaultSeason)
+    setApDateKey('all')
+  }, [leaderboardDefaultSeason, leaderboardSeason])
 
   useEffect(() => {
     if (!playerStatsEnabled && statsModalPlayer) {
@@ -673,6 +686,50 @@ export default function Dashboard({
     return map
   }, [playerStatsEnabled, filteredMatches, filteredMatchIdSet, momAwards?.winnersByMatch, matchLookup])
 
+  const matchesBySeason = useMemo(() => {
+    const map = new Map()
+    matches.forEach((match) => {
+      const season = extractSeason(match) || 'unknown'
+      if (!map.has(season)) {
+        map.set(season, [])
+      }
+      map.get(season).push(match)
+    })
+    return map
+  }, [matches])
+
+  const attackRowsBySeason = useMemo(() => {
+    const out = new Map()
+    matchesBySeason.forEach((seasonMatches, seasonKey) => {
+      if (!Array.isArray(seasonMatches) || seasonMatches.length === 0) return
+      const rows = computeAttackRows(players, seasonMatches)
+      out.set(seasonKey, buildPlayerRowMap(rows))
+    })
+    return out
+  }, [players, matchesBySeason])
+
+  const draftRecordRowsBySeason = useMemo(() => {
+    const out = new Map()
+    matchesBySeason.forEach((seasonMatches, seasonKey) => {
+      if (!Array.isArray(seasonMatches) || seasonMatches.length === 0) return
+      const rows = computeDraftPlayerStatsRows(players, seasonMatches)
+      if (!rows || rows.length === 0) return
+      out.set(seasonKey, buildPlayerRowMap(rows))
+    })
+    return out
+  }, [players, matchesBySeason])
+
+  const draftAttackRowsBySeason = useMemo(() => {
+    const out = new Map()
+    matchesBySeason.forEach((seasonMatches, seasonKey) => {
+      if (!Array.isArray(seasonMatches) || seasonMatches.length === 0) return
+      const rows = computeDraftAttackRows(players, seasonMatches)
+      if (!rows || rows.length === 0) return
+      out.set(seasonKey, buildPlayerRowMap(rows))
+    })
+    return out
+  }, [players, matchesBySeason])
+
   const momDetailDataByPlayer = useMemo(() => {
     const map = new Map()
     const winnersByMatch = momAwards?.winnersByMatch || {}
@@ -798,35 +855,84 @@ export default function Dashboard({
       return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2)
     }
 
+    const summarizeAttackRow = (row) => row ? {
+      gp: row.gp,
+      g: row.g,
+      a: row.a,
+      pts: row.pts,
+      cs: row.cs,
+    } : null
+    const summarizeEfficiency = (row) => row ? {
+      gPerGame: formatAvg(row.g, row.gp),
+      aPerGame: formatAvg(row.a, row.gp),
+      ptsPerGame: formatAvg(row.pts, row.gp),
+    } : null
+    const summarizeDraftRecord = (row) => row ? {
+      wins: row.wins,
+      draws: row.draws,
+      losses: row.losses,
+      winRate: row.winRate,
+      points: row.points,
+      last5: row.last5,
+    } : null
+    const summarizeDraftAttack = (row) => row ? {
+      gp: row.gp,
+      g: row.g,
+      a: row.a,
+      pts: row.pts,
+      gpg: row.gpg,
+      apa: row.apa,
+    } : null
+
+    const seasonStats = {}
+    const seasonOrder = []
+    const baseAttack = summarizeAttackRow(attackRow)
+    const baseEfficiency = summarizeEfficiency(attackRow)
+    const baseDraftRecord = summarizeDraftRecord(draftRow)
+    const baseDraftAttack = summarizeDraftAttack(draftAttackRow)
+    if (baseAttack || baseEfficiency || baseDraftRecord || baseDraftAttack) {
+      seasonStats.overall = {
+        attack: baseAttack,
+        efficiency: baseEfficiency,
+        draftRecord: baseDraftRecord,
+        draftAttack: baseDraftAttack,
+      }
+      seasonOrder.push('overall')
+    }
+
+    const seasonKeySet = new Set()
+    attackRowsBySeason.forEach((_, seasonKey) => {
+      if (seasonKey && seasonKey !== 'unknown') seasonKeySet.add(seasonKey)
+    })
+    draftRecordRowsBySeason.forEach((_, seasonKey) => {
+      if (seasonKey && seasonKey !== 'unknown') seasonKeySet.add(seasonKey)
+    })
+    draftAttackRowsBySeason.forEach((_, seasonKey) => {
+      if (seasonKey && seasonKey !== 'unknown') seasonKeySet.add(seasonKey)
+    })
+    const sortedSeasonKeys = Array.from(seasonKeySet)
+      .sort((a, b) => String(b).localeCompare(String(a), undefined, { numeric: true, sensitivity: 'base' }))
+    const hasUnknownSeason = attackRowsBySeason.has('unknown') || draftRecordRowsBySeason.has('unknown') || draftAttackRowsBySeason.has('unknown')
+    const orderedSeasonKeys = hasUnknownSeason ? [...sortedSeasonKeys, 'unknown'] : sortedSeasonKeys
+    orderedSeasonKeys.forEach((seasonKey) => {
+      const seasonRow = attackRowsBySeason.get(seasonKey)?.get(key)
+      const seasonDraftRecordRow = draftRecordRowsBySeason.get(seasonKey)?.get(key)
+      const seasonDraftAttackRow = draftAttackRowsBySeason.get(seasonKey)?.get(key)
+      if (!seasonRow && !seasonDraftRecordRow && !seasonDraftAttackRow) return
+      seasonStats[seasonKey] = {
+        attack: summarizeAttackRow(seasonRow),
+        efficiency: summarizeEfficiency(seasonRow),
+        draftRecord: summarizeDraftRecord(seasonDraftRecordRow),
+        draftAttack: summarizeDraftAttack(seasonDraftAttackRow),
+      }
+      seasonOrder.push(seasonKey)
+    })
+
     return {
-      attack: attackRow ? {
-        gp: attackRow.gp,
-        g: attackRow.g,
-        a: attackRow.a,
-        pts: attackRow.pts,
-        cs: attackRow.cs,
-      } : null,
-      efficiency: attackRow ? {
-        gPerGame: formatAvg(attackRow.g, attackRow.gp),
-        aPerGame: formatAvg(attackRow.a, attackRow.gp),
-        ptsPerGame: formatAvg(attackRow.pts, attackRow.gp),
-      } : null,
-      draftRecord: draftRow ? {
-        wins: draftRow.wins,
-        draws: draftRow.draws,
-        losses: draftRow.losses,
-        winRate: draftRow.winRate,
-        points: draftRow.points,
-        last5: draftRow.last5,
-      } : null,
-      draftAttack: draftAttackRow ? {
-        gp: draftAttackRow.gp,
-        g: draftAttackRow.g,
-        a: draftAttackRow.a,
-        pts: draftAttackRow.pts,
-        gpg: draftAttackRow.gpg,
-        apa: draftAttackRow.apa,
-      } : null,
+      attack: baseAttack,
+      efficiency: baseEfficiency,
+      draftRecord: baseDraftRecord,
+      draftAttack: baseDraftAttack,
       cards: cardsRow ? {
         yellow: cardsRow.y,
         red: cardsRow.r,
@@ -837,8 +943,10 @@ export default function Dashboard({
       competition,
       factsEnabled: playerFactsEnabled,
       filterDescription: statsFilterDescription,
+      seasonStats,
+      seasonOrder,
     }
-  }, [statsModalPlayer, attackRowMap, draftRecordMap, draftAttackRowMap, cardsRowMap, chemistryMap, playerHighlights, attackCompetitionMap, momAwards?.countsByPlayer, statsFilterDescription, playerStatsEnabled])
+  }, [statsModalPlayer, attackRowMap, draftRecordMap, draftAttackRowMap, cardsRowMap, chemistryMap, playerHighlights, attackCompetitionMap, momAwards?.countsByPlayer, statsFilterDescription, playerStatsEnabled, attackRowsBySeason, draftRecordRowsBySeason, draftAttackRowsBySeason])
 
   const momLeaders = useMemo(() => {
     const entries = Object.entries(mom.tally || {})
@@ -1090,7 +1198,11 @@ export default function Dashboard({
                 <div className="w-[120px]">
                   <Select
                     value={leaderboardSeason}
-                    onChange={(val) => { setLeaderboardSeason(val); setApDateKey('all') }}
+                    onChange={(val) => {
+                      leaderboardSeasonUserSetRef.current = true
+                      setLeaderboardSeason(val)
+                      setApDateKey('all')
+                    }}
                     options={seasonOptions.map(v => ({ value: v, label: v === 'all' ? t('leaderboard.allTime') : `${v}년` }))}
                     size="sm"
                   />
