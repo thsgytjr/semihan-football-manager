@@ -1,6 +1,8 @@
 import React from "react"
 import captainIcon from "../assets/Captain.PNG"
 import { getMembershipBadge } from "../lib/membershipConfig"
+import { optimizeImageUrl } from "../utils/imageOptimization"
+import useCachedImage from "../hooks/useCachedImage"
 
 /**
  * InitialAvatar
@@ -18,6 +20,13 @@ function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null, cust
   // photoUrl이 RANDOM:으로 시작하면 랜덤 색상 모드
   const isRandomColor = photoUrl && String(photoUrl).startsWith('RANDOM:')
   let actualPhotoUrl = isRandomColor ? null : photoUrl
+
+  if (actualPhotoUrl) {
+    const targetSize = Math.max(40, size * 2)
+    actualPhotoUrl = optimizeImageUrl(actualPhotoUrl, { width: targetSize, height: targetSize, quality: 70 })
+  }
+
+  const cachedPhotoSrc = useCachedImage(actualPhotoUrl)
   
   // 브라우저 캐싱 활용 (타임스탬프 제거)
   // actualPhotoUrl은 그대로 사용
@@ -129,14 +138,16 @@ function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null, cust
 
   return (
     <div className="relative inline-block" style={{ width: size, height: size }}>
-      {actualPhotoUrl ? (
+      {cachedPhotoSrc ? (
         // 사진이 있으면 이미지 표시 (흰색 배경 + 테두리)
         <div className="h-full w-full rounded-full bg-white border-2 border-gray-200 shadow-sm overflow-hidden">
           <img 
-            src={actualPhotoUrl}
+            src={cachedPhotoSrc}
             alt={name || 'Player'} 
+            width={Math.max(1, Math.round(size))}
+            height={Math.max(1, Math.round(size))}
+            decoding="async"
             className="h-full w-full object-cover"
-            key={actualPhotoUrl} // URL이 변경되면 이미지 엘리먼트를 새로 생성
             loading="lazy" // 지연 로딩: 뷰포트에 들어올 때만 로드
             onError={(e) => {
               // 이미지 로드 실패 시 폴백
@@ -157,7 +168,7 @@ function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null, cust
         style={{ 
           fontSize: Math.max(10, size * 0.5), 
           background: `linear-gradient(135deg, ${color} 0%, ${adjustBrightness(color, 20)} 100%)`,
-          display: actualPhotoUrl ? 'none' : 'flex', // 사진이 있으면 숨김
+          display: cachedPhotoSrc ? 'none' : 'flex', // 사진이 있으면 숨김
           boxShadow: '0 2px 8px rgba(0,0,0,0.15)'
         }}
       >

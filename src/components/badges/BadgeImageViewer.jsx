@@ -27,6 +27,7 @@ export default function BadgeImageViewer({ src, alt = '', onClose }) {
         <img
           src={src}
           alt={alt}
+          decoding="async"
           // let browser perform native pinch/zoom; keep object-contain so image fits initially
           className="block"
           style={{

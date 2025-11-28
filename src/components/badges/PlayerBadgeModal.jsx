@@ -6,6 +6,8 @@ import BadgeIcon from './BadgeIcon'
 import BadgeTierDetail from './BadgeTierDetail'
 import { getBadgeThresholds } from '../../lib/playerBadgeEngine'
 import { useTranslation } from 'react-i18next'
+import { optimizeImageUrl } from '../../utils/imageOptimization'
+import useCachedImage from '../../hooks/useCachedImage'
 
 export default function PlayerBadgeModal({
   open,
@@ -17,6 +19,10 @@ export default function PlayerBadgeModal({
 }) {
   const { t, i18n } = useTranslation()
   const portalTarget = typeof document !== 'undefined' ? document.body : null
+  const optimizedPlayerAvatarSrc = player?.photoUrl
+    ? optimizeImageUrl(player.photoUrl, { width: 120, height: 120, quality: 70 })
+    : null
+  const cachedPlayerAvatarSrc = useCachedImage(optimizedPlayerAvatarSrc)
   const closeModal = useCallback(() => {
     onClose?.()
   }, [onClose])
@@ -138,9 +144,19 @@ export default function PlayerBadgeModal({
         <div className="flex max-h-[85vh] flex-col gap-6 p-6">
           <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div className="flex items-center gap-4">
-              <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-2xl bg-emerald-50 ring-1 ring-emerald-100">
-                {player.photoUrl ? (
-                  <img src={player.photoUrl} alt={player.name} className="h-full w-full object-cover" />
+              <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-2xl bg-emerald-50 ring-1 ring-emerald-100 flex items-center justify-center">
+                {cachedPlayerAvatarSrc ? (
+                  <img
+                    src={cachedPlayerAvatarSrc}
+                    alt={player.name}
+                    loading="lazy"
+                    decoding="async"
+                    width={56}
+                    height={56}
+                    className="h-full w-full object-cover"
+                  />
+                ) : player?.photoUrl ? (
+                  <div className="w-full h-full bg-emerald-100 animate-pulse" aria-label="Loading avatar" />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center text-2xl" aria-hidden>
                     <Award className="h-7 w-7 text-emerald-500" />

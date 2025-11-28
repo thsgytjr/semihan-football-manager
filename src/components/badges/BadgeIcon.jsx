@@ -2,6 +2,8 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import BadgeArt from './BadgeArt'
+import { optimizeImageUrl } from '../../utils/imageOptimization'
+import useCachedImage from '../../hooks/useCachedImage'
 
 const tierThemes = {
   5: { label: 'Diamond', ring: ['#00f0ff', '#7c4dff', '#ff4ddb', '#00f0ff'], core: ['#f4feff', '#fff2ff'] },
@@ -33,6 +35,14 @@ export default function BadgeIcon({ badge, size = 'md', onSelect }) {
   const normalizedTier = tier > 5 ? 5 : (tier < 1 ? 1 : tier)
   const theme = tierThemes[normalizedTier] || fallbackTheme
   const isLarge = size === 'lg'
+  const badgeImageSrc = badge.image_url
+    ? optimizeImageUrl(badge.image_url, {
+        width: isLarge ? 320 : 220,
+        height: isLarge ? 320 : 220,
+        quality: 70
+      })
+    : null
+  const cachedBadgeImageSrc = useCachedImage(badgeImageSrc)
   const formattedDate = (() => {
     if (!awardedAt) return null
     const ts = typeof awardedAt === 'number' ? awardedAt : Date.parse(awardedAt)
@@ -116,7 +126,19 @@ export default function BadgeIcon({ badge, size = 'md', onSelect }) {
             <div className="absolute inset-[10%] md:inset-[12%] rounded-full overflow-hidden ring-1 ring-white/40 bg-white flex items-center justify-center">
               <div className="absolute inset-0 opacity-40" style={{background:'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.25), transparent 70%)'}} />
               {badge.image_url ? (
-                <img src={badge.image_url} alt={name} className="w-[120%] h-[120%] object-cover" />
+                cachedBadgeImageSrc ? (
+                  <img
+                    src={cachedBadgeImageSrc}
+                    alt={name}
+                    loading="lazy"
+                    decoding="async"
+                    width={isLarge ? 160 : 110}
+                    height={isLarge ? 160 : 110}
+                    className="w-[120%] h-[120%] object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gradient-to-br from-stone-100 to-stone-200 animate-pulse" aria-label="Loading badge" />
+                )
               ) : (
                 <BadgeArt slug={slug} />
               )}

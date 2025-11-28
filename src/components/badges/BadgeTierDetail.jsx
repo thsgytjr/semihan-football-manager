@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
 import { getBadgeThresholds } from '../../lib/playerBadgeEngine'
 import BadgeImageViewer from './BadgeImageViewer'
+import { optimizeImageUrl } from '../../utils/imageOptimization'
+import useCachedImage from '../../hooks/useCachedImage'
 
 export default function BadgeTierDetail({ badge, onClose }) {
   const { t } = useTranslation()
@@ -16,6 +18,14 @@ export default function BadgeTierDetail({ badge, onClose }) {
     const badgeDescription = t(`badges.definitions.${slug}.description`, { defaultValue: '', value: value || 0 })
 
     const [viewerOpen, setViewerOpen] = useState(false)
+    const previewImageSrc = badge.image_url
+      ? optimizeImageUrl(badge.image_url, { width: 256, height: 256, quality: 70 })
+      : null
+    const viewerImageSrc = badge.image_url
+      ? optimizeImageUrl(badge.image_url, { width: 1024, quality: 85, resize: 'contain' })
+      : null
+    const cachedPreviewSrc = useCachedImage(previewImageSrc)
+    const cachedViewerSrc = useCachedImage(viewerImageSrc)
   
   const tierName = (tNum) => {
     switch (tNum) {
@@ -49,8 +59,8 @@ export default function BadgeTierDetail({ badge, onClose }) {
         </button>
         <div className="flex flex-col gap-4 p-5">
           <div className="flex items-center gap-4">
-            {badge.image_url && (
-              <div className="flex-shrink-0 w-32 h-32 rounded-2xl overflow-hidden ring-2 ring-stone-200 bg-white">
+            <div className="flex-shrink-0 w-32 h-32 rounded-2xl overflow-hidden ring-2 ring-stone-200 bg-white flex items-center justify-center">
+              {cachedPreviewSrc ? (
                 <button
                   type="button"
                   aria-label={`Open ${badgeName} image`}
@@ -58,10 +68,20 @@ export default function BadgeTierDetail({ badge, onClose }) {
                   className="w-full h-full p-0 m-0"
                   style={{ background: 'transparent', border: 'none' }}
                 >
-                  <img src={badge.image_url} alt={badge.name} className="w-full h-full object-cover" />
+                  <img
+                    src={cachedPreviewSrc}
+                    alt={badge.name}
+                    loading="lazy"
+                    decoding="async"
+                    width={128}
+                    height={128}
+                    className="w-full h-full object-cover"
+                  />
                 </button>
-              </div>
-            )}
+              ) : (
+                <div className="text-xs text-stone-400 animate-pulse">Loading...</div>
+              )}
+            </div>
             <div className="flex-1 flex flex-col gap-2">
               <h3 className="text-lg font-bold text-stone-900">
                 {badgeName}
@@ -120,8 +140,8 @@ export default function BadgeTierDetail({ badge, onClose }) {
           )}
         </div>
       </div>
-      {viewerOpen && (
-        <BadgeImageViewer src={badge.image_url} alt={badgeName} onClose={() => setViewerOpen(false)} />
+      {viewerOpen && cachedViewerSrc && (
+        <BadgeImageViewer src={cachedViewerSrc} alt={badgeName} onClose={() => setViewerOpen(false)} />
       )}
     </div>
   )
