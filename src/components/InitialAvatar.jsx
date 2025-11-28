@@ -22,8 +22,9 @@ function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null, cust
   let actualPhotoUrl = isRandomColor ? null : photoUrl
 
   if (actualPhotoUrl) {
-    const targetSize = Math.max(40, size * 2)
-    actualPhotoUrl = optimizeImageUrl(actualPhotoUrl, { width: targetSize, height: targetSize, quality: 70 })
+    // 리스트/테이블에서 과도한 픽셀 전송 방지: 렌더 크기 기반 썸네일 요청
+    const targetSize = Math.min(128, Math.max(40, size * 2))
+    actualPhotoUrl = optimizeImageUrl(actualPhotoUrl, { width: targetSize, height: targetSize, quality: 65, format: 'webp' })
   }
 
   const cachedPhotoSrc = useCachedImage(actualPhotoUrl)
