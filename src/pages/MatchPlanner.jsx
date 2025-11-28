@@ -1954,7 +1954,7 @@ function PlayerRow({player,showOVR,isAdmin,teamIndex,isDraftMode,isCaptain,onRem
         )}
       </span>
 
-      {!isGK && showOVR && <span className={`ovr-chip shrink-0 rounded-lg bg-gradient-to-br ${unknown?'from-stone-400 to-stone-500':getOVRColor(ovrVal)} text-white text-[11px] px-2 py-[2px] font-semibold shadow-sm`} data-ovr>
+      {showOVR && <span className={`ovr-chip shrink-0 rounded-lg bg-gradient-to-br ${unknown?'from-stone-400 to-stone-500':getOVRColor(ovrVal)} text-white text-[11px] px-2 py-[2px] font-semibold shadow-sm`} data-ovr>
         {unknown ? '?' : ovrVal}
       </span>}
       
@@ -2034,7 +2034,7 @@ function DragGhost({player,showOVR,customMemberships=[]}){
   <span className="truncate notranslate" translate="no">{player.name}</span>
   {/* guest badge is shown on avatar */}
       <span className={`ml-1 inline-flex items-center rounded-full px-2 py-[2px] text-[11px] ${isGK?'bg-amber-100 text-amber-800':pos==='DF'?'bg-blue-100 text-blue-800':pos==='MF'?'bg-emerald-100 text-emerald-800':pos==='FW'?'bg-purple-100 text-purple-800':'bg-stone-100 text-stone-700'}`}>{pos}</span>
-      {showOVR&&!isGK&&<span className="text-xs text-gray-600">OVR {ovrVal}</span>}
+      {showOVR&&<span className="text-xs text-gray-600">OVR {ovrVal}</span>}
     </div>
   </div>
 )}

@@ -1989,10 +1989,6 @@ export default function PlayersPage({
           const ovr = overall(p)
           const aiOverall = calculateAIPower(p, matches)
           const aiProgress = Math.max(0, Math.min(100, ((aiOverall - 50) / 50) * 100))
-          // 오직 GK 포지션만 있는 선수인지 확인
-          const isOnlyGK = p.positions && Array.isArray(p.positions) && p.positions.length > 0
-            ? p.positions.length === 1 && p.positions[0] === 'GK'
-            : pos === 'GK'
           
           return (
             <div
@@ -2063,38 +2059,29 @@ export default function PlayersPage({
                 </div>
               </div>
 
-              {/* OVR 표시 - 오직 GK 포지션만 있는 선수가 아닐 때 */}
-              {!isOnlyGK && (
-                <div className={`mb-3 rounded-lg p-3 text-center ${
-                  ovr === 30
-                    ? 'bg-stone-300 text-stone-700'
-                    : `bg-gradient-to-br ${ovrGradientClass(ovr)} text-white`
-                }`}>
-                  <div className={`text-xs mb-1 ${ovr === 30 ? 'text-stone-600' : 'text-white/80'}`}>Overall Rating</div>
-                  <div className={`text-3xl font-bold ${ovr === 30 ? 'text-stone-700' : 'text-white'}`}>
-                    {ovr === 30 ? '?' : ovr}
-                  </div>
-                  {ovr === 30 ? (
-                    <div className="text-[10px] text-stone-600 mt-1">Unknown</div>
-                  ) : (
-                    <div className="mt-2">
-                      <div className="w-full bg-white/30 rounded-full h-2 overflow-hidden">
-                        <div 
-                          className={`h-full ${ovrMeterColor(ovr)} transition-all duration-300 rounded-full`}
-                          style={{ width: `${ovr}%` }}
-                        ></div>
-                      </div>
+              {/* OVR 표시 - 모든 선수에 표시 (GK 포함) */}
+              <div className={`mb-3 rounded-lg p-3 text-center ${
+                ovr === 30
+                  ? 'bg-stone-300 text-stone-700'
+                  : `bg-gradient-to-br ${ovrGradientClass(ovr)} text-white`
+              }`}>
+                <div className={`text-xs mb-1 ${ovr === 30 ? 'text-stone-600' : 'text-white/80'}`}>Overall Rating</div>
+                <div className={`text-3xl font-bold ${ovr === 30 ? 'text-stone-700' : 'text-white'}`}>
+                  {ovr === 30 ? '?' : ovr}
+                </div>
+                {ovr === 30 ? (
+                  <div className="text-[10px] text-stone-600 mt-1">Unknown</div>
+                ) : (
+                  <div className="mt-2">
+                    <div className="w-full bg-white/30 rounded-full h-2 overflow-hidden">
+                      <div 
+                        className={`h-full ${ovrMeterColor(ovr)} transition-all duration-300 rounded-full`}
+                        style={{ width: `${ovr}%` }}
+                      ></div>
                     </div>
-                  )}
-                </div>
-              )}
-              {isOnlyGK && (
-                <div className="mb-3 rounded-lg p-3 text-center bg-amber-100 border border-amber-200">
-                  <div className="text-xs text-amber-700 mb-1">Position</div>
-                  <div className="text-3xl font-bold text-amber-900">GK</div>
-                  <div className="text-[10px] text-amber-600 mt-1">Goalkeeper</div>
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
 
               {/* AI Overall 점수 */}
               <div className={`mb-3 rounded-lg p-3 text-center bg-gradient-to-br ${aiPowerChipClass(aiOverall).replace('text-white', '').replace('shadow-sm', '').split(' ').filter(c => c.startsWith('from-') || c.startsWith('to-')).join(' ')} text-white shadow-md`}>
@@ -2148,10 +2135,6 @@ export default function PlayersPage({
             const badgeInfo = getMembershipBadge(mem, customMemberships)
             const badges = badgeInfo ? [badgeInfo.badge] : []
             const pos = posOf(p)
-            // 오직 GK 포지션만 있는 선수인지 확인
-            const isOnlyGK = p.positions && Array.isArray(p.positions) && p.positions.length > 0
-              ? p.positions.length === 1 && p.positions[0] === 'GK'
-              : pos === 'GK'
             const ovr = overall(p)
             const aiOverall = calculateAIPower(p, matches)
             return (
@@ -2221,26 +2204,12 @@ export default function PlayersPage({
                 </div>
 
                 <div className="flex items-center gap-3">
-                  {!isOnlyGK && (
-                    <>
-                      <span className={`inline-flex items-center rounded px-3 py-1 text-sm font-bold ${ovr === 30 ? 'bg-stone-300 text-stone-700' : ovrChipClass(ovr)}`}>
-                        {ovr === 30 ? '?' : ovr}
-                      </span>
-                      <span className={`inline-flex items-center rounded-lg px-3 py-1 text-xs font-bold shadow-sm ${aiPowerChipClass(aiOverall)}`} title="AI Overall (50-100)">
-                        AI {aiOverall}
-                      </span>
-                    </>
-                  )}
-                  {isOnlyGK && (
-                    <>
-                      <span className="inline-flex items-center rounded px-3 py-1 text-sm font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                        GK
-                      </span>
-                      <span className={`inline-flex items-center rounded-lg px-3 py-1 text-xs font-bold shadow-sm ${aiPowerChipClass(aiOverall)}`} title="AI Overall (50-100)">
-                        AI {aiOverall}
-                      </span>
-                    </>
-                  )}
+                  <span className={`inline-flex items-center rounded px-3 py-1 text-sm font-bold ${ovr === 30 ? 'bg-stone-300 text-stone-700' : ovrChipClass(ovr)}`}>
+                    {ovr === 30 ? '?' : ovr}
+                  </span>
+                  <span className={`inline-flex items-center rounded-lg px-3 py-1 text-xs font-bold shadow-sm ${aiPowerChipClass(aiOverall)}`} title="AI Overall (50-100)">
+                    AI {aiOverall}
+                  </span>
                   <button
                     className="text-xs px-3 py-1.5 rounded-md border border-stone-300 hover:bg-stone-50 font-medium transition-colors"
                     onClick={(e) => {
