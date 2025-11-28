@@ -1117,8 +1117,12 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
             const maxQ = Math.max(0, ...quarterScores.map(a=>Array.isArray(a)?a.length:0))
             for (let qi=0; qi<maxQ; qi++){
               const [a,b] = pairs[qi%3]
-              const aScore = Number(quarterScores[a]?.[qi] ?? 0)
-              const bScore = Number(quarterScores[b]?.[qi] ?? 0)
+              const aVal = quarterScores[a]?.[qi]
+              const bVal = quarterScores[b]?.[qi]
+              // null 팀은 스킵 (게임수/점수 미반영)
+              if (aVal === null || bVal === null) continue
+              const aScore = Number(aVal ?? 0)
+              const bScore = Number(bVal ?? 0)
               totals[a]+=aScore; totals[b]+=bScore
               gamesPlayed[a]+=1; gamesPlayed[b]+=1
               
@@ -1917,12 +1921,21 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                           <div className="flex items-center gap-2 sm:gap-3">
                             <div className="flex gap-1">
                               {Array.from({length:maxQ}).map((_,qi)=>{
-                                const v = Array.isArray(arr) ? (arr[qi] ?? 0) : (qi===0? (arr||0) : 0)
+                                const v = Array.isArray(arr) ? arr[qi] : (qi===0? (arr||0) : 0)
+                                // null인 경우 빈 칸 또는 대시 표시
+                                if (v === null) {
+                                  return (
+                                    <div key={qi} className="w-6 text-center text-xs text-gray-400 relative">
+                                      <span>–</span>
+                                    </div>
+                                  )
+                                }
+                                const numV = Number(v ?? 0)
                                 const wonThisQuarter = wonQuarters[qi]
                                 
                                 return (
                                   <div key={qi} className="w-6 text-center text-xs text-gray-700 relative">
-                                    <span className={wonThisQuarter ? 'font-semibold' : ''}>{v}</span>
+                                    <span className={wonThisQuarter ? 'font-semibold' : ''}>{numV}</span>
                                     {wonThisQuarter && (
                                       <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
                                     )}
@@ -2132,14 +2145,23 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       <div className="flex items-center gap-2 sm:gap-3">
                         <div className="flex gap-1">
                           {Array.from({length:maxQ}).map((_,qi)=>{
-                            const v = Array.isArray(arr) ? (arr[qi] ?? 0) : (qi===0? (arr||0) : 0)
+                            const v = Array.isArray(arr) ? arr[qi] : (qi===0? (arr||0) : 0)
+                            // null인 경우 대시 표시
+                            if (v === null) {
+                              return (
+                                <div key={qi} className="w-6 text-center text-xs text-gray-400 relative">
+                                  <span>–</span>
+                                </div>
+                              )
+                            }
+                            const numV = Number(v ?? 0)
                             const wonThisQuarter = wonQuarters[qi]
                             const qDiff = (!isThreeTeams && isMultiTeam) ? quarterGoalDiffs[qi] : 0
                             const isBestQuarter = (!isThreeTeams && isMultiTeam) && Math.abs(qDiff - bestDiff) < 0.01
                             
                             return (
                               <div key={qi} className="w-6 text-center text-xs text-gray-700 relative">
-                                <span className={wonThisQuarter || isBestQuarter ? 'font-semibold' : ''}>{v}</span>
+                                <span className={wonThisQuarter || isBestQuarter ? 'font-semibold' : ''}>{numV}</span>
                                 {(!isThreeTeams && isMultiTeam) ? (
                                   isBestQuarter && (
                                     <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-blue-500"></div>
@@ -2780,40 +2802,67 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                           </div>
                           
                           {Array.from({length: Math.max(1, maxQ)}).map((_,qi)=>{
-                            const val = qs[ti][qi] ?? 0
+                            const raw = qs[ti][qi]
+                            const isAbsent = raw === null && teamLen === 3
+                            const val = raw ?? 0
                             return (
-                              <div key={`qcell-${ti}-${qi}`} className="w-14 sm:w-20">
-                                <div className="flex items-center gap-0.5 sm:gap-1 justify-center bg-gray-50 rounded-lg p-1 sm:p-1.5 border border-gray-200">
+                              <div key={`qcell-${ti}-${qi}`} className="w-14 sm:w-20 relative">
+                                {teamLen === 3 && (
                                   <button
-                                    className="rounded-md bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-gray-600 hover:text-red-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 disabled:hover:text-gray-600 font-bold shadow-sm text-xs sm:text-base"
-                                    title="점수 내리기"
-                                    disabled={val <= 0}
+                                    type="button"
+                                    className={`absolute -top-2 -right-2 w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center shadow-md ${isAbsent ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-gray-400 text-white hover:bg-gray-500'} transition-all active:scale-95 z-10`}
+                                    title={isAbsent ? '참가로 변경 (클릭)' : '불참 표시 (클릭)'}
                                     onClick={() => {
                                       const next = qs.map(a=>a.slice())
-                                      next[ti][qi] = Math.max(0, val - 1)
+                                      if (isAbsent) {
+                                        // absent → present(0)
+                                        next[ti][qi] = 0
+                                      } else {
+                                        // present → absent(null). 다른 팀이 이미 null이면 해제
+                                        for (let t=0; t<teamLen; t++) {
+                                          if (t!==ti && next[t][qi] === null) next[t][qi] = 0
+                                        }
+                                        next[ti][qi] = null
+                                      }
                                       setQuarterScores(next)
                                       setDirty(true)
                                     }}
-                                    aria-label="점수 -1"
-                                  >−</button>
-                                  
-                                  <div className="w-6 sm:w-8 flex items-center justify-center">
-                                    <span className="inline-block text-center select-none font-bold text-sm sm:text-base text-gray-800">{val}</span>
+                                    aria-label={isAbsent ? '참가로 변경' : '불참 표시'}
+                                  >{isAbsent ? '↺' : '×'}</button>
+                                )}
+                                {isAbsent ? (
+                                  <div className="flex items-center justify-center bg-gray-50 rounded-lg p-1 sm:p-1.5 border border-dashed border-gray-300 text-[10px] sm:text-xs text-gray-400">–</div>
+                                ) : (
+                                  <div className="flex items-center gap-0.5 sm:gap-1 justify-center bg-gray-50 rounded-lg p-1 sm:p-1.5 border border-gray-200">
+                                    <button
+                                      className="rounded-md bg-white border border-gray-300 hover:border-red-400 hover:bg-red-50 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-gray-600 hover:text-red-600 transition-all disabled:opacity-30 disabled:cursor-not-allowed font-bold shadow-sm text-xs sm:text-base"
+                                      title="점수 내리기"
+                                      disabled={val <= 0}
+                                      onClick={() => {
+                                        const next = qs.map(a=>a.slice())
+                                        next[ti][qi] = Math.max(0, val - 1)
+                                        setQuarterScores(next)
+                                        setDirty(true)
+                                      }}
+                                      aria-label="점수 -1"
+                                    >−</button>
+                                    <div className="w-6 sm:w-8 flex items-center justify-center">
+                                      <span className="inline-block text-center select-none font-bold text-sm sm:text-base text-gray-800">{val}</span>
+                                    </div>
+                                    <button
+                                      className="rounded-md bg-blue-500 hover:bg-blue-600 border border-blue-600 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-white transition-all disabled:opacity-30 font-bold shadow-sm text-xs sm:text-base"
+                                      title="점수 올리기"
+                                      disabled={val >= 99}
+                                      onClick={() => {
+                                        const next = qs.map(a=>a.slice())
+                                        next[ti][qi] = Math.min(99, val + 1)
+                                        setQuarterScores(next)
+                                        setDirty(true)
+                                      }}
+                                      aria-label="점수 +1"
+                                    >+</button>
                                   </div>
-                                  
-                                  <button
-                                    className="rounded-md bg-blue-500 hover:bg-blue-600 border border-blue-600 w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center text-white transition-all disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-blue-500 font-bold shadow-sm text-xs sm:text-base"
-                                    title="점수 올리기"
-                                    disabled={val >= 99}
-                                    onClick={() => {
-                                      const next = qs.map(a=>a.slice())
-                                      next[ti][qi] = Math.min(99, val + 1)
-                                      setQuarterScores(next)
-                                      setDirty(true)
-                                    }}
-                                    aria-label="점수 +1"
-                                  >+</button>
-                                </div>
+                                )}
                               </div>
                             )
                           })}

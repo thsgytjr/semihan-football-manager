@@ -749,22 +749,54 @@ export function computeDraftPlayerStatsRows(players = [], matches = []) {
       field2Winners.forEach(t => topTeams.add(t))
       
     } else {
+      // 3팀 특수 처리: 실제로 경기에 참가하지 않은 팀(게임 수 0)은 무승부 그룹 포함/패배 처리하지 않음
+      let gamesPlayed3 = null
+      if (teamCount === 3 && (!gameMatchups || !Array.isArray(gameMatchups))) {
+        const pairs = [[0,1],[1,2],[0,2]]
+        const maxQLocal = Math.max(0, ...qs.map(a => Array.isArray(a) ? a.length : 0))
+        gamesPlayed3 = [0,0,0]
+        for (let qi = 0; qi < maxQLocal; qi++) {
+          const [a,b] = pairs[qi % 3]
+          // 해당 쿼터가 존재한다고 간주 (기록 배열 길이 기준) → 두 팀만 게임 증가
+          if (qs[a] && qi < qs[a].length || qs[b] && qi < qs[b].length) {
+            gamesPlayed3[a] += 1
+            gamesPlayed3[b] += 1
+          }
+        }
+      }
+
       // 기존 로직: 단일 승자 또는 공동 1등
       const winnerIdx = winnerIndexFromQuarterScores(qs, gameMatchups)
-      
       if (winnerIdx < 0) {
         const totals = qs.map(arr => (Array.isArray(arr) ? arr.reduce((a, b) => a + Number(b || 0), 0) : 0))
         const maxTotal = Math.max(...totals)
-        totals.forEach((total, idx) => {
-          if (total === maxTotal) topTeams.add(idx)
-        })
+        for (let idx = 0; idx < totals.length; idx++) {
+          const total = totals[idx]
+          if (total === maxTotal) {
+            // 3팀에서 게임에 전혀 참여하지 않은 팀은 제외
+            if (gamesPlayed3 && gamesPlayed3[idx] === 0) continue
+            topTeams.add(idx)
+          }
+        }
+        // 만약 필터링 후 아무도 없으면(예: 0:0 한 게임만 존재) 참여한 팀들만 무승부로 처리
+        if (topTeams.size === 0 && gamesPlayed3) {
+          gamesPlayed3.forEach((gp, idx) => { if (gp > 0) topTeams.add(idx) })
+        }
       } else {
         topTeams.add(winnerIdx)
+      }
+
+      // 이후 result 계산 시 gamesPlayed3를 사용하여 완전 불참 팀은 스킵
+      if (gamesPlayed3) {
+        // result 계산 루프 전에 저장 (아래 for 루프에서 사용)
+        m.__gamesPlayed3 = gamesPlayed3
       }
     }
     
     const matchTS = extractMatchTS(m)
     for (let ti = 0; ti < teams.length; ti++) {
+      // 3팀 특수: 완전 불참 팀은 스킵 (경기수/승무패 미반영)
+      if (m.__gamesPlayed3 && m.__gamesPlayed3[ti] === 0) continue
       let result
       if (topTeams.size > 1 && topTeams.has(ti)) {
         // 공동 1등인 경우 무승부 (또는 구장별 승자 중 하나)
@@ -984,17 +1016,42 @@ export function computeCaptainStatsRows(players = [], matches = []) {
       field2Winners.forEach(t => topTeams.add(t))
       
     } else {
+      // 3팀 특수 처리: 실제로 경기에 참가하지 않은 팀(게임 수 0)은 무승부 그룹 포함/패배 처리하지 않음
+      let gamesPlayed3 = null
+      if (teamCount === 3 && (!gameMatchups || !Array.isArray(gameMatchups))) {
+        const pairs = [[0,1],[1,2],[0,2]]
+        const maxQLocal = Math.max(0, ...qs.map(a => Array.isArray(a) ? a.length : 0))
+        gamesPlayed3 = [0,0,0]
+        for (let qi = 0; qi < maxQLocal; qi++) {
+          const [a,b] = pairs[qi % 3]
+          if (qs[a] && qi < qs[a].length || qs[b] && qi < qs[b].length) {
+            gamesPlayed3[a] += 1
+            gamesPlayed3[b] += 1
+          }
+        }
+      }
+
       // 기존 로직: 단일 승자 또는 공동 1등
       const winnerIdx = winnerIndexFromQuarterScores(qs, gameMatchups)
-      
       if (winnerIdx < 0) {
         const totals = qs.map(arr => (Array.isArray(arr) ? arr.reduce((a, b) => a + Number(b || 0), 0) : 0))
         const maxTotal = Math.max(...totals)
-        totals.forEach((total, idx) => {
-          if (total === maxTotal) topTeams.add(idx)
-        })
+        for (let idx = 0; idx < totals.length; idx++) {
+          const total = totals[idx]
+          if (total === maxTotal) {
+            if (gamesPlayed3 && gamesPlayed3[idx] === 0) continue
+            topTeams.add(idx)
+          }
+        }
+        if (topTeams.size === 0 && gamesPlayed3) {
+          gamesPlayed3.forEach((gp, idx) => { if (gp > 0) topTeams.add(idx) })
+        }
       } else {
         topTeams.add(winnerIdx)
+      }
+
+      if (gamesPlayed3) {
+        m.__gamesPlayed3_caps = gamesPlayed3
       }
     }
 
@@ -1002,6 +1059,9 @@ export function computeCaptainStatsRows(players = [], matches = []) {
     for (let ti = 0; ti < caps.length; ti++) {
       const pid = toStr(caps[ti])
       if (!pid) continue
+
+      // 3팀 특수: 완전 불참 팀은 스킵
+      if (m.__gamesPlayed3_caps && m.__gamesPlayed3_caps[ti] === 0) continue
 
       let result
       if (topTeams.size > 1 && topTeams.has(ti)) {
