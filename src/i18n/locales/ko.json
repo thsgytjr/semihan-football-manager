@@ -367,6 +367,7 @@
   ,
   "badges": {
     "clickHint": "선수를 누르면 스탯과 챌린지 뱃지를 볼 수 있어요",
+    "clickHintStatsOnly": "선수를 누르면 스탯을 볼 수 있어요",
     "challengeTitle": "챌린지 뱃지",
     "categoryFallback": "주요 뱃지",
     "categoryCount": "(주요 {{count}}건)",

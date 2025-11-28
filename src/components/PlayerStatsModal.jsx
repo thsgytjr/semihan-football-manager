@@ -289,7 +289,15 @@ export default function PlayerStatsModal({
         className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-stone-50 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <header className="flex flex-col gap-4 border-b border-stone-200 bg-white px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+        <header className="relative flex flex-col gap-4 border-b border-stone-200 bg-white px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
+          <button
+            type="button"
+            onClick={() => onClose?.()}
+            className="absolute right-4 top-4 inline-flex items-center justify-center rounded-full bg-white/90 p-2 text-stone-600 shadow-sm ring-1 ring-stone-200 transition hover:bg-stone-100 sm:hidden"
+            aria-label={t('playerStatsModal.close')}
+          >
+            <X className="h-5 w-5" />
+          </button>
           <div className="flex flex-1 items-center gap-4">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
               <BarChart3 className="h-6 w-6" />
@@ -318,7 +326,7 @@ export default function PlayerStatsModal({
             <button
               type="button"
               onClick={() => onClose?.()}
-              className="rounded-full bg-stone-200 p-2 text-stone-600 hover:bg-stone-300"
+              className="hidden rounded-full bg-stone-200 p-2 text-stone-600 hover:bg-stone-300 sm:inline-flex"
               aria-label={t('playerStatsModal.close')}
             >
               <X className="h-5 w-5" />

@@ -438,6 +438,7 @@
   ,
   "badges": {
     "clickHint": "Click a player to open stats & challenge badges",
+    "clickHintStatsOnly": "Click a player to open stats",
     "challengeTitle": "Challenge Badges",
     "categoryFallback": "Featured Badges",
     "categoryCount": "(Featured {{count}})",

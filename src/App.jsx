@@ -1366,6 +1366,7 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
   const[tierErrors,setTierErrors]=useState({})
   const[tierSaving,setTierSaving]=useState(false)
   const canEditBadgeTiers = Boolean(isAdmin && badgeTierCatalog.length>0 && onSaveBadgeTierOverrides)
+  const badgesFeatureOn = Boolean(featuresEnabled?.badges ?? true)
   
   useEffect(()=>{
     if(isOpen){
@@ -1476,7 +1477,7 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
   
   return(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
-      <div className="relative w-full max-w-md rounded-2xl border border-stone-200 bg-white shadow-xl max-h-[90vh] overflow-y-auto">
+      <div className="relative flex max-h-[90vh] w-full max-w-md flex-col rounded-2xl border border-stone-200 bg-white shadow-xl overflow-hidden">
         <button className="absolute right-3 top-3 rounded-md p-1 text-stone-500 hover:bg-stone-100" onClick={onClose} aria-label={t('common.close')}>
           <X size={18}/>
         </button>
@@ -1489,7 +1490,7 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
             <p className="text-xs text-stone-500">{t('settings.description')}</p>
           </div>
         </div>
-        <div className="space-y-4 px-5 py-4">
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-medium text-stone-700">{t('settings.appTitle')}</label>
@@ -1714,7 +1715,7 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
                 })}
               </div>
             </div>
-            {canEditBadgeTiers && (
+            {canEditBadgeTiers && badgesFeatureOn && (
               <div className="border-t border-stone-200 pt-4 mt-4">
                 <div className="mb-3">
                   <h4 className="text-sm font-semibold text-stone-800">뱃지 티어 기준</h4>

@@ -576,11 +576,15 @@ export default function Dashboard({
       photoUrl: canonical?.photoUrl ?? player.photoUrl ?? player.avatarUrl ?? null,
     }
     if (!statsModalTipShownRef.current) {
-      notify('선수 기록 모달에서 상세 스탯을 확인할 수 있어요.', 'info')
+      let tipMessage = '선수를 누르면 스탯을 볼 수 있어요.'
+      if (badgesEnabled) {
+        tipMessage = '선수를 누르면 스탯과 챌린지 뱃지를 볼 수 있어요.'
+      }
+      notify(tipMessage, 'info')
       statsModalTipShownRef.current = true
     }
     setStatsModalPlayer(modalPlayer)
-  }, [playerLookup, playerNameLookup, playerStatsEnabled, statsModalTipShownRef])
+  }, [playerLookup, playerNameLookup, playerStatsEnabled, badgesEnabled, statsModalTipShownRef])
 
   const closeStatsModal = useCallback(() => {
     setStatsModalPlayer(null)
@@ -1218,10 +1222,10 @@ export default function Dashboard({
                 />
               )
             )}
-            {badgesEnabled && primaryTab !== 'mom' && (
+            {playerStatsEnabled && primaryTab !== 'mom' && (
               <div className="mt-4 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-700" data-testid="badges-hint">
                 <Award className="h-4 w-4 flex-shrink-0" />
-                <span>{t('badges.clickHint')}</span>
+                <span>{badgesEnabled ? t('badges.clickHint') : t('badges.clickHintStatsOnly')}</span>
               </div>
             )}
           </Card>
