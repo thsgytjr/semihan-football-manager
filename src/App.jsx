@@ -443,6 +443,9 @@ export default function App(){
     { key: 'analytics', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, label: t('nav.analytics'), show: isAnalyticsAdmin && featuresEnabled.analytics }
   ], [isAdmin, isAnalyticsAdmin, featuresEnabled, t]);
 
+  const playerStatsModalEnabled = featuresEnabled?.playerStatsModal ?? (featuresEnabled?.playerFunFacts ?? true)
+  const badgesFeatureEnabled = playerStatsModalEnabled && (featuresEnabled?.badges ?? true)
+
   // ⬇️ 기존 기본값 생성 방식은 유지(필요시 다른 곳에서 사용)
   async function handleCreatePlayer(){if(!isAdmin)return notify(t('auth.adminOnly'));const p=mkPlayer(t('player.newPlayer'),"MF");setDb(prev=>({...prev,players:[p,...(prev.players||[])]}));setSelectedPlayerId(p.id);notify(t('player.playerAdded'));try{await upsertPlayer(p)}catch(e){logger.error(e)}}
 
@@ -786,10 +789,44 @@ export default function App(){
   }
 
   async function handleFeatureToggle(featureName, enabled){
-    setFeaturesEnabled(prev => ({...prev, [featureName]: enabled}))
+    if(!featureName) return
+
+    if(featureName === 'badges' && enabled && !playerStatsModalEnabled){
+      notify('선수 기록 모달을 활성화해야 챌린지 뱃지를 사용할 수 있어요.', 'warning')
+      return
+    }
+
+    const shouldCascadeDisableBadges = featureName === 'playerStatsModal' && !enabled && (featuresEnabled?.badges ?? false)
+
+    setFeaturesEnabled(prev => {
+      const next = { ...(prev || {}) }
+      if (featureName.includes('.')) {
+        const [group, key] = featureName.split('.')
+        next[group] = { ...(prev?.[group] || {}) }
+        next[group][key] = enabled
+        return next
+      }
+      next[featureName] = enabled
+      if (featureName === 'playerStatsModal' && !enabled) {
+        next.badges = false
+      }
+      return next
+    })
+
     const success = await updateFeatureEnabled(featureName, enabled)
     if(success){
-      notify(`${featureName} 기능이 ${enabled?'활성화':'비활성화'}되었습니다.`,"success")
+      if (featureName === 'playerStatsModal' && !enabled) {
+        notify('선수 기록 모달이 비활성화되었습니다. 챌린지 뱃지도 함께 꺼집니다.', 'success')
+      } else {
+        notify(`${featureName} 기능이 ${enabled?'활성화':'비활성화'}되었습니다.`, 'success')
+      }
+
+      if (shouldCascadeDisableBadges) {
+        const badgeSuccess = await updateFeatureEnabled('badges', false)
+        if (!badgeSuccess) {
+          logger.warn('[App] Failed to auto-disable badges after turning off player stats modal')
+        }
+      }
     }else{
       notify("설정 저장에 실패했습니다.","error")
     }
@@ -1058,7 +1095,8 @@ export default function App(){
                   membershipSettings={db.membershipSettings||[]}
                   momFeatureEnabled={featuresEnabled?.mom ?? true}
                   leaderboardToggles={featuresEnabled?.leaderboards || {}}
-                  badgesEnabled={featuresEnabled?.badges ?? true}
+                  badgesEnabled={badgesFeatureEnabled}
+                  playerStatsEnabled={playerStatsModalEnabled}
                 />
               )}
               {tab==="players"&&isAdmin&&featuresEnabled.players&&(
@@ -1420,6 +1458,7 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
     stats: t('nav.stats'),
     mom: 'MOM 투표/리더보드',
     badges: '챌린지 뱃지',
+    playerStatsModal: '선수 기록 모달',
     accounting: t('nav.accounting'),
     analytics: t('nav.analytics')
   }
@@ -1560,32 +1599,47 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
                   if (key === 'analytics' && !isAnalyticsAdmin) {
                     return null
                   }
-                  
+
+                  const isOn = featuresEnabled?.[key] ?? true
+                  const badgesBlocked = key === 'badges' && !featuresEnabled?.playerStatsModal
+
                   return (
                     <div key={key} className="flex items-center justify-between py-2 px-3 rounded-lg bg-stone-50 hover:bg-stone-100 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-stone-700">{label}</span>
-                        {key === 'formation' && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">모두</span>
-                        )}
-                        {key === 'analytics' && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">개발자</span>
-                        )}
-                        {key !== 'formation' && key !== 'analytics' && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">Admin</span>
+                      <div className="flex flex-col text-left">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-stone-700">{label}</span>
+                          {key === 'formation' && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">모두</span>
+                          )}
+                          {key === 'analytics' && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 font-medium">개발자</span>
+                          )}
+                          {key !== 'formation' && key !== 'analytics' && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">Admin</span>
+                          )}
+                        </div>
+                        {badgesBlocked && (
+                          <span className="mt-1 text-[11px] text-stone-500">선수 기록 모달을 켜야 이용할 수 있어요.</span>
                         )}
                       </div>
                       <button
-                        onClick={() => onFeatureToggle(key, !featuresEnabled[key])}
+                        onClick={() => {
+                          if (badgesBlocked) {
+                            notify('선수 기록 모달을 활성화해야 챌린지 뱃지를 사용할 수 있어요.', 'info')
+                            return
+                          }
+                          onFeatureToggle(key, !isOn)
+                        }}
                         className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
-                          featuresEnabled[key] ? 'bg-emerald-600' : 'bg-stone-300'
-                        }`}
+                          isOn ? 'bg-emerald-600' : 'bg-stone-300'
+                        } ${badgesBlocked ? 'cursor-not-allowed opacity-60' : ''}`}
                         role="switch"
-                        aria-checked={featuresEnabled[key]}
+                        aria-checked={isOn}
+                        aria-disabled={badgesBlocked}
                       >
                         <span
                           className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
-                            featuresEnabled[key] ? 'translate-x-5' : 'translate-x-1'
+                            isOn ? 'translate-x-5' : 'translate-x-1'
                           }`}
                         />
                       </button>

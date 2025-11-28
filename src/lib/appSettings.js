@@ -23,6 +23,8 @@ const DEFAULT_SETTINGS = {
     mom: true,          // MOM 투표/리더보드
     accounting: true,   // 회계
     analytics: true,    // 방문자 분석
+    badges: true,       // 챌린지 뱃지 (선수 기록 모달 내부)
+    playerStatsModal: true, // 선수 종합 기록 모달
     // 리더보드 카테고리별 표시 토글 (데이터 유지, UI만 제어)
     leaderboards: {
       pts: true, // 종합(공격포인트)
@@ -44,13 +46,19 @@ const DEFAULT_SETTINGS = {
 
 function mergeSettings(partial = {}) {
   const incoming = partial || {}
+  const mergedFeatures = {
+    ...DEFAULT_SETTINGS.features,
+    ...(incoming.features || {}),
+  }
+
+  if (mergedFeatures.playerStatsModal === undefined && Object.prototype.hasOwnProperty.call(mergedFeatures, 'playerFunFacts')) {
+    mergedFeatures.playerStatsModal = mergedFeatures.playerFunFacts
+  }
+
   return {
     ...DEFAULT_SETTINGS,
     ...incoming,
-    features: {
-      ...DEFAULT_SETTINGS.features,
-      ...(incoming.features || {}),
-    },
+    features: mergedFeatures,
     accounting: {
       ...DEFAULT_SETTINGS.accounting,
       ...(incoming.accounting || {}),

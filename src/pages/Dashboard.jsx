@@ -1,5 +1,5 @@
 // src/pages/Dashboard.jsx
-import React, { useMemo, useState, useEffect, useCallback } from 'react'
+import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Tab } from '@headlessui/react'
 import Card from '../components/Card'
@@ -14,13 +14,15 @@ import { MoMPopup } from '../components/MoMPopup'
 import { MoMLeaderboard } from '../components/MoMLeaderboard'
 import { MoMAwardDetailModal } from '../components/MoMAwardDetailModal'
 import PlayerBadgeModal from '../components/badges/PlayerBadgeModal'
+import PlayerStatsModal from '../components/PlayerStatsModal'
 import { Award } from 'lucide-react'
 import { useMoMPrompt } from '../hooks/useMoMPrompt'
 import { useMoMAwardsSummary } from '../hooks/useMoMAwardsSummary'
-import { toStr, extractDateKey, extractSeason } from '../lib/matchUtils'
+import { toStr, extractDateKey, extractSeason, extractStatsByPlayer } from '../lib/matchUtils'
 import { getCountdownParts } from '../lib/momUtils'
 import { rankTone } from '../lib/rankingUtils'
 import { notify } from '../components/Toast'
+import { logger } from '../lib/logger'
 import Select from '../components/Select'
 import { 
   computeAttackRows, 
@@ -128,6 +130,15 @@ const toLabelString = (value) => {
   return ''
 }
 
+const buildPlayerRowMap = (rows = []) => {
+  const map = new Map()
+  rows.forEach((row) => {
+    if (!row || row.id == null) return
+    map.set(toStr(row.id), row)
+  })
+  return map
+}
+
 /* --------------------------------------------------------
    MOBILE-FIRST LEADERBOARD (Compact Segmented Tabs)
    - Tabs collapse into scrollable chips on small screens
@@ -167,7 +178,11 @@ export default function Dashboard({
   momFeatureEnabled = true,
   leaderboardToggles = {},
   badgesEnabled = true,
+  playerStatsEnabled: playerStatsEnabledProp,
+  playerFactsEnabled: legacyPlayerFactsEnabled,
 }) {
+  const playerStatsEnabled = playerStatsEnabledProp ?? (legacyPlayerFactsEnabled ?? true)
+  const playerFactsEnabled = playerStatsEnabled // legacy alias for any stale references
   const { t } = useTranslation()
   const customMemberships = membershipSettings.length > 0 ? membershipSettings : []
   const isMoMEnabled = useMemo(() => {
@@ -226,6 +241,20 @@ export default function Dashboard({
     [leaderboardSeasonFilteredMatches, apDateKey]
   )
 
+  const filteredMatchIdSet = useMemo(() => {
+    const set = new Set()
+    filteredMatches.forEach((m) => {
+      if (m?.id != null) set.add(toStr(m.id))
+    })
+    return set
+  }, [filteredMatches])
+
+  const statsFilterDescription = useMemo(() => {
+    const seasonLabel = leaderboardSeason === 'all' ? t('leaderboard.allTime') : `${leaderboardSeason}년`
+    const dateLabel = apDateKey === 'all' ? t('matchHistory.allDates') : apDateKey
+    return `${seasonLabel} · ${dateLabel}`
+  }, [leaderboardSeason, apDateKey, t])
+
   const baseRows = useMemo(() => computeAttackRows(players, filteredMatches), [players, filteredMatches])
 
   // Draft 전용: 선수/주장 승리 집계
@@ -252,6 +281,71 @@ export default function Dashboard({
     [players, matches, momAwards.countsByPlayer, momAwards.winnersByMatch]
   )
 
+  const attackRowMap = useMemo(() => buildPlayerRowMap(baseRows), [baseRows])
+  const draftRecordMap = useMemo(() => buildPlayerRowMap(draftWinRows), [draftWinRows])
+  const draftAttackRowMap = useMemo(() => buildPlayerRowMap(draftAttackRows), [draftAttackRows])
+  const cardsRowMap = useMemo(() => buildPlayerRowMap(cardsRows), [cardsRows])
+  const attackCompetitionMap = useMemo(() => {
+    const map = new Map()
+    if (!playerStatsEnabled || !rankedRows || rankedRows.length === 0) return map
+
+    const closePointDiff = 2
+    const closeAppsDiff = 1
+
+    rankedRows.forEach((row, index) => {
+      if (!row || row.id == null) return
+      const key = toStr(row.id)
+      const ahead = rankedRows[index - 1]
+      const behind = rankedRows[index + 1]
+      const entry = {}
+      const currPts = Number(row?.pts ?? 0)
+      const currApps = Number(row?.gp ?? 0)
+
+      const evaluateNeighbor = (neighbor, direction) => {
+        if (!neighbor || neighbor.id == null) return
+        const neighborPts = Number(neighbor.pts ?? 0)
+        const neighborApps = Number(neighbor.gp ?? 0)
+
+        if (Number.isFinite(currPts) && Number.isFinite(neighborPts)) {
+          if (neighborPts === currPts) {
+            if (!entry.pointsDeadHeat) {
+              entry.pointsDeadHeat = { name: neighbor.name, playerId: neighbor.id }
+            }
+          } else {
+            const diff = direction === 'ahead' ? neighborPts - currPts : currPts - neighborPts
+            if (diff > 0 && diff <= closePointDiff) {
+              const keyName = direction === 'ahead' ? 'pointsChasing' : 'pointsDefending'
+              entry[keyName] = { playerId: neighbor.id, name: neighbor.name, diff }
+            }
+          }
+        }
+
+        if (Number.isFinite(currApps) && Number.isFinite(neighborApps)) {
+          if (neighborApps === currApps) {
+            if (!entry.appsDeadHeat) {
+              entry.appsDeadHeat = { name: neighbor.name, playerId: neighbor.id }
+            }
+          } else {
+            const diff = direction === 'ahead' ? neighborApps - currApps : currApps - neighborApps
+            if (diff > 0 && diff <= closeAppsDiff) {
+              const keyName = direction === 'ahead' ? 'appsChasing' : 'appsDefending'
+              entry[keyName] = { playerId: neighbor.id, name: neighbor.name, diff }
+            }
+          }
+        }
+      }
+
+      evaluateNeighbor(ahead, 'ahead')
+      evaluateNeighbor(behind, 'behind')
+
+      if (Object.keys(entry).length > 0) {
+        map.set(key, entry)
+      }
+    })
+
+    return map
+  }, [playerStatsEnabled, rankedRows])
+
   // 리더보드 카테고리 토글 반영
   const isEnabled = useCallback((key) => {
     const v = leaderboardToggles?.[key]
@@ -266,9 +360,27 @@ export default function Dashboard({
 
   const [badgeModalPlayer, setBadgeModalPlayer] = useState(null)
   const [badgeModalState, setBadgeModalState] = useState({ badges: [], loading: false, error: null })
+  const [statsModalPlayer, setStatsModalPlayer] = useState(null)
   const [momDetailPlayer, setMoMDetailPlayer] = useState(null)
+  const statsModalTipShownRef = useRef(false)
+
+  useEffect(() => {
+    if (!playerStatsEnabled && statsModalPlayer) {
+      setStatsModalPlayer(null)
+    }
+  }, [playerStatsEnabled, statsModalPlayer])
 
   const openBadgeModal = useCallback((player) => {
+    const attemptedId = player?.id ?? player?.playerId ?? player?.player_id ?? null
+    if (!playerStatsEnabled) {
+      logger.warn('[Dashboard] Badge modal blocked because player stats feature is disabled', { playerId: attemptedId })
+      notify('선수 기록 모달을 켜야 챌린지 뱃지를 볼 수 있어요.', 'info')
+      return
+    }
+    if (!badgesEnabled) {
+      notify('챌린지 뱃지 기능이 비활성화되어 있습니다.', 'info')
+      return
+    }
     if (!player) {
       notify('선수 정보가 없어 뱃지를 볼 수 없어요.', 'warning')
       return
@@ -290,15 +402,15 @@ export default function Dashboard({
     const facts = badgeFactsByPlayer.get(key)
     const computed = generateBadgesFromFacts(facts)
     setBadgeModalState({ badges: computed, loading: false, error: null })
-  }, [badgeFactsByPlayer, badgesEnabled])
+  }, [badgeFactsByPlayer, badgesEnabled, playerStatsEnabled])
 
   // 뱃지 기능이 비활성화되면 열린 모달 닫기
   useEffect(() => {
-    if (!badgesEnabled && badgeModalPlayer) {
+    if ((!badgesEnabled || !playerStatsEnabled) && badgeModalPlayer) {
       setBadgeModalPlayer(null)
       setBadgeModalState({ badges: [], loading: false, error: null })
     }
-  }, [badgesEnabled, badgeModalPlayer])
+  }, [badgesEnabled, badgeModalPlayer, playerStatsEnabled])
 
   const refreshBadgeModal = useCallback(() => {
     if (!badgeModalPlayer) return
@@ -376,6 +488,104 @@ export default function Dashboard({
     return map
   }, [players])
 
+  const playerNameLookup = useMemo(() => {
+    const map = new Map()
+    players.forEach((p) => {
+      const name = (p?.name || '').trim().toLowerCase()
+      if (name) {
+        map.set(name, p)
+      }
+    })
+    return map
+  }, [players])
+
+  const chemistryMap = useMemo(() => {
+    const map = new Map()
+    if (!duoRows || duoRows.length === 0) return map
+
+    const addPartner = (sourceId, partnerId, meta) => {
+      if (!sourceId || !partnerId) return
+      const key = toStr(sourceId)
+      const list = map.get(key) || []
+      list.push(meta)
+      map.set(key, list)
+    }
+
+    duoRows.forEach((row) => {
+      const assistKey = toStr(row.assistId)
+      const goalKey = toStr(row.goalId)
+      const goalPlayer = playerLookup.get(goalKey)
+      const assistPlayer = playerLookup.get(assistKey)
+
+      addPartner(assistKey, goalKey, {
+        id: goalKey,
+        name: goalPlayer?.name || row.gName,
+        membership: goalPlayer?.membership || row.gMembership,
+        photoUrl: goalPlayer?.photoUrl || row.gPhotoUrl,
+        count: row.count,
+        role: 'assist',
+      })
+
+      addPartner(goalKey, assistKey, {
+        id: assistKey,
+        name: assistPlayer?.name || row.aName,
+        membership: assistPlayer?.membership || row.aMembership,
+        photoUrl: assistPlayer?.photoUrl || row.aPhotoUrl,
+        count: row.count,
+        role: 'goal',
+      })
+    })
+
+    map.forEach((partners, key) => {
+      const sorted = [...partners].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+      map.set(key, sorted.slice(0, 3))
+    })
+
+    return map
+  }, [duoRows, playerLookup])
+
+  const openPlayerStatsModal = useCallback((player) => {
+    if (!playerStatsEnabled) {
+      notify('선수 기록 모달 기능이 비활성화되어 있습니다.', 'info')
+      return
+    }
+    if (!player) {
+      notify('선수 정보가 없어 스탯을 볼 수 없어요.', 'warning')
+      return
+    }
+    let playerId = player.id ?? player.playerId ?? player.player_id ?? null
+    let canonical = playerId ? playerLookup.get(toStr(playerId)) : null
+    if (!playerId && player?.name) {
+      const fallback = playerNameLookup.get(player.name.trim().toLowerCase())
+      if (fallback) {
+        playerId = fallback.id ?? fallback.playerId ?? fallback.player_id ?? null
+        canonical = fallback
+      }
+    }
+    if (!playerId) {
+      notify('선수 ID가 없어 스탯을 볼 수 없어요.', 'warning')
+      return
+    }
+    if (!canonical) {
+      canonical = playerLookup.get(toStr(playerId)) || canonical
+    }
+    const modalPlayer = {
+      id: playerId,
+      name: canonical?.name || player.name || player.fullName || '선수',
+      membership: canonical?.membership ?? player.membership,
+      photoUrl: canonical?.photoUrl ?? player.photoUrl ?? player.avatarUrl ?? null,
+    }
+    if (!statsModalTipShownRef.current) {
+      notify('선수 기록 모달에서 상세 스탯을 확인할 수 있어요.', 'info')
+      statsModalTipShownRef.current = true
+    }
+    setStatsModalPlayer(modalPlayer)
+  }, [playerLookup, playerNameLookup, playerStatsEnabled, statsModalTipShownRef])
+
+  const closeStatsModal = useCallback(() => {
+    setStatsModalPlayer(null)
+  }, [])
+
   const matchLookup = useMemo(() => {
     const map = new Map()
     matches.forEach(match => {
@@ -385,6 +595,79 @@ export default function Dashboard({
     })
     return map
   }, [matches])
+
+  const playerHighlights = useMemo(() => {
+    const map = new Map()
+    if (!playerStatsEnabled || !filteredMatches || filteredMatches.length === 0) return map
+
+    const ordered = filteredMatches
+      .map(match => ({ match, ts: getMatchTimestamp(match) || 0 }))
+      .sort((a, b) => (a.ts || 0) - (b.ts || 0))
+
+    const formatMatchLabel = (match, ts) => {
+      const dateLabel = extractDateKey(match) || (Number.isFinite(ts) && ts > 0 ? new Date(ts).toLocaleDateString() : null)
+      const opponentLabel = (
+        [
+          match?.title,
+          match?.matchTitle,
+          match?.opponent,
+          match?.opponentName,
+          match?.opponent_label,
+          match?.location,
+        ]
+          .map(toLabelString)
+          .find(Boolean)
+      )
+      return [dateLabel, opponentLabel].filter(Boolean).join(' · ') || dateLabel || 'Match'
+    }
+
+    const ensureEntry = (pid) => {
+      if (!map.has(pid)) map.set(pid, {})
+      return map.get(pid)
+    }
+
+    ordered.forEach(({ match, ts }) => {
+      const statsMap = extractStatsByPlayer(match) || {}
+      const matchLabel = formatMatchLabel(match, ts)
+      Object.entries(statsMap).forEach(([pidRaw, rec]) => {
+        const pid = toStr(pidRaw)
+        if (!pid) return
+        const entry = ensureEntry(pid)
+        if (Number(rec?.goals || 0) > 0 && !entry.firstGoal) {
+          entry.firstGoal = { label: matchLabel, ts }
+        }
+        if (Number(rec?.assists || 0) > 0 && !entry.firstAssist) {
+          entry.firstAssist = { label: matchLabel, ts }
+        }
+        if (Number(rec?.cleanSheet || 0) > 0 && !entry.firstCleanSheet) {
+          entry.firstCleanSheet = { label: matchLabel, ts }
+        }
+        if (Number(rec?.goals || 0) + Number(rec?.assists || 0) > 0 && !entry.firstAttackPoint) {
+          entry.firstAttackPoint = { label: matchLabel, ts }
+        }
+      })
+    })
+
+    const winnersByMatch = momAwards?.winnersByMatch || {}
+    Object.entries(winnersByMatch).forEach(([matchId, summary]) => {
+      const key = toStr(matchId)
+      if (!filteredMatchIdSet.has(key)) return
+      const match = matchLookup.get(key)
+      const ts = getMatchTimestamp(match) || 0
+      const label = formatMatchLabel(match, ts)
+      const winners = Array.isArray(summary?.winners) ? summary.winners : []
+      winners.forEach((pidRaw) => {
+        const pid = toStr(pidRaw)
+        if (!pid) return
+        const entry = ensureEntry(pid)
+        if (!entry.firstMom) {
+          entry.firstMom = { label, ts }
+        }
+      })
+    })
+
+    return map
+  }, [playerStatsEnabled, filteredMatches, filteredMatchIdSet, momAwards?.winnersByMatch, matchLookup])
 
   const momDetailDataByPlayer = useMemo(() => {
     const map = new Map()
@@ -490,6 +773,68 @@ export default function Dashboard({
     if (!pid) return []
     return momDetailDataByPlayer.get(pid) || []
   }, [momDetailPlayer, momDetailDataByPlayer])
+
+  const playerStatsData = useMemo(() => {
+    if (!statsModalPlayer || !playerStatsEnabled) return null
+    const key = toStr(statsModalPlayer.id)
+    const attackRow = attackRowMap.get(key) || null
+    const draftRow = draftRecordMap.get(key) || null
+    const draftAttackRow = draftAttackRowMap.get(key) || null
+    const cardsRow = cardsRowMap.get(key) || null
+    const chemistryPartners = chemistryMap.get(key) || []
+    const highlights = playerHighlights.get(key) || null
+    const competition = attackCompetitionMap.get(key) || null
+    const momCount = Number(momAwards?.countsByPlayer?.[key] ?? 0)
+
+    const formatAvg = (numerator, denominator) => {
+      if (!Number.isFinite(numerator) || !Number.isFinite(denominator) || denominator <= 0) return null
+      const value = numerator / denominator
+      if (!Number.isFinite(value)) return null
+      const rounded = Math.round(value * 100) / 100
+      return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2)
+    }
+
+    return {
+      attack: attackRow ? {
+        gp: attackRow.gp,
+        g: attackRow.g,
+        a: attackRow.a,
+        pts: attackRow.pts,
+        cs: attackRow.cs,
+      } : null,
+      efficiency: attackRow ? {
+        gPerGame: formatAvg(attackRow.g, attackRow.gp),
+        aPerGame: formatAvg(attackRow.a, attackRow.gp),
+        ptsPerGame: formatAvg(attackRow.pts, attackRow.gp),
+      } : null,
+      draftRecord: draftRow ? {
+        wins: draftRow.wins,
+        draws: draftRow.draws,
+        losses: draftRow.losses,
+        winRate: draftRow.winRate,
+        points: draftRow.points,
+        last5: draftRow.last5,
+      } : null,
+      draftAttack: draftAttackRow ? {
+        gp: draftAttackRow.gp,
+        g: draftAttackRow.g,
+        a: draftAttackRow.a,
+        pts: draftAttackRow.pts,
+        gpg: draftAttackRow.gpg,
+        apa: draftAttackRow.apa,
+      } : null,
+      cards: cardsRow ? {
+        yellow: cardsRow.y,
+        red: cardsRow.r,
+      } : null,
+      momAwards: momCount,
+      chemistry: chemistryPartners.length > 0 ? { topPartners: chemistryPartners } : null,
+      highlights,
+      competition,
+      factsEnabled: playerFactsEnabled,
+      filterDescription: statsFilterDescription,
+    }
+  }, [statsModalPlayer, attackRowMap, draftRecordMap, draftAttackRowMap, cardsRowMap, chemistryMap, playerHighlights, attackCompetitionMap, momAwards?.countsByPlayer, statsFilterDescription, playerStatsEnabled])
 
   const momLeaders = useMemo(() => {
     const entries = Object.entries(mom.tally || {})
@@ -792,7 +1137,7 @@ export default function Dashboard({
                   apDateKey={apDateKey}
                   initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.draftCaptain || null) : null}
                   customMemberships={customMemberships}
-                  onPlayerSelect={badgesEnabled ? openBadgeModal : undefined}
+                  onPlayerSelect={openPlayerStatsModal}
                 />
               ) : draftTab === 'attack' ? (
                 <DraftAttackTable
@@ -804,7 +1149,7 @@ export default function Dashboard({
                   apDateKey={apDateKey}
                   initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.draftAttack || null) : null}
                   customMemberships={customMemberships}
-                  onPlayerSelect={badgesEnabled ? openBadgeModal : undefined}
+                  onPlayerSelect={openPlayerStatsModal}
                 />
               ) : (
                 <DraftWinsTable
@@ -816,7 +1161,7 @@ export default function Dashboard({
                   apDateKey={apDateKey}
                   initialBaselineRanks={apDateKey === 'all' ? (previousBaselinesMisc.draftPlayer || null) : null}
                   customMemberships={customMemberships}
-                  onPlayerSelect={badgesEnabled ? openBadgeModal : undefined}
+                  onPlayerSelect={openPlayerStatsModal}
                 />
               )
             ) : (
@@ -828,7 +1173,7 @@ export default function Dashboard({
                   onToggle={() => setShowAll(s => !s)}
                   controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
                   apDateKey={apDateKey}
-                  onPlayerSelect={badgesEnabled ? openBadgeModal : undefined}
+                  onPlayerSelect={openPlayerStatsModal}
                 />
               ) : apTab === 'duo' ? (
                 <DuoTable
@@ -850,7 +1195,7 @@ export default function Dashboard({
                   controls={<ControlsLeft apDateKey={apDateKey} setApDateKey={setApDateKey} dateOptions={dateOptions} showAll={showAll} setShowAll={setShowAll} />}
                   apDateKey={apDateKey}
                   customMemberships={customMemberships}
-                  onPlayerSelect={badgesEnabled ? openBadgeModal : undefined}
+                  onPlayerSelect={openPlayerStatsModal}
                 />
               ) : (
                 <AttackPointsTable
@@ -869,7 +1214,7 @@ export default function Dashboard({
                   apDateKey={apDateKey}
                   initialBaselineRanks={apDateKey === 'all' ? (previousBaselineByMetric[apTab] || null) : null}
                   customMemberships={customMemberships}
-                  onPlayerSelect={badgesEnabled ? openBadgeModal : undefined}
+                  onPlayerSelect={openPlayerStatsModal}
                 />
               )
             )}
@@ -932,6 +1277,17 @@ export default function Dashboard({
           `}</style>
         </Card>
       </div>
+
+      {playerStatsEnabled && (
+        <PlayerStatsModal
+          open={Boolean(statsModalPlayer)}
+          player={statsModalPlayer}
+          stats={playerStatsData}
+          onClose={closeStatsModal}
+          onShowBadges={badgesEnabled ? openBadgeModal : undefined}
+          customMemberships={customMemberships}
+        />
+      )}
 
       <MoMAwardDetailModal
         open={Boolean(momDetailPlayer)}
