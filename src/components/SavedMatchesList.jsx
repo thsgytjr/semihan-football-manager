@@ -3017,7 +3017,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                                 {teamLen === 3 && (
                                   <button
                                     type="button"
-                                    className={`absolute -top-2 -right-2 w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center shadow-md ${isAbsent ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-gray-400 text-white hover:bg-gray-500'} transition-all active:scale-95 z-10`}
+                                    className={`absolute -top-2 -left-2 w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center shadow-md ${isAbsent ? 'bg-green-500 text-white hover:bg-green-600' : 'bg-gray-400 text-white hover:bg-gray-500'} transition-all active:scale-95 z-10`}
                                     title={isAbsent ? '참가로 변경 (클릭)' : '불참 표시 (클릭)'}
                                     onClick={() => {
                                       const next = qs.map(a=>a.slice())
