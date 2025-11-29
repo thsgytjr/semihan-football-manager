@@ -2071,11 +2071,13 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       const arr = displayedQuarterScores[ti]
                       const teamTotal = teamTotals[ti]
                       
-                      // 승/무/패 결정 (구장별) - pointWinners 재사용
+                      // 승/무/패 결정 (구장별) - 같은 구장 내에서만 비교
                       let matchResult = null
+                      const myField = points.fieldNames[ti]
+                      const myFieldWinners = pointWinners.filter(i => points.fieldNames[i] === myField)
                       
-                      if (pointWinners.includes(ti)) {
-                        matchResult = pointWinners.length === 1 ? 'W' : 'D'
+                      if (myFieldWinners.includes(ti)) {
+                        matchResult = myFieldWinners.length === 1 ? 'W' : 'D'
                       } else {
                         matchResult = 'L'
                       }
@@ -2085,7 +2087,6 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       const thisWeightedPts = unequalGP ? points.weightedPts[ti] : 0
                       
                       // 쿼터 승리 표시: 구장 분리 시에는 같은 구장 팀끼리만 비교해야 함 (기존에는 전체 팀 비교 -> 버그)
-                      const myField = points.fieldNames[ti]
                       const wonQuarters = Array.from({length: maxQ}).map((_, qi) => {
                         const myFieldTeams = points.fieldNames.map((f, idx) => f === myField ? idx : -1).filter(idx => idx >= 0)
                         if (myFieldTeams.length === 0) return false
