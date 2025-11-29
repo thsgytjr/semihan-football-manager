@@ -328,7 +328,16 @@
     "field2": "구장2",
     "teamN": "팀 {{n}}",
     "weightedPointsShort": "가중 승점",
-    "compareTopMatches": "각 팀의 최고 {{minGames}}경기만 승점 비교"
+    "compareTopMatches": "각 팀의 최고 {{minGames}}경기만 승점 비교",
+    "tiebreakerRules": "🎯 승자 결정 규칙",
+    "tiebreakerStep1": "1️⃣ 승점 (승3·무1·패0)",
+    "tiebreakerStep2": "2️⃣ 골득실 (득점 - 실점)",
+    "tiebreakerStep3": "3️⃣ 총 득점",
+    "tiebreakerStep4": "4️⃣ 공동 동점 (무승부)",
+    "weightedGamesNote": "💡 팀별 경기수가 다를 때는 각 팀의 최고 성적 {{minGames}}경기만 비교합니다",
+    "weightedGamesExample": "예: T1과 T2가 3경기, T3가 2경기 → 모든 팀의 최고 2경기만 승점 비교",
+    "decidedByGoalDiff": "골득실로 결정",
+    "decidedByGoalsScored": "총 득점으로 결정"
   },
   "upcoming": {
     "title": "예정된 매치",

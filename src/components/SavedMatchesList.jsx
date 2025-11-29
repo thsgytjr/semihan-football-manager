@@ -886,6 +886,12 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
     if (m?.draft && Array.isArray(m.draft.quarterScores)) return m.draft.quarterScores
     if (Array.isArray(m.quarterScores)) return m.quarterScores
     if (Array.isArray(m.scores) && Array.isArray(draftSnap) && m.scores.length===draftSnap.length) return draftSnap.map((_,i)=>[m.scores[i]])
+    console.log('[SavedMatchesList] No displayedQuarterScores for match:', m.id, {
+      hasDraftQS: m?.draft && Array.isArray(m.draft.quarterScores),
+      hasQS: Array.isArray(m.quarterScores),
+      hasScores: Array.isArray(m.scores),
+      hasDraftSnap: Array.isArray(draftSnap)
+    })
     return null
   },[m, draftSnap])
 
@@ -1111,18 +1117,22 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
           if (isThreeTeams) {
             // 승점 계산: G1 0vs1, G2 1vs2, G3 0vs2 반복
             const pairs = [[0,1],[1,2],[0,2]]
-            const teamGamePoints = [[],[],[]]
+            const teamGames = [[],[],[]] // 각 게임 정보: {points, scored, conceded}
             const gamesPlayed = [0,0,0]
             const totals = [0,0,0]
             const maxQ = Math.max(0, ...quarterScores.map(a=>Array.isArray(a)?a.length:0))
+            
             for (let qi=0; qi<maxQ; qi++){
               const [a,b] = pairs[qi%3]
               const aVal = quarterScores[a]?.[qi]
               const bVal = quarterScores[b]?.[qi]
-              // null 팀은 스킵 (게임수/점수 미반영)
-              if (aVal === null || bVal === null) continue
-              const aScore = Number(aVal ?? 0)
-              const bScore = Number(bVal ?? 0)
+              // null/undefined는 경기하지 않은 것으로 처리
+              if (aVal === null || aVal === undefined || bVal === null || bVal === undefined) continue
+              
+              const aScore = Number(aVal)
+              const bScore = Number(bVal)
+              if (!Number.isFinite(aScore) || !Number.isFinite(bScore)) continue
+              
               totals[a]+=aScore; totals[b]+=bScore
               gamesPlayed[a]+=1; gamesPlayed[b]+=1
               
@@ -1131,34 +1141,77 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               else if(bScore>aScore){ aPts=0; bPts=3 } 
               else { aPts=1; bPts=1 }
               
-              teamGamePoints[a].push(aPts)
-              teamGamePoints[b].push(bPts)
+              teamGames[a].push({ points: aPts, scored: aScore, conceded: bScore })
+              teamGames[b].push({ points: bPts, scored: bScore, conceded: aScore })
             }
+            
             const unequalGP = gamesPlayed.some(g=>g!==gamesPlayed[0])
-            const totalPoints = teamGamePoints.map(pts => pts.reduce((a,b)=>a+b, 0))
+            const totalPoints = teamGames.map(games => games.reduce((sum, g) => sum + g.points, 0))
+            const goalDiff = teamGames.map(games => games.reduce((sum, g) => sum + (g.scored - g.conceded), 0))
             
             let weightedPoints = totalPoints
+            let weightedGoalDiff = goalDiff
             let minGames = 0
+            
             if (unequalGP) {
-              minGames = Math.min(...gamesPlayed)
-              weightedPoints = teamGamePoints.map(pts => {
-                if (pts.length === 0) return 0
-                const sorted = [...pts].sort((a,b) => b - a)
-                return sorted.slice(0, minGames).reduce((a,b) => a + b, 0)
-              })
+              minGames = Math.min(...gamesPlayed.filter(g => g > 0))
+              if (minGames > 0) {
+                // 게임 품질 비교: 1) 승점, 2) 골득실, 3) 득점
+                const compareGames = (g1, g2) => {
+                  if (g2.points !== g1.points) return g2.points - g1.points
+                  const diff2 = g2.scored - g2.conceded
+                  const diff1 = g1.scored - g1.conceded
+                  if (diff2 !== diff1) return diff2 - diff1
+                  if (g2.scored !== g1.scored) return g2.scored - g1.scored
+                  return 0
+                }
+                
+                const summarizeTopGames = (games, count) => {
+                  if (!games.length || !count || count <= 0) return { points: 0, goalDiff: 0 }
+                  const sorted = [...games].sort(compareGames)
+                  const selected = sorted.slice(0, count)
+                  return {
+                    points: selected.reduce((sum, g) => sum + g.points, 0),
+                    goalDiff: selected.reduce((sum, g) => sum + (g.scored - g.conceded), 0)
+                  }
+                }
+                
+                const summaries = teamGames.map(games => summarizeTopGames(games, minGames))
+                weightedPoints = summaries.map(s => s.points)
+                weightedGoalDiff = summaries.map(s => s.goalDiff)
+              }
+              
               const maxWPts = Math.max(...weightedPoints)
-              leaders = weightedPoints.map((p,i)=>p===maxWPts?i:-1).filter(i=>i>=0)
+              let candidates = weightedPoints.map((p,i)=>p===maxWPts?i:-1).filter(i=>i>=0)
+              
+              // 가중 승점 동점일 때 가중 골득실로 판단
+              if (candidates.length > 1) {
+                const maxGD = Math.max(...candidates.map(i => weightedGoalDiff[i]))
+                leaders = candidates.filter(i => weightedGoalDiff[i] === maxGD)
+              } else {
+                leaders = candidates
+              }
             } else {
               const maxPts = Math.max(...totalPoints)
-              leaders = totalPoints.map((p,i)=>p===maxPts?i:-1).filter(i=>i>=0)
+              let candidates = totalPoints.map((p,i)=>p===maxPts?i:-1).filter(i=>i>=0)
+              
+              // 승점 동점일 때 골득실로 판단
+              if (candidates.length > 1) {
+                const maxGD = Math.max(...candidates.map(i => goalDiff[i]))
+                leaders = candidates.filter(i => goalDiff[i] === maxGD)
+              } else {
+                leaders = candidates
+              }
             }
-            currentStats = teamGamePoints.map((pts,i)=>({ 
+            
+            currentStats = teamGames.map((games,i)=>({ 
               totalPoints: totalPoints[i], 
               weightedPoints: weightedPoints[i],
               total: totals[i], 
               gp: gamesPlayed[i],
-              gamePoints: pts,
-              minGames
+              gamePoints: games.map(g => g.points),
+              minGames,
+              goalDifference: unequalGP ? weightedGoalDiff[i] : goalDiff[i]
             }))
           } else {
             // 4팀 이상
@@ -1543,9 +1596,10 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
         })()
       )}
 
-      {/* 저장된 게임 점수 표시 (드래프트 모드일 때만) */}
-      {isDraftMode && displayedQuarterScores && (
+      {/* 저장된 게임 점수 표시 */}
+      {displayedQuarterScores && (
         (() => {
+          console.log('[SavedMatchesList] Calculating scores for match:', m.id, displayedQuarterScores)
           const maxQ = Math.max(...displayedQuarterScores.map(a=>Array.isArray(a)?a.length:1))
           const teamTotals = displayedQuarterScores.map(a=>Array.isArray(a)?a.reduce((s,v)=>s+Number(v||0),0):Number(a||0))
           const maxTotal = Math.max(...teamTotals)
@@ -1563,29 +1617,106 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
             const goalScored = Array.from({ length: teamCount }, () => 0) // 득점
             const goalConceded = Array.from({ length: teamCount }, () => 0) // 실점
             const fieldNames = Array.from({ length: teamCount }, () => '') // 구장 정보
+            let teamGames = null // 3팀 경기 게임 정보
             
             if (isThreeTeams) {
-              // 3팀: 고정 패턴
-              const pairs=[[0,1],[1,2],[0,2]]
+              // 3팀: 각 쿼터마다 한 팀이 휴식하고 두 팀만 경기
+              teamGames = [[], [], []]
+              
               for(let qi=0; qi<maxQ; qi++){
-                const [a,b]=pairs[qi%3]
-                const aScore = Number(Array.isArray(displayedQuarterScores[a]) ? (displayedQuarterScores[a][qi] ?? 0) : (qi===0 ? (displayedQuarterScores[a]||0) : 0))
-                const bScore = Number(Array.isArray(displayedQuarterScores[b]) ? (displayedQuarterScores[b][qi] ?? 0) : (qi===0 ? (displayedQuarterScores[b]||0) : 0))
-                gp[a]+=1; gp[b]+=1
-                goalScored[a] += aScore
-                goalScored[b] += bScore
-                goalConceded[a] += bScore
-                goalConceded[b] += aScore
+                // 각 쿼터에서 누가 경기하는지 null이 아닌 팀들을 찾기
+                const scores = displayedQuarterScores.map((teamScores, ti) => ({
+                  teamIdx: ti,
+                  score: Array.isArray(teamScores) ? teamScores[qi] : (qi===0 ? teamScores : null)
+                }))
                 
-                let aPts = 0, bPts = 0
-                if(aScore>bScore) { aPts=3; bPts=0 }
-                else if(bScore>aScore) { aPts=0; bPts=3 }
-                else { aPts=1; bPts=1 }
+                // null이 아닌 팀들 찾기 (경기에 참여한 팀들)
+                const playingTeams = scores.filter(s => s.score !== null && s.score !== undefined)
                 
-                teamGamePoints[a].push(aPts)
-                teamGamePoints[b].push(bPts)
-                totalPts[a]+=aPts
-                totalPts[b]+=bPts
+                console.log(`[3Team] Q${qi}: Playing teams:`, playingTeams.map(t => `Team${t.teamIdx}(${t.score})`).join(' vs '))
+                
+                if (playingTeams.length === 3) {
+                  // 3팀 동시 경기 (배틀로얄): 1위 3점, 2위 1점, 3위 0점
+                  console.log(`[3Team BattleRoyale] Q${qi}: 3-way match detected`)
+                  
+                  // 점수별로 정렬 (높은 순)
+                  const sorted = playingTeams
+                    .map(t => ({ ...t, score: Number(t.score) }))
+                    .filter(t => Number.isFinite(t.score))
+                    .sort((a, b) => b.score - a.score)
+                  
+                  if (sorted.length !== 3) continue
+                  
+                  // 각 팀의 순위 결정
+                  const rankings = sorted.map((team, idx) => {
+                    // 동점자 처리: 같은 점수면 같은 순위
+                    let rank = 0
+                    for (let i = 0; i < idx; i++) {
+                      if (sorted[i].score > team.score) rank++
+                    }
+                    return { ...team, rank }
+                  })
+                  
+                  rankings.forEach(({ teamIdx, score, rank }) => {
+                    gp[teamIdx] += 1
+                    goalScored[teamIdx] += score
+                    
+                    // 실점은 다른 2팀의 평균 득점
+                    const otherScores = sorted.filter(t => t.teamIdx !== teamIdx).map(t => t.score)
+                    const avgConceded = otherScores.reduce((a, b) => a + b, 0) / otherScores.length
+                    goalConceded[teamIdx] += avgConceded
+                    
+                    // 순위별 승점: 1위 3점, 2위 1점, 3위 0점 (동점이면 공동 순위)
+                    let pts = 0
+                    if (rank === 0) pts = 3  // 1위
+                    else if (rank === 1) pts = 1  // 2위
+                    else pts = 0  // 3위
+                    
+                    // 동점자가 있으면 승점 분배
+                    const sameRankCount = rankings.filter(r => r.rank === rank).length
+                    if (sameRankCount > 1) {
+                      // 동점자 처리: 해당 순위들의 평균 승점
+                      if (rank === 0) pts = (3 + 1) / 2  // 1-2위 공동: 2점
+                      else if (rank === 1) pts = (1 + 0) / 2  // 2-3위 공동: 0.5점
+                    }
+                    
+                    teamGamePoints[teamIdx].push(pts)
+                    teamGames[teamIdx].push({ points: pts, scored: score, conceded: avgConceded })
+                    totalPts[teamIdx] += pts
+                  })
+                  
+                } else if (playingTeams.length === 2) {
+                  // 2팀 대결 (로테이션): 승자 3점, 무승부 1점, 패자 0점
+                  const [team1, team2] = playingTeams
+                  const a = team1.teamIdx
+                  const b = team2.teamIdx
+                  const aVal = team1.score
+                  const bVal = team2.score
+                  
+                  const aScore = Number(aVal)
+                  const bScore = Number(bVal)
+                  if (!Number.isFinite(aScore) || !Number.isFinite(bScore)) continue
+                  
+                  gp[a]+=1; gp[b]+=1
+                  goalScored[a] += aScore
+                  goalScored[b] += bScore
+                  goalConceded[a] += bScore
+                  goalConceded[b] += aScore
+                  
+                  let aPts = 0, bPts = 0
+                  if(aScore>bScore) { aPts=3; bPts=0 }
+                  else if(bScore>aScore) { aPts=0; bPts=3 }
+                  else { aPts=1; bPts=1 }
+                  
+                  teamGamePoints[a].push(aPts)
+                  teamGamePoints[b].push(bPts)
+                  teamGames[a].push({ points: aPts, scored: aScore, conceded: bScore })
+                  teamGames[b].push({ points: bPts, scored: bScore, conceded: aScore })
+                  totalPts[a]+=aPts
+                  totalPts[b]+=bPts
+                } else {
+                  console.log(`[3Team Skip] Q${qi} skipped - expected 2 or 3 teams, got ${playingTeams.length}`)
+                }
               }
             } else if (isFourPlusWithMatchups) {
               // 4팀+: 매치업 기반 - 구장 분리 체크
@@ -1628,11 +1759,43 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               }
             }
             
-            let weightedPts = totalPts
+            // 골득실 계산 (먼저 계산)
+            const goalDifference = goalScored.map((scored, i) => scored - goalConceded[i])
+            
+            let weightedPts = totalPts.slice()
+            let weightedGoalDiff = goalDifference.slice()
+            let weightedGoalsScored = goalScored.slice()  // 가중치 득점 추가
             const minGames = Math.min(...gp.filter(g => g > 0))
             const unequalGP = gp.some(v=>v!==gp[0])
             
-            if (unequalGP && minGames > 0) {
+            if (unequalGP && minGames > 0 && isThreeTeams && teamGames) {
+              // 게임 품질 비교: 1) 승점, 2) 골득실, 3) 득점
+              const compareGames = (g1, g2) => {
+                if (g2.points !== g1.points) return g2.points - g1.points
+                const diff2 = g2.scored - g2.conceded
+                const diff1 = g1.scored - g1.conceded
+                if (diff2 !== diff1) return diff2 - diff1
+                if (g2.scored !== g1.scored) return g2.scored - g1.scored
+                return 0
+              }
+              
+              const summarizeTopGames = (games, count) => {
+                if (!games || !games.length || !count || count <= 0) return { points: 0, goalDiff: 0, goalsScored: 0 }
+                const sorted = [...games].sort(compareGames)
+                const selected = sorted.slice(0, count)
+                return {
+                  points: selected.reduce((sum, g) => sum + g.points, 0),
+                  goalDiff: selected.reduce((sum, g) => sum + (g.scored - g.conceded), 0),
+                  goalsScored: selected.reduce((sum, g) => sum + g.scored, 0)  // 득점 합계 추가
+                }
+              }
+              
+              const summaries = teamGames.map(games => summarizeTopGames(games, minGames))
+              weightedPts = summaries.map(s => s.points)
+              weightedGoalDiff = summaries.map(s => s.goalDiff)
+              weightedGoalsScored = summaries.map(s => s.goalsScored)  // 가중치 득점
+            } else if (unequalGP && minGames > 0) {
+              // 기존 방식 (승점만 정렬)
               weightedPts = teamGamePoints.map(pts => {
                 if (pts.length === 0) return 0
                 const sorted = [...pts].sort((a,b) => b - a)
@@ -1640,11 +1803,21 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               })
             }
             
-            // 골득실 계산
-            const goalDifference = goalScored.map((scored, i) => scored - goalConceded[i])
-            
-            return { totalPts, weightedPts, gp, minGames, teamGamePoints, goalDifference, fieldNames }
+            return { 
+              totalPts, 
+              weightedPts, 
+              gp, 
+              minGames, 
+              teamGamePoints, 
+              goalDifference, 
+              weightedGoalDiff,
+              goalScored,  // 전체 득점
+              weightedGoalsScored,  // 가중치 득점 (최고 경기들만)
+              fieldNames 
+            }
           })() : null
+          
+          
           const unequalGP = points ? points.gp.some(v=>v!==points.gp[0]) : false
           
           // Calculate quarter wins for each team
@@ -1681,8 +1854,13 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
             const maxBestDiff = Math.max(...bestGoalDiffs)
             return bestGoalDiffs.map((diff, i) => diff === maxBestDiff ? i : -1).filter(i => i >= 0)
           })()
+          
+          // 타이브레이커 정보를 추적
+          let tiebreakerInfo = { method: null, data: {} }
+          
           const pointWinners = (isThreeTeams || isFourPlusWithMatchups) ? (()=>{
             // 구장별 분리 체크
+            if (!points) return []
             const hasFieldSeparation = points.fieldNames.some(f => f !== '')
             
             if (hasFieldSeparation) {
@@ -1706,10 +1884,20 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   topCandidates = candidates.filter(i => points.totalPts[i] === maxPts)
                 }
                 
+                // 1단계 타이브레이커: 골득실
                 if (topCandidates.length > 1) {
-                  const maxGoalDiff = Math.max(...topCandidates.map(i => points.goalDifference[i]))
-                  return topCandidates.filter(i => points.goalDifference[i] === maxGoalDiff)
+                  const gdArray = unequalGP ? points.weightedGoalDiff : points.goalDifference
+                  const maxGoalDiff = Math.max(...topCandidates.map(i => gdArray[i]))
+                  topCandidates = topCandidates.filter(i => gdArray[i] === maxGoalDiff)
                 }
+                
+                // 2단계 타이브레이커: 총 득점 (골득실이 같으면)
+                if (topCandidates.length > 1) {
+                  const goalsArray = unequalGP ? points.weightedGoalsScored : points.goalScored
+                  const maxGoals = Math.max(...topCandidates.map(i => goalsArray[i]))
+                  topCandidates = topCandidates.filter(i => goalsArray[i] === maxGoals)
+                }
+                
                 return topCandidates
               }
               
@@ -1728,11 +1916,38 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                 topCandidates = points.totalPts.map((p,i)=>p===maxPts?i:-1).filter(i=>i>=0)
               }
               
-              // 승점 동점일 때 골득실로 승자 결정
+              // 1단계 타이브레이커: 골득실
               if (topCandidates.length > 1) {
-                const maxGoalDiff = Math.max(...topCandidates.map(i => points.goalDifference[i]))
-                return topCandidates.filter(i => points.goalDifference[i] === maxGoalDiff)
+                const gdArray = unequalGP ? points.weightedGoalDiff : points.goalDifference
+                const maxGoalDiff = Math.max(...topCandidates.map(i => gdArray[i]))
+                const beforeGD = topCandidates.length
+                topCandidates = topCandidates.filter(i => gdArray[i] === maxGoalDiff)
+                
+                // 골득실로 결정됨
+                if (beforeGD > topCandidates.length && topCandidates.length === 1) {
+                  tiebreakerInfo = {
+                    method: 'goalDifference',
+                    data: { winner: topCandidates[0], gd: gdArray[topCandidates[0]] }
+                  }
+                }
               }
+              
+              // 2단계 타이브레이커: 총 득점 (골득실이 같으면)
+              if (topCandidates.length > 1) {
+                const goalsArray = unequalGP ? points.weightedGoalsScored : points.goalScored
+                const maxGoals = Math.max(...topCandidates.map(i => goalsArray[i]))
+                const beforeGoals = topCandidates.length
+                topCandidates = topCandidates.filter(i => goalsArray[i] === maxGoals)
+                
+                // 총 득점으로 결정됨
+                if (beforeGoals > topCandidates.length && topCandidates.length >= 1) {
+                  tiebreakerInfo = {
+                    method: 'goalsScored',
+                    data: { winners: topCandidates, goalsArray }
+                  }
+                }
+              }
+              
               return topCandidates
             }
           })() : []
@@ -1760,18 +1975,24 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                          )
                        }
                        // 통합 승자 표시
-                       return pointWinners.length === 1 ? (
-                         <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 border border-amber-300">
-                           <span className="text-amber-600 text-xs">🏆</span>
-                           <span className="text-xs font-bold text-amber-900">{t('matchHistory.teamWin',{ n: pointWinners[0] + 1 })}</span>
-                         </div>
-                       ) : pointWinners.length > 1 ? (
-                         <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-200 border border-gray-300">
-                           <span className="text-xs font-bold text-gray-700">
-                             {t('matchHistory.teamsDraw',{ teams: pointWinners.map(i => `${t('matchHistory.team')} ${i + 1}`).join(', ') })}
-                           </span>
-                         </div>
-                       ) : null
+                       if (pointWinners.length === 1) {
+                         return (
+                           <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 border border-amber-300">
+                             <span className="text-amber-600 text-xs">🏆</span>
+                             <span className="text-xs font-bold text-amber-900">{t('matchHistory.teamWin',{ n: pointWinners[0] + 1 })}</span>
+                           </div>
+                         )
+                       } else if (pointWinners.length > 1) {
+                         return (
+                           <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-200 border border-gray-300">
+                             <span className="text-xs font-bold text-gray-700">
+                               {t('matchHistory.teamsDraw',{ teams: pointWinners.map(i => `${t('matchHistory.team')} ${i + 1}`).join(', ') })}
+                             </span>
+                           </div>
+                         )
+                       } else {
+                         return null
+                       }
                      })()
                    ) : isMultiTeam ? (
                      bestDiffWinners.length === 1 ? (
@@ -1850,33 +2071,11 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       const arr = displayedQuarterScores[ti]
                       const teamTotal = teamTotals[ti]
                       
-                      // 승/무/패 결정 (구장별)
+                      // 승/무/패 결정 (구장별) - pointWinners 재사용
                       let matchResult = null
-                      const myField = points.fieldNames[ti]
-                      const fieldTeams = points.fieldNames.map((f, i) => f === myField ? i : -1).filter(i => i >= 0)
                       
-                      let topTeams = []
-                      if (unequalGP) {
-                        const maxWPts = Math.max(...fieldTeams.map(i => points.weightedPts[i]))
-                        topTeams = fieldTeams.filter(i => points.weightedPts[i] === maxWPts)
-                      } else {
-                        const maxPts = Math.max(...fieldTeams.map(i => points.totalPts[i]))
-                        topTeams = fieldTeams.filter(i => points.totalPts[i] === maxPts)
-                      }
-                      
-                      if (topTeams.length > 1) {
-                        const maxGoalDiff = Math.max(...topTeams.map(i => points.goalDifference[i]))
-                        const winnersAfterGD = topTeams.filter(i => points.goalDifference[i] === maxGoalDiff)
-                        
-                        if (winnersAfterGD.length === 1 && winnersAfterGD.includes(ti)) {
-                          matchResult = 'W'
-                        } else if (winnersAfterGD.length > 1 && winnersAfterGD.includes(ti)) {
-                          matchResult = 'D'
-                        } else {
-                          matchResult = 'L'
-                        }
-                      } else if (topTeams.length === 1 && topTeams.includes(ti)) {
-                        matchResult = 'W'
+                      if (pointWinners.includes(ti)) {
+                        matchResult = pointWinners.length === 1 ? 'W' : 'D'
                       } else {
                         matchResult = 'L'
                       }
@@ -1886,6 +2085,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       const thisWeightedPts = unequalGP ? points.weightedPts[ti] : 0
                       
                       // 쿼터 승리 표시: 구장 분리 시에는 같은 구장 팀끼리만 비교해야 함 (기존에는 전체 팀 비교 -> 버그)
+                      const myField = points.fieldNames[ti]
                       const wonQuarters = Array.from({length: maxQ}).map((_, qi) => {
                         const myFieldTeams = points.fieldNames.map((f, idx) => f === myField ? idx : -1).filter(idx => idx >= 0)
                         if (myFieldTeams.length === 0) return false
@@ -1957,11 +2157,11 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                             )}
                             <div className="w-12 text-center">
                               <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold ${
-                                points.goalDifference[ti] > 0 ? 'bg-blue-100 text-blue-700' : 
-                                points.goalDifference[ti] < 0 ? 'bg-red-100 text-red-700' : 
+                                points && (unequalGP ? points.weightedGoalDiff[ti] : points.goalDifference[ti]) > 0 ? 'bg-blue-100 text-blue-700' : 
+                                points && (unequalGP ? points.weightedGoalDiff[ti] : points.goalDifference[ti]) < 0 ? 'bg-red-100 text-red-700' : 
                                 'bg-gray-100 text-gray-500'
                               }`}>
-                                {points.goalDifference[ti] > 0 ? '+' : ''}{points.goalDifference[ti]}
+                                {points && (unequalGP ? points.weightedGoalDiff[ti] : points.goalDifference[ti]) > 0 ? '+' : ''}{points ? (unequalGP ? points.weightedGoalDiff[ti] : points.goalDifference[ti]) : 0}
                               </span>
                             </div>
                             <div className="w-8 text-right text-sm font-semibold">{teamTotal}</div>
@@ -1997,72 +2197,14 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       {displayedQuarterScores.map((arr,ti)=>{
                   const teamTotal = teamTotals[ti]
                   
-                  // 승/무/패 결정
+                  // 승/무/패 결정 - pointWinners 재사용 (모든 타이브레이커 포함)
                   let matchResult = null // 'W', 'D', 'L'
                   if (isThreeTeams || isFourPlusWithMatchups) {
-                    // 구장 분리 체크
-                    const hasFieldSeparation = points.fieldNames.some(f => f !== '')
-                    
-                    if (hasFieldSeparation) {
-                      // 구장별로 승자 판정
-                      const myField = points.fieldNames[ti]
-                      const fieldTeams = points.fieldNames.map((f, i) => f === myField ? i : -1).filter(i => i >= 0)
-                      
-                      // 같은 구장 내에서만 비교
-                      let topTeams = []
-                      if (unequalGP) {
-                        const maxWPts = Math.max(...fieldTeams.map(i => points.weightedPts[i]))
-                        topTeams = fieldTeams.filter(i => points.weightedPts[i] === maxWPts)
-                      } else {
-                        const maxPts = Math.max(...fieldTeams.map(i => points.totalPts[i]))
-                        topTeams = fieldTeams.filter(i => points.totalPts[i] === maxPts)
-                      }
-                      
-                      // 승점 동점일 때 골득실로 승자 결정
-                      if (topTeams.length > 1) {
-                        const maxGoalDiff = Math.max(...topTeams.map(i => points.goalDifference[i]))
-                        const winnersAfterGD = topTeams.filter(i => points.goalDifference[i] === maxGoalDiff)
-                        
-                        if (winnersAfterGD.length === 1 && winnersAfterGD.includes(ti)) {
-                          matchResult = 'W' // 골득실로 단독 승자
-                        } else if (winnersAfterGD.length > 1 && winnersAfterGD.includes(ti)) {
-                          matchResult = 'D' // 골득실까지 동점
-                        } else {
-                          matchResult = 'L' // 패배
-                        }
-                      } else if (topTeams.length === 1 && topTeams.includes(ti)) {
-                        matchResult = 'W' // 단독 1등 승리
-                      } else {
-                        matchResult = 'L' // 패배
-                      }
+                    // pointWinners가 이미 모든 타이브레이커를 적용했으므로 직접 사용
+                    if (pointWinners.includes(ti)) {
+                      matchResult = pointWinners.length === 1 ? 'W' : 'D'  // 단독 승자 또는 공동 우승
                     } else {
-                      // 통합 승점 기반 (골득실 타이브레이커 포함)
-                      let topTeams = []
-                      if (unequalGP) {
-                        const maxWPts = Math.max(...points.weightedPts)
-                        topTeams = points.weightedPts.map((p, i) => p === maxWPts ? i : -1).filter(i => i >= 0)
-                      } else {
-                        const maxPts = Math.max(...points.totalPts)
-                        topTeams = points.totalPts.map((p, i) => p === maxPts ? i : -1).filter(i => i >= 0)
-                      }
-                      
-                      // 승점 동점일 때 골득실로 승자 결정
-                      if (topTeams.length > 1) {
-                        const maxGoalDiff = Math.max(...topTeams.map(i => points.goalDifference[i]))
-                        const winnersAfterGD = topTeams.filter(i => points.goalDifference[i] === maxGoalDiff)
-                        
-                        if (winnersAfterGD.length === 1 && winnersAfterGD.includes(ti)) {
-                          matchResult = 'W' // 골득실로 단독 승자
-                        } else if (winnersAfterGD.length > 1 && winnersAfterGD.includes(ti)) {
-                          matchResult = 'D' // 골득실까지 동점
-                        } else {
-                          matchResult = 'L' // 패배
-                        }
-                      } else if (topTeams.length === 1 && topTeams.includes(ti)) {
-                        matchResult = 'W' // 단독 1등 승리
-                      } else {
-                        matchResult = 'L' // 패배
-                      }
+                      matchResult = 'L'  // 패배
                     }
                   } else if (isMultiTeam) {
                     // 최고 골득실 기반 (4팀+ 단일 경기장)
@@ -2091,14 +2233,14 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   }
                   
                   const isWinner = (isThreeTeams || isFourPlusWithMatchups)
-                    ? (pointWinners.length === 1 && pointWinners[0] === ti)
+                    ? pointWinners.includes(ti)  // 공동 우승 포함
                     : (isMultiTeam 
-                        ? (bestDiffWinners.length === 1 && bestDiffWinners[0] === ti)
-                        : (winners.length === 1 && winners[0] === ti))
+                        ? bestDiffWinners.includes(ti)  // 공동 우승 포함
+                        : winners.includes(ti))  // 공동 우승 포함
                   const quarterWins = allTeamQuarterWins[ti]
                   const bestDiff = (!isThreeTeams && !isFourPlusWithMatchups && isMultiTeam) ? bestGoalDiffs[ti] : 0
-                  const totalPts = (isThreeTeams || isFourPlusWithMatchups) ? points.totalPts[ti] : 0
-                  const thisWeightedPts = (isThreeTeams || isFourPlusWithMatchups) && unequalGP ? points.weightedPts[ti] : 0
+                  const totalPts = (isThreeTeams || isFourPlusWithMatchups) && points ? points.totalPts[ti] : 0
+                  const thisWeightedPts = (isThreeTeams || isFourPlusWithMatchups) && points && unequalGP ? points.weightedPts[ti] : 0
                   
                   // Calculate which quarters this team won
                   const wonQuarters = Array.from({length: maxQ}).map((_,qi) => {
@@ -2191,11 +2333,11 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                             )}
                             <div className="w-12 text-center">
                               <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold ${
-                                points.goalDifference[ti] > 0 ? 'bg-blue-100 text-blue-700' : 
-                                points.goalDifference[ti] < 0 ? 'bg-red-100 text-red-700' : 
+                                points && (unequalGP ? points.weightedGoalDiff[ti] : points.goalDifference[ti]) > 0 ? 'bg-blue-100 text-blue-700' : 
+                                points && (unequalGP ? points.weightedGoalDiff[ti] : points.goalDifference[ti]) < 0 ? 'bg-red-100 text-red-700' : 
                                 'bg-gray-100 text-gray-500'
                               }`}>
-                                {points.goalDifference[ti] > 0 ? '+' : ''}{points.goalDifference[ti]}
+                                {points && (unequalGP ? points.weightedGoalDiff[ti] : points.goalDifference[ti]) > 0 ? '+' : ''}{points ? (unequalGP ? points.weightedGoalDiff[ti] : points.goalDifference[ti]) : 0}
                               </span>
                             </div>
                           </>
@@ -2228,19 +2370,34 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               
               {/* 하단 설명 */}
               {isThreeTeams && (
-                <div className="mt-2 pt-2 border-t border-gray-200">
+                <div className="mt-2 pt-2 border-t border-gray-200 space-y-2">
+                  {/* 가중 승점 안내 */}
                   <div className="text-[10px] text-gray-600 text-center">
                     {unequalGP ? (
                       <>
-                        💡 팀별 경기수가 다를 때는 각 팀의 최고 성적 <span className="font-semibold text-purple-700">{points.minGames}경기</span>만 비교합니다
+                        <div>{t('matchHistory.weightedGamesNote', { minGames: points.minGames })}</div>
                         <div className="mt-0.5 text-purple-600 font-medium">
-                          예: T1과 T2가 3경기, T3가 2경기 → 모든 팀의 최고 2경기만 승점 비교
+                          {t('matchHistory.weightedGamesExample')}
                         </div>
                       </>
                     ) : (
-                      '💡 3팀일 때는 승점(승3·무1·패0)으로 승자를 결정합니다'
+                      <div>{t('matchHistory.pointsSystemInfo')}</div>
                     )}
                   </div>
+                  
+                  {/* 타이브레이커 규칙 - 실제로 발동되었을 때만 표시 */}
+                  {(tiebreakerInfo.method === 'goalDifference' || tiebreakerInfo.method === 'goalsScored') && (
+                    <div className="text-[10px] bg-blue-50 rounded px-2 py-1.5 border border-blue-100">
+                      <div className="text-gray-700 text-center">
+                        {tiebreakerInfo.method === 'goalsScored' && (
+                          <span>🎯 {t('matchHistory.decidedByGoalsScored')}</span>
+                        )}
+                        {tiebreakerInfo.method === 'goalDifference' && (
+                          <span>📊 {t('matchHistory.decidedByGoalDiff')}</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -2414,18 +2571,71 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
             const gameMatchups = m?.gameMatchups || null
             
             if (teamLen === 3) {
-              // points-based for 3 teams
-              const pts=[0,0,0]
-              const pairs=[[0,1],[1,2],[0,2]]
-              for(let qi=0; qi<maxQ; qi++){
-                const [a,b]=pairs[qi%3]
-                const aScore=Number(quarterScores[a]?.[qi] ?? 0)
-                const bScore=Number(quarterScores[b]?.[qi] ?? 0)
-                if(aScore>bScore) pts[a]+=3; else if(bScore>aScore) pts[b]+=3; else { pts[a]+=1; pts[b]+=1 }
+              // 3팀: 위에서 계산한 pointWinners 재사용
+              // 하지만 스코프 문제로 여기서 다시 계산 (동일한 로직)
+              // null 체크로 rotation vs battle royale 구분
+              const hasNulls = quarterScores.some(teamScores => 
+                Array.isArray(teamScores) && teamScores.some(s => s === null)
+              )
+              
+              if (hasNulls) {
+                // Rotation format: 동적으로 페어 찾기
+                const pts = [0, 0, 0]
+                const goalScored = [0, 0, 0]
+                const goalConceded = [0, 0, 0]
+                
+                for (let qi = 0; qi < maxQ; qi++) {
+                  const playingTeams = quarterScores.map((teamScores, ti) => ({
+                    teamIdx: ti,
+                    score: Array.isArray(teamScores) ? teamScores[qi] : (qi === 0 ? teamScores : null)
+                  })).filter(t => t.score !== null)
+                  
+                  if (playingTeams.length === 2) {
+                    const [t1, t2] = playingTeams
+                    goalScored[t1.teamIdx] += t1.score
+                    goalScored[t2.teamIdx] += t2.score
+                    goalConceded[t1.teamIdx] += t2.score
+                    goalConceded[t2.teamIdx] += t1.score
+                    
+                    if (t1.score > t2.score) pts[t1.teamIdx] += 3
+                    else if (t2.score > t1.score) pts[t2.teamIdx] += 3
+                    else { pts[t1.teamIdx] += 1; pts[t2.teamIdx] += 1 }
+                  }
+                }
+                
+                // 타이브레이커: 승점 → 골득실 → 총 득점
+                const maxPts = Math.max(...pts)
+                let winners = pts.map((p, idx) => p === maxPts ? idx : -1).filter(idx => idx >= 0)
+                
+                if (winners.length > 1) {
+                  const goalDiff = winners.map(idx => goalScored[idx] - goalConceded[idx])
+                  const maxGD = Math.max(...goalDiff)
+                  winners = winners.filter((_, wIdx) => goalDiff[wIdx] === maxGD)
+                  
+                  if (winners.length > 1) {
+                    const maxGoals = Math.max(...winners.map(idx => goalScored[idx]))
+                    winners = winners.filter(idx => goalScored[idx] === maxGoals)
+                  }
+                }
+                
+                isWinner = winners.length === 1 && winners[0] === i
+              } else {
+                // Battle royale: 3팀 동시 경기
+                // 간단하게 승점만 계산 (battle royale는 보통 타이브레이커 불필요)
+                const pts = [0, 0, 0]
+                for (let qi = 0; qi < maxQ; qi++) {
+                  const scores = quarterScores.map(ts => Number(Array.isArray(ts) ? ts[qi] : (qi === 0 ? ts : 0)))
+                  const sorted = [...scores].sort((a, b) => b - a)
+                  
+                  scores.forEach((s, idx) => {
+                    if (s === sorted[0] && scores.filter(x => x === sorted[0]).length === 1) pts[idx] += 3
+                    else if (s === sorted[1] && scores.filter(x => x === sorted[1]).length === 1) pts[idx] += 1
+                  })
+                }
+                const maxPts = Math.max(...pts)
+                const winners = pts.map((p, idx) => p === maxPts ? idx : -1).filter(idx => idx >= 0)
+                isWinner = winners.length === 1 && winners[0] === i
               }
-              const maxPts=Math.max(...pts)
-              const winners=pts.map((p,idx)=>p===maxPts?idx:-1).filter(idx=>idx>=0)
-              isWinner = winners.length===1 && winners[0]===i
             } else if (teamLen >= 4 && gameMatchups && Array.isArray(gameMatchups) && gameMatchups.length > 0) {
               // 4팀+ 매치업 모드: 구장 분리 체크
               const separation = checkFieldSeparation(gameMatchups, teamLen)

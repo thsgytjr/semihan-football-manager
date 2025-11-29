@@ -478,49 +478,94 @@ export function winnerIndexFromQuarterScores(qs, gameMatchups = null) {
   if (teamLen === 3) {
     const pairs = [ [0,1], [1,2], [0,2] ]
     
-    // 각 팀별로 각 게임의 승점을 기록 (나중에 가중 승점 계산 시 필요)
-    const teamGamePoints = [[], [], []]
+    // 각 팀별로 각 게임의 승점과 골득실을 기록 (나중에 가중 승점 계산 시 필요)
+    const teamGames = [[], [], []] // 각 게임 정보: {points, scored, conceded}
     const gamesPlayed = [0, 0, 0]
+    const totalsByTeam = [0, 0, 0]
     
     for (let qi = 0; qi < maxQ; qi++) {
       const [a, b] = pairs[qi % 3]
-      const aScore = Number(qs[a]?.[qi] ?? 0)
-      const bScore = Number(qs[b]?.[qi] ?? 0)
+      // null/undefined는 경기하지 않은 것으로 처리
+      const aVal = qs[a]?.[qi]
+      const bVal = qs[b]?.[qi]
+      if (aVal === null || aVal === undefined || bVal === null || bVal === undefined) continue
+      
+      const aScore = Number(aVal)
+      const bScore = Number(bVal)
+      if (!Number.isFinite(aScore) || !Number.isFinite(bScore)) continue
       
       gamesPlayed[a] += 1
       gamesPlayed[b] += 1
+      totalsByTeam[a] += aScore
+      totalsByTeam[b] += bScore
       
       let aPts = 0, bPts = 0
       if (aScore > bScore) { aPts = 3; bPts = 0 }
       else if (bScore > aScore) { aPts = 0; bPts = 3 }
       else { aPts = 1; bPts = 1 }
       
-      teamGamePoints[a].push(aPts)
-      teamGamePoints[b].push(bPts)
+      teamGames[a].push({ points: aPts, scored: aScore, conceded: bScore })
+      teamGames[b].push({ points: bPts, scored: bScore, conceded: aScore })
     }
 
     const allEqualGames = gamesPlayed.every(g => g === gamesPlayed[0])
+    const validGames = gamesPlayed.filter(g => g > 0)
+    if (validGames.length === 0) return -1 // 아무도 경기하지 않음
     
     if (allEqualGames) {
       // 모든 팀이 같은 경기 수 → 총 승점으로 비교
-      const totalPoints = teamGamePoints.map(pts => pts.reduce((a,b)=>a+b, 0))
+      const totalPoints = teamGames.map(games => games.reduce((sum, g) => sum + g.points, 0))
       const maxPts = Math.max(...totalPoints)
-      const winners = totalPoints.map((p,i)=>p===maxPts?i:-1).filter(i=>i>=0)
+      let winners = totalPoints.map((p,i)=>p===maxPts?i:-1).filter(i=>i>=0)
+      
+      // 승점 동점일 때 골득실로 판단
+      if (winners.length > 1) {
+        const goalDiff = teamGames.map(games => games.reduce((sum, g) => sum + (g.scored - g.conceded), 0))
+        const maxGD = Math.max(...winners.map(i => goalDiff[i]))
+        winners = winners.filter(i => goalDiff[i] === maxGD)
+      }
+      
       return winners.length === 1 ? winners[0] : -1
     }
 
     // 게임 수가 다른 경우: 가중 승점 (Weighted Points)
     // 최소 게임 수에 맞춰 각 팀의 최고 성적 게임만 선택
-    const minGames = Math.min(...gamesPlayed)
-    const weightedPoints = teamGamePoints.map(pts => {
-      if (pts.length === 0) return 0
-      // 각 팀의 게임별 승점을 내림차순 정렬 후 상위 minGames개만 합산
-      const sorted = [...pts].sort((a,b) => b - a)
-      return sorted.slice(0, minGames).reduce((a,b) => a + b, 0)
-    })
+    const minGames = Math.min(...validGames)
+    if (minGames <= 0) return -1
+    
+    // 게임 품질 비교: 1) 승점, 2) 골득실, 3) 득점
+    const compareGames = (g1, g2) => {
+      if (g2.points !== g1.points) return g2.points - g1.points
+      const diff2 = g2.scored - g2.conceded
+      const diff1 = g1.scored - g1.conceded
+      if (diff2 !== diff1) return diff2 - diff1
+      if (g2.scored !== g1.scored) return g2.scored - g1.scored
+      return 0
+    }
+    
+    const summarizeTopGames = (games, count) => {
+      if (!games.length || !count || count <= 0) return { points: 0, goalDiff: 0 }
+      const sorted = [...games].sort(compareGames)
+      const selected = sorted.slice(0, count)
+      return {
+        points: selected.reduce((sum, g) => sum + g.points, 0),
+        goalDiff: selected.reduce((sum, g) => sum + (g.scored - g.conceded), 0)
+      }
+    }
+    
+    const summaries = teamGames.map(games => summarizeTopGames(games, minGames))
+    const weightedPoints = summaries.map(s => s.points)
+    const weightedGoalDiff = summaries.map(s => s.goalDiff)
     
     const maxWPts = Math.max(...weightedPoints)
     let candidates = weightedPoints.map((p,i)=>p===maxWPts?i:-1).filter(i=>i>=0)
+    
+    // 가중 승점 동점일 때 가중 골득실로 판단
+    if (candidates.length > 1) {
+      const maxGD = Math.max(...candidates.map(i => weightedGoalDiff[i]))
+      candidates = candidates.filter(i => weightedGoalDiff[i] === maxGD)
+    }
+    
     if (candidates.length === 1) return candidates[0]
 
     // 동률이면 타이브레이커 1: 동률 팀들 간 맞대결(H2H) 승점 비교

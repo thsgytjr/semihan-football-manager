@@ -328,7 +328,16 @@
     "field2": "Field 2",
     "teamN": "Team {{n}}",
     "weightedPointsShort": "Weighted Pts",
-    "compareTopMatches": "Only top {{minGames}} matches per team are compared"
+    "compareTopMatches": "Only top {{minGames}} matches per team are compared",
+    "tiebreakerRules": "🎯 Tiebreaker Rules",
+    "tiebreakerStep1": "1️⃣ Points (W3·D1·L0)",
+    "tiebreakerStep2": "2️⃣ Goal Difference (GF - GA)",
+    "tiebreakerStep3": "3️⃣ Goals Scored",
+    "tiebreakerStep4": "4️⃣ Tied (Draw)",
+    "weightedGamesNote": "💡 When teams play different number of games, only top {{minGames}} performances are compared",
+    "weightedGamesExample": "e.g., T1 & T2 play 3, T3 plays 2 → Compare top 2 games for all teams",
+    "decidedByGoalDiff": "Decided by goal difference",
+    "decidedByGoalsScored": "Decided by goals scored"
   },
   "mom": {
     "popup": {
