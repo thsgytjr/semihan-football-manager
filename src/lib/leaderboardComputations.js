@@ -474,38 +474,94 @@ export function winnerIndexFromQuarterScores(qs, gameMatchups = null) {
     return final.length === 1 ? final[0] : -1
   }
   
-  // 3팀 경기: 승점제로 승자 결정 (패턴: G1 0vs1, G2 1vs2, G3 0vs2, 반복)
+  // 3팀 경기: 승점제로 승자 결정
   if (teamLen === 3) {
-    const pairs = [ [0,1], [1,2], [0,2] ]
-    
     // 각 팀별로 각 게임의 승점과 골득실을 기록 (나중에 가중 승점 계산 시 필요)
     const teamGames = [[], [], []] // 각 게임 정보: {points, scored, conceded}
     const gamesPlayed = [0, 0, 0]
     const totalsByTeam = [0, 0, 0]
     
-    for (let qi = 0; qi < maxQ; qi++) {
-      const [a, b] = pairs[qi % 3]
-      // null/undefined는 경기하지 않은 것으로 처리
-      const aVal = qs[a]?.[qi]
-      const bVal = qs[b]?.[qi]
-      if (aVal === null || aVal === undefined || bVal === null || bVal === undefined) continue
-      
-      const aScore = Number(aVal)
-      const bScore = Number(bVal)
-      if (!Number.isFinite(aScore) || !Number.isFinite(bScore)) continue
-      
-      gamesPlayed[a] += 1
-      gamesPlayed[b] += 1
-      totalsByTeam[a] += aScore
-      totalsByTeam[b] += bScore
-      
-      let aPts = 0, bPts = 0
-      if (aScore > bScore) { aPts = 3; bPts = 0 }
-      else if (bScore > aScore) { aPts = 0; bPts = 3 }
-      else { aPts = 1; bPts = 1 }
-      
-      teamGames[a].push({ points: aPts, scored: aScore, conceded: bScore })
-      teamGames[b].push({ points: bPts, scored: bScore, conceded: aScore })
+    // null 체크로 rotation vs battle royale 구분
+    const hasNulls = qs.some(teamScores => 
+      Array.isArray(teamScores) && teamScores.some(s => s === null)
+    )
+    
+    if (hasNulls) {
+      // Rotation 모드: null이 있는 경우 동적으로 경기 쌍 감지
+      for (let qi = 0; qi < maxQ; qi++) {
+        const scores = qs.map(arr => Array.isArray(arr) ? arr[qi] : undefined)
+        const playingTeams = []
+        
+        for (let ti = 0; ti < 3; ti++) {
+          if (scores[ti] !== null && scores[ti] !== undefined) {
+            playingTeams.push(ti)
+          }
+        }
+        
+        // 정확히 2팀이 경기하는 경우만 처리
+        if (playingTeams.length === 2) {
+          const [a, b] = playingTeams
+          const aScore = Number(scores[a])
+          const bScore = Number(scores[b])
+          
+          if (!Number.isFinite(aScore) || !Number.isFinite(bScore)) continue
+          
+          gamesPlayed[a] += 1
+          gamesPlayed[b] += 1
+          totalsByTeam[a] += aScore
+          totalsByTeam[b] += bScore
+          
+          let aPts = 0, bPts = 0
+          if (aScore > bScore) { aPts = 3; bPts = 0 }
+          else if (bScore > aScore) { aPts = 0; bPts = 3 }
+          else { aPts = 1; bPts = 1 }
+          
+          teamGames[a].push({ points: aPts, scored: aScore, conceded: bScore })
+          teamGames[b].push({ points: bPts, scored: bScore, conceded: aScore })
+        }
+      }
+    } else {
+      // Battle royale 모드: 모든 팀이 동시에 경기
+      for (let qi = 0; qi < maxQ; qi++) {
+        const scores = qs.map(arr => Array.isArray(arr) ? Number(arr[qi] || 0) : 0)
+        
+        // 각 쿼터를 3팀 동시 경기로 처리 (순위 기반 승점)
+        const ranked = scores.map((score, idx) => ({ idx, score }))
+          .sort((a, b) => b.score - a.score)
+        
+        // 1등: 3점, 2등: 1점, 3등: 0점
+        const points = [0, 0, 0]
+        if (ranked[0].score > ranked[1].score) {
+          points[ranked[0].idx] = 3
+          if (ranked[1].score > ranked[2].score) {
+            points[ranked[1].idx] = 1
+          } else if (ranked[1].score === ranked[2].score) {
+            points[ranked[1].idx] = 1
+            points[ranked[2].idx] = 1
+          }
+        } else if (ranked[0].score === ranked[1].score && ranked[1].score > ranked[2].score) {
+          points[ranked[0].idx] = 1
+          points[ranked[1].idx] = 1
+        } else if (ranked[0].score === ranked[1].score && ranked[1].score === ranked[2].score) {
+          points[0] = 1
+          points[1] = 1
+          points[2] = 1
+        }
+        
+        for (let ti = 0; ti < 3; ti++) {
+          gamesPlayed[ti] += 1
+          totalsByTeam[ti] += scores[ti]
+          
+          const otherScores = scores.filter((_, idx) => idx !== ti)
+          const avgConceded = otherScores.reduce((a, b) => a + b, 0) / otherScores.length
+          
+          teamGames[ti].push({ 
+            points: points[ti], 
+            scored: scores[ti], 
+            conceded: avgConceded 
+          })
+        }
+      }
     }
 
     const allEqualGames = gamesPlayed.every(g => g === gamesPlayed[0])
@@ -518,11 +574,18 @@ export function winnerIndexFromQuarterScores(qs, gameMatchups = null) {
       const maxPts = Math.max(...totalPoints)
       let winners = totalPoints.map((p,i)=>p===maxPts?i:-1).filter(i=>i>=0)
       
-      // 승점 동점일 때 골득실로 판단
+      // 1단계 타이브레이커: 골득실
       if (winners.length > 1) {
         const goalDiff = teamGames.map(games => games.reduce((sum, g) => sum + (g.scored - g.conceded), 0))
         const maxGD = Math.max(...winners.map(i => goalDiff[i]))
         winners = winners.filter(i => goalDiff[i] === maxGD)
+      }
+      
+      // 2단계 타이브레이커: 총 득점
+      if (winners.length > 1) {
+        const goalsScored = teamGames.map(games => games.reduce((sum, g) => sum + g.scored, 0))
+        const maxGS = Math.max(...winners.map(i => goalsScored[i]))
+        winners = winners.filter(i => goalsScored[i] === maxGS)
       }
       
       return winners.length === 1 ? winners[0] : -1
@@ -544,57 +607,69 @@ export function winnerIndexFromQuarterScores(qs, gameMatchups = null) {
     }
     
     const summarizeTopGames = (games, count) => {
-      if (!games.length || !count || count <= 0) return { points: 0, goalDiff: 0 }
+      if (!games.length || !count || count <= 0) return { points: 0, goalDiff: 0, goalsScored: 0 }
       const sorted = [...games].sort(compareGames)
       const selected = sorted.slice(0, count)
       return {
         points: selected.reduce((sum, g) => sum + g.points, 0),
-        goalDiff: selected.reduce((sum, g) => sum + (g.scored - g.conceded), 0)
+        goalDiff: selected.reduce((sum, g) => sum + (g.scored - g.conceded), 0),
+        goalsScored: selected.reduce((sum, g) => sum + g.scored, 0)
       }
     }
     
     const summaries = teamGames.map(games => summarizeTopGames(games, minGames))
     const weightedPoints = summaries.map(s => s.points)
     const weightedGoalDiff = summaries.map(s => s.goalDiff)
+    const weightedGoalsScored = summaries.map(s => s.goalsScored)
     
     const maxWPts = Math.max(...weightedPoints)
     let candidates = weightedPoints.map((p,i)=>p===maxWPts?i:-1).filter(i=>i>=0)
     
-    // 가중 승점 동점일 때 가중 골득실로 판단
+    // 1단계 타이브레이커: 가중 골득실
     if (candidates.length > 1) {
       const maxGD = Math.max(...candidates.map(i => weightedGoalDiff[i]))
       candidates = candidates.filter(i => weightedGoalDiff[i] === maxGD)
     }
     
+    // 2단계 타이브레이커: 가중 총 득점
+    if (candidates.length > 1) {
+      const maxGS = Math.max(...candidates.map(i => weightedGoalsScored[i]))
+      candidates = candidates.filter(i => weightedGoalsScored[i] === maxGS)
+    }
+    
     if (candidates.length === 1) return candidates[0]
 
-    // 동률이면 타이브레이커 1: 동률 팀들 간 맞대결(H2H) 승점 비교
-    if (candidates.length === 2) {
+    // 동률이면 타이브레이커: 동률 팀들 간 맞대결(H2H) 승점 비교 (rotation 모드만)
+    if (candidates.length === 2 && hasNulls) {
       const [x, y] = candidates
-      let h2hX = 0, h2hY = 0
+      let h2hX = 0, h2hY = 0, gdX = 0, gdY = 0
+      
+      // 동적으로 x vs y 경기 찾기
       for (let qi = 0; qi < maxQ; qi++) {
-        const [a, b] = pairs[qi % 3]
-        if ((a === x && b === y) || (a === y && b === x)) {
-          const xScore = Number(qs[x]?.[qi] ?? 0)
-          const yScore = Number(qs[y]?.[qi] ?? 0)
+        const scores = qs.map(arr => Array.isArray(arr) ? arr[qi] : undefined)
+        const playingTeams = []
+        
+        for (let ti = 0; ti < 3; ti++) {
+          if (scores[ti] !== null && scores[ti] !== undefined) {
+            playingTeams.push(ti)
+          }
+        }
+        
+        // x와 y가 서로 경기한 쿼터인지 확인
+        if (playingTeams.length === 2 && playingTeams.includes(x) && playingTeams.includes(y)) {
+          const xScore = Number(scores[x])
+          const yScore = Number(scores[y])
+          
           if (xScore > yScore) h2hX += 3
           else if (yScore > xScore) h2hY += 3
           else { h2hX += 1; h2hY += 1 }
-        }
-      }
-      if (h2hX !== h2hY) return h2hX > h2hY ? x : y
-
-      // 타이브레이커 2: H2H 골득실 비교
-      let gdX = 0, gdY = 0
-      for (let qi = 0; qi < maxQ; qi++) {
-        const [a, b] = pairs[qi % 3]
-        if ((a === x && b === y) || (a === y && b === x)) {
-          const xScore = Number(qs[x]?.[qi] ?? 0)
-          const yScore = Number(qs[y]?.[qi] ?? 0)
+          
           gdX += (xScore - yScore)
           gdY += (yScore - xScore)
         }
       }
+      
+      if (h2hX !== h2hY) return h2hX > h2hY ? x : y
       if (gdX !== gdY) return gdX > gdY ? x : y
     }
 
