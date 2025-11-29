@@ -1599,7 +1599,6 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
       {/* 저장된 게임 점수 표시 */}
       {displayedQuarterScores && (
         (() => {
-          console.log('[SavedMatchesList] Calculating scores for match:', m.id, displayedQuarterScores)
           const maxQ = Math.max(...displayedQuarterScores.map(a=>Array.isArray(a)?a.length:1))
           const teamTotals = displayedQuarterScores.map(a=>Array.isArray(a)?a.reduce((s,v)=>s+Number(v||0),0):Number(a||0))
           const maxTotal = Math.max(...teamTotals)
@@ -1633,11 +1632,8 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                 // null이 아닌 팀들 찾기 (경기에 참여한 팀들)
                 const playingTeams = scores.filter(s => s.score !== null && s.score !== undefined)
                 
-                console.log(`[3Team] Q${qi}: Playing teams:`, playingTeams.map(t => `Team${t.teamIdx}(${t.score})`).join(' vs '))
-                
                 if (playingTeams.length === 3) {
                   // 3팀 동시 경기 (배틀로얄): 1위 3점, 2위 1점, 3위 0점
-                  console.log(`[3Team BattleRoyale] Q${qi}: 3-way match detected`)
                   
                   // 점수별로 정렬 (높은 순)
                   const sorted = playingTeams
