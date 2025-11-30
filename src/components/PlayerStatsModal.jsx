@@ -114,11 +114,13 @@ export default function PlayerStatsModal({
   const cards = stats?.cards || null
   const momAwards = Number(stats?.momAwards ?? 0)
   const contextLabel = stats?.filterDescription || ''
-  const highlights = stats?.highlights || null
+  const baseHighlights = stats?.highlights || null
+  const overallHighlights = stats?.overallHighlights || null
   const competition = stats?.competition || null
   const funFactsEnabled = stats?.factsEnabled !== false
   const membershipBadge = player?.membership ? getMembershipBadge(player.membership, customMemberships) : null
-  const topPartners = stats?.chemistry?.topPartners || []
+  const baseTopPartners = stats?.chemistry?.topPartners || []
+  const overallTopPartners = stats?.overallChemistry?.topPartners || []
   const seasonLookup = useMemo(() => {
     const next = { ...seasonStatsMap }
     const overallEntry = next.overall || {}
@@ -145,6 +147,10 @@ export default function PlayerStatsModal({
   const seasonEfficiency = activeSeasonEntry?.efficiency || efficiency
   const draftRecord = activeSeasonEntry?.draftRecord || baseDraftRecord
   const draftAttack = activeSeasonEntry?.draftAttack || baseDraftAttack
+
+  // overall 시즌일 때는 전체 매치 기반 데이터 사용
+  const highlights = seasonKey === 'overall' ? overallHighlights : baseHighlights
+  const topPartners = seasonKey === 'overall' ? overallTopPartners : baseTopPartners
 
   const badgesPinned = Boolean(
     player?.challengeBadgesPinned ||
@@ -359,7 +365,7 @@ export default function PlayerStatsModal({
               <h2 className="text-2xl font-bold text-stone-900 notranslate" translate="no">
                 {t('playerStatsModal.title', { name: player?.name ?? 'Player' })}
               </h2>
-              {contextLabel && (
+              {contextLabel && seasonKey !== 'overall' && (
                 <p className="text-sm text-stone-500">{t('playerStatsModal.filterContext', { context: contextLabel })}</p>
               )}
             </div>

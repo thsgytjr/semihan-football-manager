@@ -262,6 +262,17 @@ export default function Dashboard({
 
   const baseRows = useMemo(() => computeAttackRows(players, filteredMatches), [players, filteredMatches])
 
+  // 전체 매치 기반 데이터 (overall 시즌용)
+  const allMatchesBaseRows = useMemo(() => computeAttackRows(players, matches), [players, matches])
+  const allMatchesDraftWinRows = useMemo(() => computeDraftPlayerStatsRows(players, matches), [players, matches])
+  const allMatchesDraftAttackRows = useMemo(() => computeDraftAttackRows(players, matches), [players, matches])
+  const allMatchesCardsRows = useMemo(() => computeCardsRows(players, matches), [players, matches])
+
+  const allMatchesAttackRowMap = useMemo(() => buildPlayerRowMap(allMatchesBaseRows), [allMatchesBaseRows])
+  const allMatchesDraftRecordMap = useMemo(() => buildPlayerRowMap(allMatchesDraftWinRows), [allMatchesDraftWinRows])
+  const allMatchesDraftAttackRowMap = useMemo(() => buildPlayerRowMap(allMatchesDraftAttackRows), [allMatchesDraftAttackRows])
+  const allMatchesCardsRowMap = useMemo(() => buildPlayerRowMap(allMatchesCardsRows), [allMatchesCardsRows])
+
   // Draft 전용: 선수/주장 승리 집계
   const draftWinRows = useMemo(() => computeDraftPlayerStatsRows(players, filteredMatches), [players, filteredMatches])
   const captainWinRows = useMemo(() => computeCaptainStatsRows(players, filteredMatches), [players, filteredMatches])
@@ -276,6 +287,7 @@ export default function Dashboard({
   const [draftTab, setDraftTab] = useState('playerWins') // 'playerWins' | 'captainWins' | 'attack'
   const rankedRows = useMemo(() => addRanks(baseRows, apTab), [baseRows, apTab])
   const duoRows = useMemo(() => computeDuoRows(players, filteredMatches), [players, filteredMatches])
+  const allMatchesDuoRows = useMemo(() => computeDuoRows(players, matches), [players, matches])
   const csRows = useMemo(() => addRanks(baseRows, 'cs'), [baseRows])
   const cardsRows = useMemo(() => computeCardsRows(players, filteredMatches), [players, filteredMatches])
   const badgeFactsByPlayer = useMemo(
@@ -557,6 +569,51 @@ export default function Dashboard({
     return map
   }, [duoRows, playerLookup])
 
+  const allMatchesChemistryMap = useMemo(() => {
+    const map = new Map()
+    if (!allMatchesDuoRows || allMatchesDuoRows.length === 0) return map
+
+    const addPartner = (sourceId, partnerId, meta) => {
+      if (!sourceId || !partnerId) return
+      const key = toStr(sourceId)
+      const list = map.get(key) || []
+      list.push(meta)
+      map.set(key, list)
+    }
+
+    allMatchesDuoRows.forEach((row) => {
+      const assistKey = toStr(row.assistId)
+      const goalKey = toStr(row.goalId)
+      const goalPlayer = playerLookup.get(goalKey)
+      const assistPlayer = playerLookup.get(assistKey)
+
+      addPartner(assistKey, goalKey, {
+        id: goalKey,
+        name: goalPlayer?.name || row.gName,
+        membership: goalPlayer?.membership || row.gMembership,
+        photoUrl: goalPlayer?.photoUrl || row.gPhotoUrl,
+        count: row.count,
+        role: 'assist',
+      })
+
+      addPartner(goalKey, assistKey, {
+        id: assistKey,
+        name: assistPlayer?.name || row.aName,
+        membership: assistPlayer?.membership || row.aMembership,
+        photoUrl: assistPlayer?.photoUrl || row.aPhotoUrl,
+        count: row.count,
+        role: 'goal',
+      })
+    })
+
+    map.forEach((partners, key) => {
+      const sorted = [...partners].sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+      map.set(key, sorted.slice(0, 3))
+    })
+
+    return map
+  }, [allMatchesDuoRows, playerLookup])
+
   const openPlayerStatsModal = useCallback((player) => {
     if (!playerStatsEnabled) {
       notify('선수 기록 모달 기능이 비활성화되어 있습니다.', 'info')
@@ -685,6 +742,78 @@ export default function Dashboard({
 
     return map
   }, [playerStatsEnabled, filteredMatches, filteredMatchIdSet, momAwards?.winnersByMatch, matchLookup])
+
+  const allMatchesPlayerHighlights = useMemo(() => {
+    const map = new Map()
+    if (!playerStatsEnabled || !matches || matches.length === 0) return map
+
+    const ordered = matches
+      .map(match => ({ match, ts: getMatchTimestamp(match) || 0 }))
+      .sort((a, b) => (a.ts || 0) - (b.ts || 0))
+
+    const formatMatchLabel = (match, ts) => {
+      const dateLabel = extractDateKey(match) || (Number.isFinite(ts) && ts > 0 ? new Date(ts).toLocaleDateString() : null)
+      const opponentLabel = (
+        [
+          match?.title,
+          match?.matchTitle,
+          match?.opponent,
+          match?.opponentName,
+          match?.opponent_label,
+          match?.location,
+        ]
+          .map(toLabelString)
+          .find(Boolean)
+      )
+      return [dateLabel, opponentLabel].filter(Boolean).join(' · ') || dateLabel || 'Match'
+    }
+
+    const ensureEntry = (pid) => {
+      if (!map.has(pid)) map.set(pid, {})
+      return map.get(pid)
+    }
+
+    ordered.forEach(({ match, ts }) => {
+      const statsMap = extractStatsByPlayer(match) || {}
+      const matchLabel = formatMatchLabel(match, ts)
+      Object.entries(statsMap).forEach(([pidRaw, rec]) => {
+        const pid = toStr(pidRaw)
+        if (!pid) return
+        const entry = ensureEntry(pid)
+        if (Number(rec?.goals || 0) > 0 && !entry.firstGoal) {
+          entry.firstGoal = { label: matchLabel, ts }
+        }
+        if (Number(rec?.assists || 0) > 0 && !entry.firstAssist) {
+          entry.firstAssist = { label: matchLabel, ts }
+        }
+        if (Number(rec?.cleanSheet || 0) > 0 && !entry.firstCleanSheet) {
+          entry.firstCleanSheet = { label: matchLabel, ts }
+        }
+        if (Number(rec?.goals || 0) + Number(rec?.assists || 0) > 0 && !entry.firstAttackPoint) {
+          entry.firstAttackPoint = { label: matchLabel, ts }
+        }
+      })
+    })
+
+    const winnersByMatch = momAwards?.winnersByMatch || {}
+    Object.entries(winnersByMatch).forEach(([matchId, summary]) => {
+      const key = toStr(matchId)
+      const match = matchLookup.get(key)
+      const ts = getMatchTimestamp(match) || 0
+      const label = formatMatchLabel(match, ts)
+      const winners = Array.isArray(summary?.winners) ? summary.winners : []
+      winners.forEach((pidRaw) => {
+        const pid = toStr(pidRaw)
+        if (!pid) return
+        const entry = ensureEntry(pid)
+        if (!entry.firstMom) {
+          entry.firstMom = { label, ts }
+        }
+      })
+    })
+
+    return map
+  }, [playerStatsEnabled, matches, momAwards?.winnersByMatch, matchLookup])
 
   const matchesBySeason = useMemo(() => {
     const map = new Map()
@@ -838,12 +967,23 @@ export default function Dashboard({
   const playerStatsData = useMemo(() => {
     if (!statsModalPlayer || !playerStatsEnabled) return null
     const key = toStr(statsModalPlayer.id)
+    
+    // 필터링된 매치 기반 데이터 (현재 뷰)
     const attackRow = attackRowMap.get(key) || null
     const draftRow = draftRecordMap.get(key) || null
     const draftAttackRow = draftAttackRowMap.get(key) || null
     const cardsRow = cardsRowMap.get(key) || null
+    
+    // 전체 매치 기반 데이터 (overall 시즌용)
+    const overallAttackRow = allMatchesAttackRowMap.get(key) || null
+    const overallDraftRow = allMatchesDraftRecordMap.get(key) || null
+    const overallDraftAttackRow = allMatchesDraftAttackRowMap.get(key) || null
+    const overallCardsRow = allMatchesCardsRowMap.get(key) || null
+    
     const chemistryPartners = chemistryMap.get(key) || []
+    const allMatchesChemistryPartners = allMatchesChemistryMap.get(key) || []
     const highlights = playerHighlights.get(key) || null
+    const allMatchesHighlights = allMatchesPlayerHighlights.get(key) || null
     const competition = attackCompetitionMap.get(key) || null
     const momCount = Number(momAwards?.countsByPlayer?.[key] ?? 0)
 
@@ -886,19 +1026,27 @@ export default function Dashboard({
 
     const seasonStats = {}
     const seasonOrder = []
+    
+    // overall 시즌: 전체 매치 기반 데이터 사용
+    const overallAttack = summarizeAttackRow(overallAttackRow)
+    const overallEfficiency = summarizeEfficiency(overallAttackRow)
+    const overallDraftRecord = summarizeDraftRecord(overallDraftRow)
+    const overallDraftAttack = summarizeDraftAttack(overallDraftAttackRow)
+    if (overallAttack || overallEfficiency || overallDraftRecord || overallDraftAttack) {
+      seasonStats.overall = {
+        attack: overallAttack,
+        efficiency: overallEfficiency,
+        draftRecord: overallDraftRecord,
+        draftAttack: overallDraftAttack,
+      }
+      seasonOrder.push('overall')
+    }
+    
+    // 현재 필터링된 데이터 (메인 뷰)
     const baseAttack = summarizeAttackRow(attackRow)
     const baseEfficiency = summarizeEfficiency(attackRow)
     const baseDraftRecord = summarizeDraftRecord(draftRow)
     const baseDraftAttack = summarizeDraftAttack(draftAttackRow)
-    if (baseAttack || baseEfficiency || baseDraftRecord || baseDraftAttack) {
-      seasonStats.overall = {
-        attack: baseAttack,
-        efficiency: baseEfficiency,
-        draftRecord: baseDraftRecord,
-        draftAttack: baseDraftAttack,
-      }
-      seasonOrder.push('overall')
-    }
 
     const seasonKeySet = new Set()
     attackRowsBySeason.forEach((_, seasonKey) => {
@@ -945,8 +1093,11 @@ export default function Dashboard({
       filterDescription: statsFilterDescription,
       seasonStats,
       seasonOrder,
+      // overall 시즌용 전체 매치 기반 데이터
+      overallChemistry: allMatchesChemistryPartners.length > 0 ? { topPartners: allMatchesChemistryPartners } : null,
+      overallHighlights: allMatchesHighlights,
     }
-  }, [statsModalPlayer, attackRowMap, draftRecordMap, draftAttackRowMap, cardsRowMap, chemistryMap, playerHighlights, attackCompetitionMap, momAwards?.countsByPlayer, statsFilterDescription, playerStatsEnabled, attackRowsBySeason, draftRecordRowsBySeason, draftAttackRowsBySeason])
+  }, [statsModalPlayer, attackRowMap, draftRecordMap, draftAttackRowMap, cardsRowMap, allMatchesAttackRowMap, allMatchesDraftRecordMap, allMatchesDraftAttackRowMap, allMatchesCardsRowMap, chemistryMap, allMatchesChemistryMap, playerHighlights, allMatchesPlayerHighlights, attackCompetitionMap, momAwards?.countsByPlayer, statsFilterDescription, playerStatsEnabled, attackRowsBySeason, draftRecordRowsBySeason, draftAttackRowsBySeason])
 
   const momLeaders = useMemo(() => {
     const entries = Object.entries(mom.tally || {})
