@@ -294,7 +294,7 @@ export default function Dashboard({
   const captainWinRows = useMemo(() => computeCaptainStatsRows(players, filteredMatches), [players, filteredMatches])
   const draftAttackRows = useMemo(() => computeDraftAttackRows(players, filteredMatches), [players, filteredMatches])
   const seasonRecapDuoRows = useMemo(() => computeDuoRows(players, seasonRecapMatches), [players, seasonRecapMatches])
-  const seasonRecapDraftAttackRows = useMemo(() => computeDraftAttackRows(players, seasonRecapMatches), [players, seasonRecapMatches])
+  const seasonRecapDraftPlayerRows = useMemo(() => computeDraftPlayerStatsRows(players, seasonRecapMatches), [players, seasonRecapMatches])
   const seasonRecapCaptainRows = useMemo(() => computeCaptainStatsRows(players, seasonRecapMatches), [players, seasonRecapMatches])
 
   const mom = useMoMPrompt({ matches, players })
@@ -551,10 +551,10 @@ export default function Dashboard({
           photoUrl: row.gPhotoUrl,
         },
       })),
-      draftPlayer: (seasonRecapDraftAttackRows || []).map((row) => ({
+      draftPlayer: (seasonRecapDraftPlayerRows || []).map((row) => ({
         id: row.id,
         name: row.name,
-        value: row.pts,
+        value: row.points ?? row.value ?? 0,
         photoUrl: row.photoUrl || null,
       })),
       draftCaptain: (seasonRecapCaptainRows || []).map((row) => ({
@@ -606,7 +606,7 @@ export default function Dashboard({
     playerLookup,
     players,
     seasonRecapCaptainRows,
-    seasonRecapDraftAttackRows,
+    seasonRecapDraftPlayerRows,
     seasonRecapDuoRows,
     seasonRecapMatches,
   ])

@@ -1,5 +1,9 @@
 {
   "app": {
+      "attackLeader": {
+        "title": "Attack Catalyst",
+        "subtitle": "Most goal involvements"
+      },
     "title": "Goalify",
     "version": "Version",
     "build": "Build",
@@ -644,6 +648,10 @@
       }
     },
     "slides": {
+      "attackLeader": {
+        "title": "Attack Catalyst",
+        "subtitle": "Total goal + assist leader"
+      },
       "goldenBoot": {
         "title": "GOLDEN BOOT",
         "subtitle": "Top Scorer"
@@ -662,6 +670,7 @@
       }
     },
     "metrics": {
+      "attackPoints": "Attack points",
       "goals": "Goals",
       "assists": "Assists",
       "matches": "Matches",
@@ -672,8 +681,13 @@
     "champions": {
       "label": "Champions",
       "slideTitle": "Leaderboard Highlights {{index}}",
+      "groupSlideTitle": "{{group}} Highlights",
+      "groupLabels": {
+        "total": "Season Board",
+        "draft": "Draft Board"
+      },
       "duoTo": "to {{name}}",
-      "tieNote": "and {{count}} more tied (see leaderboard)",
+      "tieNote": "+{{count}} tied players",
       "sections": {
         "mom": {
           "title": "MOM King",
@@ -684,7 +698,7 @@
           "subtitle": "Assist → Goal chemistry"
         },
         "draftPlayer": {
-          "title": "Draft Attack",
+          "title": "Draft Player Points",
           "subtitle": "Player points king"
         },
         "draftCaptain": {

@@ -644,6 +644,10 @@
       }
     },
     "slides": {
+      "attackLeader": {
+        "title": "공격 핵심",
+        "subtitle": "골+어시 총합 리더"
+      },
       "goldenBoot": {
         "title": "골든부트",
         "subtitle": "득점왕"
@@ -662,6 +666,7 @@
       }
     },
     "metrics": {
+      "attackPoints": "공격 포인트",
       "goals": "골",
       "assists": "어시스트",
       "matches": "경기",
@@ -672,8 +677,13 @@
     "champions": {
       "label": "챔피언스",
       "slideTitle": "리더보드 하이라이트 {{index}}",
+      "groupSlideTitle": "{{group}} 하이라이트",
+      "groupLabels": {
+        "total": "시즌 보드",
+        "draft": "드래프트 보드"
+      },
       "duoTo": "→ {{name}}",
-      "tieNote": "외 {{count}}명 동률 (리더보드에서 확인 가능)",
+      "tieNote": "동률 선수 외 {{count}}명",
       "sections": {
         "mom": {
           "title": "MOM King",
@@ -684,7 +694,7 @@
           "subtitle": "Assist → Goal 케미"
         },
         "draftPlayer": {
-          "title": "드래프트 공격",
+          "title": "선수 승점",
           "subtitle": "선수 승점 리더"
         },
         "draftCaptain": {

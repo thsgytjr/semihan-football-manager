@@ -30,6 +30,8 @@ const STORY_CONFIGS = [
   }
 ]
 
+const MAX_PINNED_STORIES = 3
+
 const SUPPORTED_RECAP_LANGS = ['en', 'ko']
 const LANGUAGE_FLAGS = {
   en: '🇺🇸',
@@ -226,6 +228,18 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     const topAssisters = ensureList(buildTopList((stat) => stat.assists), 'assist-none')
     const ironMen = ensureList(buildAppearanceList(), 'apps-none')
     const cleanSheetMasters = ensureList(buildTopList((stat) => stat.cleanSheets || 0), 'cs-none')
+    const attackLeaderList = buildTopList((stat) => (stat.goals || 0) + (stat.assists || 0))
+    const attackLeaders = (attackLeaderList.length > 0
+      ? attackLeaderList
+      : [{ id: 'attack-none', name: '—', value: 0 }]
+    ).map((entry) => {
+      const base = playerStats[entry.id] || { goals: 0, assists: 0 }
+      return {
+        ...entry,
+        goals: base.goals || 0,
+        assists: base.assists || 0
+      }
+    })
 
     const hatTrickClub = Object.entries(hatTrickCounts)
       .sort((a, b) => b[1] - a[1])
@@ -249,7 +263,8 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
       goalFiesta,
       totalGoalContributors: uniqueScorers.size,
       totalAssistContributors: uniqueAssisters.size,
-      cleanSheetMasters
+      cleanSheetMasters,
+      attackLeaders
     }
   }, [matches, players])
 
@@ -281,6 +296,7 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
   const primaryAssister = safePrimary(stats.topAssisters)
   const primaryIron = safePrimary(stats.ironMen)
   const primaryKeeper = safePrimary(stats.cleanSheetMasters)
+  const primaryAttackLeader = safePrimary(stats.attackLeaders || [])
 
   const formatListWithMore = useCallback((list, formatter = (item) => item.name, limit = 3) => {
     if (!Array.isArray(list) || list.length === 0) return ''
@@ -374,6 +390,7 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
   const championSections = [
     {
       id: 'mom',
+      group: 'total',
       title: t('seasonRecap.champions.sections.mom.title'),
       subtitle: t('seasonRecap.champions.sections.mom.subtitle'),
       icon: Crown,
@@ -384,6 +401,7 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     },
     {
       id: 'duo',
+      group: 'total',
       title: t('seasonRecap.champions.sections.duo.title'),
       subtitle: t('seasonRecap.champions.sections.duo.subtitle'),
       icon: Handshake,
@@ -395,6 +413,7 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     },
     {
       id: 'draftPlayer',
+      group: 'draft',
       title: t('seasonRecap.champions.sections.draftPlayer.title'),
       subtitle: t('seasonRecap.champions.sections.draftPlayer.subtitle'),
       icon: Gamepad2,
@@ -405,6 +424,7 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     },
     {
       id: 'draftCaptain',
+      group: 'draft',
       title: t('seasonRecap.champions.sections.draftCaptain.title'),
       subtitle: t('seasonRecap.champions.sections.draftCaptain.subtitle'),
       icon: Shield,
@@ -432,103 +452,165 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
       winners: selectTopEntries(section.entries, section.valueKey || (section.type === 'duo' ? 'count' : 'value'))
     }))
     .filter((section) => section.winners.length > 0)
-  const championChunks = []
-  for (let i = 0; i < championDisplays.length; i += 2) {
-    championChunks.push(championDisplays.slice(i, i + 2))
+
+  const normalizePlayerId = (id) => {
+    if (id === undefined || id === null) return null
+    const str = String(id).trim()
+    return str ? str : null
   }
-  const championSlides = championChunks.map((chunk, idx) => ({
-    id: `champions-${idx + 1}`,
-    bg: idx % 2 === 0
+
+  const championShowcaseTracker = new Set()
+  const seedShowcasedPlayers = (...playersToSeed) => {
+    playersToSeed.forEach((player) => {
+      const normalized = normalizePlayerId(player?.id ?? player)
+      if (normalized) {
+        championShowcaseTracker.add(normalized)
+      }
+    })
+  }
+  seedShowcasedPlayers(primaryAttackLeader, primaryScorer, primaryAssister, primaryIron, primaryKeeper)
+
+  const getChampionEntryPlayerIds = (section, entry) => {
+    if (section.type === 'duo') {
+      return [normalizePlayerId(entry.assist?.id), normalizePlayerId(entry.scorer?.id)].filter(Boolean)
+    }
+    return [normalizePlayerId(entry.id)].filter(Boolean)
+  }
+
+  const championDisplayEntries = championDisplays.map((section) => {
+    const entries = section.winners || []
+    if (entries.length === 0) {
+      return { ...section, visibleWinners: [], tieRemainder: 0 }
+    }
+    const unseen = []
+    const alreadyShown = []
+    entries.forEach((entry) => {
+      const ids = getChampionEntryPlayerIds(section, entry)
+      const hasAppeared = ids.some((id) => championShowcaseTracker.has(id))
+      const bucket = hasAppeared ? alreadyShown : unseen
+      bucket.push({ entry, ids })
+    })
+    const prioritized = [...unseen, ...alreadyShown]
+    const selected = prioritized.slice(0, 2)
+    selected.forEach(({ ids }) => ids.forEach((id) => championShowcaseTracker.add(id)))
+    return {
+      ...section,
+      visibleWinners: selected.map((item) => item.entry),
+      tieRemainder: Math.max(entries.length - selected.length, 0)
+    }
+  })
+  const championGroupOrder = ['total', 'draft']
+  const championGroupMap = championDisplayEntries.reduce((acc, section) => {
+    const groupKey = section.group || 'total'
+    if (!acc[groupKey]) acc[groupKey] = []
+    acc[groupKey].push(section)
+    return acc
+  }, {})
+
+  const championSlides = []
+  championGroupOrder.forEach((groupKey) => {
+    const sections = championGroupMap[groupKey]
+    if (!sections || sections.length === 0) return
+    const slideIndex = championSlides.length
+    const bgClass = slideIndex % 2 === 0
       ? 'bg-gradient-to-tr from-slate-900 via-indigo-950 to-black'
-      : 'bg-gradient-to-br from-indigo-950 via-purple-900 to-black',
-    content: (
-      <div className="relative h-full w-full">
-        <div className="absolute inset-0 champion-aurora" aria-hidden="true" />
-        <div className="absolute inset-0 champion-grid" aria-hidden="true" />
-        <div className="relative flex flex-col items-center justify-center h-full text-center p-4">
-          <p className="text-[11px] uppercase tracking-[0.4em] text-white/60 mb-2">{t('seasonRecap.champions.label')}</p>
-          <h2 className="text-2xl font-bold text-white mb-4">{t('seasonRecap.champions.slideTitle', { index: idx + 1 })}</h2>
-          <div className="w-full max-w-sm space-y-3 text-left">
-            {chunk.map((section) => (
-              <div key={section.id} className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-                <div className="flex items-center gap-3">
-                  <section.icon className={`h-6 w-6 ${section.colorClass}`} />
-                  <div>
-                    <p className="text-[11px] uppercase tracking-wide text-white/60">{section.subtitle}</p>
-                    <p className="text-sm font-semibold text-white">{section.title}</p>
+      : 'bg-gradient-to-br from-indigo-950 via-purple-900 to-black'
+    championSlides.push({
+      id: `champions-${groupKey}`,
+      bg: bgClass,
+      content: (
+        <div className="relative h-full w-full">
+          <div className="absolute inset-0 champion-aurora" aria-hidden="true" />
+          <div className="absolute inset-0 champion-grid" aria-hidden="true" />
+          <div className="relative flex flex-col items-center justify-center h-full text-center p-4">
+            <p className="text-[11px] uppercase tracking-[0.4em] text-white/60 mb-2">{t('seasonRecap.champions.label')}</p>
+            <h2 className="text-2xl font-bold text-white mb-4">
+              {t('seasonRecap.champions.groupSlideTitle', {
+                group: t(`seasonRecap.champions.groupLabels.${groupKey}`, { defaultValue: groupKey })
+              })}
+            </h2>
+            <div className="w-full max-w-sm space-y-3 text-left">
+              {sections.map((section) => (
+                <div key={section.id} className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+                  <div className="flex items-center gap-3">
+                    <section.icon className={`h-6 w-6 ${section.colorClass}`} />
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-white/60">{section.subtitle}</p>
+                      <p className="text-sm font-semibold text-white">{section.title}</p>
+                    </div>
                   </div>
-                </div>
-                {(() => {
-                  const visibleWinners = section.winners.slice(0, 2)
-                  const remaining = Math.max(section.winners.length - visibleWinners.length, 0)
-                  return (
-                    <>
-                      {section.type === 'duo'
-                        ? visibleWinners.map((entry) => (
-                            <div key={entry.id} className="mt-3 rounded-2xl bg-white/10 px-3 py-2 text-sm text-white">
-                              <div className="flex items-center justify-between gap-3">
+                  {(() => {
+                    const visibleWinners = section.visibleWinners || []
+                    const remaining = Math.max(section.tieRemainder || 0, 0)
+                    return (
+                      <>
+                        {section.type === 'duo'
+                          ? visibleWinners.map((entry) => (
+                              <div key={entry.id} className="mt-3 rounded-2xl bg-white/10 px-3 py-2 text-sm text-white">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-3">
+                                    <div className="flex -space-x-3">
+                                      <InitialAvatar
+                                        id={entry.assist?.id}
+                                        name={entry.assist?.name || t('seasonRecap.common.unknown')}
+                                        photoUrl={entry.assist?.photoUrl}
+                                        size={36}
+                                        className="border-2 border-white/40 bg-black"
+                                      />
+                                      <InitialAvatar
+                                        id={entry.scorer?.id}
+                                        name={entry.scorer?.name || t('seasonRecap.common.unknown')}
+                                        photoUrl={entry.scorer?.photoUrl}
+                                        size={36}
+                                        className="border-2 border-white/40 bg-black"
+                                      />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-semibold">{entry.assist?.name || t('seasonRecap.common.unknown')}</p>
+                                      <p className="text-[11px] text-white/60">{t('seasonRecap.champions.duoTo', { name: entry.scorer?.name || t('seasonRecap.common.unknown') })}</p>
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <AnimatedNumber value={entry.count} className="text-xl font-bold" />
+                                    <p className="text-[10px] uppercase text-white/60">{section.unit}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            ))
+                          : visibleWinners.map((entry) => (
+                              <div key={entry.id} className="mt-3 flex items-center justify-between rounded-2xl bg-white/10 px-3 py-2 text-sm text-white">
                                 <div className="flex items-center gap-3">
-                                  <div className="flex -space-x-3">
-                                    <InitialAvatar
-                                      id={entry.assist?.id}
-                                      name={entry.assist?.name || t('seasonRecap.common.unknown')}
-                                      photoUrl={entry.assist?.photoUrl}
-                                      size={36}
-                                      className="border-2 border-white/40 bg-black"
-                                    />
-                                    <InitialAvatar
-                                      id={entry.scorer?.id}
-                                      name={entry.scorer?.name || t('seasonRecap.common.unknown')}
-                                      photoUrl={entry.scorer?.photoUrl}
-                                      size={36}
-                                      className="border-2 border-white/40 bg-black"
-                                    />
-                                  </div>
+                                  <InitialAvatar
+                                    id={entry.id}
+                                    name={entry.name || t('seasonRecap.common.unknown')}
+                                    photoUrl={entry.photoUrl}
+                                    size={42}
+                                    className="border-2 border-white/40 bg-black"
+                                  />
                                   <div>
-                                    <p className="text-sm font-semibold">{entry.assist?.name || t('seasonRecap.common.unknown')}</p>
-                                    <p className="text-[11px] text-white/60">{t('seasonRecap.champions.duoTo', { name: entry.scorer?.name || t('seasonRecap.common.unknown') })}</p>
+                                    <p className="font-semibold">{entry.name || t('seasonRecap.common.unknown')}</p>
+                                    <p className="text-[11px] uppercase text-white/60">{section.unit}</p>
                                   </div>
                                 </div>
-                                <div className="text-right">
-                                  <AnimatedNumber value={entry.count} className="text-xl font-bold" />
-                                  <p className="text-[10px] uppercase text-white/60">{section.unit}</p>
-                                </div>
+                                <AnimatedNumber value={entry.value} className="text-xl font-bold" />
                               </div>
-                            </div>
-                          ))
-                        : visibleWinners.map((entry) => (
-                            <div key={entry.id} className="mt-3 flex items-center justify-between rounded-2xl bg-white/10 px-3 py-2 text-sm text-white">
-                              <div className="flex items-center gap-3">
-                                <InitialAvatar
-                                  id={entry.id}
-                                  name={entry.name || t('seasonRecap.common.unknown')}
-                                  photoUrl={entry.photoUrl}
-                                  size={42}
-                                  className="border-2 border-white/40 bg-black"
-                                />
-                                <div>
-                                  <p className="font-semibold">{entry.name || t('seasonRecap.common.unknown')}</p>
-                                  <p className="text-[11px] uppercase text-white/60">{section.unit}</p>
-                                </div>
-                              </div>
-                              <AnimatedNumber value={entry.value} className="text-xl font-bold" />
-                            </div>
-                          ))}
-                      {remaining > 0 && (
-                        <p className="mt-3 rounded-2xl border border-dashed border-white/10 px-3 py-2 text-[11px] text-white/70">
-                          {t('seasonRecap.champions.tieNote', { count: remaining })}
-                        </p>
-                      )}
-                    </>
-                  )
-                })()}
-              </div>
-            ))}
+                            ))}
+                        {remaining > 0 && (
+                          <p className="mt-3 rounded-2xl border border-dashed border-white/10 px-3 py-2 text-[11px] text-white/70">
+                            {t('seasonRecap.champions.tieNote', { count: remaining })}
+                          </p>
+                        )}
+                      </>
+                    )
+                  })()}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
-    )
-  }))
+      )
+    })
+  })
 
   const storyCount = storyEntries.length || 1
   const activeStory = storyEntries[storyActiveIndex % storyCount] || storyEntries[0]
@@ -543,8 +625,10 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     previousStoryIdRef.current = activeStoryId
   }, [activeStoryId])
   const pinnedStories = pinnedStoryIds
+    .slice(-MAX_PINNED_STORIES)
     .map((id) => storyEntries.find((entry) => entry.id === id))
     .filter(Boolean)
+    .reverse()
   const finaleStats = [
     { id: 'matches', label: t('seasonRecap.finale.stats.matches'), value: stats.totalMatches },
     { id: 'players', label: t('seasonRecap.finale.stats.players'), value: stats.activePlayers },
@@ -754,6 +838,57 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
                 </div>
               ))}
             </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'attack-leader',
+      bg: 'bg-gradient-to-br from-rose-900 via-amber-900 to-black',
+      content: (
+        <div className="relative flex flex-col items-center justify-center h-full text-center p-4">
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="attack-flare" />
+            <div className="attack-orbit" />
+          </div>
+          <div className="relative z-10 flex flex-col items-center">
+            <div className="mb-3 rounded-full border border-white/20 bg-white/10 px-4 py-1 text-[11px] uppercase tracking-[0.35em] text-white/70">
+              {t('seasonRecap.slides.attackLeader.title')}
+            </div>
+            <Flame className="h-14 w-14 text-amber-200 drop-shadow-[0_0_18px_rgba(251,191,36,0.45)] mb-3" />
+            <div className="relative mb-3">
+              <div className="absolute -inset-1 bg-amber-400/20 rounded-full blur-xl" />
+              <InitialAvatar
+                id={primaryAttackLeader.id}
+                name={primaryAttackLeader.name || t('seasonRecap.common.unknown')}
+                photoUrl={primaryAttackLeader.photoUrl}
+                size={96}
+                className="border-2 border-white/40 shadow-[0_12px_30px_rgba(0,0,0,0.45)]"
+              />
+            </div>
+            <h2 className="text-3xl font-black text-white mb-1">
+              {primaryAttackLeader.name || t('seasonRecap.common.unknown')}
+            </h2>
+            <p className="text-sm text-white/70 max-w-xs mb-4">
+              {t('seasonRecap.slides.attackLeader.subtitle')}
+            </p>
+            <div className="rounded-3xl border border-white/20 bg-white/10 px-5 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
+              <AnimatedNumber value={primaryAttackLeader.value} className="text-4xl font-black text-amber-200" />
+              <p className="text-[11px] uppercase tracking-[0.25em] text-white/70 mt-1">
+                {t('seasonRecap.metrics.attackPoints')}
+              </p>
+            </div>
+            <div className="mt-5 flex w-full max-w-sm flex-col gap-3 sm:flex-row">
+              <div className="flex flex-1 flex-col items-center rounded-2xl border border-white/15 bg-white/5 px-4 py-2 text-center">
+                <p className="text-[11px] uppercase tracking-wide text-white/50">{t('seasonRecap.metrics.goals')}</p>
+                <AnimatedNumber value={primaryAttackLeader.goals || 0} className="text-2xl font-bold text-white" />
+              </div>
+              <div className="flex flex-1 flex-col items-center rounded-2xl border border-white/15 bg-white/5 px-4 py-2 text-center">
+                <p className="text-[11px] uppercase tracking-wide text-white/50">{t('seasonRecap.metrics.assists')}</p>
+                <AnimatedNumber value={primaryAttackLeader.assists || 0} className="text-2xl font-bold text-white" />
+              </div>
+            </div>
+            {renderTieList(stats.attackLeaders, 'attackPoints')}
           </div>
         </div>
       )
@@ -1229,6 +1364,60 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+        .attack-flare {
+          position: absolute;
+          inset: -20%;
+          background: radial-gradient(circle at 30% 30%, rgba(251,191,36,0.35), transparent 55%),
+            radial-gradient(circle at 70% 60%, rgba(248,113,113,0.3), transparent 65%);
+          filter: blur(50px);
+          opacity: 0.7;
+          animation: attack-flare-pulse 10s ease-in-out infinite;
+        }
+        .attack-orbit {
+          position: absolute;
+          inset: 10%;
+          border: 1px dashed rgba(255,255,255,0.25);
+          border-radius: 36% 48% 52% 44% / 40% 46% 54% 50%;
+          animation: attack-orbit-spin 14s linear infinite;
+          opacity: 0.4;
+        }
+        @keyframes attack-flare-pulse {
+          0% { transform: scale(0.95); opacity: 0.5; }
+          50% { transform: scale(1.05); opacity: 0.8; }
+          100% { transform: scale(0.95); opacity: 0.5; }
+        }
+        @keyframes attack-orbit-spin {
+          from { transform: rotate(0deg) scale(1); }
+          to { transform: rotate(360deg) scale(1.05); }
+        }
+        .draft-spark {
+          position: absolute;
+          inset: -25% 10% auto;
+          height: 70%;
+          background: radial-gradient(circle at 40% 40%, rgba(59,130,246,0.35), transparent 55%),
+            radial-gradient(circle at 70% 70%, rgba(99,102,241,0.25), transparent 65%);
+          filter: blur(50px);
+          opacity: 0.6;
+          animation: draft-spark-float 12s ease-in-out infinite;
+        }
+        .draft-grid {
+          position: absolute;
+          inset: 0;
+          background-image: linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px);
+          background-size: 80px 80px;
+          opacity: 0.15;
+          animation: draft-grid-pan 16s linear infinite;
+        }
+        @keyframes draft-spark-float {
+          0% { transform: translateY(0); opacity: 0.4; }
+          50% { transform: translateY(-20px); opacity: 0.7; }
+          100% { transform: translateY(0); opacity: 0.4; }
+        }
+        @keyframes draft-grid-pan {
+          from { transform: translate3d(0,0,0); }
+          to { transform: translate3d(-80px, 80px, 0); }
         }
         @keyframes story-stack-slide {
           from { opacity: 0; transform: translateY(12px); }
