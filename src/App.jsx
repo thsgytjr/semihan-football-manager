@@ -194,6 +194,9 @@ export default function App(){
         if(settings.maintenanceMode !== undefined){
           setMaintenanceMode(settings.maintenanceMode)
         }
+        if(settings.seasonRecapEnabled !== undefined){
+          setSeasonRecapEnabled(Boolean(settings.seasonRecapEnabled))
+        }
         if(settings.features){
           setFeaturesEnabled(settings.features)
         }
