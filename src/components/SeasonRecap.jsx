@@ -36,6 +36,14 @@ const LANGUAGE_FLAGS = {
   ko: '🇰🇷'
 }
 
+const INTERACTIVE_TOUCH_SELECTOR = 'button, a, input, select, textarea, [data-recap-interactive="true"], [role="button"]'
+
+const isInteractiveTouchTarget = (target) => {
+  if (typeof window === 'undefined') return false
+  if (!target || typeof target.closest !== 'function') return false
+  return Boolean(target.closest(INTERACTIVE_TOUCH_SELECTOR))
+}
+
 const hasRealPhoto = (photoUrl) => {
   if (typeof photoUrl !== 'string') return false
   const trimmed = photoUrl.trim()
@@ -98,6 +106,8 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
   const [pinnedStoryIds, setPinnedStoryIds] = useState([])
   const [verifiedPulsePlayers, setVerifiedPulsePlayers] = useState([])
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false)
+  const touchStartRef = useRef({ x: 0, y: 0, active: false })
+  const skipNextClickRef = useRef(false)
 
   const storyEntries = useMemo(
     () => STORY_CONFIGS.map((entry) => ({ ...entry, title: t(`seasonRecap.stories.${entry.id}.title`) })),
@@ -1036,6 +1046,10 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
   }, [])
 
   const handleContainerClick = useCallback((event) => {
+    if (skipNextClickRef.current) {
+      skipNextClickRef.current = false
+      return
+    }
     if (languageMenuOpen) {
       setLanguageMenuOpen(false)
     }
@@ -1057,6 +1071,63 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     return () => clearTimeout(timer)
   }, [activeSlide, handleNext, isStorySlideActive, storyExpanded])
 
+  const handleTouchStart = useCallback((event) => {
+    if (event.touches.length !== 1) {
+      touchStartRef.current.active = false
+      return
+    }
+    if (isInteractiveTouchTarget(event.target)) {
+      touchStartRef.current.active = false
+      return
+    }
+    const touch = event.touches[0]
+    touchStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      active: true
+    }
+  }, [])
+
+  const handleTouchEnd = useCallback((event) => {
+    if (!touchStartRef.current.active) return
+    const touch = event.changedTouches[0]
+    touchStartRef.current.active = false
+    if (!touch) return
+
+    const deltaX = touch.clientX - touchStartRef.current.x
+    const deltaY = touch.clientY - touchStartRef.current.y
+    const absDeltaX = Math.abs(deltaX)
+    const absDeltaY = Math.abs(deltaY)
+    const isSwipe = absDeltaX > 30 && absDeltaX > absDeltaY
+    const isTap = absDeltaX < 18 && absDeltaY < 18
+    if (!isSwipe && !isTap) return
+
+    skipNextClickRef.current = true
+    event.preventDefault()
+
+    if (isSwipe) {
+      if (deltaX < 0) {
+        handleNext()
+      } else {
+        handlePrev()
+      }
+      return
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect()
+    const relativeX = touch.clientX - rect.left
+    const threshold = rect.width / 3
+    if (relativeX <= threshold) {
+      handlePrev()
+    } else {
+      handleNext()
+    }
+  }, [handleNext, handlePrev])
+
+  const handleTouchCancel = useCallback(() => {
+    touchStartRef.current.active = false
+  }, [])
+
   const activeSlideContextValue = `${currentSlideId || 'slide'}-${activeSlide}`
 
   if (!portalTarget) return null
@@ -1067,6 +1138,9 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
         <div 
           className={`w-full h-full max-h-[100dvh] md:max-w-sm md:max-h-[600px] md:rounded-3xl overflow-hidden relative shadow-2xl transition-colors duration-700 ease-in-out ${slides[activeSlide].bg}`}
           onClick={handleContainerClick}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          onTouchCancel={handleTouchCancel}
         >
         {/* Progress Bar */}
         <div className="absolute top-0 left-0 right-0 p-4 flex gap-1 z-20">
