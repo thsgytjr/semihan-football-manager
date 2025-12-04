@@ -529,7 +529,12 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
                 group: t(`seasonRecap.champions.groupLabels.${groupKey}`, { defaultValue: groupKey })
               })}
             </h2>
-            <div className="w-full max-w-sm space-y-3 text-left">
+            <div
+              className={`w-full text-left ${sections.length > 1
+                ? 'max-w-2xl grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4'
+                : 'max-w-sm space-y-3'
+              }`}
+            >
               {sections.map((section) => (
                 <div key={section.id} className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
                   <div className="flex items-center gap-3">
@@ -628,7 +633,6 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     .slice(-MAX_PINNED_STORIES)
     .map((id) => storyEntries.find((entry) => entry.id === id))
     .filter(Boolean)
-    .reverse()
   const finaleStats = [
     { id: 'matches', label: t('seasonRecap.finale.stats.matches'), value: stats.totalMatches },
     { id: 'players', label: t('seasonRecap.finale.stats.players'), value: stats.activePlayers },
@@ -1114,9 +1118,9 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
             <h1 className="text-2xl font-bold text-white mb-6">{t('seasonRecap.finale.title')}</h1>
             <div className="w-full max-w-sm space-y-4 text-left">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
-                <div className="grid grid-cols-2 gap-4 mb-4">
+                <div className="grid grid-cols-2 gap-4 mb-4 text-center">
                   {finaleStats.map((stat) => (
-                    <div key={stat.id} className="text-left">
+                    <div key={stat.id} className="flex flex-col items-center justify-center">
                       <p className="text-[11px] uppercase tracking-wide text-white/60">{stat.label}</p>
                       <AnimatedNumber value={stat.value} className="text-2xl font-bold text-white" />
                     </div>
