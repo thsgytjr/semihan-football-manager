@@ -37,6 +37,7 @@ import {
 import { getMembershipBadge } from '../lib/membershipConfig'
 import MobileCategoryCarousel from '../components/MobileCategoryCarousel'
 import { buildPlayerBadgeFactsMap, generateBadgesFromFacts } from '../lib/playerBadgeEngine'
+import SeasonRecap from '../components/SeasonRecap'
 
 // 멤버십 helper 함수
 const S = (v) => v == null ? '' : String(v)
@@ -180,6 +181,7 @@ export default function Dashboard({
   badgesEnabled = true,
   playerStatsEnabled: playerStatsEnabledProp,
   playerFactsEnabled: legacyPlayerFactsEnabled,
+  seasonRecapEnabled = true,
 }) {
   const playerStatsEnabled = playerStatsEnabledProp ?? (legacyPlayerFactsEnabled ?? true)
   const playerFactsEnabled = playerStatsEnabled // legacy alias for any stale references
@@ -203,6 +205,14 @@ export default function Dashboard({
   const [leaderboardSeason, setLeaderboardSeason] = useState('all')
   const [historySeason, setHistorySeason] = useState('all')
   
+  // Season Recap 모달 상태
+  const [showSeasonRecap, setShowSeasonRecap] = useState(seasonRecapEnabled) // 기능 토글 반영
+  
+  // seasonRecapEnabled 변경 시 showSeasonRecap 업데이트
+  useEffect(() => {
+    setShowSeasonRecap(seasonRecapEnabled)
+  }, [seasonRecapEnabled])
+  
   // 시즌 옵션 생성 (년도별)
   const seasonOptions = useMemo(() => {
     const seasons = new Set()
@@ -223,6 +233,12 @@ export default function Dashboard({
     if (leaderboardSeason === 'all') return matches
     return matches.filter(m => extractSeason(m) === leaderboardSeason)
   }, [matches, leaderboardSeason])
+  const seasonRecapMatches = useMemo(() => {
+    if (leaderboardSeasonFilteredMatches.length === 0 && matches.length > 0) {
+      return matches
+    }
+    return leaderboardSeasonFilteredMatches
+  }, [leaderboardSeasonFilteredMatches, matches])
 
   // 시즌별 필터링 (히스토리용)
   const historySeasonFilteredMatches = useMemo(() => {
@@ -277,6 +293,9 @@ export default function Dashboard({
   const draftWinRows = useMemo(() => computeDraftPlayerStatsRows(players, filteredMatches), [players, filteredMatches])
   const captainWinRows = useMemo(() => computeCaptainStatsRows(players, filteredMatches), [players, filteredMatches])
   const draftAttackRows = useMemo(() => computeDraftAttackRows(players, filteredMatches), [players, filteredMatches])
+  const seasonRecapDuoRows = useMemo(() => computeDuoRows(players, seasonRecapMatches), [players, seasonRecapMatches])
+  const seasonRecapDraftAttackRows = useMemo(() => computeDraftAttackRows(players, seasonRecapMatches), [players, seasonRecapMatches])
+  const seasonRecapCaptainRows = useMemo(() => computeCaptainStatsRows(players, seasonRecapMatches), [players, seasonRecapMatches])
 
   const mom = useMoMPrompt({ matches, players })
   const momAwards = useMoMAwardsSummary(matches, { limit: null })
@@ -512,6 +531,85 @@ export default function Dashboard({
     })
     return map
   }, [players])
+  // Spotify-style recap needs its own champion feeds so precompute them once here
+  const seasonRecapLeaders = useMemo(() => {
+    const base = {
+      mom: [],
+      duo: (seasonRecapDuoRows || []).map((row) => ({
+        id: row.id,
+        count: row.count,
+        assist: {
+          id: row.assistId,
+          name: row.aName,
+          membership: row.aMembership,
+          photoUrl: row.aPhotoUrl,
+        },
+        scorer: {
+          id: row.goalId,
+          name: row.gName,
+          membership: row.gMembership,
+          photoUrl: row.gPhotoUrl,
+        },
+      })),
+      draftPlayer: (seasonRecapDraftAttackRows || []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        value: row.pts,
+        photoUrl: row.photoUrl || null,
+      })),
+      draftCaptain: (seasonRecapCaptainRows || []).map((row) => ({
+        id: row.id,
+        name: row.name,
+        value: row.points,
+        photoUrl: row.photoUrl || null,
+      })),
+    }
+    if (!seasonRecapMatches || seasonRecapMatches.length === 0) {
+      return base
+    }
+    const matchIdSet = new Set()
+    seasonRecapMatches.forEach((match) => {
+      if (match?.id != null) {
+        matchIdSet.add(toStr(match.id))
+      }
+    })
+    if (matchIdSet.size === 0) {
+      return base
+    }
+
+    const momCounts = new Map()
+    Object.entries(momAwards?.winnersByMatch || {}).forEach(([matchIdRaw, summary]) => {
+      const matchId = toStr(matchIdRaw)
+      if (!matchId || !matchIdSet.has(matchId)) return
+      const winners = Array.isArray(summary?.winners) ? summary.winners : []
+      winners.forEach((pidRaw) => {
+        const pid = toStr(pidRaw)
+        if (!pid) return
+        momCounts.set(pid, (momCounts.get(pid) || 0) + 1)
+      })
+    })
+
+    const mom = Array.from(momCounts.entries())
+      .map(([pid, value]) => {
+        const player = playerLookup.get(pid)
+        if (player) {
+          return { id: pid, name: player.name || '—', value, photoUrl: player.photoUrl || null }
+        }
+        const fallback = players.find((p) => toStr(p.id) === pid)
+        return { id: pid, name: fallback?.name || '—', value, photoUrl: fallback?.photoUrl || null }
+      })
+      .sort((a, b) => (b.value - a.value) || a.name.localeCompare(b.name))
+
+    return { ...base, mom }
+  }, [
+    momAwards.winnersByMatch,
+    playerLookup,
+    players,
+    seasonRecapCaptainRows,
+    seasonRecapDraftAttackRows,
+    seasonRecapDuoRows,
+    seasonRecapMatches,
+  ])
 
   const playerNameLookup = useMemo(() => {
     const map = new Map()
@@ -1320,6 +1418,16 @@ export default function Dashboard({
             onClose={handleCloseMoM}
             onSubmit={mom.submitVote}
             error={mom.error}
+          />
+        )}
+
+        {showSeasonRecap && (
+          <SeasonRecap
+            matches={seasonRecapMatches}
+            players={players}
+            seasonName={leaderboardSeason !== 'all' ? leaderboardSeason : leaderboardDefaultSeason}
+            leaders={seasonRecapLeaders}
+            onClose={() => setShowSeasonRecap(false)}
           />
         )}
 

@@ -10,7 +10,7 @@ const SUPABASE_SETTINGS_KEY = 'app_settings'
 const DEFAULT_SETTINGS = {
   appTitle: 'Semihan-FM',
   appName: 'Semihan Football Manager',
-  tutorialEnabled: true,
+  seasonRecapEnabled: true,  // 시즌 리캡 슬라이드쇼 표시
   maintenanceMode: false, // 유지보수 모드 (개발자만 접근 가능)
   // 선택: 관리자 이메일 화이트리스트(있으면 이 목록만 Admin 허용)
   adminEmails: [],
@@ -157,10 +157,10 @@ export async function updateAppTitle(newTitle) {
   return false
 }
 
-// 튜토리얼 활성화 상태 업데이트 (서버 + 로컬)
-export async function updateTutorialEnabled(enabled) {
+// 시즌 리캡 활성화 상태 업데이트 (서버 + 로컬)
+export async function updateSeasonRecapEnabled(enabled) {
   const settings = getAppSettings()
-  settings.tutorialEnabled = enabled
+  settings.seasonRecapEnabled = enabled
   
   const success = await saveAppSettingsToServer(settings)
   return success

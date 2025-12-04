@@ -627,7 +627,7 @@ If you encounter issues:
 3. **Configure membership**: Customize membership types in settings
 4. **Set up accounting**: Configure dues and match fees
 5. **Test all features**: Match planner, draft, formation board, stats
-6. **Train admins**: Share admin credentials and tutorial
+6. **Train admins**: Share admin credentials and quick-start guide
 
 ---
 

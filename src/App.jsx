@@ -16,14 +16,13 @@ import{logger}from"./lib/logger"
 const DEVELOPER_EMAIL = 'sonhyosuck@gmail.com'
 import{runMigrations}from"./lib/dbMigration"
 import ToastHub from"./components/Toast";import Card from"./components/Card"
-import AppTutorial,{TutorialButton,useAutoTutorial}from"./components/AppTutorial"
 import AdminLoginDialog from"./components/AdminLoginDialog"
 import VisitorStats from"./components/VisitorStats"
 import ProdDataWarning from"./components/ProdDataWarning"
 import LanguageSwitcher from"./components/LanguageSwitcherNew"
 import Dashboard from"./pages/Dashboard";import PlayersPage from"./pages/PlayersPage";import MaintenancePage from"./pages/MaintenancePage"
 import logoUrl from"./assets/GoalifyLogo.png"
-import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateTutorialEnabled,updateMaintenanceMode,updateFeatureEnabled,updateLeaderboardCategoryEnabled,updateBadgeTierOverrides}from"./lib/appSettings"
+import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateSeasonRecapEnabled,updateMaintenanceMode,updateFeatureEnabled,updateLeaderboardCategoryEnabled,updateBadgeTierOverrides}from"./lib/appSettings"
 import { getBadgeTierRuleCatalog } from './lib/playerBadgeEngine'
 
 const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden role="img" className="shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5"/><rect x="2" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/><rect x="18.5" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>)
@@ -60,12 +59,10 @@ export default function App(){
   const[loadAttempt,setLoadAttempt]=useState(0)
   const[appTitle,setAppTitle]=useState(()=>getAppSettings().appTitle)
   const[settingsOpen,setSettingsOpen]=useState(false)
-  const[tutorialOpen,setTutorialOpen]=useState(false)
-  const[tutorialEnabled,setTutorialEnabled]=useState(()=>getAppSettings().tutorialEnabled)
+  const[seasonRecapEnabled,setSeasonRecapEnabled]=useState(()=>getAppSettings().seasonRecapEnabled)
   const[maintenanceMode,setMaintenanceMode]=useState(()=>getAppSettings().maintenanceMode||false)
   const[featuresEnabled,setFeaturesEnabled]=useState(()=>getAppSettings().features||{})
   const[badgeTierOverrides,setBadgeTierOverrides]=useState(()=>getAppSettings().badgeTierOverrides||{})
-  const{shouldShowTutorial,setShouldShowTutorial}=useAutoTutorial(isAdmin)
   const[previewMode,setPreviewMode]=useState(()=>isPreviewMode())
   const[isDev,setIsDev]=useState(()=>isDevelopmentEnvironment())
   const[showInviteSetup,setShowInviteSetup]=useState(false)
@@ -180,14 +177,6 @@ export default function App(){
     return unsubscribe
   },[])
 
-  // 첫 방문자 자동 튜토리얼 (튜토리얼이 활성화된 경우에만)
-  useEffect(()=>{
-    if(tutorialEnabled && shouldShowTutorial){
-      setTutorialOpen(true)
-      setShouldShowTutorial(false)
-    }
-  },[tutorialEnabled,shouldShowTutorial,setShouldShowTutorial])
-
   // 브라우저 탭 타이틀 업데이트
   useEffect(()=>{
     document.title = appTitle
@@ -200,9 +189,6 @@ export default function App(){
         const settings = await loadAppSettingsFromServer()
         if(settings.appTitle && settings.appTitle !== appTitle){
           setAppTitle(settings.appTitle)
-        }
-        if(settings.tutorialEnabled !== undefined && settings.tutorialEnabled !== tutorialEnabled){
-          setTutorialEnabled(settings.tutorialEnabled)
         }
         if(settings.maintenanceMode !== undefined){
           setMaintenanceMode(settings.maintenanceMode)
@@ -768,11 +754,11 @@ export default function App(){
     return false
   }
 
-  async function handleTutorialToggle(enabled){
-    setTutorialEnabled(enabled)
-    const success = await updateTutorialEnabled(enabled)
+  async function handleSeasonRecapToggle(enabled){
+    setSeasonRecapEnabled(enabled)
+    const success = await updateSeasonRecapEnabled(enabled)
     if(success){
-      notify(enabled?"튜토리얼이 활성화되었습니다.":"튜토리얼이 비활성화되었습니다.","success")
+      notify(enabled?"시즌 리캡이 활성화되었습니다.":"시즌 리캡이 비활성화되었습니다.","success")
     }else{
       notify("설정 저장에 실패했습니다.","error")
     }
@@ -982,7 +968,6 @@ export default function App(){
           <div className="ml-2 sm:ml-3 pl-2 sm:pl-3 border-l border-stone-300 flex-shrink-0 relative z-10">
             <div className="flex gap-2 items-center">
               <LanguageSwitcher />
-              {tutorialEnabled && <TutorialButton onClick={()=>setTutorialOpen(true)}/>}
               {isAdmin?(
                 <>
                   <button
@@ -1097,6 +1082,7 @@ export default function App(){
                   leaderboardToggles={featuresEnabled?.leaderboards || {}}
                   badgesEnabled={badgesFeatureEnabled}
                   playerStatsEnabled={playerStatsModalEnabled}
+                  seasonRecapEnabled={seasonRecapEnabled ?? true}
                 />
               )}
               {tab==="players"&&isAdmin&&featuresEnabled.players&&(
@@ -1160,8 +1146,7 @@ export default function App(){
     </footer>
 
     <AdminLoginDialog isOpen={loginOpen} onClose={()=>setLoginOpen(false)} onSuccess={onAdminSuccess}/>
-  <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle} tutorialEnabled={tutorialEnabled} onTutorialToggle={handleTutorialToggle} maintenanceMode={maintenanceMode} onMaintenanceModeToggle={handleMaintenanceModeToggle} featuresEnabled={featuresEnabled} onFeatureToggle={handleFeatureToggle} onLeaderboardToggle={handleLeaderboardToggle} badgeTierOverrides={badgeTierOverrides} onSaveBadgeTierOverrides={handleSaveBadgeTierOverrides} isAdmin={isAdmin} isAnalyticsAdmin={isAnalyticsAdmin} visits={visits}/>
-    {tutorialEnabled && <AppTutorial isOpen={tutorialOpen} onClose={()=>setTutorialOpen(false)} isAdmin={isAdmin}/>}
+  <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle} seasonRecapEnabled={seasonRecapEnabled} onSeasonRecapToggle={handleSeasonRecapToggle} maintenanceMode={maintenanceMode} onMaintenanceModeToggle={handleMaintenanceModeToggle} featuresEnabled={featuresEnabled} onFeatureToggle={handleFeatureToggle} onLeaderboardToggle={handleLeaderboardToggle} badgeTierOverrides={badgeTierOverrides} onSaveBadgeTierOverrides={handleSaveBadgeTierOverrides} isAdmin={isAdmin} isAnalyticsAdmin={isAnalyticsAdmin} visits={visits}/>
   </div>)}
 const TabButton = React.memo(function TabButton({icon,label,active,onClick,loading}){return(<button onClick={onClick} disabled={loading} title={label} aria-label={label} className={`flex items-center gap-1.5 rounded-md px-2.5 py-2.5 sm:px-3 sm:py-3 text-sm transition-all duration-200 min-h-[42px] sm:min-h-[44px] touch-manipulation whitespace-nowrap ${active?"bg-emerald-500 text-white shadow-md":"text-stone-700 hover:bg-stone-200 active:bg-stone-300 active:scale-95"} ${loading?"opacity-75 cursor-wait":""}`} style={{touchAction: 'manipulation'}} aria-pressed={active}>{loading && active ? <svg className="w-4 h-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg> : <span className="w-4 h-4 flex-shrink-0">{icon}</span>}{active && <span className="text-xs font-semibold hidden sm:inline">{label}</span>}</button>)})
 
@@ -1353,7 +1338,7 @@ function mergeBadgeTierOverridesForSave(catalog = [], values = {}, existing = {}
 }
 
 /* ── Settings Dialog ─────────────────── */
-function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,onTutorialToggle,maintenanceMode,onMaintenanceModeToggle,featuresEnabled,onFeatureToggle,onLeaderboardToggle,badgeTierOverrides,onSaveBadgeTierOverrides,isAdmin,isAnalyticsAdmin,visits}){
+function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,seasonRecapEnabled,onSeasonRecapToggle,maintenanceMode,onMaintenanceModeToggle,featuresEnabled,onFeatureToggle,onLeaderboardToggle,badgeTierOverrides,onSaveBadgeTierOverrides,isAdmin,isAnalyticsAdmin,visits}){
   const { t } = useTranslation()
   const[newTitle,setNewTitle]=useState(appTitle)
   const[titleEditMode,setTitleEditMode]=useState(false)
@@ -1532,24 +1517,24 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,tutorialEnabled,o
             )}
           </div>
 
-          {/* 튜토리얼 활성화 토글 */}
+          {/* 시즌 리캡 활성화 토글 */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <div>
-                <label className="block text-sm font-medium text-stone-700">튜토리얼 기능</label>
-                <p className="text-xs text-stone-500 mt-0.5">앱 가이드 및 자동 튜토리얼 활성화</p>
+                <label className="block text-sm font-medium text-stone-700">{t('settings.seasonRecap')}</label>
+                <p className="text-xs text-stone-500 mt-0.5">{t('settings.seasonRecapDesc')}</p>
               </div>
               <button
-                onClick={() => onTutorialToggle(!tutorialEnabled)}
+                onClick={() => onSeasonRecapToggle(!seasonRecapEnabled)}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
-                  tutorialEnabled ? 'bg-emerald-600' : 'bg-stone-300'
+                  seasonRecapEnabled ? 'bg-emerald-600' : 'bg-stone-300'
                 }`}
                 role="switch"
-                aria-checked={tutorialEnabled}
+                aria-checked={seasonRecapEnabled}
               >
                 <span
                   className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                    tutorialEnabled ? 'translate-x-6' : 'translate-x-1'
+                    seasonRecapEnabled ? 'translate-x-6' : 'translate-x-1'
                   }`}
                 />
               </button>

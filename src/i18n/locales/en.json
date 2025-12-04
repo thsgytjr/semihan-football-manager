@@ -86,12 +86,10 @@
   },
   "settings": {
     "title": "App Settings",
-    "description": "Manage app title, tutorial and feature settings.",
+    "description": "Manage app title and feature settings.",
     "appTitle": "App Title",
-    "tutorial": "Tutorial Feature",
-    "tutorialDesc": "Enable app guide and automatic tutorial",
-    "tutorialEnabled": "Tutorial enabled.",
-    "tutorialDisabled": "Tutorial disabled.",
+    "seasonRecap": "Season Recap",
+    "seasonRecapDesc": "Show season recap slideshow after season ends",
     "features": "Feature Settings",
     "featuresDesc": "Control visibility of each tab (data is preserved)",
     "featureEnabled": "{{feature}} feature enabled.",
@@ -566,6 +564,145 @@
       "mom-awards": {
         "name": "MOM Awards",
         "description": "MOM awards {{value}} time(s)"
+      }
+    }
+  },
+  "seasonRecap": {
+    "intro": {
+      "defaultSeason": "Goalify",
+      "titleSuffix": "SEASON WRAPPED",
+      "tagline": "Thank you for running this season together!"
+    },
+    "common": {
+      "tapHint": "Tap to continue",
+      "plusMore": "+{{count}} more",
+      "multiPlayers": "multiple players",
+      "matchFallback": "an unforgettable night",
+      "unknown": "Unknown"
+    },
+    "language": {
+      "label": "Language",
+      "aria": "Select recap language",
+      "options": {
+        "en": {
+          "label": "English",
+          "short": "EN"
+        },
+        "ko": {
+          "label": "Korean",
+          "short": "KO"
+        }
+      }
+    },
+    "overview": {
+      "label": "Season Pulse",
+      "title": "Season Overview",
+      "description": "No major injuries, no off weeks—just everyone showing up for one another. Thanks for carrying the season all the way through.",
+      "cards": {
+        "consistency": {
+          "title": "Consistency",
+          "body": "Rain, cold, or workdays never stopped this group from showing up week after week."
+        },
+        "care": {
+          "title": "Care",
+          "body": "All the subtle cover runs and quick check-ins kept everyone safe until the final whistle."
+        },
+        "passion": {
+          "title": "Passion",
+          "body": "Sprints in the dying minutes and high fives afterward made this season glow."
+        }
+      }
+    },
+    "stories": {
+      "heading": "Season Stories",
+      "compactButton": "Back to summary",
+      "fiesta": {
+        "title": "Goal Fireworks Night",
+        "mainPrefix": "Our biggest scoring party came at {{match}}, unleashing ",
+        "mainSuffix": " goals.",
+        "alt": "Every match stayed tight this year—no runaway blowouts."
+      },
+      "hat-trick": {
+        "title": "Hat-trick Club",
+        "mainSuffix": " hat-tricks lit up the board, highlighted by {{players}}.",
+        "alt": "Defenses were locked in—no hat-tricks sneaked through."
+      },
+      "rookies": {
+        "title": "New Faces, New Spark",
+        "mainSuffix": " new members joined, and {{names}} kept the energy fresh.",
+        "alt": "A trusted core moved in sync from start to finish.",
+        "namesFallback": "the whole squad"
+      },
+      "energy": {
+        "title": "Team Energy Radar",
+        "goalPrefix": "Goal contributors: ",
+        "goalSuffix": " players, ",
+        "assistPrefix": "Assist providers: ",
+        "assistSuffix": " players. ",
+        "avgPrefix": "Season average: ",
+        "avgSuffix": " goals per match. The pulse never faded."
+      }
+    },
+    "slides": {
+      "goldenBoot": {
+        "title": "GOLDEN BOOT",
+        "subtitle": "Top Scorer"
+      },
+      "playmaker": {
+        "title": "PLAYMAKER",
+        "subtitle": "Most Assists"
+      },
+      "ironman": {
+        "title": "IRON MAN",
+        "subtitle": "Most Appearances"
+      },
+      "wallKeepers": {
+        "title": "WALL DEFENDERS",
+        "subtitle": "Clean Sheet Leaders"
+      }
+    },
+    "metrics": {
+      "goals": "Goals",
+      "assists": "Assists",
+      "matches": "Matches",
+      "cleanSheets": "Clean Sheets",
+      "awards": "Awards",
+      "points": "Pts"
+    },
+    "champions": {
+      "label": "Champions",
+      "slideTitle": "Leaderboard Highlights {{index}}",
+      "duoTo": "to {{name}}",
+      "tieNote": "and {{count}} more tied (see leaderboard)",
+      "sections": {
+        "mom": {
+          "title": "MOM King",
+          "subtitle": "Man of the Match legends"
+        },
+        "duo": {
+          "title": "Duo Top",
+          "subtitle": "Assist → Goal chemistry"
+        },
+        "draftPlayer": {
+          "title": "Draft Attack",
+          "subtitle": "Player points king"
+        },
+        "draftCaptain": {
+          "title": "Captain Wins",
+          "subtitle": "Locker-room commanders"
+        }
+      }
+    },
+    "finale": {
+      "label": "Next Chapter",
+      "title": "See you next season!",
+      "description": "Already counting down to the {{season}} season—bring on the next chapter.",
+      "cta": "Close Recap",
+      "stats": {
+        "matches": "Matches",
+        "players": "Players",
+        "goals": "Goals",
+        "assists": "Assists"
       }
     }
   }

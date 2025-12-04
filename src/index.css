@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 @keyframes spin-slow {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
@@ -26,7 +28,6 @@
 .animate-twinkle {
   animation: twinkle 1.8s ease-in-out infinite;
 }
-@import "tailwindcss";
 
 :root { 
   color-scheme: light; 

@@ -137,7 +137,7 @@ VALUES (
   '{
     "appTitle": "Hangang-FM",
     "appName": "Hangang Football Manager",
-    "tutorialEnabled": true,
+    "seasonRecapEnabled": true,
     "features": { "players": true, "planner": true, "draft": true, "formation": true, "stats": true }
   }'::jsonb
 )

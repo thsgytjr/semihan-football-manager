@@ -19,7 +19,7 @@ VALUES (
   '{
     "appTitle": "Semihan-FM",
     "appName": "Semihan Football Manager",
-    "tutorialEnabled": true,
+    "seasonRecapEnabled": true,
     "features": {
       "players": true,
       "planner": true,

@@ -16,7 +16,7 @@
 --   Value JSONB structure (extended):
 --   {
 --     "appTitle": "...",
---     "tutorialEnabled": true/false,
+--     "seasonRecapEnabled": true/false,
 --     "features": {
 --       "players": true/false,
 --       "planner": true/false,
@@ -61,7 +61,7 @@ VALUES (
   'app_config',
   '{
     "appTitle": "Goalify",
-    "tutorialEnabled": true,
+    "seasonRecapEnabled": true,
     "features": {
       "players": true,
       "planner": true,

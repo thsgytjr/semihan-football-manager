@@ -273,7 +273,7 @@ VALUES (
   '{
     "appTitle": "NEWTEAM-FM",
     "appName": "NewTeam Football Manager",
-    "tutorialEnabled": true,
+    "seasonRecapEnabled": true,
     "features": {
       "players": true,
       "planner": true,
