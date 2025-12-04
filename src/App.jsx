@@ -63,6 +63,7 @@ export default function App(){
   const[maintenanceMode,setMaintenanceMode]=useState(()=>getAppSettings().maintenanceMode||false)
   const[featuresEnabled,setFeaturesEnabled]=useState(()=>getAppSettings().features||{})
   const[badgeTierOverrides,setBadgeTierOverrides]=useState(()=>getAppSettings().badgeTierOverrides||{})
+  const[appSettingsLoaded,setAppSettingsLoaded]=useState(false)
   const[previewMode,setPreviewMode]=useState(()=>isPreviewMode())
   const[isDev,setIsDev]=useState(()=>isDevelopmentEnvironment())
   const[showInviteSetup,setShowInviteSetup]=useState(false)
@@ -208,6 +209,8 @@ export default function App(){
         }
       }catch(e){
         logger.error('Failed to load app settings from server:', e)
+      }finally{
+        setAppSettingsLoaded(true)
       }
     })()
   },[])
@@ -1083,6 +1086,7 @@ export default function App(){
                   badgesEnabled={badgesFeatureEnabled}
                   playerStatsEnabled={playerStatsModalEnabled}
                   seasonRecapEnabled={seasonRecapEnabled ?? true}
+                  seasonRecapReady={appSettingsLoaded}
                 />
               )}
               {tab==="players"&&isAdmin&&featuresEnabled.players&&(

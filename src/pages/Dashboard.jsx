@@ -182,6 +182,7 @@ export default function Dashboard({
   playerStatsEnabled: playerStatsEnabledProp,
   playerFactsEnabled: legacyPlayerFactsEnabled,
   seasonRecapEnabled = true,
+  seasonRecapReady = true,
 }) {
   const playerStatsEnabled = playerStatsEnabledProp ?? (legacyPlayerFactsEnabled ?? true)
   const playerFactsEnabled = playerStatsEnabled // legacy alias for any stale references
@@ -206,12 +207,16 @@ export default function Dashboard({
   const [historySeason, setHistorySeason] = useState('all')
   
   // Season Recap 모달 상태
-  const [showSeasonRecap, setShowSeasonRecap] = useState(seasonRecapEnabled) // 기능 토글 반영
+  const [showSeasonRecap, setShowSeasonRecap] = useState(() => seasonRecapEnabled && seasonRecapReady) // 기능 토글 반영
   
-  // seasonRecapEnabled 변경 시 showSeasonRecap 업데이트
+  // seasonRecapEnabled/Ready 상태 변화 시 모달 표시 여부 업데이트
   useEffect(() => {
-    setShowSeasonRecap(seasonRecapEnabled)
-  }, [seasonRecapEnabled])
+    if (seasonRecapReady) {
+      setShowSeasonRecap(seasonRecapEnabled)
+    } else {
+      setShowSeasonRecap(false)
+    }
+  }, [seasonRecapEnabled, seasonRecapReady])
   
   // 시즌 옵션 생성 (년도별)
   const seasonOptions = useMemo(() => {
