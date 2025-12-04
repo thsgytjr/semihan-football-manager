@@ -1,9 +1,11 @@
-import React, { useMemo, useState, useEffect, useCallback, useRef } from 'react'
+import React, { useMemo, useState, useEffect, useCallback, useRef, useContext } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Users, Activity, Calendar, Star, Target, Sparkles, Flame, Smile, Crown, Handshake, Gamepad2, Shield } from 'lucide-react'
 import { extractStatsByPlayer, extractAttendeeIds, extractDateKey } from '../lib/matchUtils'
 import InitialAvatar from './InitialAvatar'
 import { useTranslation } from 'react-i18next'
+
+const ActiveSlideContext = React.createContext('season-recap-initial')
 
 const STORY_CONFIGS = [
   {
@@ -1001,7 +1003,8 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
   ]
 
   const slideCount = slides.length
-  const isStorySlideActive = slides[activeSlide]?.id === 'stories'
+  const currentSlideId = slides[activeSlide]?.id
+  const isStorySlideActive = currentSlideId === 'stories'
   useEffect(() => {
     if (!isStorySlideActive) {
       setStoryExpanded(false)
@@ -1054,14 +1057,17 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     return () => clearTimeout(timer)
   }, [activeSlide, handleNext, isStorySlideActive, storyExpanded])
 
+  const activeSlideContextValue = `${currentSlideId || 'slide'}-${activeSlide}`
+
   if (!portalTarget) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black">
-      <div 
-        className={`w-full h-full max-h-[100dvh] md:max-w-sm md:max-h-[600px] md:rounded-3xl overflow-hidden relative shadow-2xl transition-colors duration-700 ease-in-out ${slides[activeSlide].bg}`}
-        onClick={handleContainerClick}
-      >
+    <ActiveSlideContext.Provider value={activeSlideContextValue}>
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black">
+        <div 
+          className={`w-full h-full max-h-[100dvh] md:max-w-sm md:max-h-[600px] md:rounded-3xl overflow-hidden relative shadow-2xl transition-colors duration-700 ease-in-out ${slides[activeSlide].bg}`}
+          onClick={handleContainerClick}
+        >
         {/* Progress Bar */}
         <div className="absolute top-0 left-0 right-0 p-4 flex gap-1 z-20">
           {slides.map((_, idx) => (
@@ -1139,9 +1145,9 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
             {slides[activeSlide].content}
           </div>
 
-      </div>
-      
-      <style>{`
+        </div>
+        
+        <style>{`
         @keyframes fade-in-up {
           from { opacity: 0; transform: translateY(20px); }
           to { opacity: 1; transform: translateY(0); }
@@ -1312,7 +1318,8 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
           to { transform: translate3d(0,-40px,0); }
         }
       `}</style>
-    </div>,
+      </div>
+    </ActiveSlideContext.Provider>,
     portalTarget
   );
 }
@@ -1323,9 +1330,14 @@ const sanitizeCountValue = (raw) => {
   return numeric < 0 ? 0 : numeric
 }
 
-function useCountUp(targetValue = 0, duration = 1400) {
+function useCountUp(targetValue = 0, duration = 1400, resetSignal = null) {
   const [display, setDisplay] = useState(0)
   const previousValueRef = useRef(0)
+
+  useEffect(() => {
+    previousValueRef.current = 0
+    setDisplay(0)
+  }, [resetSignal])
 
   useEffect(() => {
     const target = sanitizeCountValue(targetValue)
@@ -1341,7 +1353,7 @@ function useCountUp(targetValue = 0, duration = 1400) {
       return undefined
     }
 
-    const start = performance.now()
+    const start = typeof performance !== 'undefined' ? performance.now() : Date.now()
 
     const animate = (now) => {
       const progress = Math.min((now - start) / duration, 1)
@@ -1361,13 +1373,14 @@ function useCountUp(targetValue = 0, duration = 1400) {
       if (raf) cancelAnimationFrame(raf)
       previousValueRef.current = latestValue
     }
-  }, [targetValue, duration])
+  }, [targetValue, duration, resetSignal])
 
   return display
 }
 
 function AnimatedNumber({ value = 0, decimals = 0, className = '' }) {
-  const animated = sanitizeCountValue(useCountUp(value))
+  const activeSlideKey = useContext(ActiveSlideContext)
+  const animated = sanitizeCountValue(useCountUp(value, 1400, activeSlideKey))
   const formatted = decimals > 0
     ? animated.toFixed(decimals)
     : Math.round(animated).toLocaleString()

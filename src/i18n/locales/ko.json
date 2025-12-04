@@ -624,7 +624,7 @@
       },
       "hat-trick": {
         "title": "해트트릭 클럽",
-        "mainSuffix": "번의 해트트릭이 탄생했고, {{players}} 전광판을 달궜어요.",
+        "mainSuffix": "번의 해트트릭이 탄생했고, {{players}} 필드를 달궜어요.",
         "alt": "수비 조직력이 워낙 촘촘해서 해트트릭은 잠시 휴식!"
       },
       "rookies": {

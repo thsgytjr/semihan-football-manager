@@ -624,7 +624,7 @@
       },
       "hat-trick": {
         "title": "Hat-trick Club",
-        "mainSuffix": " hat-tricks lit up the board, highlighted by {{players}}.",
+        "mainSuffix": " hat-tricks lit up the field, highlighted by {{players}}.",
         "alt": "Defenses were locked in—no hat-tricks sneaked through."
       },
       "rookies": {
