@@ -330,6 +330,17 @@
     "total": "Total",
     "gameWins": "Game Wins",
     "weightedPointsAppliedBadge": "⚖︎ Weighted points applied",
+    "teamSummary": "{{label}} · {{count}}{{unit}}",
+    "teamPower": "Team Power",
+    "teamAvgPower": "Avg {{value}}",
+    "playerUnit": {
+      "one": " p",
+      "other": " p"
+    },
+    "fees": {
+      "memberEach": "Member ${{amount}}/pp",
+      "guestEach": "Guest ${{amount}}/pp"
+    },
     "noVideoLinks": "No video links available.",
     "field1": "Field 1",
     "field2": "Field 2",

@@ -229,6 +229,13 @@ export default function Dashboard({
     return ['all', ...Array.from(seasons).sort().reverse()]
   }, [matches])
 
+  const seasonSelectOptions = useMemo(() => (
+    seasonOptions.map((value) => ({
+      value,
+      label: value === 'all' ? t('leaderboard.allTime') : String(value)
+    }))
+  ), [seasonOptions, t])
+
   const leaderboardDefaultSeason = useMemo(() => {
     const firstSeason = seasonOptions.find((option) => option !== 'all')
     return firstSeason || 'all'
@@ -1541,7 +1548,7 @@ export default function Dashboard({
                       setLeaderboardSeason(val)
                       setApDateKey('all')
                     }}
-                    options={seasonOptions.map(v => ({ value: v, label: v === 'all' ? t('leaderboard.allTime') : `${v}년` }))}
+                    options={seasonSelectOptions}
                     size="sm"
                   />
                 </div>
@@ -1692,7 +1699,7 @@ export default function Dashboard({
                     historySeasonUserSetRef.current = true
                     setHistorySeason(val)
                   }}
-                  options={seasonOptions.map(v => ({ value: v, label: v === 'all' ? t('leaderboard.allTime') : `${v}년` }))}
+                  options={seasonSelectOptions}
                   size="sm"
                 />
               </div>

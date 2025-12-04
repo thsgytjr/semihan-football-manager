@@ -326,6 +326,17 @@
     "total": "합계",
     "gameWins": "게임승리",
     "weightedPointsAppliedBadge": "⚖︎ 가중 승점 적용",
+    "teamSummary": "{{label}} · {{count}}{{unit}}",
+    "teamPower": "팀파워",
+    "teamAvgPower": "평균 {{value}}",
+    "playerUnit": {
+      "one": "명",
+      "other": "명"
+    },
+    "fees": {
+      "memberEach": "정회원 ${{amount}}/인",
+      "guestEach": "게스트 ${{amount}}/인"
+    },
     "noVideoLinks": "등록된 비디오 링크가 없습니다.",
     "field1": "구장1",
     "field2": "구장2",

@@ -1096,10 +1096,10 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
           <>
             {m.teamCount}{t('matchHistory.teams')} ·💰{t('matchHistory.totalFees')} ${fees?.total??0}
             {typeof fees?.memberFee==="number" && (
-              <> · 정회원 ${fees.memberFee}/인</>
+              <> · {t('matchHistory.fees.memberEach', { amount: fees.memberFee })}</>
             )}
             {fees?.guestCount>0 && typeof fees?.guestFee==="number" && (
-              <> · 게스트 ${fees.guestFee}/인</>
+              <> · {t('matchHistory.fees.guestEach', { amount: fees.guestFee })}</>
             )}
             {fees?._estimated && <span className="opacity-70"> (추정)</span>}
           </>
@@ -2751,6 +2751,11 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
             color: teamColor.text,
             borderColor: teamColor.border,
           } : {}
+          const teamLabel = teamColor ? teamColor.label : kit.label
+          const playerUnit = list.length === 1
+            ? t('matchHistory.playerUnit.one')
+            : t('matchHistory.playerUnit.other')
+          const teamSummary = t('matchHistory.teamSummary', { label: teamLabel, count: list.length, unit: playerUnit })
           
           return (
             <div key={i} className="overflow-hidden rounded border border-gray-200 relative">
@@ -2762,8 +2767,8 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   {t('matchHistory.teamN', { n: i+1 })} {isWinner && <span className="ml-2">🏆</span>}
                 </div>
                 {isAdmin && !hideOVR
-                  ? <div className="opacity-80">{teamColor ? teamColor.label : kit.label} · {list.length}명 · <b>팀파워</b> {sum} · 평균 {avg}</div>
-                  : <div className="opacity-80">{teamColor ? teamColor.label : kit.label} · {list.length}명</div>}
+                  ? <div className="opacity-80">{teamSummary} · <b>{t('matchHistory.teamPower')}</b> {sum} · {t('matchHistory.teamAvgPower', { value: avg })}</div>
+                  : <div className="opacity-80">{teamSummary}</div>}
               </div>
               <ul className="divide-y divide-gray-100 relative z-10">
                 {isWinner && isDraftMode && m?.id===latestDraftId && <Confetti />}
