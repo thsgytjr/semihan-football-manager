@@ -107,7 +107,6 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
   const [verifiedPulsePlayers, setVerifiedPulsePlayers] = useState([])
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false)
   const touchStartRef = useRef({ x: 0, y: 0, active: false })
-  const skipNextClickRef = useRef(false)
 
   const storyEntries = useMemo(
     () => STORY_CONFIGS.map((entry) => ({ ...entry, title: t(`seasonRecap.stories.${entry.id}.title`) })),
@@ -1046,10 +1045,6 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
   }, [])
 
   const handleContainerClick = useCallback((event) => {
-    if (skipNextClickRef.current) {
-      skipNextClickRef.current = false
-      return
-    }
     if (languageMenuOpen) {
       setLanguageMenuOpen(false)
     }
@@ -1102,7 +1097,6 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     const isTap = absDeltaX < 18 && absDeltaY < 18
     if (!isSwipe && !isTap) return
 
-    skipNextClickRef.current = true
     event.preventDefault()
 
     if (isSwipe) {
