@@ -61,13 +61,14 @@ function extractStatsByPlayer(m) {
       const cleanSheet = Number(v?.cleanSheet || v?.cs || 0)
       const yellowCards = Number(v?.yellowCards || v?.yc || 0)
       const redCards = Number(v?.redCards || v?.rc || 0)
+      const blackCards = Number(v?.blackCards || v?.bc || 0)
       const events = Array.isArray(v?.events) ? v.events.map(e => ({
         type: e.type || e.event || (e?.isAssist ? 'assist' : 'goal'),
         date: e.dateISO || e.date || e.ts || e.time,
         assistedBy: e.assistedBy,
         linkedToGoal: e.linkedToGoal
       })).filter(Boolean) : []
-      out[pid] = { goals, assists, events, cleanSheet, yellowCards, redCards }
+      out[pid] = { goals, assists, events, cleanSheet, yellowCards, redCards, blackCards }
     }
     return out
   }
@@ -81,7 +82,7 @@ function extractStatsByPlayer(m) {
       const date = rec?.dateISO || rec?.date || rec?.time || rec?.ts || null
       const isGoal = /goal/i.test(type)
       const isAssist = /assist/i.test(type)
-      out[pid] = out[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      out[pid] = out[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
       if (isGoal) {
         out[pid].goals = (out[pid].goals || 0) + Number(rec?.goals || 1)
         out[pid].events.push({ type: 'goal', date })
@@ -97,6 +98,9 @@ function extractStatsByPlayer(m) {
       }
       if (Number(rec?.redCards || 0) > 0) {
         out[pid].redCards = (out[pid].redCards || 0) + Number(rec.redCards)
+      }
+      if (Number(rec?.blackCards || 0) > 0) {
+        out[pid].blackCards = (out[pid].blackCards || 0) + Number(rec.blackCards)
       }
     }
     return out
@@ -147,7 +151,8 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
         events: Array.isArray(rec.events) ? rec.events.slice() : [],
         cleanSheet: csValue,
         yellowCards: Number(rec.yellowCards || 0),
-        redCards: Number(rec.redCards || 0)
+        redCards: Number(rec.redCards || 0),
+        blackCards: Number(rec.blackCards || 0)
       }
     }
     setDraft(next)
@@ -1148,7 +1153,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
     setDraft(prev => {
       const next = JSON.parse(JSON.stringify(prev || {}))
       csCount.forEach((count, pid) => {
-        const rec = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+        const rec = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
         rec.cleanSheet = count
         next[pid] = rec
       })
@@ -1366,12 +1371,13 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
                     <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="클린시트">CS</th>
                     <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="옐로우카드">YC</th>
                     <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="레드카드">RC</th>
+                    <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="블랙카드">BC</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {team.players.map(p => {
-                    const rec = draft[toStr(p.id)] || { goals: 0, assists: 0, cleanSheet: 0, yellowCards: 0, redCards: 0 }
-                    const hasStats = (rec.goals > 0 || rec.assists > 0 || rec.cleanSheet > 0 || rec.yellowCards > 0 || rec.redCards > 0)
+                    const rec = draft[toStr(p.id)] || { goals: 0, assists: 0, cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
+                    const hasStats = (rec.goals > 0 || rec.assists > 0 || rec.cleanSheet > 0 || rec.yellowCards > 0 || rec.redCards > 0 || rec.blackCards > 0)
 
                     return (
                       <tr key={toStr(p.id)} className={`transition-colors ${hasStats ? 'bg-blue-50/50' : 'hover:bg-gray-50'}`}>
@@ -1425,6 +1431,10 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
                         {/* RC Counter - Compact */}
                         <td className="px-1 py-2">
                           <CompactCounterRC player={p} draft={draft} setDraft={setDraft} />
+                        </td>
+                        {/* BC Counter - Compact */}
+                        <td className="px-1 py-2">
+                          <CompactCounterBC player={p} draft={draft} setDraft={setDraft} />
                         </td>
                       </tr>
                     )
@@ -1513,7 +1523,7 @@ function CompactCounterCS({ player, draft, setDraft }) {
   const inc = () => {
     setDraft(prev => {
       const next = JSON.parse(JSON.stringify(prev))
-      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
       base.cleanSheet = Math.max(0, Number(base.cleanSheet || 0) + 1)
       next[pid] = base
       return next
@@ -1523,7 +1533,7 @@ function CompactCounterCS({ player, draft, setDraft }) {
   const dec = () => {
     setDraft(prev => {
       const next = JSON.parse(JSON.stringify(prev))
-      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
       base.cleanSheet = Math.max(0, Number(base.cleanSheet || 0) - 1)
       next[pid] = base
       return next
@@ -1561,7 +1571,7 @@ function CompactCounterYC({ player, draft, setDraft }) {
   const inc = () => {
     setDraft(prev => {
       const next = JSON.parse(JSON.stringify(prev))
-      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
       base.yellowCards = Math.max(0, Number(base.yellowCards || 0) + 1)
       next[pid] = base
       return next
@@ -1571,7 +1581,7 @@ function CompactCounterYC({ player, draft, setDraft }) {
   const dec = () => {
     setDraft(prev => {
       const next = JSON.parse(JSON.stringify(prev))
-      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
       base.yellowCards = Math.max(0, Number(base.yellowCards || 0) - 1)
       next[pid] = base
       return next
@@ -1609,7 +1619,7 @@ function CompactCounterRC({ player, draft, setDraft }) {
   const inc = () => {
     setDraft(prev => {
       const next = JSON.parse(JSON.stringify(prev))
-      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
       base.redCards = Math.max(0, Number(base.redCards || 0) + 1)
       next[pid] = base
       return next
@@ -1619,7 +1629,7 @@ function CompactCounterRC({ player, draft, setDraft }) {
   const dec = () => {
     setDraft(prev => {
       const next = JSON.parse(JSON.stringify(prev))
-      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
       base.redCards = Math.max(0, Number(base.redCards || 0) - 1)
       next[pid] = base
       return next
@@ -1635,6 +1645,54 @@ function CompactCounterRC({ player, draft, setDraft }) {
         +
       </button>
       <div className={`w-10 h-6 flex items-center justify-center font-bold text-[13px] tabular-nums ${hasValue ? 'text-rose-700' : 'text-gray-400'}`}>
+        {value}
+      </div>
+      <button
+        onClick={dec}
+        disabled={value <= 0}
+        className="w-10 h-5 rounded-b bg-white border hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-[10px] transition-all active:scale-95"
+      >
+        −
+      </button>
+    </div>
+  )
+}
+
+function CompactCounterBC({ player, draft, setDraft }) {
+  const pid = toStr(player.id)
+  const rec = draft[pid] || { blackCards: 0 }
+  const value = Number(rec.blackCards || 0)
+  const hasValue = value > 0
+
+  const inc = () => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
+      base.blackCards = Math.max(0, Number(base.blackCards || 0) + 1)
+      next[pid] = base
+      return next
+    })
+  }
+
+  const dec = () => {
+    setDraft(prev => {
+      const next = JSON.parse(JSON.stringify(prev))
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
+      base.blackCards = Math.max(0, Number(base.blackCards || 0) - 1)
+      next[pid] = base
+      return next
+    })
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <button
+        onClick={inc}
+        className="w-10 h-5 rounded-t bg-stone-800 hover:bg-stone-900 border border-stone-900 flex items-center justify-center text-white font-bold text-[10px] transition-all active:scale-95"
+      >
+        +
+      </button>
+      <div className={`w-10 h-6 flex items-center justify-center font-bold text-[13px] tabular-nums ${hasValue ? 'text-stone-800' : 'text-gray-400'}`}>
         {value}
       </div>
       <button
@@ -1703,7 +1761,7 @@ function YellowCardCounter({ player, draft, setDraft }) {
   const dec = () => {
     setDraft(prev => {
       const next = JSON.parse(JSON.stringify(prev))
-      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
       base.yellowCards = Math.max(0, Number(base.yellowCards || 0) - 1)
       next[pid] = base
       return next
@@ -1713,7 +1771,7 @@ function YellowCardCounter({ player, draft, setDraft }) {
   const inc = () => {
     setDraft(prev => {
       const next = JSON.parse(JSON.stringify(prev))
-      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
       base.yellowCards = Math.max(0, Number(base.yellowCards || 0) + 1)
       next[pid] = base
       return next
@@ -1750,7 +1808,7 @@ function RedCardCounter({ player, draft, setDraft }) {
   const dec = () => {
     setDraft(prev => {
       const next = JSON.parse(JSON.stringify(prev))
-      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
       base.redCards = Math.max(0, Number(base.redCards || 0) - 1)
       next[pid] = base
       return next
@@ -1760,7 +1818,7 @@ function RedCardCounter({ player, draft, setDraft }) {
   const inc = () => {
     setDraft(prev => {
       const next = JSON.parse(JSON.stringify(prev))
-      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      const base = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
       base.redCards = Math.max(0, Number(base.redCards || 0) + 1)
       next[pid] = base
       return next

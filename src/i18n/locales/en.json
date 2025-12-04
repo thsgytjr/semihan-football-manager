@@ -193,7 +193,7 @@
     "duoPair": "Duo (Assist → Goal)",
     "count": "Count",
     "totalDuo": "Total Duo",
-    "cardsTitle": "Cards (Y/R)",
+    "cardsTitle": "Cards (Y/R/B)",
     "draftPlayerPoints": "Draft Player Points",
     "draftAttack": "Draft Goals/Assists",
     "draftCaptainPoints": "Draft Captain Points",
@@ -234,7 +234,7 @@
     "facts": {
       "cleanSheets": "{{count}} clean-sheet credits (multi-game awards included)",
       "momAwards": "{{count}} MOM awards",
-      "cards": "Cards: {{yellow}} yellow · {{red}} red",
+      "cards": "Cards: {{yellow}} yellow · {{red}} red · {{black}} black",
       "winRate": "Draft win rate {{rate}}%",
       "chemistry": "Best chemistry with {{name}} ({{count}} duos)",
       "firstGoal": "First goal of the season on {{match}}",
@@ -274,6 +274,7 @@
       "draftPointsPer": "Draft Attack / Match",
       "yellow": "Yellow",
       "red": "Red",
+      "black": "Black",
       "last5": "Last 5",
       "duoCount": "{{count}} duos"
     },

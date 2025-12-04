@@ -1398,20 +1398,22 @@ export function computeCardsRows(players = [], matches = []) {
         membership: p.membership || '',
         photoUrl: p.photoUrl || null,
         y: 0,
-        r: 0
+        r: 0,
+        b: 0
       }
       row.y += Number(rec?.yellowCards || 0)
       row.r += Number(rec?.redCards || 0)
+      row.b += Number(rec?.blackCards || 0)
       tally.set(pid, row)
     }
   }
 
-  const rows = Array.from(tally.values()).filter(r => (r.y + r.r) > 0)
-  rows.sort((a, b) => (b.r - a.r) || (b.y - a.y) || a.name.localeCompare(b.name))
+  const rows = Array.from(tally.values()).filter(r => (r.y + r.r + r.b) > 0)
+  rows.sort((a, b) => (b.b - a.b) || (b.r - a.r) || (b.y - a.y) || a.name.localeCompare(b.name))
   let lastRank = 0
   let lastKey = null
   return rows.map((r, i) => {
-    const key = `${r.r}-${r.y}`
+    const key = `${r.b}-${r.r}-${r.y}`
     const rank = (i === 0) ? 1 : (key === lastKey ? lastRank : i + 1)
     lastRank = rank
     lastKey = key

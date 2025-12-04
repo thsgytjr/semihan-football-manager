@@ -1082,8 +1082,9 @@ export default function Dashboard({
       draftRecord: baseDraftRecord,
       draftAttack: baseDraftAttack,
       cards: cardsRow ? {
-        yellow: cardsRow.y,
-        red: cardsRow.r,
+        yellow: cardsRow.y || 0,
+        red: cardsRow.r || 0,
+        black: cardsRow.b || 0,
       } : null,
       momAwards: momCount,
       chemistry: chemistryPartners.length > 0 ? { topPartners: chemistryPartners } : null,
@@ -2273,8 +2274,42 @@ function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMember
   const columns = [
     { label: t('leaderboard.rank'), px: 1.5, align: 'center', className: 'w-[60px]' },
     { label: t('leaderboard.player'), px: 2 },
-    { label: 'YC', px: 1.5, align: 'center', className: 'w-[50px]' },
-    { label: 'RC', px: 1.5, align: 'center', className: 'w-[50px]' },
+    {
+      label: (
+        <CardColumnHeader
+          label={t('playerStatsModal.labels.yellow')}
+          colorClass="bg-yellow-300"
+          borderClass="border-yellow-500"
+        />
+      ),
+      px: 1.5,
+      align: 'center',
+      className: 'w-[50px]'
+    },
+    {
+      label: (
+        <CardColumnHeader
+          label={t('playerStatsModal.labels.red')}
+          colorClass="bg-red-500"
+          borderClass="border-red-700"
+        />
+      ),
+      px: 1.5,
+      align: 'center',
+      className: 'w-[50px]'
+    },
+    {
+      label: (
+        <CardColumnHeader
+          label={t('playerStatsModal.labels.black')}
+          colorClass="bg-stone-900"
+          borderClass="border-stone-950"
+        />
+      ),
+      px: 1.5,
+      align: 'center',
+      className: 'w-[50px]'
+    },
   ]
 
   const renderRow = (r, tone) => (
@@ -2291,6 +2326,7 @@ function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMember
       />
       <StatCell value={r.y || 0} tone={tone} align="center" width={50} />
       <StatCell value={r.r || 0} tone={tone} align="center" width={50} />
+      <StatCell value={r.b || 0} tone={tone} align="center" width={50} />
     </>
   )
 
@@ -2305,5 +2341,17 @@ function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMember
       renderRow={renderRow}
       membershipSettings={customMemberships}
     />
+  )
+}
+
+function CardColumnHeader({ label, colorClass, borderClass }) {
+  return (
+    <div className="flex items-center justify-center" title={label} aria-label={label}>
+      <span className="sr-only">{label}</span>
+      <span
+        aria-hidden="true"
+        className={`inline-block h-5 w-3.5 rounded-[3px] border shadow-sm ${colorClass} ${borderClass}`}
+      />
+    </div>
   )
 }

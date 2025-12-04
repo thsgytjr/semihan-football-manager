@@ -201,7 +201,8 @@ export default function PlayerStatsModal({
 
   const disciplineItems = useMemo(() => ([
     { label: t('playerStatsModal.labels.yellow'), value: cards?.yellow != null ? cards.yellow : null },
-    { label: t('playerStatsModal.labels.red'), value: cards?.red != null ? cards.red : null }
+    { label: t('playerStatsModal.labels.red'), value: cards?.red != null ? cards.red : null },
+    { label: t('playerStatsModal.labels.black'), value: cards?.black != null ? cards.black : null }
   ]), [cards, t])
 
   const hasSummary = hasDataSection(summaryItems.map((item) => item.value))
@@ -316,9 +317,9 @@ export default function PlayerStatsModal({
     if (momAwards > 0) {
       pushFact(t('playerStatsModal.facts.momAwards', { count: momAwards }), 3)
     }
-    const cardTotal = (toNumber(cards?.yellow) || 0) + (toNumber(cards?.red) || 0)
+    const cardTotal = (toNumber(cards?.yellow) || 0) + (toNumber(cards?.red) || 0) + (toNumber(cards?.black) || 0)
     if (cardTotal > 0) {
-      pushFact(t('playerStatsModal.facts.cards', { yellow: cards?.yellow || 0, red: cards?.red || 0 }), 3)
+      pushFact(t('playerStatsModal.facts.cards', { yellow: cards?.yellow || 0, red: cards?.red || 0, black: cards?.black || 0 }), 3)
     }
     if (draftRecord?.winRate != null) {
       pushFact(t('playerStatsModal.facts.winRate', { rate: draftRecord.winRate }), 3)

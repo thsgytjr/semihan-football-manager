@@ -83,7 +83,8 @@ export function extractStatsByPlayer(m) {
         // Include clean sheet if present (manual entry via StatsInput)
          cleanSheet: csValue,
          yellowCards: Number(v?.yellowCards || v?.yc || 0),
-         redCards: Number(v?.redCards || v?.rc || 0)
+         redCards: Number(v?.redCards || v?.rc || 0),
+         blackCards: Number(v?.blackCards || v?.bc || 0)
       }
     }
     return out
@@ -97,7 +98,7 @@ export function extractStatsByPlayer(m) {
       const date = rec?.dateISO || rec?.date || rec?.time || rec?.ts || null
       const isGoal = /goal/i.test(type)
       const isAssist = /assist/i.test(type)
-      out[pid] = out[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0 }
+      out[pid] = out[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
       if (isGoal) {
         out[pid].goals = (out[pid].goals || 0) + Number(rec?.goals || 1)
         out[pid].events.push({ type: 'goal', date })
@@ -114,6 +115,9 @@ export function extractStatsByPlayer(m) {
       }
       if (Number(rec?.redCards || 0) > 0) {
         out[pid].redCards = (out[pid].redCards || 0) + Number(rec.redCards)
+      }
+      if (Number(rec?.blackCards || 0) > 0) {
+        out[pid].blackCards = (out[pid].blackCards || 0) + Number(rec.blackCards)
       }
     }
   }

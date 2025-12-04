@@ -193,7 +193,7 @@
     "duoPair": "듀오 (Assist → Goal)",
     "count": "회수",
     "totalDuo": "총 듀오",
-    "cardsTitle": "카드(Y/R)",
+    "cardsTitle": "카드(Y/R/B)",
     "draftPlayerPoints": "Draft 선수 승점",
     "draftAttack": "Draft 골/어시",
     "draftCaptainPoints": "Draft 주장 승점",
@@ -234,7 +234,7 @@
     "facts": {
       "cleanSheets": "클린시트 크레딧 {{count}}회 (같은 경기 내 중복 포함)",
       "momAwards": "MOM 수상 {{count}}회",
-      "cards": "카드: 옐로 {{yellow}} · 레드 {{red}}",
+      "cards": "카드: 옐로 {{yellow}} · 레드 {{red}} · 블랙 {{black}}",
       "winRate": "드래프트 승률 {{rate}}%",
       "chemistry": "{{name}} 선수와 {{count}}회 호흡",
       "firstGoal": "{{match}}에서 시즌 첫 골",
@@ -274,6 +274,7 @@
       "draftPointsPer": "경기당 드래프트 공격",
       "yellow": "옐로",
       "red": "레드",
+      "black": "블랙",
       "last5": "최근 5경기",
       "duoCount": "{{count}}회 듀오"
     },
