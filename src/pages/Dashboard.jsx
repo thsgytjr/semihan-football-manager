@@ -37,6 +37,7 @@ import {
 import { getMembershipBadge } from '../lib/membershipConfig'
 import MobileCategoryCarousel from '../components/MobileCategoryCarousel'
 import { buildPlayerBadgeFactsMap, generateBadgesFromFacts } from '../lib/playerBadgeEngine'
+import { fetchPlayerBadges } from '../services/badgeService'
 import SeasonRecap from '../components/SeasonRecap'
 
 // 멤버십 helper 함수
@@ -276,10 +277,11 @@ export default function Dashboard({
   }, [filteredMatches])
 
   const statsFilterDescription = useMemo(() => {
-    const seasonLabel = leaderboardSeason === 'all' ? t('leaderboard.allTime') : `${leaderboardSeason}년`
-    const dateLabel = apDateKey === 'all' ? t('matchHistory.allDates') : apDateKey
-    return `${seasonLabel} · ${dateLabel}`
-  }, [leaderboardSeason, apDateKey, t])
+    if (apDateKey === 'all') {
+      return t('playerStatsModal.filters.allMatches')
+    }
+    return t('playerStatsModal.filters.byDate', { date: apDateKey })
+  }, [apDateKey, t])
 
   const baseRows = useMemo(() => computeAttackRows(players, filteredMatches), [players, filteredMatches])
 
@@ -314,14 +316,6 @@ export default function Dashboard({
   const allMatchesDuoRows = useMemo(() => computeDuoRows(players, matches), [players, matches])
   const csRows = useMemo(() => addRanks(baseRows, 'cs'), [baseRows])
   const cardsRows = useMemo(() => computeCardsRows(players, filteredMatches), [players, filteredMatches])
-  const badgeFactsByPlayer = useMemo(
-    () => buildPlayerBadgeFactsMap(players, matches, {
-      momAwardCounts: momAwards.countsByPlayer,
-      momAwardTimeline: momAwards.winnersByMatch,
-    }),
-    [players, matches, momAwards.countsByPlayer, momAwards.winnersByMatch]
-  )
-
   const attackRowMap = useMemo(() => buildPlayerRowMap(baseRows), [baseRows])
   const draftRecordMap = useMemo(() => buildPlayerRowMap(draftWinRows), [draftWinRows])
   const draftAttackRowMap = useMemo(() => buildPlayerRowMap(draftAttackRows), [draftAttackRows])
@@ -400,11 +394,12 @@ export default function Dashboard({
   }, [leaderboardToggles])
 
   const [badgeModalPlayer, setBadgeModalPlayer] = useState(null)
-  const [badgeModalState, setBadgeModalState] = useState({ badges: [], loading: false, error: null })
+  const [badgeModalState, setBadgeModalState] = useState({ badges: [], loading: false, error: null, source: null })
   const [statsModalPlayer, setStatsModalPlayer] = useState(null)
   const [momDetailPlayer, setMoMDetailPlayer] = useState(null)
   const statsModalTipShownRef = useRef(false)
   const leaderboardSeasonUserSetRef = useRef(false)
+  const historySeasonUserSetRef = useRef(false)
 
   useEffect(() => {
     if (leaderboardSeasonUserSetRef.current) return
@@ -414,62 +409,18 @@ export default function Dashboard({
   }, [leaderboardDefaultSeason, leaderboardSeason])
 
   useEffect(() => {
+    if (historySeasonUserSetRef.current) return
+    if (!leaderboardDefaultSeason || historySeason === leaderboardDefaultSeason) return
+    setHistorySeason(leaderboardDefaultSeason)
+  }, [leaderboardDefaultSeason, historySeason])
+
+  useEffect(() => {
     if (!playerStatsEnabled && statsModalPlayer) {
       setStatsModalPlayer(null)
     }
   }, [playerStatsEnabled, statsModalPlayer])
 
-  const openBadgeModal = useCallback((player) => {
-    const attemptedId = player?.id ?? player?.playerId ?? player?.player_id ?? null
-    if (!playerStatsEnabled) {
-      logger.warn('[Dashboard] Badge modal blocked because player stats feature is disabled', { playerId: attemptedId })
-      notify('선수 기록 모달을 켜야 챌린지 뱃지를 볼 수 있어요.', 'info')
-      return
-    }
-    if (!badgesEnabled) {
-      notify('챌린지 뱃지 기능이 비활성화되어 있습니다.', 'info')
-      return
-    }
-    if (!player) {
-      notify('선수 정보가 없어 뱃지를 볼 수 없어요.', 'warning')
-      return
-    }
-    const playerId = player.id || player.playerId || player.player_id
-    if (!playerId) {
-      notify('선수 ID가 없어 뱃지를 볼 수 없어요.', 'warning')
-      return
-    }
-    const modalPlayer = {
-      id: playerId,
-      name: player.name || player.fullName || '선수',
-      photoUrl: player.photoUrl || player.avatarUrl || null,
-      membership: player.membership,
-    }
-    setBadgeModalPlayer(modalPlayer)
-    setBadgeModalState({ badges: [], loading: true, error: null })
-    const key = toStr(playerId)
-    const facts = badgeFactsByPlayer.get(key)
-    const computed = generateBadgesFromFacts(facts)
-    setBadgeModalState({ badges: computed, loading: false, error: null })
-  }, [badgeFactsByPlayer, badgesEnabled, playerStatsEnabled])
-
-  // 뱃지 기능이 비활성화되면 열린 모달 닫기
-  useEffect(() => {
-    if ((!badgesEnabled || !playerStatsEnabled) && badgeModalPlayer) {
-      setBadgeModalPlayer(null)
-      setBadgeModalState({ badges: [], loading: false, error: null })
-    }
-  }, [badgesEnabled, badgeModalPlayer, playerStatsEnabled])
-
-  const refreshBadgeModal = useCallback(() => {
-    if (!badgeModalPlayer) return
-    openBadgeModal(badgeModalPlayer)
-  }, [badgeModalPlayer, openBadgeModal])
-
-  const closeBadgeModal = useCallback(() => {
-    setBadgeModalPlayer(null)
-    setBadgeModalState({ badges: [], loading: false, error: null })
-  }, [])
+  
 
   const handleOpenMoMDetails = useCallback((player) => {
     if (!player) {
@@ -929,6 +880,129 @@ export default function Dashboard({
     })
     return map
   }, [matches])
+  const momWinnersByMatch = momAwards?.winnersByMatch || {}
+
+  const computeSeasonBadgeFallback = useCallback((playerId) => {
+    if (!playerId) return []
+    const normalizedId = toStr(playerId)
+    const results = []
+
+    matchesBySeason.forEach((seasonMatches, seasonKey) => {
+      if (!Array.isArray(seasonMatches) || seasonMatches.length === 0) return
+
+      const seasonMomTimeline = {}
+      const seasonMomCounts = {}
+
+      Object.entries(momWinnersByMatch).forEach(([matchId, summary]) => {
+        const match = matchLookup.get(matchId)
+        if (!match) return
+        const matchSeason = extractSeason(match) || 'unknown'
+        if (matchSeason !== seasonKey) return
+        seasonMomTimeline[matchId] = summary
+        const winners = Array.isArray(summary?.winners) ? summary.winners : []
+        winners.forEach((pidRaw) => {
+          const pid = toStr(pidRaw)
+          if (!pid) return
+          seasonMomCounts[pid] = (seasonMomCounts[pid] || 0) + 1
+        })
+      })
+
+      const factsMap = buildPlayerBadgeFactsMap(players, seasonMatches, {
+        momAwardCounts: Object.keys(seasonMomCounts).length ? seasonMomCounts : null,
+        momAwardTimeline: Object.keys(seasonMomTimeline).length ? seasonMomTimeline : null,
+      })
+      const facts = factsMap.get(normalizedId)
+      if (!facts) return
+      const computed = generateBadgesFromFacts(facts).map((badge) => ({
+        ...badge,
+        seasonKey: seasonKey === 'unknown' ? 'legacy' : seasonKey,
+      }))
+      results.push(...computed)
+    })
+
+    return results.sort((a, b) => {
+      const aTs = a?.awarded_at ? Date.parse(a.awarded_at) : 0
+      const bTs = b?.awarded_at ? Date.parse(b.awarded_at) : 0
+      return bTs - aTs
+    })
+  }, [matchesBySeason, momWinnersByMatch, matchLookup, players])
+
+  const openBadgeModal = useCallback((player) => {
+    const attemptedId = player?.id ?? player?.playerId ?? player?.player_id ?? null
+    if (!playerStatsEnabled) {
+      logger.warn('[Dashboard] Badge modal blocked because player stats feature is disabled', { playerId: attemptedId })
+      notify('선수 기록 모달을 켜야 챌린지 뱃지를 볼 수 있어요.', 'info')
+      return
+    }
+    if (!badgesEnabled) {
+      notify('챌린지 뱃지 기능이 비활성화되어 있습니다.', 'info')
+      return
+    }
+    if (!player) {
+      notify('선수 정보가 없어 뱃지를 볼 수 없어요.', 'warning')
+      return
+    }
+    const playerId = player.id || player.playerId || player.player_id
+    if (!playerId) {
+      notify('선수 ID가 없어 뱃지를 볼 수 없어요.', 'warning')
+      return
+    }
+    const modalPlayer = {
+      id: playerId,
+      name: player.name || player.fullName || '선수',
+      photoUrl: player.photoUrl || player.avatarUrl || null,
+      membership: player.membership,
+    }
+    setBadgeModalPlayer(modalPlayer)
+    setBadgeModalState({ badges: [], loading: true, error: null, source: null })
+    const loadBadges = async () => {
+      let remoteError = null
+      try {
+        const { data, error } = await fetchPlayerBadges(playerId)
+        if (error) {
+          remoteError = error
+          throw error
+        }
+        if (Array.isArray(data) && data.length > 0) {
+          setBadgeModalState({ badges: data, loading: false, error: null, source: 'remote' })
+          return
+        }
+      } catch (err) {
+        remoteError = remoteError || err
+        logger.warn('[Dashboard] Failed to fetch remote badges, falling back to computed results', {
+          playerId,
+          error: err?.message || err,
+        })
+      }
+
+      const computed = computeSeasonBadgeFallback(playerId)
+      setBadgeModalState({
+        badges: computed,
+        loading: false,
+        error: computed.length === 0 && remoteError ? (remoteError.message || 'BADGE_FETCH_FAILED') : null,
+        source: computed.length > 0 ? 'computed' : null,
+      })
+    }
+
+    loadBadges()
+  }, [badgesEnabled, playerStatsEnabled, computeSeasonBadgeFallback])
+
+  useEffect(() => {
+    if ((!badgesEnabled || !playerStatsEnabled) && badgeModalPlayer) {
+      setBadgeModalPlayer(null)
+      setBadgeModalState({ badges: [], loading: false, error: null, source: null })
+    }
+  }, [badgesEnabled, badgeModalPlayer, playerStatsEnabled])
+
+  const refreshBadgeModal = useCallback(() => {
+    if (!badgeModalPlayer) return
+    openBadgeModal(badgeModalPlayer)
+  }, [badgeModalPlayer, openBadgeModal])
+
+  const closeBadgeModal = useCallback(() => {
+    setBadgeModalPlayer(null)
+    setBadgeModalState({ badges: [], loading: false, error: null, source: null })
+  }, [])
 
   const attackRowsBySeason = useMemo(() => {
     const out = new Map()
@@ -1142,7 +1216,6 @@ export default function Dashboard({
         draftRecord: overallDraftRecord,
         draftAttack: overallDraftAttack,
       }
-      seasonOrder.push('overall')
     }
     
     // 현재 필터링된 데이터 (메인 뷰)
@@ -1615,7 +1688,10 @@ export default function Dashboard({
               <div className="w-[120px]">
                 <Select
                   value={historySeason}
-                  onChange={(val) => setHistorySeason(val)}
+                  onChange={(val) => {
+                    historySeasonUserSetRef.current = true
+                    setHistorySeason(val)
+                  }}
                   options={seasonOptions.map(v => ({ value: v, label: v === 'all' ? t('leaderboard.allTime') : `${v}년` }))}
                   size="sm"
                 />

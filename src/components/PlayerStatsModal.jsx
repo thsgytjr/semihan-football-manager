@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { X, BarChart3, Award } from 'lucide-react'
+import { X, Award } from 'lucide-react'
 import InitialAvatar from './InitialAvatar'
 import { getMembershipBadge } from '../lib/membershipConfig'
 
@@ -77,9 +77,9 @@ export default function PlayerStatsModal({
   const shouldRender = Boolean(open && player)
   const seasonOrder = useMemo(() => {
     if (Array.isArray(stats?.seasonOrder) && stats.seasonOrder.length > 0) {
-      return stats.seasonOrder
+      return stats.seasonOrder.filter((key) => key && key !== 'overall')
     }
-    return stats?.attack ? ['overall'] : []
+    return []
   }, [stats])
   const seasonStatsMap = stats?.seasonStats || {}
   const preferredSeasonKey = useMemo(() => {
@@ -166,6 +166,13 @@ export default function PlayerStatsModal({
     if (key === 'overall') return t('playerStatsModal.seasons.overall')
     return t('playerStatsModal.seasons.named', { season: key })
   }
+  const activeSeasonLabel = formatSeasonLabel(seasonKey)
+  const contextSummary = useMemo(() => {
+    const parts = []
+    if (activeSeasonLabel) parts.push(activeSeasonLabel)
+    if (contextLabel) parts.push(contextLabel)
+    return parts.join(' · ')
+  }, [activeSeasonLabel, contextLabel])
 
   const summaryItems = useMemo(() => ([
     { label: t('playerStatsModal.labels.apps'), value: seasonAttack?.gp ?? null, helper: t('playerStatsModal.helpers.apps') },
@@ -357,19 +364,32 @@ export default function PlayerStatsModal({
           >
             <X className="h-5 w-5" />
           </button>
-          <div className="flex flex-1 items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
-              <BarChart3 className="h-6 w-6" />
+          <div className="flex flex-1 flex-col gap-4 sm:flex-row sm:items-center sm:gap-6">
+            <div className="flex items-center gap-4">
+              <InitialAvatar
+                id={player?.id}
+                name={player?.name}
+                photoUrl={player?.photoUrl}
+                size={56}
+                customMemberships={customMemberships}
+                badges={membershipBadge ? [membershipBadge.badge] : []}
+                badgeInfo={membershipBadge}
+              />
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">{t('playerStatsModal.subtitle')}</p>
+                <h2 className="text-2xl font-bold text-stone-900 notranslate" translate="no">
+                  {t('playerStatsModal.title', { name: player?.name ?? 'Player' })}
+                </h2>
+                {contextSummary && (
+                  <p className="text-sm text-stone-500">{contextSummary}</p>
+                )}
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-600">{t('playerStatsModal.subtitle')}</p>
-              <h2 className="text-2xl font-bold text-stone-900 notranslate" translate="no">
-                {t('playerStatsModal.title', { name: player?.name ?? 'Player' })}
-              </h2>
-              {contextLabel && seasonKey !== 'overall' && (
-                <p className="text-sm text-stone-500">{t('playerStatsModal.filterContext', { context: contextLabel })}</p>
-              )}
-            </div>
+            {player?.membership && (
+              <p className="text-sm font-semibold text-stone-600">
+                {player.membership}
+              </p>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {showBadgeCta && (
@@ -394,24 +414,6 @@ export default function PlayerStatsModal({
         </header>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-6">
-          <section className="flex flex-wrap items-center gap-4 rounded-3xl border border-stone-200 bg-white px-4 py-4 shadow-sm">
-            <InitialAvatar
-              id={player?.id}
-              name={player?.name}
-              photoUrl={player?.photoUrl}
-              size={64}
-              customMemberships={customMemberships}
-              badges={membershipBadge ? [membershipBadge.badge] : []}
-              badgeInfo={membershipBadge}
-            />
-            <div className="min-w-0">
-              <p className="text-xs uppercase tracking-wide text-stone-400">{t('playerStatsModal.labels.player')}</p>
-              <p className="text-lg font-semibold text-stone-900 notranslate" translate="no">{player?.name}</p>
-              {player?.membership && (
-                <p className="text-sm text-stone-500">{player.membership}</p>
-              )}
-            </div>
-          </section>
 
           {noStats && (
             <div className="rounded-3xl border border-dashed border-stone-300 bg-white px-4 py-10 text-center text-sm text-stone-500">
@@ -504,14 +506,6 @@ export default function PlayerStatsModal({
             <section className="space-y-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-stone-500">{t('playerStatsModal.sections.draftRecord')}</h3>
-                {hasDraftRecord && draftRecord?.last5?.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1 text-xs text-stone-500">
-                    {t('playerStatsModal.labels.last5')}
-                    {draftRecord.last5.slice(-5).map((val, idx) => (
-                      <ResultPill key={`${val}-${idx}`} value={val} />
-                    ))}
-                  </div>
-                )}
               </div>
               {hasDraftRecord && (
                 <div className="grid gap-3 md:grid-cols-5">

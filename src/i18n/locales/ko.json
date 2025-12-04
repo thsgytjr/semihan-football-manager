@@ -207,6 +207,10 @@
     "viewBadges": "챌린지 뱃지 보기",
     "close": "닫기",
     "filterContext": "{{context}} 기준으로 집계됨",
+    "filters": {
+      "allMatches": "전체 매치",
+      "byDate": "{{date}} 경기만"
+    },
     "empty": "현재 필터에 해당하는 스탯이 없습니다.",
     "sections": {
       "attack": "전체 기록",

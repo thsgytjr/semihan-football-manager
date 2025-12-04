@@ -141,10 +141,23 @@ export default function MatchPlanner({
     }
     return ['all', ...Array.from(seasons).sort().reverse()]
   }, [matches])
+
+  useEffect(() => {
+    if (!seasonOptions || seasonOptions.length === 0) return
+    setSelectedSeason((prev) => {
+      // 유지 가능한 선택이면 그대로 둠
+      if (prev && seasonOptions.includes(prev) && (prev !== 'all' || !seasonOptions.some(opt => opt !== 'all'))) {
+        return prev
+      }
+      const preferred = seasonOptions.find((opt) => opt !== 'all')
+      if (preferred) return preferred
+      return 'all'
+    })
+  }, [seasonOptions])
   
   // 시즌별 필터링된 매치
   const seasonFilteredMatches = useMemo(() => {
-    if (selectedSeason === 'all') return matches
+    if (!selectedSeason || selectedSeason === 'all') return matches
     return matches.filter(m => extractSeason(m) === selectedSeason)
   }, [matches, selectedSeason])
   

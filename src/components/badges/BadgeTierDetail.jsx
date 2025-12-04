@@ -83,9 +83,11 @@ export default function BadgeTierDetail({ badge, onClose }) {
               )}
             </div>
             <div className="flex-1 flex flex-col gap-2">
-              <h3 className="text-lg font-bold text-stone-900">
-                {badgeName}
-              </h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-lg font-bold text-stone-900">
+                  {badgeName}
+                </h3>
+              </div>
               {badgeDescription && (
                 <p className="text-sm text-stone-600">
                   {badgeDescription}

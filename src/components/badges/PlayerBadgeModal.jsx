@@ -1,13 +1,50 @@
 // src/components/badges/PlayerBadgeModal.jsx
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Award } from 'lucide-react'
 import BadgeIcon from './BadgeIcon'
 import BadgeTierDetail from './BadgeTierDetail'
-import { getBadgeThresholds } from '../../lib/playerBadgeEngine'
 import { useTranslation } from 'react-i18next'
 import { optimizeImageUrl } from '../../utils/imageOptimization'
 import useCachedImage from '../../hooks/useCachedImage'
+
+const LEGACY_SEASON_KEY = 'legacy'
+
+function parseMetadataSeason(metadata) {
+  if (!metadata) return null
+  if (typeof metadata === 'object') {
+    return metadata.season ?? metadata.seasonKey ?? metadata.year ?? null
+  }
+  if (typeof metadata === 'string') {
+    try {
+      const parsed = JSON.parse(metadata)
+      return parseMetadataSeason(parsed)
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+function deriveBadgeSeasonKey(badge) {
+  if (!badge) return LEGACY_SEASON_KEY
+  const fromMetadata = parseMetadataSeason(badge.metadata)
+  const directSeason = badge.season ?? badge.seasonKey ?? badge.season_key ?? null
+  const preferred = directSeason ?? fromMetadata
+  if (preferred != null) {
+    const str = String(preferred).trim()
+    if (str) return str
+  }
+  const awarded = badge.awarded_at ?? badge.awardedAt ?? null
+  if (awarded != null) {
+    const ts = typeof awarded === 'number' ? awarded : Date.parse(awarded)
+    if (Number.isFinite(ts)) {
+      const year = new Date(ts).getFullYear()
+      if (Number.isFinite(year)) return String(year)
+    }
+  }
+  return LEGACY_SEASON_KEY
+}
 
 export default function PlayerBadgeModal({
   open,
@@ -17,7 +54,7 @@ export default function PlayerBadgeModal({
   error = null,
   onClose
 }) {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const portalTarget = typeof document !== 'undefined' ? document.body : null
   const optimizedPlayerAvatarSrc = player?.photoUrl
     ? optimizeImageUrl(player.photoUrl, { width: 120, height: 120, quality: 70 })
@@ -53,13 +90,40 @@ export default function PlayerBadgeModal({
   // Hook 먼저 선언 후 렌더 조건 평가 (Hook 순서 문제 예방)
   const [viewMode, setViewMode] = useState('tiers') // categories | all | highTier | tiers
   const [selectedBadge, setSelectedBadge] = useState(null)
-  const shouldRender = open && player && portalTarget
-  if (!shouldRender) return null
-  const sortedBadges = [...badges].sort((a, b) => {
-    const aTs = a?.awarded_at ? Date.parse(a.awarded_at) : 0
-    const bTs = b?.awarded_at ? Date.parse(b.awarded_at) : 0
-    return bTs - aTs
-  })
+  const [seasonFilter, setSeasonFilter] = useState(null)
+  const normalizedBadges = useMemo(() => {
+    if (!Array.isArray(badges)) return []
+    return badges.map((badge) => ({ ...badge, seasonKey: deriveBadgeSeasonKey(badge) }))
+  }, [badges])
+  const seasonOrder = useMemo(() => {
+    const keys = new Set()
+    normalizedBadges.forEach((badge) => {
+      keys.add(badge.seasonKey || LEGACY_SEASON_KEY)
+    })
+    const values = Array.from(keys)
+    const numeric = values.filter((key) => /^\d{4}$/.test(key)).sort((a, b) => Number(b) - Number(a))
+    const others = values.filter((key) => !/^\d{4}$/.test(key)).sort((a, b) => a.localeCompare(b))
+    return [...numeric, ...others]
+  }, [normalizedBadges])
+  useEffect(() => {
+    if (seasonOrder.length === 0) {
+      setSeasonFilter(null)
+      return
+    }
+    setSeasonFilter((prev) => (prev && seasonOrder.includes(prev)) ? prev : seasonOrder[0])
+  }, [seasonOrder])
+  const filteredBadges = useMemo(
+    () => (seasonFilter ? normalizedBadges.filter((badge) => badge.seasonKey === seasonFilter) : normalizedBadges),
+    [normalizedBadges, seasonFilter]
+  )
+  const hasAnyBadges = normalizedBadges.length > 0
+  const sortedBadges = useMemo(() => {
+    return [...filteredBadges].sort((a, b) => {
+      const aTs = a?.awarded_at ? Date.parse(a.awarded_at) : 0
+      const bTs = b?.awarded_at ? Date.parse(b.awarded_at) : 0
+      return bTs - aTs
+    })
+  }, [filteredBadges])
   const highPriority = sortedBadges.filter((badge) => (badge.tier ?? 1) >= 3 || badge.importance === 'high')
   let displayBadges = []
   switch (viewMode) {
@@ -107,12 +171,26 @@ export default function PlayerBadgeModal({
     return translated
   }
 
-  // 티어별 뱃지 개수 집계 (전체 보유 배지 기준)
-  const tierCounts = badges.reduce((acc, b) => {
+  // 티어별 뱃지 개수 집계 (선택된 시즌 기준)
+  const tierCounts = filteredBadges.reduce((acc, b) => {
     const t = Number(b.tier || 1)
     acc[t] = (acc[t] || 0) + 1
     return acc
   }, {})
+  const formatSeasonLabel = useCallback((key) => {
+    if (!key || key === LEGACY_SEASON_KEY) {
+      return t('badges.season.legacy', { defaultValue: '레거시' })
+    }
+    if (key === 'unknown') {
+      return t('badges.season.unknown', { defaultValue: '시즌 미상' })
+    }
+    if (/^\d{4}$/.test(key)) {
+      return t('badges.season.named', { season: key, defaultValue: `${key} 시즌` })
+    }
+    return t('badges.season.generic', { season: key, defaultValue: key })
+  }, [t])
+  const shouldRender = open && player && portalTarget
+  if (!shouldRender) return null
   const tierOrder = [5, 4, 3, 2, 1]
   const tierMeta = {
     5: { key: 'diamond', swatch: 'linear-gradient(135deg,#8df0ff,#d3c7ff)' },
@@ -143,52 +221,78 @@ export default function PlayerBadgeModal({
         </button>
         <div className="flex max-h-[85vh] flex-col gap-6 p-6">
           <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-2xl bg-emerald-50 ring-1 ring-emerald-100 flex items-center justify-center">
-                {cachedPlayerAvatarSrc ? (
-                  <img
-                    src={cachedPlayerAvatarSrc}
-                    alt={player.name}
-                    loading="lazy"
-                    decoding="async"
-                    width={56}
-                    height={56}
-                    className="h-full w-full object-cover"
-                  />
-                ) : player?.photoUrl ? (
-                  <div className="w-full h-full bg-emerald-100 animate-pulse" aria-label="Loading avatar" />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-2xl" aria-hidden>
-                    <Award className="h-7 w-7 text-emerald-500" />
-                  </div>
-                )}
-              </div>
-              <div>
-                <p className="text-xs uppercase tracking-wide text-stone-500">{t('badges.challengeTitle')}</p>
-                <div className="flex flex-wrap items-center gap-3">
-                  <h2 className="text-2xl font-bold text-stone-900">{player.name}</h2>
-                  {tierOrder.filter(t => tierCounts[t]).length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1 max-w-full overflow-hidden" aria-label="티어별 뱃지 개수">
-                      {tierOrder.filter(tierKey => tierCounts[tierKey]).map(tierKey => {
-                        const meta = tierMeta[tierKey]
-                        const label = t(`badges.tiers.${meta.key}`)
-                        return (
-                          <div
-                            key={tierKey}
-                            className="flex items-center gap-1 rounded-full bg-stone-100 px-2 py-1 text-[11px] font-medium text-stone-600 whitespace-nowrap"
-                            aria-label={`${label} ${tierCounts[tierKey]}`}
-                          >
-                            <span className="h-3 w-3 rounded-full" style={{ background: meta?.swatch || '#d4d4d8' }} aria-hidden></span>
-                            <span>{label} {tierCounts[tierKey]}</span>
-                          </div>
-                        )
-                      })}
+            <div className="flex flex-1 flex-col gap-4 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-4">
+                <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-2xl bg-emerald-50 ring-1 ring-emerald-100 flex items-center justify-center">
+                  {cachedPlayerAvatarSrc ? (
+                    <img
+                      src={cachedPlayerAvatarSrc}
+                      alt={player.name}
+                      loading="lazy"
+                      decoding="async"
+                      width={56}
+                      height={56}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : player?.photoUrl ? (
+                    <div className="w-full h-full bg-emerald-100 animate-pulse" aria-label="Loading avatar" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-2xl" aria-hidden>
+                      <Award className="h-7 w-7 text-emerald-500" />
                     </div>
                   )}
                 </div>
-                {player.membership && (
-                  <p className="text-sm text-stone-500">{player.membership}</p>
-                )}
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-stone-500">{t('badges.challengeTitle')}</p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <h2 className="text-2xl font-bold text-stone-900">{player.name}</h2>
+                    {tierOrder.filter(t => tierCounts[t]).length > 0 && (
+                      <div className="flex flex-wrap items-center gap-1 max-w-full overflow-hidden" aria-label="티어별 뱃지 개수">
+                        {tierOrder.filter(tierKey => tierCounts[tierKey]).map(tierKey => {
+                          const meta = tierMeta[tierKey]
+                          const label = t(`badges.tiers.${meta.key}`)
+                          return (
+                            <div
+                              key={tierKey}
+                              className="flex items-center gap-1 rounded-full bg-stone-100 px-2 py-1 text-[11px] font-medium text-stone-600 whitespace-nowrap"
+                              aria-label={`${label} ${tierCounts[tierKey]}`}
+                            >
+                              <span className="h-3 w-3 rounded-full" style={{ background: meta?.swatch || '#d4d4d8' }} aria-hidden></span>
+                              <span>{label} {tierCounts[tierKey]}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  {player.membership && (
+                    <p className="text-sm text-stone-500">{player.membership}</p>
+                  )}
+                  {seasonOrder.length > 0 && (
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      {seasonOrder.map((seasonKey) => (
+                        <button
+                          key={seasonKey}
+                          type="button"
+                          onClick={() => setSeasonFilter(seasonKey)}
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${seasonFilter === seasonKey ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-stone-200 text-stone-500 hover:border-stone-300'}`}
+                        >
+                          {formatSeasonLabel(seasonKey)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {seasonOrder.length > 0 && seasonFilter && (
+                    <p className="text-[11px] text-stone-400">
+                      {t('badges.season.activeHint', { season: formatSeasonLabel(seasonFilter), defaultValue: `${formatSeasonLabel(seasonFilter)} 시즌 기록만 보여줘요.` })}
+                    </p>
+                  )}
+                  {hasAnyBadges && (
+                    <p className="text-[11px] text-stone-400">
+                      {t('badges.season.lockedHint', { defaultValue: '시즌별 기준이 바뀌어도 그 시즌에 획득한 뱃지는 그대로 남습니다.' })}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
             <div className="flex flex-col gap-2 sm:items-end w-full sm:w-auto">
@@ -204,11 +308,18 @@ export default function PlayerBadgeModal({
                   </button>
                 ))}
               </div>
-              <p className="text-[11px] text-stone-400">
-                {viewMode === 'categories' && t('badges.categoryFallback')}
-                {viewMode === 'all' && t('badges.group.allHeader')}
-                {viewMode === 'highTier' && t('badges.group.highTierHeader')}
-                {viewMode === 'tiers' && t('badges.group.allHeader')}
+              <p className="text-[11px] text-stone-400 space-y-1">
+                <span className="block">
+                  {viewMode === 'categories' && t('badges.categoryFallback')}
+                  {viewMode === 'all' && t('badges.group.allHeader')}
+                  {viewMode === 'highTier' && t('badges.group.highTierHeader')}
+                  {viewMode === 'tiers' && t('badges.group.allHeader')}
+                </span>
+                <span className="block text-emerald-600">
+                  {seasonFilter
+                    ? t('badges.season.scope', { season: formatSeasonLabel(seasonFilter), defaultValue: `${formatSeasonLabel(seasonFilter)} 시즌 기준` })
+                    : t('badges.season.scopeAll', { defaultValue: '시즌 정보 없음' })}
+                </span>
               </p>
             </div>
           </header>
@@ -224,13 +335,19 @@ export default function PlayerBadgeModal({
               </div>
             )}
 
-            {!loading && !error && badges.length === 0 && (
+            {!loading && !error && !hasAnyBadges && (
               <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-6 text-center text-sm text-stone-500">
                 {t('badges.empty')}
               </div>
             )}
 
-            {!loading && !error && badges.length > 0 && (
+            {!loading && !error && hasAnyBadges && filteredBadges.length === 0 && (
+              <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-6 text-center text-sm text-stone-500">
+                {t('badges.emptySeason', { season: seasonFilter ? formatSeasonLabel(seasonFilter) : '', defaultValue: seasonFilter ? `${formatSeasonLabel(seasonFilter)} 시즌에 획득한 뱃지가 없어요.` : '선택한 시즌의 뱃지가 없어요.' })}
+              </div>
+            )}
+
+            {!loading && !error && filteredBadges.length > 0 && (
               <div className="flex flex-col gap-6">
                 {viewMode === 'categories' && grouped && Object.entries(grouped).map(([categoryKey, categoryBadges]) => {
                   const categoryLabel = getCategoryLabel(categoryKey)
@@ -243,7 +360,11 @@ export default function PlayerBadgeModal({
                       </div>
                       <div className="grid gap-2" style={{gridTemplateColumns:'repeat(auto-fill,minmax(120px,1fr))'}}>
                         {categoryBadges.map((badge) => (
-                          <BadgeIcon key={badge.id || `${badge.slug}-${badge.awarded_at}`} badge={badge} onSelect={setSelectedBadge} />
+                          <BadgeIcon
+                            key={badge.id || `${badge.slug}-${badge.awarded_at}`}
+                            badge={badge}
+                            onSelect={setSelectedBadge}
+                          />
                         ))}
                       </div>
                     </section>
@@ -258,7 +379,11 @@ export default function PlayerBadgeModal({
                     </div>
                     <div className="grid gap-2" style={{gridTemplateColumns:'repeat(auto-fill,minmax(120px,1fr))'}}>
                       {displayBadges.map((badge) => (
-                        <BadgeIcon key={badge.id || `${badge.slug}-${badge.awarded_at}`} badge={badge} onSelect={setSelectedBadge} />
+                        <BadgeIcon
+                          key={badge.id || `${badge.slug}-${badge.awarded_at}`}
+                          badge={badge}
+                          onSelect={setSelectedBadge}
+                        />
                       ))}
                     </div>
                   </section>
@@ -272,7 +397,11 @@ export default function PlayerBadgeModal({
                     </div>
                     <div className="grid gap-2" style={{gridTemplateColumns:'repeat(auto-fill,minmax(120px,1fr))'}}>
                       {displayBadges.map((badge) => (
-                        <BadgeIcon key={badge.id || `${badge.slug}-${badge.awarded_at}`} badge={badge} onSelect={setSelectedBadge} />
+                        <BadgeIcon
+                          key={badge.id || `${badge.slug}-${badge.awarded_at}`}
+                          badge={badge}
+                          onSelect={setSelectedBadge}
+                        />
                       ))}
                     </div>
                   </section>
@@ -286,7 +415,11 @@ export default function PlayerBadgeModal({
                     </div>
                     <div className="grid gap-2" style={{gridTemplateColumns:'repeat(auto-fill,minmax(120px,1fr))'}}>
                       {tierGrouped[tierKey].map(badge => (
-                        <BadgeIcon key={badge.id || `${badge.slug}-${badge.awarded_at}`} badge={badge} onSelect={setSelectedBadge} />
+                        <BadgeIcon
+                          key={badge.id || `${badge.slug}-${badge.awarded_at}`}
+                          badge={badge}
+                          onSelect={setSelectedBadge}
+                        />
                       ))}
                     </div>
                   </section>
@@ -295,7 +428,10 @@ export default function PlayerBadgeModal({
             )}
           </div>
           {selectedBadge && (
-            <BadgeTierDetail badge={selectedBadge} onClose={() => setSelectedBadge(null)} />
+            <BadgeTierDetail
+              badge={selectedBadge}
+              onClose={() => setSelectedBadge(null)}
+            />
           )}
         </div>
       </div>

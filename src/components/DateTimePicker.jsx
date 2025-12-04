@@ -97,7 +97,8 @@ export default function DateTimePicker({
               type="time"
               value={localTime}
               onChange={onTimeChange}
-              className="text-sm rounded border border-gray-300 px-2 py-1 w-[100px]"
+              className="text-sm rounded border border-gray-300 px-2 py-1 w-[140px]"
+              style={{ minWidth: 140 }}
             />
           </div>
           <div className="flex items-center justify-end gap-2 pt-1">

@@ -211,11 +211,15 @@
     "viewBadges": "View challenge badges",
     "close": "Close",
     "filterContext": "Stats filtered by {{context}}",
+    "filters": {
+      "allMatches": "All matches",
+      "byDate": "Matches on {{date}}"
+    },
     "empty": "No stats available for the current filters yet.",
     "sections": {
       "attack": "Overall production",
       "efficiency": "Per match averages",
-      "draftRecord": "Draft W/D/L",
+      "draftRecord": "Draft Matches",
       "draftAttack": "Draft attack",
       "discipline": "Discipline",
       "visual": "Scoring mix snapshot",
