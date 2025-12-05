@@ -201,7 +201,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   }, [refreshVoidedMatches])
   const filteredPlayers = useMemo(() => {
     const q = playerSearch.trim().toLowerCase()
-    const list = players.filter(p => !p.isUnknown).sort((a, b) => a.name.localeCompare(b.name))
+    const list = players.filter(p => !p.isSystemAccount).sort((a, b) => a.name.localeCompare(b.name))
     if (!q) return list.slice(0, 50)
     return list.filter(p => p.name.toLowerCase().includes(q)).slice(0, 50)
   }, [playerSearch, players])
@@ -228,7 +228,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     : null
 
   const renewalEligiblePlayers = useMemo(() => {
-    return players.filter(p => !p.isUnknown && isMember(p.membership))
+    return players.filter(p => !p.isSystemAccount && isMember(p.membership))
   }, [players])
 
   const paymentsForRenewals = useMemo(() => (allPayments?.length ? allPayments : payments), [allPayments, payments])
@@ -242,6 +242,12 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     })
     return map
   }, [duesSettings])
+
+  const fallbackHouseAccount = useMemo(() => {
+    return players.find(p => p.isSystemAccount) || null
+  }, [players])
+  const fallbackHouseAccountId = fallbackHouseAccount?.id || null
+  const hasSystemAccount = Boolean(fallbackHouseAccountId)
 
   const monthlyPaymentBucketsByPlayer = useMemo(() => {
     const map = new Map()
@@ -519,22 +525,35 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       notify(isDonationLike ? '금액을 입력해주세요' : '선수와 금액을 입력해주세요')
       return
     }
+    if (isDonationLike && !hasPlayerSelection && !hasSystemAccount) {
+      notify('시스템 계정을 먼저 생성해야 운영비/기타 항목을 기록할 수 있어요. Players > 새 선수 추가 > "시스템 계정 자동 생성"을 눌러 주세요.', 'error')
+      return
+    }
     const dateList = [newPayment.paymentDate, ...(newPayment.additionalDates||[])].filter(Boolean)
     if (dateList.length === 0) {
       notify('최소 1개 이상의 날짜를 입력해주세요')
       return
     }
     try {
-      const playerIds = isDonationLike ? [null] : ((newPayment.selectedPlayerIds&&newPayment.selectedPlayerIds.length>0) ? newPayment.selectedPlayerIds : (newPayment.playerId ? [newPayment.playerId] : []))
-      if (!isDonationLike && playerIds.length === 0) {
-        notify('선수를 선택해주세요')
+      const playerIds = isDonationLike
+        ? (() => {
+            if (newPayment.playerId) return [newPayment.playerId]
+            if ((newPayment.selectedPlayerIds || []).length > 0) return [newPayment.selectedPlayerIds[0]]
+            if (fallbackHouseAccountId) {
+              return [fallbackHouseAccountId]
+            }
+            return []
+          })()
+        : ((newPayment.selectedPlayerIds&&newPayment.selectedPlayerIds.length>0) ? newPayment.selectedPlayerIds : (newPayment.playerId ? [newPayment.playerId] : []))
+      if (playerIds.length === 0) {
+        notify(isDonationLike ? '시스템 계정을 먼저 생성해야 운영비/기타 항목을 기록할 수 있어요.' : '선수를 선택해주세요')
         return
       }
       const tasks = []
       for (const pid of playerIds) {
         for (const dt of dateList) {
           const paymentData = {
-            playerId: isDonationLike ? null : pid,
+            playerId: pid,
             paymentType: newPayment.paymentType,
             amount: parseFloat(newPayment.amount),
             paymentMethod: newPayment.paymentMethod,
@@ -792,7 +811,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       let displayNotes = payment.notes || ''
       if (isDonationLike && displayNotes) {
         const match = displayNotes.match(/^\[payee: ([^\]]+)\]/)
-        if (match) {
+        if (ok>0) {
           customPayee = match[1]
           displayNotes = displayNotes.replace(match[0], '').trim()
         }
@@ -829,7 +848,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   const sortedPlayerStats = useMemo(() => {
     const query = playerStatsSearch.trim().toLowerCase()
     const playerData = players
-      .filter(p => !p.isUnknown)
+      .filter(p => !p.isSystemAccount)
       .map(player => {
         const playerPayments = payments.filter(p => p.player_id === player.id)
         const registration = playerPayments.find(p => p.payment_type === 'registration')
@@ -1551,13 +1570,20 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                     {['other_income','expense'].includes(newPayment.paymentType) ? '대상/용도 (선택)' : '선수'}
                   </label>
                   {['other_income','expense'].includes(newPayment.paymentType) ? (
-                    <input
-                      type="text"
-                      value={newPayment.customPayee}
-                      onChange={(e) => setNewPayment({ ...newPayment, customPayee: e.target.value })}
-                      className="w-full px-3 py-2 border rounded-lg text-sm"
-                      placeholder="예: 공 구입, 홍길동 후원"
-                    />
+                    <div className="space-y-1">
+                      <input
+                        type="text"
+                        value={newPayment.customPayee}
+                        onChange={(e) => setNewPayment({ ...newPayment, customPayee: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-lg text-sm"
+                        placeholder="예: 공 구입, 상품 지급"
+                      />
+                      <p className="text-[11px] text-gray-500">
+                        {hasSystemAccount
+                          ? `대상을 비워두면 "${fallbackHouseAccount?.name || 'System Account'}"(시스템 계정)으로 자동 기록됩니다.`
+                          : '시스템 계정을 먼저 만들어야 운영비/기타 항목을 기록할 수 있어요. Players > 새 선수 추가 > "시스템 계정 자동 생성"을 눌러 주세요.'}
+                      </p>
+                    </div>
                   ) : (
                     <div className="space-y-2">
                       <input

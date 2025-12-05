@@ -187,7 +187,7 @@ ON CONFLICT (name) DO NOTHING;
 CREATE TABLE IF NOT EXISTS public.payments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   player_id UUID NOT NULL REFERENCES public.players(id) ON DELETE CASCADE,
-  payment_type TEXT NOT NULL CHECK (payment_type IN ('registration', 'monthly_dues', 'annual_dues', 'match_fee')),
+  payment_type TEXT NOT NULL CHECK (payment_type IN ('registration', 'monthly_dues', 'annual_dues', 'match_fee', 'other_income', 'expense', 'reimbursement')),
   amount DECIMAL(10, 2) NOT NULL,
   payment_date TIMESTAMPTZ DEFAULT NOW(),
   payment_method TEXT CHECK (payment_method IN ('venmo', 'cash', 'zelle', 'other')),

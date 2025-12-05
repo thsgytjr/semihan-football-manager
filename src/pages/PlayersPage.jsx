@@ -2,7 +2,7 @@
 import React, { useMemo, useState, useEffect } from "react"
 import { createPortal } from "react-dom"
 import { notify } from "../components/Toast"
-import { overall, isUnknownPlayer } from "../lib/players"
+import { overall, isUnknownPlayer, isSystemAccount, SYSTEM_ACCOUNT_STATUS } from "../lib/players"
 import { logger } from "../lib/logger"
 import { 
   STAT_KEYS, 
@@ -32,6 +32,8 @@ import MembershipSettings from "../components/MembershipSettings"
 import { DEFAULT_MEMBERSHIPS, getMembershipBadge } from "../lib/membershipConfig"
 import ConfirmDialog from "../components/ConfirmDialog"
 
+const VISIBLE_PLAYER_STATUS = PLAYER_STATUS.filter(status => status.value !== SYSTEM_ACCOUNT_STATUS)
+
 const S = (v) => (v == null ? "" : String(v))
 const posOf = (p) => {
   // 새로운 positions 배열 사용
@@ -52,6 +54,14 @@ const isAssociate = (m) => {
 const isGuest = (m) => {
   const s = S(m).trim().toLowerCase()
   return s === "guest" || s.includes("게스트")
+}
+
+const buildSystemAccountStats = () => {
+  const stats = {}
+  STAT_KEYS.forEach(key => {
+    stats[key] = 30
+  })
+  return stats
 }
 
 function OriginChip({ origin }) {
@@ -111,7 +121,7 @@ const aiPowerMeterColor = (power) => {
 }
 
 // ===== 편집 모달 =====
-function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAddTagPreset, onUpdateTagPreset, onDeleteTagPreset, customMemberships = [], isAdmin }) {
+function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAddTagPreset, onUpdateTagPreset, onDeleteTagPreset, customMemberships = [], isAdmin, systemAccountExists = true, onEnsureSystemAccount = null }) {
   const [draft, setDraft] = useState(null)
   const [showUrlInput, setShowUrlInput] = useState(false)
   const [urlInput, setUrlInput] = useState('')
@@ -122,6 +132,7 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
   const [editTagName, setEditTagName] = useState('')
   const [editTagColor, setEditTagColor] = useState('blue')
   const [confirmTagDelete, setConfirmTagDelete] = useState({ open: false, index: null, name: '' })
+  const [creatingSystemAccount, setCreatingSystemAccount] = useState(false)
 
   useEffect(() => {
     if (open && player !== undefined) {
@@ -193,7 +204,8 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
 
   const nameEmpty = !S(draft?.name).trim()
   const isNew = !player?.id
-  const posMissing = isNew && (!draft?.positions || draft.positions.length === 0)
+  const isSystemDraft = (draft?.status || 'active') === SYSTEM_ACCOUNT_STATUS
+  const posMissing = isNew && !isSystemDraft && (!draft?.positions || draft.positions.length === 0)
 
   if (!open || !draft) return null
 
@@ -298,6 +310,11 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
       stats: ensureStatsObject(draft.stats),
       photoUrl: finalPhotoUrl, // 해시 제거, 쿼리 파라미터 유지
     }
+
+    if ((payload.status || 'active') === SYSTEM_ACCOUNT_STATUS) {
+      payload.positions = []
+      payload.stats = buildSystemAccountStats()
+    }
     
     // 새 선수일 경우 ID 제거 (Supabase가 자동 생성)
     if (!player?.id || String(player.id).startsWith('new-')) {
@@ -397,6 +414,32 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-6">
+          {isNew && !systemAccountExists && (
+            <div className="mb-6 rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-stone-700">
+                회계 장부 전용 시스템 계정이 아직 없습니다. 아래 버튼을 눌러 자동으로 생성하면 모든 화면에서 숨겨지고 회계에서만 사용됩니다.
+              </div>
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!onEnsureSystemAccount) return
+                  setCreatingSystemAccount(true)
+                  try {
+                    await onEnsureSystemAccount()
+                    onClose()
+                  } catch (err) {
+                    notify('시스템 계정 생성에 실패했습니다. 다시 시도해주세요.', 'error')
+                  } finally {
+                    setCreatingSystemAccount(false)
+                  }
+                }}
+                className={`inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold shadow-sm transition-colors ${creatingSystemAccount ? 'bg-stone-300 text-stone-500 cursor-not-allowed' : 'bg-stone-900 text-white hover:bg-stone-800'}`}
+                disabled={creatingSystemAccount}
+              >
+                {creatingSystemAccount ? '생성 중...' : '시스템 계정 자동 생성'}
+              </button>
+            </div>
+          )}
           <div className="grid gap-6 md:grid-cols-2">
             {/* 왼쪽: 기본 정보 */}
             <div className="space-y-5">
@@ -704,7 +747,7 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
                   <div>
                     <label className="block text-xs font-semibold text-blue-900 mb-2">선수 상태</label>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {PLAYER_STATUS.map(status => {
+                      {VISIBLE_PLAYER_STATUS.map(status => {
                         const isSelected = draft.status === status.value
                         let selectedClass = 'bg-white border-2 border-stone-200 text-stone-600 hover:border-stone-300'
                         
@@ -736,6 +779,11 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
                         )
                       })}
                     </div>
+                    {isSystemDraft && (
+                      <p className="text-[11px] text-stone-600 mt-2">
+                        시스템 계정은 매치 플래너, 회비·리뉴얼 목록 등 사용자 화면에서 자동으로 숨겨집니다.
+                      </p>
+                    )}
                   </div>
 
                   <div>
@@ -1216,6 +1264,8 @@ export default function PlayersPage({
   membershipSettings = [],
   onSaveMembershipSettings = () => {},
   isAdmin = false,
+  systemAccount = null,
+  onEnsureSystemAccount = null,
 }) {
   const [confirm, setConfirm] = useState({ open: false, id: null, name: "" })
   const [editing, setEditing] = useState({ open: false, player: null })
@@ -1227,6 +1277,8 @@ export default function PlayersPage({
   const [selectedTags, setSelectedTags] = useState([]) // 선택된 태그들
   const [searchQuery, setSearchQuery] = useState('') // 검색어
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false) // 고급 필터 표시 여부
+  const systemAccountExists = Boolean(systemAccount)
+  const rosterPlayers = useMemo(() => players.filter(p => !p.isSystemAccount), [players])
 
   const resetFilters = () => {
     setMembershipFilter('all')
@@ -1345,7 +1397,7 @@ export default function PlayersPage({
   }
 
   const sorted = useMemo(() => {
-    const arr = [...players]
+    const arr = [...rosterPlayers]
     let cmp = cmpByNameAsc
     if (sortKey === "ovr") cmp = cmpByOvrAsc
     else if (sortKey === "pos") cmp = cmpByPosAsc
@@ -1353,7 +1405,7 @@ export default function PlayersPage({
     else if (sortKey === "status") cmp = cmpByStatusAsc
     arr.sort(applyDir(cmp))
     return arr
-  }, [players, sortKey, sortDir])
+  }, [rosterPlayers, sortKey, sortDir])
 
   // 멤버십, 상태, 포지션, 태그, 검색어 필터 적용
   const filtered = useMemo(() => {
@@ -1413,30 +1465,30 @@ export default function PlayersPage({
   }, [sorted, searchQuery, membershipFilter, statusFilter, positionFilter, selectedTags])
 
   const counts = useMemo(() => {
-    const total = players.length
-    const members = players.filter((p) => isMember(p.membership)).length
-    const associates = players.filter((p) => isAssociate(p.membership)).length
-    const guests = players.filter((p) => isGuest(p.membership)).length
+    const total = rosterPlayers.length
+    const members = rosterPlayers.filter((p) => isMember(p.membership)).length
+    const associates = rosterPlayers.filter((p) => isAssociate(p.membership)).length
+    const guests = rosterPlayers.filter((p) => isGuest(p.membership)).length
     
     // 커스텀 멤버십별 카운트 계산
     const customCounts = {}
     customMemberships.forEach(cm => {
-      customCounts[cm.name] = players.filter(p => p.membership === cm.name).length
+      customCounts[cm.name] = rosterPlayers.filter(p => p.membership === cm.name).length
     })
     
     return { total, members, associates, guests, custom: customCounts }
-  }, [players, customMemberships])
+  }, [rosterPlayers, customMemberships])
 
   // 모든 선수의 태그 수집
   const allTags = useMemo(() => {
     const tagSet = new Set()
-    players.forEach(p => {
+    rosterPlayers.forEach(p => {
       if (p.tags && Array.isArray(p.tags)) {
         p.tags.forEach(tag => tagSet.add(tag.name))
       }
     })
     return Array.from(tagSet).sort()
-  }, [players])
+  }, [rosterPlayers])
 
   // 새 선수 추가
   const handleCreate = () => {
@@ -1747,7 +1799,7 @@ export default function PlayersPage({
                   >
                     전체
                   </button>
-                  {PLAYER_STATUS.map(status => {
+                  {VISIBLE_PLAYER_STATUS.map(status => {
                     const isActive = statusFilter === status.value
                     let buttonClass = 'border-stone-300 bg-white text-stone-700 hover:border-stone-400'
                     
@@ -1912,9 +1964,9 @@ export default function PlayersPage({
               <span className="ml-2 text-emerald-600">
                 {filtered.length}명
               </span>
-              {filtered.length !== players.length && (
+              {filtered.length !== rosterPlayers.length && (
                 <span className="ml-1 text-xs text-stone-500">
-                  (전체 {players.length}명)
+                  (전체 {rosterPlayers.length}명)
                 </span>
               )}
             </div>
@@ -2021,6 +2073,7 @@ export default function PlayersPage({
                         p.status === 'inactive' ? 'bg-stone-100 text-stone-800 border border-stone-200' :
                         p.status === 'nocontact' ? 'bg-slate-100 text-slate-800 border border-slate-200' :
                         p.status === 'suspended' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                        p.status === SYSTEM_ACCOUNT_STATUS ? 'bg-stone-900 text-white border border-stone-900' :
                         'bg-stone-100 text-stone-800 border border-stone-200'
                       }`}>
                         {getPlayerStatusLabel(p.status)}
@@ -2166,6 +2219,7 @@ export default function PlayersPage({
                         p.status === 'inactive' ? 'bg-stone-100 text-stone-800 border border-stone-200' :
                         p.status === 'nocontact' ? 'bg-slate-100 text-slate-800 border border-slate-200' :
                         p.status === 'suspended' ? 'bg-amber-100 text-amber-800 border border-amber-200' :
+                        p.status === SYSTEM_ACCOUNT_STATUS ? 'bg-stone-900 text-white border border-stone-900' :
                         'bg-stone-100 text-stone-800 border border-stone-200'
                       }`}>
                         {getPlayerStatusLabel(p.status)}
@@ -2235,7 +2289,7 @@ export default function PlayersPage({
         </ul>
       )}
 
-      {players.length > 0 && filtered.length === 0 && (
+      {rosterPlayers.length > 0 && filtered.length === 0 && (
         <div className="text-center py-12 mt-4 rounded-2xl border-2 border-dashed border-stone-200 bg-stone-50">
           <svg className="w-12 h-12 mx-auto mb-3 text-stone-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l2.5 1.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -2317,6 +2371,8 @@ export default function PlayersPage({
         onDeleteTagPreset={onDeleteTagPreset}
         customMemberships={customMemberships}
         isAdmin={isAdmin}
+        systemAccountExists={systemAccountExists}
+        onEnsureSystemAccount={onEnsureSystemAccount}
       />
 
       {/* 멤버십 설정 모달 */}

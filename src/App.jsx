@@ -6,7 +6,7 @@ import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subs
 import { supabase } from './lib/supabaseClient'
 import{saveMatchToDB,updateMatchInDB,deleteMatchFromDB,listMatchesFromDB,subscribeMatches}from"./services/matches.service"
 import{getMembershipSettings,subscribeMembershipSettings}from"./services/membership.service"
-import{mkPlayer}from"./lib/players";import{notify}from"./components/Toast"
+import{mkPlayer,isUnknownPlayer,isSystemAccount,mkSystemAccount}from"./lib/players";import{notify}from"./components/Toast"
 import{filterExpiredMatches, normalizeDateISO}from"./lib/upcomingMatch"
 import{getOrCreateVisitorId,getVisitorIP,parseUserAgent,shouldTrackVisit,isPreviewMode,isDevelopmentEnvironment}from"./lib/visitorTracking"
 import{signInAdmin,signOut,getSession,onAuthStateChange,isDeveloperEmail}from"./lib/auth"
@@ -396,14 +396,47 @@ export default function App(){
     }
   },[])
 
-  const players=db.players||[],matches=db.matches||[],visits=typeof db.visits==="number"?db.visits:0,upcomingMatches=db.upcomingMatches||[],membershipSettings=db.membershipSettings||[]
+  const rawPlayers=db.players||[],matches=db.matches||[],visits=typeof db.visits==="number"?db.visits:0,upcomingMatches=db.upcomingMatches||[],membershipSettings=db.membershipSettings||[]
+  const players=useMemo(()=>{
+    return(rawPlayers||[]).map(p=>{
+      const systemAccount=isSystemAccount(p)
+      return{...p,isSystemAccount:systemAccount,isUnknown:systemAccount||isUnknownPlayer(p)}
+    })
+  },[rawPlayers])
+  const publicPlayers=useMemo(()=>players.filter(p=>!p.isSystemAccount),[players])
+  const systemAccount=useMemo(()=>players.find(p=>p.isSystemAccount)||null,[players])
 
   const totals=useMemo(()=>{
-    const cnt=players.length
-    const goalsProxy=Math.round(players.reduce((a,p)=>a+(p.stats?.Shooting||0)*0.1,0))
-    const attendanceProxy=Math.round(60+players.length*2)
+    const cnt=publicPlayers.length
+    const goalsProxy=Math.round(publicPlayers.reduce((a,p)=>a+(p.stats?.Shooting||0)*0.1,0))
+    const attendanceProxy=Math.round(60+publicPlayers.length*2)
     return{count:cnt,goals:goalsProxy,attendance:attendanceProxy}
-  },[players])
+  },[publicPlayers])
+
+  const handleEnsureSystemAccount=useCallback(async()=>{
+    if(systemAccount){
+      notify('이미 시스템 계정이 준비되어 있어요.')
+      return systemAccount
+    }
+    const sysPlayer=mkSystemAccount('System Account')
+    setDb(prev=>({
+      ...prev,
+      players:[sysPlayer,...(prev.players||[])]
+    }))
+    try{
+      await upsertPlayer(sysPlayer)
+      notify('시스템 계정을 만들었어요. 회계에서 자동으로 사용됩니다.')
+      return sysPlayer
+    }catch(err){
+      logger.error('[App] Failed to create system account',err)
+      setDb(prev=>({
+        ...prev,
+        players:(prev.players||[]).filter(p=>p.id!==sysPlayer.id)
+      }))
+      notify('시스템 계정 생성에 실패했습니다. 다시 시도해주세요.', 'error')
+      throw err
+    }
+  },[systemAccount])
 
   // 탭 전환 함수 메모이제이션 (즉시 반영 + 로딩 상태)
   const handleTabChange = useCallback((newTab) => {
@@ -461,8 +494,33 @@ export default function App(){
 
   async function handleUpdatePlayer(next){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,players:(prev.players||[]).map(x=>x.id===next.id?next:x)}));try{await upsertPlayer(next)}catch(e){logger.error(e)}}
   async function handleDeletePlayer(id){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,players:(prev.players||[]).filter(p=>p.id!==id)}));if(selectedPlayerId===id)setSelectedPlayerId(null);try{await deletePlayer(id);notify("선수를 삭제했습니다.")}catch(e){logger.error(e)}}
-  function handleImportPlayers(list){if(!isAdmin)return notify("Admin만 가능합니다.");const safe=Array.isArray(list)?list:[];setDb(prev=>({...prev,players:safe}));Promise.all(safe.map(upsertPlayer)).then(()=>notify("선수 목록을 가져왔습니다.")).catch(logger.error);setSelectedPlayerId(null)}
-  function handleResetPlayers(){if(!isAdmin)return notify("Admin만 가능합니다.");(async()=>{const fresh=await listPlayers();setDb(prev=>({...prev,players:fresh}));setSelectedPlayerId(null);notify("선수 목록을 리셋했습니다.")})()}
+  async function handleImportPlayers(list){
+    if(!isAdmin)return notify("Admin만 가능합니다.")
+    const safe=Array.isArray(list)?list:[]
+    setDb(prev=>({...prev,players:safe}))
+    setSelectedPlayerId(null)
+    try{
+      await Promise.all(safe.map(upsertPlayer))
+      await handleEnsureSystemAccount()
+      notify("선수 목록을 가져왔습니다.")
+    }catch(err){
+      logger.error(err)
+      notify("선수 데이터를 저장하는 중 오류가 발생했습니다.","error")
+    }
+  }
+  async function handleResetPlayers(){
+    if(!isAdmin)return notify("Admin만 가능합니다.")
+    try{
+      const fresh=await listPlayers()
+      setDb(prev=>({...prev,players:fresh}))
+      setSelectedPlayerId(null)
+      await handleEnsureSystemAccount()
+      notify("선수 목록을 리셋했습니다.")
+    }catch(err){
+      logger.error(err)
+      notify("선수 목록을 불러오는 중 오류가 발생했습니다.","error")
+    }
+  }
   async function handleSaveMatch(match){
     if(!isAdmin)return notify("Admin만 가능합니다.")
     
@@ -1075,7 +1133,7 @@ export default function App(){
               {tab==="dashboard"&&(
                 <Dashboard
                   totals={totals}
-                  players={players}
+                  players={publicPlayers}
                   matches={matches}
                   isAdmin={isAdmin}
                   onUpdateMatch={handleUpdateMatch}
@@ -1110,26 +1168,28 @@ export default function App(){
                   membershipSettings={db.membershipSettings||[]}
                   onSaveMembershipSettings={handleSaveMembershipSettings}
                   isAdmin={isAdmin}
+                  systemAccount={systemAccount}
+                  onEnsureSystemAccount={handleEnsureSystemAccount}
                 />
               )}
               {tab==="planner"&&isAdmin&&featuresEnabled.planner&&(
                 <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.planner')}</div>}>
-                  <MatchPlanner players={players} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch} membershipSettings={db.membershipSettings||[]}/>
+                  <MatchPlanner players={publicPlayers} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch} membershipSettings={db.membershipSettings||[]}/>
                 </Suspense>
               )}
               {tab==="draft"&&isAdmin&&featuresEnabled.draft&&(
                 <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.draft')}</div>}>
-                  <DraftPage players={players} upcomingMatches={db.upcomingMatches} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>
+                  <DraftPage players={publicPlayers} upcomingMatches={db.upcomingMatches} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>
                 </Suspense>
               )}
               {tab==="formation"&&featuresEnabled.formation&&(
                 <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.formation')}</div>}>
-                  <FormationBoard players={players} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>
+                  <FormationBoard players={publicPlayers} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>
                 </Suspense>
               )}
               {tab==="stats"&&isAdmin&&featuresEnabled.stats&&(
                 <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.stats')}</div>}>
-                  <StatsInput players={players} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>
+                  <StatsInput players={publicPlayers} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>
                 </Suspense>
               )}
                 {tab==="accounting"&&isAdmin&&featuresEnabled.accounting&&(

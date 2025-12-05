@@ -151,6 +151,7 @@ export const PLAYER_STATUS = [
   { value: 'inactive', label: '휴면', color: 'stone' },
   { value: 'suspended', label: '출전정지', color: 'amber' },
   { value: 'nocontact', label: '연락두절', color: 'slate' },
+  { value: 'system', label: '시스템 계정', color: 'stone' },
 ]
 
 export function getPlayerStatusLabel(status) {

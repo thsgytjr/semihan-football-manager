@@ -47,10 +47,60 @@ CREATE INDEX IF NOT EXISTS idx_players_tags ON players USING GIN (tags);
 -- SELECT id, name, position, positions, status, tags FROM players LIMIT 5;
 
 -- 6. 제약 조건 추가
--- status 값 검증
+-- status 값 검증 (system 계정까지 허용)
+ALTER TABLE players 
+DROP CONSTRAINT IF EXISTS check_player_status;
+
 ALTER TABLE players 
 ADD CONSTRAINT check_player_status 
-CHECK (status IN ('active', 'recovering', 'inactive', 'suspended', 'nocontact'));
+CHECK (status IN ('active', 'recovering', 'inactive', 'suspended', 'nocontact', 'system'));
+
+-- 7. payments.payment_type 제약 업데이트 (기타 수입/지출, 상환 등 허용)
+ALTER TABLE payments
+DROP CONSTRAINT IF EXISTS payments_payment_type_check;
+
+ALTER TABLE payments
+ADD CONSTRAINT payments_payment_type_check
+CHECK (payment_type IN ('registration', 'monthly_dues', 'annual_dues', 'match_fee', 'other_income', 'expense', 'reimbursement'));
+
+-- 8. 시스템 계정 데이터 보정 및 유일성 보장
+--    (1) status='system' 이거나 이름이 'System Account'인 선수 중 가장 오래된 1명을 정식 시스템 계정으로 지정
+WITH canonical AS (
+  SELECT id
+  FROM (
+    SELECT id, created_at FROM players WHERE status = 'system'
+    UNION ALL
+    SELECT id, created_at FROM players WHERE status <> 'system' AND LOWER(name) = 'system account'
+  ) merged
+  ORDER BY created_at NULLS LAST
+  LIMIT 1
+)
+UPDATE players
+SET
+  status = 'system',
+  name = 'System Account',
+  tags = '[]'::jsonb,
+  origin = 'none',
+  membership = COALESCE(membership, 'guest')
+WHERE id IN (SELECT id FROM canonical);
+
+--    (2) 중복된 시스템 계정이 있다면 상태를 inactive로 되돌려 UI에 노출되지 않도록 처리
+UPDATE players
+SET status = 'inactive'
+WHERE status = 'system'
+  AND id NOT IN (SELECT id FROM (
+    SELECT id
+    FROM (
+      SELECT id, created_at FROM players WHERE status = 'system'
+      UNION ALL
+      SELECT id, created_at FROM players WHERE status <> 'system' AND LOWER(name) = 'system account'
+    ) merged
+    ORDER BY created_at NULLS LAST
+    LIMIT 1
+  ) canonical_keep);
+
+--    (3) 시스템 계정은 항상 1개만 존재하도록 부분 유니크 인덱스 생성
+CREATE UNIQUE INDEX IF NOT EXISTS ux_players_system_account ON players(status) WHERE status = 'system';
 
 -- ========================================
 -- 완료 체크리스트:
