@@ -1580,7 +1580,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                       />
                       <p className="text-[11px] text-gray-500">
                         {hasSystemAccount
-                          ? `대상을 비워두면 "${fallbackHouseAccount?.name || 'System Account'}"(시스템 계정)으로 자동 기록됩니다.`
+                          ? ``
                           : '시스템 계정을 먼저 만들어야 운영비/기타 항목을 기록할 수 있어요. Players > 새 선수 추가 > "시스템 계정 자동 생성"을 눌러 주세요.'}
                       </p>
                     </div>
