@@ -107,6 +107,55 @@ const formatCurrency = (value) => {
   return currencyFormatter.format(numeric)
 }
 
+const PAYMENT_FLOW_LABELS = {
+  income: '수입',
+  expense: '지출'
+}
+
+const PAYMENT_FLOW_BADGES = {
+  income: 'bg-emerald-50 text-emerald-700 border border-emerald-200',
+  expense: 'bg-rose-50 text-rose-700 border border-rose-200'
+}
+
+const PAYMENT_TYPE_META = {
+  registration: { label: '가입비', flow: 'income' },
+  monthly_dues: { label: '월회비', flow: 'income' },
+  annual_dues: { label: '연회비', flow: 'income' },
+  match_fee: { label: '구장비 수입', flow: 'income' },
+  other_income: { label: '기타 수입', flow: 'income' },
+  expense: { label: '기타 지출', flow: 'expense' },
+  reimbursement: { label: '상환', flow: 'expense' },
+  registration_fee: { label: '가입비', flow: 'income' },
+  facility_expense: { label: '구장비 지출', flow: 'expense' }
+}
+
+const PAYMENT_TYPE_ALIASES = {
+  facility_expense: 'expense'
+}
+
+const resolvePaymentTypeAlias = (type) => PAYMENT_TYPE_ALIASES[type] || type
+
+const PAYMENT_TYPE_SELECT_GROUPS = [
+  {
+    label: '수입',
+    options: [
+      { value: 'registration', label: '가입비 (수입)' },
+      { value: 'monthly_dues', label: '월회비 (수입)' },
+      { value: 'annual_dues', label: '연회비 (수입)' },
+      { value: 'match_fee', label: '구장비 수입' },
+      { value: 'other_income', label: '기타 수입' }
+    ]
+  },
+  {
+    label: '지출',
+    options: [
+      { value: 'facility_expense', label: '구장비 지출' },
+      { value: 'expense', label: '기타 지출' },
+      { value: 'reimbursement', label: '상환 (환급)' }
+    ]
+  }
+]
+
 function readVoidedMatchIdsFromStorage() {
   if (typeof window === 'undefined') return new Set()
   try {
@@ -149,7 +198,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   const [voidedMatchIds, setVoidedMatchIds] = useState(() => readVoidedMatchIdsFromStorage())
   // 매치별 구장비 페이지네이션
   const [matchFeesPage, setMatchFeesPage] = useState(1)
-  const matchFeesPerPage = 5
+  const [matchFeesPerPage, setMatchFeesPerPage] = useState(5)
 
   // Bulk delete state for payments
   const [selectedPayments, setSelectedPayments] = useState(new Set())
@@ -178,8 +227,11 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     notes: '',
     customPayee: ''
   })
+  const resolvedPaymentType = resolvePaymentTypeAlias(newPayment.paymentType)
+  const selectedPaymentTypeMeta = PAYMENT_TYPE_META[newPayment.paymentType] || PAYMENT_TYPE_META[resolvedPaymentType]
   const [renewalSearch, setRenewalSearch] = useState('')
   const [renewalFilter, setRenewalFilter] = useState('all')
+  const [renewalShowDetails, setRenewalShowDetails] = useState(true)
   const [renewalPrefs, setRenewalPrefs] = useState(() => (feeOverrides?.renewalPreferences || {}))
   const [renewalSaving, setRenewalSaving] = useState({})
   const [renewalResets, setRenewalResets] = useState(() => normalizeRenewalResetMap(feeOverrides?.renewalResets || {}))
@@ -296,11 +348,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     return renewalEligiblePlayers.map(player => {
       const r = renewals[player.id] || {}
       const preference = renewalPrefs[player.id]?.billingType || 'auto'
-      const manualResetIso = renewalResets[player.id]
-      const manualResetAt = manualResetIso ? new Date(manualResetIso) : null
-      const manualResetKey = manualResetAt
-        ? `${manualResetAt.getFullYear()}-${String(manualResetAt.getMonth() + 1).padStart(2, '0')}`
-        : null
+      const manualResetEntry = renewalResets[player.id]
 
       const monthlyInfo = {
         lastPaid: r.lastMonthly ? new Date(r.lastMonthly) : null,
@@ -316,6 +364,14 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       const derivedType = monthlyInfo.hasData ? 'monthly' : annualInfo.hasData ? 'annual' : 'unknown'
       const billingType = preference !== 'auto' ? preference : derivedType
       const warnWindow = billingType === 'annual' ? 30 : 7
+      const manualResetIso = typeof manualResetEntry === 'string'
+        ? manualResetEntry
+        : manualResetEntry?.[billingType] || manualResetEntry?.monthly || manualResetEntry?.annual || null
+      const manualResetAt = manualResetIso ? new Date(manualResetIso) : null
+      const manualResetValid = manualResetAt?.getTime && !Number.isNaN(manualResetAt.getTime())
+      const manualResetKey = manualResetValid
+        ? `${manualResetAt.getFullYear()}-${String(manualResetAt.getMonth() + 1).padStart(2, '0')}`
+        : null
       const lastPaid = billingType === 'monthly' ? monthlyInfo.lastPaid : billingType === 'annual' ? annualInfo.lastPaid : null
       const nextDue = billingType === 'monthly' ? monthlyInfo.nextDue : billingType === 'annual' ? annualInfo.nextDue : null
 
@@ -330,7 +386,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       if (billingType === 'monthly') {
         const paidSet = monthlyPaymentBucketsByPlayer.get(player.id) || new Set()
         const monthsSinceLastPaid = monthlyInfo.lastPaid ? Math.max(diffInMonths(now, monthlyInfo.lastPaid), 0) + 1 : MAX_MONTH_HISTORY
-        const monthsSinceReset = manualResetAt ? Math.max(diffInMonths(now, manualResetAt), 0) + 1 : 0
+        const monthsSinceReset = manualResetValid ? Math.max(diffInMonths(now, manualResetAt), 0) + 1 : 0
         const historyDepth = Math.min(
           MAX_MONTH_HISTORY,
           Math.max(DEFAULT_MONTH_HISTORY, monthsSinceLastPaid, monthsSinceReset || 0)
@@ -354,7 +410,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       const outstandingAmount = billingType === 'monthly' ? missedMonthsTotal * monthlyDueAmount : 0
       const hasOutstandingMonths = billingType === 'monthly' && missedMonthsTotal > 0
       const finalStatus = billingType === 'unknown' ? 'no-plan' : hasOutstandingMonths ? 'overdue' : baseStatus
-      const manualResetActive = Boolean(manualResetAt)
+      const manualResetActive = Boolean(manualResetValid)
       const statusDescription = manualResetActive
         ? `관리자 수동 정상 처리 (${formatDate(manualResetAt.toISOString(), true)})`
         : hasOutstandingMonths
@@ -386,7 +442,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
         missedMonthsHidden,
         missedMonthsTotal,
         outstandingAmount,
-        manualResetAt,
+        manualResetAt: manualResetValid ? manualResetAt : null,
         manualResetActive,
         preference,
         preferenceLabel: preference === 'auto' ? '자동' : preference === 'monthly' ? '월회비' : '연회비',
@@ -519,7 +575,8 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   }
 
   async function handleAddPayment() {
-    const isDonationLike = newPayment.paymentType === 'other_income' || newPayment.paymentType === 'expense'
+    const paymentTypeToSave = resolvePaymentTypeAlias(newPayment.paymentType)
+    const isDonationLike = paymentTypeToSave === 'other_income' || paymentTypeToSave === 'expense'
     const hasPlayerSelection = Boolean(newPayment.playerId) || ((newPayment.selectedPlayerIds || []).length > 0)
     if ((!isDonationLike && !hasPlayerSelection) || !newPayment.amount) {
       notify(isDonationLike ? '금액을 입력해주세요' : '선수와 금액을 입력해주세요')
@@ -554,7 +611,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
         for (const dt of dateList) {
           const paymentData = {
             playerId: pid,
-            paymentType: newPayment.paymentType,
+            paymentType: paymentTypeToSave,
             amount: parseFloat(newPayment.amount),
             paymentMethod: newPayment.paymentMethod,
             paymentDate: dt,
@@ -817,10 +874,12 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
         }
       }
 
+      const flow = PAYMENT_TYPE_META[payment.payment_type]?.flow || (payment.payment_type === 'expense' ? 'expense' : 'income')
       return {
         '날짜': new Date(payment.payment_date).toLocaleDateString('ko-KR'),
         '선수/대상': isDonationLike ? (customPayee || '미지정') : (player?.name || 'Unknown'),
         '유형': paymentTypeLabels[payment.payment_type] || payment.payment_type,
+        '구분': flow === 'income' ? '수입' : '지출',
         '금액': `$${parseFloat(payment.amount).toFixed(2)}`,
         '방법': paymentMethodLabels[payment.payment_method] || payment.payment_method,
         '메모': displayNotes
@@ -843,6 +902,18 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
     }))
   }
+
+  const openPaymentFormForPlayer = useCallback((player) => {
+    if (!player) return
+    setSelectedTab('payments')
+    setShowAddPayment(true)
+    setPlayerSearch(player.name || '')
+    setNewPayment(prev => ({
+      ...prev,
+      playerId: '',
+      selectedPlayerIds: player.id ? [player.id] : []
+    }))
+  }, [setSelectedTab, setShowAddPayment, setPlayerSearch, setNewPayment])
 
   // 정렬된 선수 목록
   const sortedPlayerStats = useMemo(() => {
@@ -946,16 +1017,9 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     }
   }
 
-  const paymentTypeLabels = {
-    registration: '가입비',
-    monthly_dues: '월회비',
-    annual_dues: '연회비',
-    match_fee: '구장비',
-    other_income: '기타 수입',
-    expense: '기타 지출',
-    reimbursement: '상환',
-    registration_fee: '가입비'
-  }
+  const paymentTypeLabels = useMemo(() => (
+    Object.fromEntries(Object.entries(PAYMENT_TYPE_META).map(([key, meta]) => [key, meta.label]))
+  ), [])
 
   // 회비 금액 매핑 (가입비/월/연)
   const duesMap = useMemo(() => {
@@ -967,6 +1031,33 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     })
     return map
   }, [duesSettings])
+
+  const selectedPlayerIds = newPayment.selectedPlayerIds || []
+  const isHouseEntry = ['other_income', 'expense'].includes(resolvedPaymentType)
+
+  const paymentKpis = useMemo(() => {
+    const THIRTY_DAYS_MS = 1000 * 60 * 60 * 24 * 30
+    const now = Date.now()
+    const totals = payments.reduce((acc, pay) => {
+      const amt = Math.abs(parseFloat(pay.amount) || 0)
+      const payDate = new Date(pay.payment_date || pay.paymentDate)
+      const isRecent = Number.isFinite(payDate.getTime()) && (now - payDate.getTime()) <= THIRTY_DAYS_MS
+
+      if (pay.payment_type === 'expense') {
+        acc.outflow += amt
+      } else {
+        acc.inflow += amt
+        if (isRecent) acc.recentInflow += amt
+      }
+
+      acc.volume += amt
+      return acc
+    }, { inflow: 0, outflow: 0, recentInflow: 0, volume: 0 })
+
+    const count = payments.length
+    const avgTicket = count > 0 ? totals.volume / count : 0
+    return { ...totals, count, avgTicket }
+  }, [payments])
 
   function clearYearSelection() {
     setSelectedYear(null)
@@ -1041,9 +1132,11 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   const paginatedMatches = useMemo(() => {
     const startIdx = (matchFeesPage - 1) * matchFeesPerPage
     return sortedMatches.slice(startIdx, startIdx + matchFeesPerPage)
-  }, [sortedMatches, matchFeesPage])
+  }, [sortedMatches, matchFeesPage, matchFeesPerPage])
 
-  const totalMatchPages = Math.ceil(sortedMatches.length / matchFeesPerPage)
+  const totalMatchPages = Math.max(1, Math.ceil(Math.max(sortedMatches.length, 1) / matchFeesPerPage))
+  const matchPageStart = sortedMatches.length === 0 ? 0 : (matchFeesPage - 1) * matchFeesPerPage + 1
+  const matchPageEnd = sortedMatches.length === 0 ? 0 : Math.min(sortedMatches.length, matchFeesPage * matchFeesPerPage)
 
   if (!isAdmin) {
     return (
@@ -1243,14 +1336,26 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
             <div className="text-sm text-gray-600">
               총 {sortedPlayerStats.length}명 표시
             </div>
-            <div className="w-full md:w-64">
+            <div className="relative w-full md:w-64">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
                 value={playerStatsSearch}
                 onChange={(e) => setPlayerStatsSearch(e.target.value)}
                 placeholder="선수 이름 검색"
-                className="w-full px-3 py-2 border rounded-lg text-sm"
+                className="w-full pl-9 pr-8 py-2 border rounded-lg text-sm"
+                aria-label="선수 검색"
               />
+              {playerStatsSearch && (
+                <button
+                  type="button"
+                  onClick={() => setPlayerStatsSearch('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  aria-label="검색어 지우기"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
           </div>
           {/* 리스트 뷰 */}
@@ -1400,12 +1505,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                     </td>
                     <td className="py-3 px-4 text-center">
                       <button
-                        onClick={() => {
-                          setSelectedTab('payments')
-                          setShowAddPayment(true)
-                          setPlayerSearch(player.name)
-                          setNewPayment(prev => ({ ...prev, playerId: '', selectedPlayerIds: [player.id] }))
-                        }}
+                        onClick={() => openPaymentFormForPlayer(player)}
                         className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
                       >
                         결제 추가
@@ -1503,6 +1603,41 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
             </div>
           }
         >
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3 mb-6">
+            {[{
+              key: 'count',
+              label: '총 거래',
+              value: `${paymentKpis.count}건`,
+              helper: '현재 필터 기준'
+            }, {
+              key: 'inflow',
+              label: '누적 수입',
+              value: formatCurrency(paymentKpis.inflow),
+              helper: '지출 제외'
+            }, {
+              key: 'outflow',
+              label: '누적 지출',
+              value: formatCurrency(paymentKpis.outflow),
+              helper: 'expense 기준'
+            }, {
+              key: 'recent',
+              label: '최근 30일 수입',
+              value: formatCurrency(paymentKpis.recentInflow),
+              helper: '오늘 기준 30일'
+            }, {
+              key: 'avg',
+              label: '평균 거래 금액',
+              value: formatCurrency(paymentKpis.avgTicket || 0),
+              helper: '건당 평균'
+            }].map(tile => (
+              <div key={tile.key} className="p-3 rounded-xl border bg-white shadow-sm">
+                <div className="text-[11px] uppercase tracking-wide text-gray-500">{tile.label}</div>
+                <div className="text-lg font-bold text-gray-900 mt-1">{tile.value}</div>
+                <div className="text-[11px] text-gray-500 mt-0.5">{tile.helper}</div>
+              </div>
+            ))}
+          </div>
+
           {showAddPayment && (
             <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
               <div className="flex items-center justify-between mb-3">
@@ -1511,233 +1646,237 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                   <X size={20} className="text-gray-500 hover:text-gray-700" />
                 </button>
               </div>
-              
-              {/* 상단: 결제 유형, 금액, 방법 - 한 줄로 */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+              <div className="space-y-6">
                 <div>
-                  <label className="block text-xs font-medium mb-1">결제 유형</label>
-                  <select
-                    value={newPayment.paymentType}
-                    onChange={(e) => {
-                      const newType = e.target.value
-                      const updates = { paymentType: newType }
-                      if (newType === 'registration' || newType === 'monthly_dues' || newType === 'annual_dues') {
-                        const fixedAmount = duesMap[newType]
-                        if (fixedAmount) {
-                          updates.amount = String(fixedAmount)
-                        }
-                      }
-                      setNewPayment({ ...newPayment, ...updates })
-                    }}
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                  >
-                    {Object.entries(paymentTypeLabels).map(([key, label]) => (
-                      <option key={key} value={key}>{label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1">금액 ($)</label>
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={newPayment.amount}
-                    onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    placeholder="0.00"
-                    readOnly={['registration', 'monthly_dues', 'annual_dues'].includes(newPayment.paymentType) && duesMap[newPayment.paymentType]}
-                    title={['registration', 'monthly_dues', 'annual_dues'].includes(newPayment.paymentType) ? '회비 설정에서 고정된 금액' : ''}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1">결제 방법</label>
-                  <select
-                    value={newPayment.paymentMethod}
-                    onChange={(e) => setNewPayment({ ...newPayment, paymentMethod: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                  >
-                    {Object.entries(paymentMethodLabels).map(([key, label]) => (
-                      <option key={key} value={key}>{label}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* 중간: 선수 선택 or 대상/용도 + 메모 */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                <div>
-                  <label className="block text-xs font-medium mb-1">
-                    {['other_income','expense'].includes(newPayment.paymentType) ? '대상/용도 (선택)' : '선수'}
-                  </label>
-                  {['other_income','expense'].includes(newPayment.paymentType) ? (
-                    <div className="space-y-1">
-                      <input
-                        type="text"
-                        value={newPayment.customPayee}
-                        onChange={(e) => setNewPayment({ ...newPayment, customPayee: e.target.value })}
+                  <StepHeader step={1} title="결제 기본 정보" description="유형 · 금액 · 결제 수단" />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium mb-1">결제 유형</label>
+                      <select
+                        value={newPayment.paymentType}
+                        onChange={(e) => {
+                          const newType = e.target.value
+                          const updates = { paymentType: newType }
+                          const resolvedType = resolvePaymentTypeAlias(newType)
+                          if (['registration', 'monthly_dues', 'annual_dues'].includes(resolvedType)) {
+                            const fixedAmount = duesMap[resolvedType]
+                            if (fixedAmount) {
+                              updates.amount = String(fixedAmount)
+                            }
+                          }
+                          if (newType === 'facility_expense' && !newPayment.notes) {
+                            updates.notes = '구장비 지출'
+                          }
+                          setNewPayment({ ...newPayment, ...updates })
+                        }}
                         className="w-full px-3 py-2 border rounded-lg text-sm"
-                        placeholder="예: 공 구입, 상품 지급"
+                      >
+                        {PAYMENT_TYPE_SELECT_GROUPS.map(group => (
+                          <optgroup key={group.label} label={group.label}>
+                            {group.options.map(option => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                      <div className="mt-1 text-[11px] text-gray-500">
+                        {selectedPaymentTypeMeta?.label} · {PAYMENT_FLOW_LABELS[selectedPaymentTypeMeta?.flow] || '수입'}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">금액 ($)</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={newPayment.amount}
+                        onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-lg text-sm"
+                        placeholder="0.00"
+                        readOnly={['registration', 'monthly_dues', 'annual_dues'].includes(resolvedPaymentType) && duesMap[resolvedPaymentType]}
+                        title={['registration', 'monthly_dues', 'annual_dues'].includes(resolvedPaymentType) ? '회비 설정에서 고정된 금액' : ''}
                       />
-                      <p className="text-[11px] text-gray-500">
-                        {hasSystemAccount
-                          ? ``
-                          : '시스템 계정을 먼저 만들어야 운영비/기타 항목을 기록할 수 있어요. Players > 새 선수 추가 > "시스템 계정 자동 생성"을 눌러 주세요.'}
-                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium mb-1">결제 방법</label>
+                      <select
+                        value={newPayment.paymentMethod}
+                        onChange={(e) => setNewPayment({ ...newPayment, paymentMethod: e.target.value })}
+                        className="w-full px-3 py-2 border rounded-lg text-sm"
+                      >
+                        {Object.entries(paymentMethodLabels).map(([key, label]) => (
+                          <option key={key} value={key}>{label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <StepHeader step={2} title="대상 & 메모" description={isHouseEntry ? '운영비/기타 항목은 용도를 입력하세요' : '선수를 검색해 다중 선택할 수 있습니다'} />
+                  {isHouseEntry ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium mb-1">대상/용도 (선택)</label>
+                        <input
+                          type="text"
+                          value={newPayment.customPayee}
+                          onChange={(e) => setNewPayment({ ...newPayment, customPayee: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-lg text-sm"
+                          placeholder="예: 공 구입, 상품 지급"
+                        />
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          {hasSystemAccount
+                            ? '운영비와 기타 수입/지출을 구분할 메모를 함께 남겨 주세요.'
+                            : '시스템 계정을 먼저 만들어야 운영비/기타 항목을 기록할 수 있어요. Players > 새 선수 추가 > "시스템 계정 자동 생성"을 눌러 주세요.'}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium mb-1">메모 (선택)</label>
+                        <input
+                          type="text"
+                          value={newPayment.notes}
+                          onChange={(e) => setNewPayment({ ...newPayment, notes: e.target.value })}
+                          className="w-full px-3 py-2 border rounded-lg text-sm"
+                          placeholder="선택사항"
+                        />
+                      </div>
                     </div>
                   ) : (
-                    <div className="space-y-2">
-                      <input
-                        type="text"
-                        value={playerSearch}
-                        onChange={(e)=> setPlayerSearch(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && filteredPlayers.length === 1) {
-                            e.preventDefault()
-                            const player = filteredPlayers[0]
-                            setNewPayment(prev => {
-                              const list = new Set(prev.selectedPlayerIds||[])
-                              if (!list.has(player.id)) list.add(player.id)
-                              return { ...prev, selectedPlayerIds: Array.from(list), playerId: '' }
-                            })
-                            // 한글 조합 완료를 위해 약간의 지연 후 클리어
-                            setTimeout(() => setPlayerSearch(''), 0)
-                          }
-                        }}
-                        placeholder="이름 검색... (1명일 때 Enter로 추가)"
-                        className="w-full px-2 py-1.5 border rounded text-xs"
+                    <div className="space-y-4">
+                      <SelectedPlayerTray
+                        players={players}
+                        selectedIds={selectedPlayerIds}
+                        onClear={() => setNewPayment(prev => ({ ...prev, selectedPlayerIds: [] }))}
+                        onRemove={(playerId) => setNewPayment(prev => ({
+                          ...prev,
+                          selectedPlayerIds: (prev.selectedPlayerIds || []).filter(id => id !== playerId)
+                        }))}
                       />
-                      <div className="max-h-32 overflow-y-auto border rounded bg-white divide-y text-xs">
-                        {filteredPlayers.length === 0 && (
-                          <div className="px-2 py-1.5 text-gray-500">검색 결과 없음</div>
-                        )}
-                        {filteredPlayers.map(p => {
-                          const selected = (newPayment.selectedPlayerIds||[]).includes(p.id)
-                          return (
-                            <button
-                              type="button"
-                              key={p.id}
-                              onClick={() => setNewPayment(prev => {
-                                const list = new Set(prev.selectedPlayerIds||[])
-                                if (list.has(p.id)) list.delete(p.id); else list.add(p.id)
-                                return { ...prev, selectedPlayerIds: Array.from(list), playerId: '' }
-                              })}
-                              className={`w-full flex items-center gap-1.5 px-2 py-1.5 text-left hover:bg-blue-50 ${selected ? 'bg-blue-100' : ''}`}
-                            >
-                              <InitialAvatar id={p.id} name={p.name} size={20} photoUrl={p.photoUrl} />
-                              <span className="flex-1 truncate text-xs">{p.name}</span>
-                              {selected && <span className="text-[10px] text-blue-600 font-medium">✓</span>}
-                            </button>
-                          )
-                        })}
-                      </div>
-                      {(newPayment.selectedPlayerIds||[]).length > 0 && (
-                        <div className="text-xs">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-blue-600 font-medium">선택: {newPayment.selectedPlayerIds.length}명</span>
-                            <button
-                              type="button"
-                              onClick={() => setNewPayment(prev => ({ ...prev, selectedPlayerIds: [] }))}
-                              className="text-[10px] text-gray-600 hover:text-gray-800 underline"
-                            >전체 해제</button>
-                          </div>
-                          <div className="flex flex-wrap gap-1">
-                            {newPayment.selectedPlayerIds.map(pid => {
-                              const pl = players.find(pp => pp.id === pid)
-                              if (!pl) return null
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="space-y-2">
+                          <label className="block text-xs font-medium">선수 검색</label>
+                          <input
+                            type="text"
+                            value={playerSearch}
+                            onChange={(e)=> setPlayerSearch(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && filteredPlayers.length === 1) {
+                                e.preventDefault()
+                                const player = filteredPlayers[0]
+                                setNewPayment(prev => {
+                                  const list = new Set(prev.selectedPlayerIds||[])
+                                  if (!list.has(player.id)) list.add(player.id)
+                                  return { ...prev, selectedPlayerIds: Array.from(list), playerId: '' }
+                                })
+                                setTimeout(() => setPlayerSearch(''), 0)
+                              }
+                            }}
+                            placeholder="이름 검색... (1명일 때 Enter로 추가)"
+                            className="w-full px-2 py-1.5 border rounded text-xs"
+                          />
+                          <div className="max-h-32 overflow-y-auto border rounded bg-white divide-y text-xs">
+                            {filteredPlayers.length === 0 && (
+                              <div className="px-2 py-1.5 text-gray-500">검색 결과 없음</div>
+                            )}
+                            {filteredPlayers.map(p => {
+                              const selected = selectedPlayerIds.includes(p.id)
                               return (
-                                <div key={pid} className="inline-flex items-center gap-0.5 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 text-[11px]">
-                                  <InitialAvatar id={pl.id} name={pl.name} size={14} photoUrl={pl.photoUrl} />
-                                  <span className="text-gray-800">{pl.name}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() => setNewPayment(prev => ({ ...prev, selectedPlayerIds: (prev.selectedPlayerIds||[]).filter(id => id !== pid) }))}
-                                    className="text-gray-500 hover:text-gray-700"
-                                  >
-                                    <X size={10} />
-                                  </button>
-                                </div>
+                                <button
+                                  type="button"
+                                  key={p.id}
+                                  onClick={() => setNewPayment(prev => {
+                                    const list = new Set(prev.selectedPlayerIds||[])
+                                    if (list.has(p.id)) list.delete(p.id); else list.add(p.id)
+                                    return { ...prev, selectedPlayerIds: Array.from(list), playerId: '' }
+                                  })}
+                                  className={`w-full flex items-center gap-1.5 px-2 py-1.5 text-left hover:bg-blue-50 ${selected ? 'bg-blue-100' : ''}`}
+                                >
+                                  <InitialAvatar id={p.id} name={p.name} size={20} photoUrl={p.photoUrl} />
+                                  <span className="flex-1 truncate text-xs">{p.name}</span>
+                                  {selected && <span className="text-[10px] text-blue-600 font-medium">✓</span>}
+                                </button>
                               )
                             })}
                           </div>
                         </div>
-                      )}
+                        <div>
+                          <label className="block text-xs font-medium mb-1">메모 (선택)</label>
+                          <input
+                            type="text"
+                            value={newPayment.notes}
+                            onChange={(e) => setNewPayment({ ...newPayment, notes: e.target.value })}
+                            className="w-full px-3 py-2 border rounded-lg text-sm"
+                            placeholder="선수에게 보여줄 간단한 메모"
+                          />
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
-                <div>
-                  <label className="block text-xs font-medium mb-1">메모 (선택)</label>
-                  <input
-                    type="text"
-                    value={newPayment.notes}
-                    onChange={(e) => setNewPayment({ ...newPayment, notes: e.target.value })}
-                    className="w-full px-3 py-2 border rounded-lg text-sm"
-                    placeholder="선택사항"
-                  />
-                </div>
-              </div>
 
-              {/* 하단: 날짜(들) */}
-              <div className="mb-3">
-                <label className="block text-xs font-medium mb-1 flex items-center justify-between">
-                  <span>결제 날짜</span>
-                  <button
-                    type="button"
-                    onClick={() => setNewPayment(prev => ({ ...prev, additionalDates: [...(prev.additionalDates||[]), prev.paymentDate ] }))}
-                    className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
-                  >현재 날짜 복제</button>
-                </label>
-                <div className="space-y-1.5">
-                  <input
-                    type="datetime-local"
-                    value={newPayment.paymentDate}
-                    onChange={(e) => setNewPayment({ ...newPayment, paymentDate: e.target.value })}
-                    className="w-full px-3 py-1.5 border rounded text-sm"
-                  />
-                  {(newPayment.additionalDates||[]).map((dt, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <input
-                        type="datetime-local"
-                        value={dt}
-                        onChange={(e) => {
-                          const copy = [...newPayment.additionalDates]
-                          copy[idx] = e.target.value
-                          setNewPayment(prev => ({ ...prev, additionalDates: copy }))
-                        }}
-                        className="flex-1 px-3 py-1.5 border rounded text-sm"
-                      />
+                <div>
+                  <StepHeader step={3} title="납부 일자" description="복수 날짜도 한 번에 기록할 수 있습니다" />
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-medium mb-1 flex items-center justify-between">
+                      <span>결제 날짜</span>
                       <button
                         type="button"
-                        onClick={() => {
-                          const copy = newPayment.additionalDates.filter((_,i)=> i!==idx)
-                          setNewPayment(prev => ({ ...prev, additionalDates: copy }))
-                        }}
-                        className="p-1.5 rounded bg-gray-200 hover:bg-gray-300"
-                      >
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setNewPayment(prev => ({ ...prev, additionalDates: [...(prev.additionalDates||[]), defaultLocalDateTime] }))}
-                    className="w-full py-1.5 text-[11px] border border-dashed rounded hover:bg-gray-50"
-                  >+ 추가 날짜</button>
+                        onClick={() => setNewPayment(prev => ({ ...prev, additionalDates: [...(prev.additionalDates||[]), prev.paymentDate ] }))}
+                        className="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
+                      >현재 날짜 복제</button>
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={newPayment.paymentDate}
+                      onChange={(e) => setNewPayment({ ...newPayment, paymentDate: e.target.value })}
+                      className="w-full px-3 py-1.5 border rounded text-sm"
+                    />
+                    {(newPayment.additionalDates||[]).map((dt, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <input
+                          type="datetime-local"
+                          value={dt}
+                          onChange={(e) => {
+                            const copy = [...newPayment.additionalDates]
+                            copy[idx] = e.target.value
+                            setNewPayment(prev => ({ ...prev, additionalDates: copy }))
+                          }}
+                          className="flex-1 px-3 py-1.5 border rounded text-sm"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const copy = newPayment.additionalDates.filter((_,i)=> i!==idx)
+                            setNewPayment(prev => ({ ...prev, additionalDates: copy }))
+                          }}
+                          className="p-1.5 rounded bg-gray-200 hover:bg-gray-300"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setNewPayment(prev => ({ ...prev, additionalDates: [...(prev.additionalDates||[]), defaultLocalDateTime] }))}
+                      className="w-full py-1.5 text-[11px] border border-dashed rounded hover:bg-gray-50"
+                    >+ 추가 날짜</button>
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex gap-2 justify-end">
-                <button
-                  onClick={handleAddPayment}
-                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium"
-                >
-                  추가
-                </button>
-                <button
-                  onClick={() => setShowAddPayment(false)}
-                  className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 text-sm"
-                >
-                  취소
-                </button>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    onClick={handleAddPayment}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 text-sm font-medium"
+                  >
+                    추가
+                  </button>
+                  <button
+                    onClick={() => setShowAddPayment(false)}
+                    className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 text-sm"
+                  >
+                    취소
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -1775,6 +1914,17 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
               </button>
             </div>
           )}
+
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px] text-gray-500">
+            <span className="font-semibold text-gray-700">금전 구분:</span>
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${PAYMENT_FLOW_BADGES.income}`}>
+              {PAYMENT_FLOW_LABELS.income}
+            </span>
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full ${PAYMENT_FLOW_BADGES.expense}`}>
+              {PAYMENT_FLOW_LABELS.expense}
+            </span>
+            <span className="text-gray-400">배지로 수입/지출을 바로 확인할 수 있어요.</span>
+          </div>
 
           <div className="overflow-x-auto -mx-4 sm:mx-0">
             <div className="inline-block min-w-full align-middle px-2 sm:px-0">
@@ -1846,6 +1996,9 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                 {sortedPayments.map(payment => {
                   const player = players.find(p => p.id === payment.player_id) || players.find(p => p.id === payment.players?.id)
                   const isDonationLike = payment.payment_type === 'other_income' || payment.payment_type === 'expense'
+                  const typeMeta = PAYMENT_TYPE_META[payment.payment_type] || { label: payment.payment_type, flow: payment.payment_type === 'expense' ? 'expense' : 'income' }
+                  const flowLabel = PAYMENT_FLOW_LABELS[typeMeta.flow] || PAYMENT_FLOW_LABELS.income
+                  const flowBadgeClass = PAYMENT_FLOW_BADGES[typeMeta.flow] || PAYMENT_FLOW_BADGES.income
                   
                   // Extract custom payee from notes if present
                   let customPayee = null
@@ -1885,31 +2038,36 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                       )}
                     </td>
                     <td className="py-2 px-1 sm:py-3 sm:px-2">
-                      <span className={`px-1 sm:px-2 py-0.5 sm:py-1 rounded text-[8px] sm:text-xs font-medium whitespace-nowrap ${
-                        payment.payment_type === 'registration' ? 'bg-blue-100 text-blue-700' :
-                        payment.payment_type === 'monthly_dues' ? 'bg-purple-100 text-purple-700' :
-                        payment.payment_type === 'annual_dues' ? 'bg-indigo-100 text-indigo-700' :
-                        payment.payment_type === 'match_fee' ? 'bg-orange-100 text-orange-700' :
-                        payment.payment_type === 'other_income' ? 'bg-emerald-100 text-emerald-700' :
-                        payment.payment_type === 'expense' ? 'bg-red-100 text-red-700' :
-                        payment.payment_type === 'reimbursement' ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-gray-100 text-gray-700'
-                      }`}>
-                        <span className="hidden sm:inline">{paymentTypeLabels[payment.payment_type] || payment.payment_type}</span>
-                        <span className="sm:hidden">
-                          {payment.payment_type === 'registration' ? '가입' :
-                           payment.payment_type === 'monthly_dues' ? '월' :
-                           payment.payment_type === 'annual_dues' ? '연' :
-                           payment.payment_type === 'match_fee' ? '구장' :
-                           payment.payment_type === 'other_income' ? '수입' :
-                           payment.payment_type === 'expense' ? '지출' :
-                           payment.payment_type === 'reimbursement' ? '상환' : '기타'}
+                      <div className="flex flex-col gap-1 w-max">
+                        <span className={`px-1 sm:px-2 py-0.5 sm:py-1 rounded text-[8px] sm:text-xs font-semibold whitespace-nowrap ${
+                          payment.payment_type === 'registration' ? 'bg-blue-100 text-blue-700' :
+                          payment.payment_type === 'monthly_dues' ? 'bg-purple-100 text-purple-700' :
+                          payment.payment_type === 'annual_dues' ? 'bg-indigo-100 text-indigo-700' :
+                          payment.payment_type === 'match_fee' ? 'bg-orange-100 text-orange-700' :
+                          payment.payment_type === 'other_income' ? 'bg-emerald-100 text-emerald-700' :
+                          payment.payment_type === 'expense' ? 'bg-red-100 text-red-700' :
+                          payment.payment_type === 'reimbursement' ? 'bg-yellow-100 text-yellow-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          <span className="hidden sm:inline">{paymentTypeLabels[payment.payment_type] || payment.payment_type}</span>
+                          <span className="sm:hidden">
+                            {payment.payment_type === 'registration' ? '가입' :
+                             payment.payment_type === 'monthly_dues' ? '월' :
+                             payment.payment_type === 'annual_dues' ? '연' :
+                             payment.payment_type === 'match_fee' ? '구장' :
+                             payment.payment_type === 'other_income' ? '수입' :
+                             payment.payment_type === 'expense' ? '지출' :
+                             payment.payment_type === 'reimbursement' ? '상환' : '기타'}
+                          </span>
                         </span>
-                      </span>
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] sm:text-[11px] font-medium ${flowBadgeClass}`}>
+                          {flowLabel}
+                        </span>
+                      </div>
                     </td>
-                    <td className={`py-2 px-1 sm:py-3 sm:px-2 font-semibold text-[9px] sm:text-sm whitespace-nowrap ${payment.payment_type === 'expense' ? 'text-red-600' : 'text-emerald-600'}`}>
-                      <span className="hidden sm:inline">{payment.payment_type === 'expense' ? '-' : ''}${parseFloat(payment.amount).toFixed(2)}</span>
-                      <span className="sm:hidden">{payment.payment_type === 'expense' ? '-' : ''}${Math.round(parseFloat(payment.amount))}</span>
+                    <td className={`py-2 px-1 sm:py-3 sm:px-2 font-semibold text-[9px] sm:text-sm whitespace-nowrap ${typeMeta.flow === 'expense' ? 'text-red-600' : 'text-emerald-600'}`}>
+                      <span className="hidden sm:inline">{typeMeta.flow === 'expense' ? '-' : ''}${parseFloat(payment.amount).toFixed(2)}</span>
+                      <span className="sm:hidden">{typeMeta.flow === 'expense' ? '-' : ''}${Math.round(parseFloat(payment.amount))}</span>
                     </td>
                     <td className="py-3 px-2 sm:px-4 text-sm hidden md:table-cell">
                       <select
@@ -1982,25 +2140,48 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
             {sortedMatches.length === 0 && (
               <p className="text-center text-gray-500 py-8">저장된 매치가 없습니다.</p>
             )}
-            {totalMatchPages > 1 && (
-              <div className="flex items-center justify-center gap-2 pt-4">
-                <button
-                  onClick={() => setMatchFeesPage(p => Math.max(1, p - 1))}
-                  disabled={matchFeesPage === 1}
-                  className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  이전
-                </button>
-                <span className="px-4 py-2 text-sm text-gray-700">
-                  {matchFeesPage} / {totalMatchPages}
-                </span>
-                <button
-                  onClick={() => setMatchFeesPage(p => Math.min(totalMatchPages, p + 1))}
-                  disabled={matchFeesPage === totalMatchPages}
-                  className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  다음
-                </button>
+            {sortedMatches.length > 0 && (
+              <div className="flex flex-col gap-2 pt-4">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-gray-600">
+                  <div>
+                    {matchPageStart}–{matchPageEnd} / {sortedMatches.length}개의 매치
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span>페이지당</span>
+                    <select
+                      value={matchFeesPerPage}
+                      onChange={(e) => {
+                        const next = Number(e.target.value) || 5
+                        setMatchFeesPerPage(next)
+                        setMatchFeesPage(1)
+                      }}
+                      className="border rounded-lg px-2 py-1"
+                    >
+                      {[5,10,20].map(size => (
+                        <option key={size} value={size}>{size}개</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex items-center justify-center gap-2">
+                  <button
+                    onClick={() => setMatchFeesPage(p => Math.max(1, p - 1))}
+                    disabled={matchFeesPage === 1}
+                    className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    이전
+                  </button>
+                  <span className="px-4 py-2 text-sm text-gray-700">
+                    {matchFeesPage} / {totalMatchPages}
+                  </span>
+                  <button
+                    onClick={() => setMatchFeesPage(p => Math.min(totalMatchPages, p + 1))}
+                    disabled={matchFeesPage === totalMatchPages}
+                    className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    다음
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -2058,26 +2239,38 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                 />
                 <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
               </div>
-              <div className="flex flex-wrap gap-2 text-xs">
-                {[
-                  { key: 'all', label: '전체' },
-                  { key: 'overdue', label: `연체 (${renewalStats.overdue})` },
-                  { key: 'due-soon', label: `임박 (${renewalStats.dueSoon})` },
-                  { key: 'ok', label: `정상 (${renewalStats.ok})` },
-                  { key: 'no-plan', label: `미설정 (${renewalStats.noPlan})` }
-                ].map(filter => (
-                  <button
-                    key={filter.key}
-                    onClick={() => setRenewalFilter(filter.key)}
-                    className={`px-3 py-1.5 rounded-full border ${
-                      renewalFilter === filter.key
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'border-gray-300 text-gray-600 hover:border-gray-400'
-                    }`}
-                  >
-                    {filter.label}
-                  </button>
-                ))}
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap gap-2 text-xs">
+                  {[
+                    { key: 'all', label: '전체' },
+                    { key: 'overdue', label: `연체 (${renewalStats.overdue})` },
+                    { key: 'due-soon', label: `임박 (${renewalStats.dueSoon})` },
+                    { key: 'ok', label: `정상 (${renewalStats.ok})` },
+                    { key: 'no-plan', label: `미설정 (${renewalStats.noPlan})` }
+                  ].map(filter => (
+                    <button
+                      key={filter.key}
+                      onClick={() => setRenewalFilter(filter.key)}
+                      className={`px-3 py-1.5 rounded-full border ${
+                        renewalFilter === filter.key
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'border-gray-300 text-gray-600 hover:border-gray-400'
+                      }`}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={() => setRenewalShowDetails(prev => !prev)}
+                  className={`self-start px-3 py-1.5 rounded-full border text-xs font-medium transition-colors ${
+                    renewalShowDetails
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'border-gray-300 text-gray-600 hover:border-gray-400'
+                  }`}
+                >
+                  {renewalShowDetails ? '상세 보기 켜짐' : '상세 보기 꺼짐'}
+                </button>
               </div>
             </div>
 
@@ -2098,6 +2291,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                   onManualReset={handleRenewalManualReset}
                   onManualResetClear={handleRenewalManualResetClear}
                   manualResetSaving={Boolean(manualResetSaving[`${entry.player.id}:${entry.billingType}`])}
+                  showDetails={renewalShowDetails}
                 />
               ))}
             </div>
@@ -2188,6 +2382,68 @@ function TabButton({ active, onClick, icon, children }) {
       {icon}
       {children}
     </button>
+  )
+}
+
+function StepHeader({ step, title, description }) {
+  return (
+    <div className="flex items-center gap-3 mb-3">
+      <div className="w-8 h-8 rounded-full bg-blue-600 text-white text-sm font-semibold flex items-center justify-center">
+        {step}
+      </div>
+      <div>
+        <div className="font-semibold text-gray-900">{title}</div>
+        {description && <div className="text-xs text-gray-500">{description}</div>}
+      </div>
+    </div>
+  )
+}
+
+function SelectedPlayerTray({ players, selectedIds = [], onRemove, onClear }) {
+  const hasSelection = selectedIds.length > 0
+
+  return (
+    <div className={`rounded-xl border ${hasSelection ? 'border-blue-200 bg-white' : 'border-dashed border-gray-300 bg-gray-50'} p-3`}>
+      <div className="flex items-center justify-between text-xs text-gray-600">
+        <span className="font-semibold">
+          {hasSelection ? `선택된 선수 ${selectedIds.length}명` : '선수를 선택하면 여기에서 한눈에 확인할 수 있어요'}
+        </span>
+        {hasSelection && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-[11px] text-gray-500 hover:text-gray-800 underline"
+          >
+            전체 해제
+          </button>
+        )}
+      </div>
+      {hasSelection ? (
+        <div className="flex flex-wrap gap-2 mt-2">
+          {selectedIds.map(playerId => {
+            const player = players.find(p => p.id === playerId)
+            if (!player) return null
+            return (
+              <div key={playerId} className="inline-flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-full border border-blue-200 text-[11px]">
+                <InitialAvatar id={player.id} name={player.name} size={16} photoUrl={player.photoUrl} />
+                <span className="text-gray-800">{player.name}</span>
+                <button
+                  type="button"
+                  onClick={() => onRemove?.(playerId)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  <X size={10} />
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="text-[11px] text-gray-500 mt-2">
+          검색 결과에서 클릭하거나 Enter를 눌러 선수를 추가해 주세요.
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -2291,7 +2547,8 @@ function RenewalStatusCard({
   quickSaving,
   onManualReset,
   onManualResetClear,
-  manualResetSaving
+  manualResetSaving,
+  showDetails = true
 }) {
   const statusTone = {
     overdue: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200' },
@@ -2336,6 +2593,24 @@ function RenewalStatusCard({
   }, [effectiveQuickType, entry.outstandingAmount, getDefaultAmount])
 
   const outstandingAmountLabel = entry.outstandingAmount > 0 ? formatCurrency(entry.outstandingAmount) : null
+  const summaryInfo = [
+    {
+      label: '적용 모드',
+      value: entry.preference === 'auto' ? `${entry.billingLabel} (자동)` : entry.billingLabel
+    },
+    {
+      label: '최근 납부',
+      value: entry.lastPaidLabel
+    },
+    {
+      label: '다음 납부',
+      value: entry.nextDueLabel
+    },
+    {
+      label: '남은 일수',
+      value: daysLabel
+    }
+  ]
 
   return (
     <div className="border rounded-2xl p-5 bg-white shadow-sm">
@@ -2372,54 +2647,62 @@ function RenewalStatusCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4 text-sm">
-        {[{
-          label: '적용 모드',
-          value: entry.preference === 'auto' ? `${entry.billingLabel} (자동)` : entry.billingLabel
-        }, {
-          label: '최근 납부',
-          value: entry.lastPaidLabel
-        }, {
-          label: '다음 납부',
-          value: entry.nextDueLabel
-        }, {
-          label: '남은 일수',
-          value: daysLabel
-        }].map(info => (
-          <div key={info.label} className="p-3 rounded-xl border bg-gray-50">
-            <div className="text-xs text-gray-500">{info.label}</div>
-            <div className="font-semibold text-gray-900">{info.value}</div>
+      {showDetails ? (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4 text-sm">
+            {summaryInfo.map(info => (
+              <div key={info.label} className="p-3 rounded-xl border bg-gray-50">
+                <div className="text-xs text-gray-500">{info.label}</div>
+                <div className="font-semibold text-gray-900">{info.value}</div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {entry.billingType === 'monthly' && entry.missedMonthsTotal > 0 && (
-        <div className="mt-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
-          <div className="font-semibold">
-            총 미납 {entry.missedMonthsTotal}개월
-            {entry.missedMonthsHidden > 0 && (
-              <span className="text-[11px] text-red-500">
-                {' '}(최근 {DISPLAY_MISSED_MONTH_LIMIT}개월 중 {entry.missedMonths.length}개월 표시)
-              </span>
-            )}
-          </div>
-          <div className="mt-1 text-red-700">
-            {entry.missedMonths.join(', ')}
-          </div>
-          {outstandingAmountLabel && (
-            <div className="mt-1 font-semibold text-red-700">
-              총 미납 금액: {outstandingAmountLabel}
+          {entry.billingType === 'monthly' && entry.missedMonthsTotal > 0 && (
+            <div className="mt-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+              <div className="font-semibold">
+                총 미납 {entry.missedMonthsTotal}개월
+                {entry.missedMonthsHidden > 0 && (
+                  <span className="text-[11px] text-red-500">
+                    {' '}(최근 {DISPLAY_MISSED_MONTH_LIMIT}개월 중 {entry.missedMonths.length}개월 표시)
+                  </span>
+                )}
+              </div>
+              <div className="mt-1 text-red-700">
+                {entry.missedMonths.join(', ')}
+              </div>
+              {outstandingAmountLabel && (
+                <div className="mt-1 font-semibold text-red-700">
+                  총 미납 금액: {outstandingAmountLabel}
+                </div>
+              )}
+              {entry.missedMonthsHidden > 0 && (
+                <div className="mt-1 text-[11px] text-red-500">
+                  나머지 {entry.missedMonthsHidden}개월은 목록에 표시되지 않지만 연체 금액에 포함되었습니다.
+                </div>
+              )}
             </div>
           )}
-          {entry.missedMonthsHidden > 0 && (
-            <div className="mt-1 text-[11px] text-red-500">
-              나머지 {entry.missedMonthsHidden}개월은 목록에 표시되지 않지만 연체 금액에 포함되었습니다.
+        </>
+      ) : (
+        <>
+          <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+            {summaryInfo.map(info => (
+              <div key={info.label} className="p-2 rounded-lg border bg-gray-50">
+                <div className="text-gray-500">{info.label}</div>
+                <div className="font-semibold text-gray-900">{info.value}</div>
+              </div>
+            ))}
+          </div>
+          {entry.billingType === 'monthly' && entry.missedMonthsTotal > 0 && (
+            <div className="mt-2 text-[11px] text-red-600">
+              미납 {entry.missedMonthsTotal}개월 · {outstandingAmountLabel || '금액 계산 중'}
             </div>
           )}
-        </div>
+        </>
       )}
 
-      <div className="mt-4 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between text-sm">
+      <div className={`mt-4 ${showDetails ? 'flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between text-sm' : 'flex flex-col gap-2 text-xs'}`}>
         <div className="text-gray-600 text-xs">{entry.recommendation}</div>
         <div className="flex flex-wrap gap-2">
           {entry.manualResetActive ? (
@@ -2442,73 +2725,79 @@ function RenewalStatusCard({
         </div>
       </div>
 
-      <div className="mt-4 border rounded-2xl bg-gray-50 p-4">
-        <div className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-3">
-          빠른 결제 입력
-          <span className="text-gray-400">Payments 탭 이동 없이 기록</span>
-        </div>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-          {allowTypeSelect && (
+      {showDetails ? (
+        <div className="mt-4 border rounded-2xl bg-gray-50 p-4">
+          <div className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-3">
+            빠른 결제 입력
+            <span className="text-gray-400">Payments 탭 이동 없이 기록</span>
+          </div>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+            {allowTypeSelect && (
+              <div>
+                <label className="text-xs text-gray-500">납부 유형</label>
+                <select
+                  value={quickType}
+                  onChange={(e) => setQuickType(e.target.value)}
+                  className="border rounded-lg px-3 py-2 text-sm"
+                >
+                  <option value="monthly">월회비</option>
+                  <option value="annual">연회비</option>
+                </select>
+              </div>
+            )}
             <div>
-              <label className="text-xs text-gray-500">납부 유형</label>
+              <label className="text-xs text-gray-500">결제 방식</label>
               <select
-                value={quickType}
-                onChange={(e) => setQuickType(e.target.value)}
+                value={quickMethod}
+                onChange={(e) => setQuickMethod(e.target.value)}
                 className="border rounded-lg px-3 py-2 text-sm"
               >
-                <option value="monthly">월회비</option>
-                <option value="annual">연회비</option>
+                {Object.entries(paymentMethodLabels).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
               </select>
             </div>
-          )}
-          <div>
-            <label className="text-xs text-gray-500">결제 방식</label>
-            <select
-              value={quickMethod}
-              onChange={(e) => setQuickMethod(e.target.value)}
-              className="border rounded-lg px-3 py-2 text-sm"
-            >
-              {Object.entries(paymentMethodLabels).map(([key, label]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex-1">
-            <label className="text-xs text-gray-500">금액</label>
-            <input
-              type="number"
-              step="0.01"
-              value={quickAmount}
-              onChange={(e) => setQuickAmount(e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-gray-500">납부일</label>
-            <input
-              type="date"
-              value={quickDate}
-              onChange={(e) => setQuickDate(e.target.value)}
-              className="border rounded-lg px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => onQuickPayment({
-                playerId: entry.player.id,
-                billingType: effectiveQuickType,
-                amount: quickAmount,
-                paymentDate: quickDate,
-                paymentMethod: quickMethod
-              })}
-              disabled={quickSaving || !quickAmount || !effectiveQuickType || !quickMethod}
-              className="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {quickSaving ? '기록 중...' : '빠른 입력'}
-            </button>
+            <div className="flex-1">
+              <label className="text-xs text-gray-500">금액</label>
+              <input
+                type="number"
+                step="0.01"
+                value={quickAmount}
+                onChange={(e) => setQuickAmount(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">납부일</label>
+              <input
+                type="date"
+                value={quickDate}
+                onChange={(e) => setQuickDate(e.target.value)}
+                className="border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => onQuickPayment({
+                  playerId: entry.player.id,
+                  billingType: effectiveQuickType,
+                  amount: quickAmount,
+                  paymentDate: quickDate,
+                  paymentMethod: quickMethod
+                })}
+                disabled={quickSaving || !quickAmount || !effectiveQuickType || !quickMethod}
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {quickSaving ? '기록 중...' : '빠른 입력'}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="mt-3 text-[11px] text-gray-500">
+          빠른 결제 입력은 상세 보기 모드에서 이용할 수 있습니다.
+        </div>
+      )}
     </div>
   )
 }
