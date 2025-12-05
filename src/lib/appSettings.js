@@ -39,7 +39,9 @@ const DEFAULT_SETTINGS = {
   accounting: {
     memberFeeOverride: null,        // 숫자 또는 null
     guestSurchargeOverride: null,   // 숫자 또는 null
-    venueTotalOverride: null        // 매치 전체 구장비 강제 설정 (멤버/게스트 계산에 사용)
+    venueTotalOverride: null,        // 매치 전체 구장비 강제 설정 (멤버/게스트 계산에 사용)
+    renewalPreferences: {},          // 선수별 회비 납부 방식 수동 설정
+    renewalResets: {}               // 선수별 수동 정상 처리 기록
   },
   badgeTierOverrides: {}
 }

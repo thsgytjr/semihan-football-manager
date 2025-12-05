@@ -1,13 +1,14 @@
 // src/pages/AccountingPage.jsx
-import React, { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo, useCallback } from 'react'
 import ConfirmDialog from '../components/ConfirmDialog'
 import Card from '../components/Card'
 import { notify } from '../components/Toast'
+import FinancialDashboard from '../components/FinancialDashboard'
 import {
   listPayments,
   addPayment,
   deletePayment,
-    updatePayment,
+  updatePayment,
   getDuesSettings,
   updateDuesSetting,
   getAccountingSummary,
@@ -19,15 +20,106 @@ import {
   getDuesRenewals
 } from '../lib/accounting'
 import { isMember } from '../lib/fees'
-import { DollarSign, Users, Calendar, TrendingUp, Plus, X, Check, AlertCircle, RefreshCw, Trash2, ArrowUpDown, Download } from 'lucide-react'
+import { DollarSign, Users, Calendar, TrendingUp, Plus, X, Check, AlertCircle, RefreshCw, Trash2, ArrowUpDown, Download, Search } from 'lucide-react'
 import InitialAvatar from '../components/InitialAvatar'
-import FinancialDashboard from '../components/FinancialDashboard'
 import { listMatchesFromDB } from '../services/matches.service'
 import { getAccountingOverrides, updateAccountingOverrides } from '../lib/appSettings'
 import { calculateMatchFees, calculatePlayerMatchFee } from '../lib/matchFeeCalculator'
 import * as XLSX from 'xlsx'
 
+const VOID_STORAGE_KEY = 'sfm:accounting:voidMatches'
+const DISPLAY_MISSED_MONTH_LIMIT = 12
+const DEFAULT_MONTH_HISTORY = 18
+const MAX_MONTH_HISTORY = 60
+const YEAR_FILTER_STORAGE_KEY = 'sfm:accounting:selectedYear'
+
+const diffInMonths = (later, earlier) => {
+  if (!later || !earlier) return 0
+  return (later.getFullYear() - earlier.getFullYear()) * 12 + (later.getMonth() - earlier.getMonth())
+}
+
+const normalizeRenewalResetMap = (raw = {}) => {
+  if (!raw || typeof raw !== 'object') return {}
+  const result = {}
+  Object.entries(raw).forEach(([playerId, value]) => {
+    if (!value) return
+    if (typeof value === 'string') {
+      result[playerId] = { monthly: value, annual: value }
+      return
+    }
+    if (typeof value === 'object') {
+      const entry = {}
+      if (typeof value.monthly === 'string') entry.monthly = value.monthly
+      if (typeof value.annual === 'string') entry.annual = value.annual
+      if (Object.keys(entry).length > 0) {
+        result[playerId] = entry
+      }
+    }
+  })
+  return result
+}
+
+const cleanupRenewalResetMap = (raw = {}) => {
+  const next = {}
+  Object.entries(raw || {}).forEach(([playerId, value]) => {
+    if (!value) return
+    const entry = {}
+    if (typeof value.monthly === 'string') entry.monthly = value.monthly
+    if (typeof value.annual === 'string') entry.annual = value.annual
+    if (Object.keys(entry).length > 0) {
+      next[playerId] = entry
+    }
+  })
+  return next
+}
+
+const readStoredYearFilter = () => {
+  if (typeof window === 'undefined') return null
+  const raw = window.localStorage.getItem(YEAR_FILTER_STORAGE_KEY)
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+const persistYearFilter = (year) => {
+  if (typeof window === 'undefined') return
+  if (year === null || typeof year === 'undefined') {
+    window.localStorage.removeItem(YEAR_FILTER_STORAGE_KEY)
+    return
+  }
+  window.localStorage.setItem(YEAR_FILTER_STORAGE_KEY, String(year))
+}
+
+const paymentMethodLabels = {
+  venmo: 'Venmo',
+  cash: '현금',
+  zelle: 'Zelle',
+  other: '기타'
+}
+
+const currencyFormatter = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD'
+})
+
+const formatCurrency = (value) => {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return currencyFormatter.format(0)
+  return currencyFormatter.format(numeric)
+}
+
+function readVoidedMatchIdsFromStorage() {
+  if (typeof window === 'undefined') return new Set()
+  try {
+    const raw = window.localStorage.getItem(VOID_STORAGE_KEY)
+    const arr = raw ? JSON.parse(raw) : []
+    return new Set(Array.isArray(arr) ? arr : [])
+  } catch {
+    return new Set()
+  }
+}
+
 export default function AccountingPage({ players = [], matches = [], upcomingMatches = [], isAdmin }) {
+
   const [payments, setPayments] = useState([])
   const [duesSettings, setDuesSettings] = useState([])
   const [summary, setSummary] = useState(null)
@@ -37,15 +129,24 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   const [showAddPayment, setShowAddPayment] = useState(false)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const [playerStats, setPlayerStats] = useState(null)
-  const [dateRange, setDateRange] = useState({ start: '', end: '' })
+  const [selectedYear, setSelectedYear] = useState(() => readStoredYearFilter())
+  const [dateRange, setDateRange] = useState(() => {
+    const storedYear = readStoredYearFilter()
+    return storedYear
+      ? { start: `${storedYear}-01-01`, end: `${storedYear}-12-31` }
+      : { start: '', end: '' }
+  })
   const [showAdvancedDates, setShowAdvancedDates] = useState(false)
   const [feeOverrides, setFeeOverrides] = useState(() => getAccountingOverrides())
   const [savingOverrides, setSavingOverrides] = useState(false)
   const [confirmState, setConfirmState] = useState({ open: false, kind: null, payload: null })
+  const [playerSearch, setPlayerSearch] = useState('')
+  const [playerStatsSearch, setPlayerStatsSearch] = useState('')
 
   const [renewals, setRenewals] = useState({})
   const [matchesLocal, setMatchesLocal] = useState(matches)
   const [allPayments, setAllPayments] = useState([])
+  const [voidedMatchIds, setVoidedMatchIds] = useState(() => readVoidedMatchIdsFromStorage())
   // 매치별 구장비 페이지네이션
   const [matchFeesPage, setMatchFeesPage] = useState(1)
   const matchFeesPerPage = 5
@@ -77,7 +178,27 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     notes: '',
     customPayee: ''
   })
-  const [playerSearch, setPlayerSearch] = useState('')
+  const [renewalSearch, setRenewalSearch] = useState('')
+  const [renewalFilter, setRenewalFilter] = useState('all')
+  const [renewalPrefs, setRenewalPrefs] = useState(() => (feeOverrides?.renewalPreferences || {}))
+  const [renewalSaving, setRenewalSaving] = useState({})
+  const [renewalResets, setRenewalResets] = useState(() => normalizeRenewalResetMap(feeOverrides?.renewalResets || {}))
+  const [manualResetSaving, setManualResetSaving] = useState({})
+
+  const refreshVoidedMatches = useCallback(() => {
+    setVoidedMatchIds(readVoidedMatchIdsFromStorage())
+  }, [])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handler = () => refreshVoidedMatches()
+    window.addEventListener('storage', handler)
+    window.addEventListener('sfm:void-matches-updated', handler)
+    return () => {
+      window.removeEventListener('storage', handler)
+      window.removeEventListener('sfm:void-matches-updated', handler)
+    }
+  }, [refreshVoidedMatches])
   const filteredPlayers = useMemo(() => {
     const q = playerSearch.trim().toLowerCase()
     const list = players.filter(p => !p.isUnknown).sort((a, b) => a.name.localeCompare(b.name))
@@ -85,9 +206,245 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     return list.filter(p => p.name.toLowerCase().includes(q)).slice(0, 50)
   }, [playerSearch, players])
 
+  const yearOptions = useMemo(() => {
+    const years = new Set()
+    ;(allPayments || []).forEach(pay => {
+      const rawDate = pay.payment_date || pay.paymentDate
+      if (!rawDate) return
+      const year = new Date(rawDate).getFullYear()
+      if (Number.isFinite(year)) years.add(year)
+    })
+    if (selectedYear && Number.isFinite(selectedYear)) years.add(selectedYear)
+    years.add(new Date().getFullYear())
+    return Array.from(years).sort((a, b) => b - a)
+  }, [allPayments, selectedYear])
+
+  const currentYearIndex = selectedYear !== null ? yearOptions.indexOf(selectedYear) : -1
+  const prevYear = currentYearIndex >= 0 && currentYearIndex < yearOptions.length - 1
+    ? yearOptions[currentYearIndex + 1]
+    : null
+  const nextYear = currentYearIndex > 0
+    ? yearOptions[currentYearIndex - 1]
+    : null
+
+  const renewalEligiblePlayers = useMemo(() => {
+    return players.filter(p => !p.isUnknown && isMember(p.membership))
+  }, [players])
+
+  const paymentsForRenewals = useMemo(() => (allPayments?.length ? allPayments : payments), [allPayments, payments])
+
+  const duesAmountMap = useMemo(() => {
+    const map = { monthly: '', annual: '', registration: '' }
+    duesSettings.forEach(setting => {
+      if (setting.setting_type === 'monthly_dues') map.monthly = setting.amount
+      if (setting.setting_type === 'annual_dues') map.annual = setting.amount
+      if (setting.setting_type === 'registration_fee') map.registration = setting.amount
+    })
+    return map
+  }, [duesSettings])
+
+  const monthlyPaymentBucketsByPlayer = useMemo(() => {
+    const map = new Map()
+    paymentsForRenewals.forEach(pay => {
+      if (pay.payment_type !== 'monthly_dues' || !pay.player_id || !pay.payment_date) return
+      const dt = new Date(pay.payment_date)
+      const bucket = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`
+      if (!map.has(pay.player_id)) map.set(pay.player_id, new Set())
+      map.get(pay.player_id).add(bucket)
+    })
+    return map
+  }, [paymentsForRenewals])
+
+  const findLatestPaymentByType = useCallback((playerId, paymentType) => {
+    if (!playerId || !paymentType) return null
+    return paymentsForRenewals
+      .filter(pay => pay.player_id === playerId && pay.payment_type === paymentType)
+      .sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))[0] || null
+  }, [paymentsForRenewals])
+
+  const renewalEntries = useMemo(() => {
+    const now = new Date()
+    const DAY_MS = 24 * 60 * 60 * 1000
+    const monthlyDueAmount = parseFloat(duesAmountMap.monthly || '') || 0
+
+    const describeStatus = (status, billingType, daysUntilDue) => {
+      if (status === 'overdue') return '즉시 리뉴얼 필요'
+      if (status === 'due-soon') {
+        if (daysUntilDue === null) return '곧 만료 예정'
+        return `${Math.max(daysUntilDue, 0)}일 내 만료`
+      }
+      if (status === 'no-plan') return '납부 방식 미설정'
+      return billingType === 'monthly' ? '이번 달 정상' : billingType === 'annual' ? '올해 정상' : '정상'
+    }
+
+    const formatDate = (iso, withYear = false) => {
+      if (!iso) return '기록 없음'
+      const date = new Date(iso)
+      return date.toLocaleDateString('ko-KR', {
+        year: withYear ? 'numeric' : undefined,
+        month: 'short',
+        day: 'numeric'
+      })
+    }
+
+    return renewalEligiblePlayers.map(player => {
+      const r = renewals[player.id] || {}
+      const preference = renewalPrefs[player.id]?.billingType || 'auto'
+      const manualResetIso = renewalResets[player.id]
+      const manualResetAt = manualResetIso ? new Date(manualResetIso) : null
+      const manualResetKey = manualResetAt
+        ? `${manualResetAt.getFullYear()}-${String(manualResetAt.getMonth() + 1).padStart(2, '0')}`
+        : null
+
+      const monthlyInfo = {
+        lastPaid: r.lastMonthly ? new Date(r.lastMonthly) : null,
+        nextDue: r.nextMonthly ? new Date(r.nextMonthly) : null,
+        hasData: Boolean(r.lastMonthly || r.nextMonthly)
+      }
+      const annualInfo = {
+        lastPaid: r.lastAnnual ? new Date(r.lastAnnual) : null,
+        nextDue: r.nextAnnual ? new Date(r.nextAnnual) : null,
+        hasData: Boolean(r.lastAnnual || r.nextAnnual)
+      }
+
+      const derivedType = monthlyInfo.hasData ? 'monthly' : annualInfo.hasData ? 'annual' : 'unknown'
+      const billingType = preference !== 'auto' ? preference : derivedType
+      const warnWindow = billingType === 'annual' ? 30 : 7
+      const lastPaid = billingType === 'monthly' ? monthlyInfo.lastPaid : billingType === 'annual' ? annualInfo.lastPaid : null
+      const nextDue = billingType === 'monthly' ? monthlyInfo.nextDue : billingType === 'annual' ? annualInfo.nextDue : null
+
+      const isOverdue = nextDue ? nextDue < now : false
+      const daysUntilDue = nextDue ? Math.ceil((nextDue - now) / DAY_MS) : null
+      const dueSoon = !isOverdue && daysUntilDue !== null && daysUntilDue <= warnWindow
+      const baseStatus = billingType === 'unknown' ? 'no-plan' : isOverdue ? 'overdue' : dueSoon ? 'due-soon' : 'ok'
+
+      let missedMonths = []
+      let missedMonthsHidden = 0
+      let missedMonthsTotal = 0
+      if (billingType === 'monthly') {
+        const paidSet = monthlyPaymentBucketsByPlayer.get(player.id) || new Set()
+        const monthsSinceLastPaid = monthlyInfo.lastPaid ? Math.max(diffInMonths(now, monthlyInfo.lastPaid), 0) + 1 : MAX_MONTH_HISTORY
+        const monthsSinceReset = manualResetAt ? Math.max(diffInMonths(now, manualResetAt), 0) + 1 : 0
+        const historyDepth = Math.min(
+          MAX_MONTH_HISTORY,
+          Math.max(DEFAULT_MONTH_HISTORY, monthsSinceLastPaid, monthsSinceReset || 0)
+        )
+        const window = []
+        for (let i = 1; i <= historyDepth; i++) {
+          const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+          window.push({
+            key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+            label: `${d.getFullYear()}년 ${d.getMonth() + 1}월`
+          })
+        }
+        const missedEntries = window
+          .filter(w => !paidSet.has(w.key))
+          .filter(w => !manualResetKey || w.key >= manualResetKey)
+        missedMonthsTotal = missedEntries.length
+        missedMonths = missedEntries.slice(0, DISPLAY_MISSED_MONTH_LIMIT).map(w => w.label)
+        missedMonthsHidden = Math.max(0, missedMonthsTotal - missedMonths.length)
+      }
+
+      const outstandingAmount = billingType === 'monthly' ? missedMonthsTotal * monthlyDueAmount : 0
+      const hasOutstandingMonths = billingType === 'monthly' && missedMonthsTotal > 0
+      const finalStatus = billingType === 'unknown' ? 'no-plan' : hasOutstandingMonths ? 'overdue' : baseStatus
+      const manualResetActive = Boolean(manualResetAt)
+      const statusDescription = manualResetActive
+        ? `관리자 수동 정상 처리 (${formatDate(manualResetAt.toISOString(), true)})`
+        : hasOutstandingMonths
+          ? `미납 ${missedMonthsTotal}개월${outstandingAmount > 0 ? ` · 총 ${formatCurrency(outstandingAmount)}` : ''}`
+          : describeStatus(finalStatus, billingType, daysUntilDue)
+
+      return {
+        player,
+        billingType,
+        billingLabel: billingType === 'monthly' ? '월회비' : billingType === 'annual' ? '연회비' : '납부 방식 미정',
+        lastPaidLabel: lastPaid ? formatDate(lastPaid.toISOString(), true) : '기록 없음',
+        nextDueLabel: nextDue ? formatDate(nextDue.toISOString(), true) : '일정 미정',
+        nextDue,
+        lastPaid,
+        status: finalStatus,
+        statusLabel:
+          finalStatus === 'overdue'
+            ? '연체'
+            : finalStatus === 'due-soon'
+              ? '임박'
+              : finalStatus === 'no-plan'
+                ? '미설정'
+                : '정상',
+        statusDescription,
+        daysUntilDue,
+        isOverdue,
+        dueSoon,
+        missedMonths,
+        missedMonthsHidden,
+        missedMonthsTotal,
+        outstandingAmount,
+        manualResetAt,
+        manualResetActive,
+        preference,
+        preferenceLabel: preference === 'auto' ? '자동' : preference === 'monthly' ? '월회비' : '연회비',
+        recommendation:
+          manualResetActive
+            ? '수동 정상 처리됨 - 이후 납부부터 새로 집계됩니다'
+            : billingType === 'unknown'
+            ? '납부 방식을 먼저 설정해주세요'
+            : hasOutstandingMonths
+              ? `미납된 ${missedMonthsTotal}개월${outstandingAmount > 0 ? ` (${formatCurrency(outstandingAmount)})` : ''}을 먼저 정산해주세요`
+              : finalStatus === 'overdue'
+                ? '바로 회비 리뉴얼을 기록하는 것이 좋습니다'
+                : finalStatus === 'due-soon'
+                  ? `${Math.max(daysUntilDue || 0, 0)}일 내에 납부 예정입니다`
+                  : '현재 일정은 정상입니다'
+      }
+    })
+  }, [renewalEligiblePlayers, renewals, monthlyPaymentBucketsByPlayer, renewalPrefs, duesAmountMap, renewalResets])
+
+  const renewalStats = useMemo(() => {
+    const base = {
+      total: renewalEntries.length,
+      overdue: 0,
+      dueSoon: 0,
+      ok: 0,
+      noPlan: 0,
+      monthly: 0,
+      annual: 0
+    }
+    renewalEntries.forEach(entry => {
+      if (entry.status === 'overdue') base.overdue += 1
+      else if (entry.status === 'due-soon') base.dueSoon += 1
+      else if (entry.status === 'no-plan') base.noPlan += 1
+      else base.ok += 1
+
+      if (entry.billingType === 'monthly') base.monthly += 1
+      else if (entry.billingType === 'annual') base.annual += 1
+    })
+    return base
+  }, [renewalEntries])
+
+  const filteredRenewalEntries = useMemo(() => {
+    const statusMatcher = (entry) => {
+      if (renewalFilter === 'overdue') return entry.status === 'overdue'
+      if (renewalFilter === 'due-soon') return entry.status === 'due-soon'
+      if (renewalFilter === 'ok') return entry.status === 'ok'
+      if (renewalFilter === 'no-plan') return entry.status === 'no-plan'
+      return true
+    }
+
+    const query = renewalSearch.trim().toLowerCase()
+
+    return renewalEntries
+      .filter(entry => statusMatcher(entry))
+      .filter(entry => {
+        if (!query) return true
+        return entry.player.name.toLowerCase().includes(query)
+      })
+      .sort((a, b) => a.player.name.localeCompare(b.player.name))
+  }, [renewalEntries, renewalFilter, renewalSearch])
+
   useEffect(() => {
     loadData()
-  }, [dateRange])
+  }, [dateRange, players])
 
   // 초기 override 로드 (클라이언트 설정에서)
   useEffect(() => {
@@ -101,6 +458,15 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   useEffect(() => {
     setMatchesLocal(matches)
   }, [matches])
+
+  useEffect(() => {
+    if (feeOverrides?.renewalPreferences) {
+      setRenewalPrefs(feeOverrides.renewalPreferences)
+    }
+    if (feeOverrides?.renewalResets) {
+      setRenewalResets(normalizeRenewalResetMap(feeOverrides.renewalResets))
+    }
+  }, [feeOverrides])
 
   async function loadData() {
     if (!isAdmin) return
@@ -131,7 +497,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
         setMatchesLocal(latest)
       } catch {}
       // 연회비/월회비 리뉴얼 정보
-      const renewalData = await getDuesRenewals(players.filter(p => !p.isUnknown))
+      const renewalData = await getDuesRenewals(renewalEligiblePlayers)
       setRenewals(renewalData)
     } catch (error) {
       console.error('Failed to load accounting data:', error)
@@ -148,7 +514,8 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
 
   async function handleAddPayment() {
     const isDonationLike = newPayment.paymentType === 'other_income' || newPayment.paymentType === 'expense'
-    if ((!isDonationLike && !newPayment.playerId) || !newPayment.amount) {
+    const hasPlayerSelection = Boolean(newPayment.playerId) || ((newPayment.selectedPlayerIds || []).length > 0)
+    if ((!isDonationLike && !hasPlayerSelection) || !newPayment.amount) {
       notify(isDonationLike ? '금액을 입력해주세요' : '선수와 금액을 입력해주세요')
       return
     }
@@ -219,6 +586,130 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     }
     // Open confirm; actual deletion in onConfirm
     setConfirmState({ open: true, kind: 'bulk-delete', payload: { ids: Array.from(selectedPayments) } })
+  }
+
+  async function handleUpdateRenewalPreference(playerId, value) {
+    if (!playerId) return
+    const next = { ...renewalPrefs }
+    if (value === 'auto') delete next[playerId]
+    else next[playerId] = { billingType: value }
+    setRenewalPrefs(next)
+    try {
+      await updateAccountingOverrides({ renewalPreferences: next })
+      setFeeOverrides(prev => ({ ...prev, renewalPreferences: next }))
+      notify('납부 방식이 업데이트되었습니다 ✅')
+    } catch (error) {
+      console.error('Failed to update renewal preference', error)
+      notify('납부 방식 저장 실패')
+    }
+  }
+
+  async function handleRenewalManualReset(playerId, billingType) {
+    if (!playerId || (billingType !== 'monthly' && billingType !== 'annual')) {
+      notify('납부 방식을 먼저 설정해주세요')
+      return
+    }
+    const timestamp = new Date().toISOString()
+    const savingKey = `${playerId}:${billingType}`
+    setManualResetSaving(prev => ({ ...prev, [savingKey]: true }))
+    try {
+      const currentEntry = renewalResets[playerId] || {}
+      const updatedEntry = { ...currentEntry, [billingType]: timestamp }
+      const nextResets = cleanupRenewalResetMap({
+        ...renewalResets,
+        [playerId]: updatedEntry
+      })
+      await updateAccountingOverrides({ renewalResets: nextResets })
+      setRenewalResets(nextResets)
+      setFeeOverrides(prev => ({ ...prev, renewalResets: nextResets }))
+      notify('수동 정상 처리가 완료되었습니다 ✅')
+      await loadData()
+    } catch (error) {
+      console.error('Failed to manually reset renewal status', error)
+      notify('정상 처리에 실패했습니다')
+    } finally {
+      setManualResetSaving(prev => {
+        const next = { ...prev }
+        delete next[savingKey]
+        return next
+      })
+    }
+  }
+
+  async function handleRenewalManualResetClear(playerId, billingType) {
+    if (!playerId || (billingType !== 'monthly' && billingType !== 'annual')) {
+      notify('납부 방식을 먼저 설정해주세요')
+      return
+    }
+    const savingKey = `${playerId}:${billingType}`
+    setManualResetSaving(prev => ({ ...prev, [savingKey]: true }))
+    try {
+      const currentEntry = renewalResets[playerId] || {}
+      if (!currentEntry[billingType]) {
+        setManualResetSaving(prev => {
+          const next = { ...prev }
+          delete next[savingKey]
+          return next
+        })
+        return
+      }
+      const updatedEntry = { ...currentEntry }
+      delete updatedEntry[billingType]
+      const nextResets = cleanupRenewalResetMap({
+        ...renewalResets,
+        [playerId]: Object.keys(updatedEntry).length ? updatedEntry : undefined
+      })
+      await updateAccountingOverrides({ renewalResets: nextResets })
+      setRenewalResets(nextResets)
+      setFeeOverrides(prev => ({ ...prev, renewalResets: nextResets }))
+      notify('수동 정상 처리가 해제되었습니다')
+      await loadData()
+    } catch (error) {
+      console.error('Failed to revert manual reset', error)
+      notify('정상 처리 해제에 실패했습니다')
+    } finally {
+      setManualResetSaving(prev => {
+        const next = { ...prev }
+        delete next[savingKey]
+        return next
+      })
+    }
+  }
+
+  async function handleQuickRenewalPayment({ playerId, billingType, amount, paymentDate, paymentMethod = 'cash' }) {
+    const resolvedType = billingType && billingType !== 'unknown' ? billingType : null
+    if (!playerId || !resolvedType) {
+      notify('납부 유형을 선택해주세요')
+      return
+    }
+    const parsedAmount = parseFloat(amount)
+    if (!parsedAmount || Number.isNaN(parsedAmount)) {
+      notify('금액을 입력해주세요')
+      return
+    }
+    const normalizedDate = paymentDate || new Date().toISOString().slice(0, 10)
+    setRenewalSaving(prev => ({ ...prev, [playerId]: true }))
+    try {
+      await addPayment({
+        playerId,
+        paymentType: resolvedType === 'monthly' ? 'monthly_dues' : 'annual_dues',
+        amount: parsedAmount,
+        paymentMethod,
+        paymentDate: normalizedDate,
+        notes: '[renewals-tab]'
+      })
+      notify('회비 납부가 기록되었습니다 ✅')
+      await loadData()
+    } catch (error) {
+      console.error('Failed to add quick renewal payment', error)
+      notify('빠른 결제 입력 실패')
+    } finally {
+      setRenewalSaving(prev => {
+        const next = { ...prev }
+        delete next[playerId]
+        return next
+      })
+    }
   }
 
   function toggleSelectPayment(paymentId) {
@@ -336,6 +827,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
 
   // 정렬된 선수 목록
   const sortedPlayerStats = useMemo(() => {
+    const query = playerStatsSearch.trim().toLowerCase()
     const playerData = players
       .filter(p => !p.isUnknown)
       .map(player => {
@@ -363,7 +855,11 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
         }
       })
 
-    return playerData.sort((a, b) => {
+    const filteredData = query
+      ? playerData.filter(({ player }) => player.name?.toLowerCase().includes(query))
+      : playerData
+
+    return filteredData.sort((a, b) => {
       let aVal, bVal
 
       switch (playerStatsSortConfig.key) {
@@ -409,7 +905,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       if (aVal > bVal) return playerStatsSortConfig.direction === 'asc' ? 1 : -1
       return 0
     })
-  }, [players, payments, playerStatsSortConfig])
+  }, [players, payments, playerStatsSortConfig, playerStatsSearch])
 
   async function handleUpdateDues(settingType, amount, description) {
     try {
@@ -442,13 +938,6 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     registration_fee: '가입비'
   }
 
-  const paymentMethodLabels = {
-    venmo: 'Venmo',
-    cash: '현금',
-    zelle: 'Zelle',
-    other: '기타'
-  }
-
   // 회비 금액 매핑 (가입비/월/연)
   const duesMap = useMemo(() => {
     const map = {}
@@ -460,19 +949,68 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     return map
   }, [duesSettings])
 
+  function clearYearSelection() {
+    setSelectedYear(null)
+    persistYearFilter(null)
+  }
+
+  function applyYearRange(year) {
+    if (!year) return
+    setSelectedYear(year)
+    persistYearFilter(year)
+    setDateRange({ start: `${year}-01-01`, end: `${year}-12-31` })
+    setShowAdvancedDates(false)
+  }
+
+  function resetDateRange() {
+    clearYearSelection()
+    setDateRange({ start: '', end: '' })
+  }
+
+  function handleDateInputChange(field, value) {
+    clearYearSelection()
+    setDateRange(prev => ({ ...prev, [field]: value }))
+  }
+
   function setThisMonthRange() {
     const now = new Date()
     const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10)
     const end = new Date(now.getFullYear(), now.getMonth()+1, 0).toISOString().slice(0,10)
+    clearYearSelection()
     setDateRange({ start, end })
   }
 
   function setThisYearRange() {
     const now = new Date()
-    const start = new Date(now.getFullYear(), 0, 1).toISOString().slice(0,10)
-    const end = new Date(now.getFullYear(), 11, 31).toISOString().slice(0,10)
-    setDateRange({ start, end })
+    applyYearRange(now.getFullYear())
   }
+
+  useEffect(() => {
+    if (!dateRange.start || !dateRange.end) {
+      if (selectedYear !== null) {
+        setSelectedYear(null)
+        persistYearFilter(null)
+      }
+      return
+    }
+    const startYear = Number(dateRange.start.slice(0, 4))
+    const endYear = Number(dateRange.end.slice(0, 4))
+    const matchesFullYear =
+      dateRange.start.endsWith('-01-01') &&
+      dateRange.end.endsWith('-12-31') &&
+      Number.isFinite(startYear) &&
+      startYear === endYear
+
+    if (matchesFullYear) {
+      if (selectedYear !== startYear) {
+        setSelectedYear(startYear)
+        persistYearFilter(startYear)
+      }
+    } else if (selectedYear !== null) {
+      setSelectedYear(null)
+      persistYearFilter(null)
+    }
+  }, [dateRange.start, dateRange.end, selectedYear])
 
   // 저장된 매치 정렬 (최신순)
   const sortedMatches = useMemo(() => {
@@ -573,22 +1111,66 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
             <span className="text-sm font-semibold text-gray-700 mr-1">기간:</span>
             <button onClick={setThisMonthRange} className="px-3 py-1.5 text-sm bg-gray-100 rounded hover:bg-gray-200">이번 달</button>
             <button onClick={setThisYearRange} className="px-3 py-1.5 text-sm bg-gray-100 rounded hover:bg-gray-200">이번 해</button>
-            <button onClick={()=>setDateRange({ start: '', end: '' })} className="px-3 py-1.5 text-sm bg-gray-100 rounded hover:bg-gray-200">전체</button>
+            <button onClick={resetDateRange} className="px-3 py-1.5 text-sm bg-gray-100 rounded hover:bg-gray-200">전체</button>
             <button onClick={()=>setShowAdvancedDates(v=>!v)} className="px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900">기간 지정</button>
           </div>
+          {yearOptions.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700">
+              <span className="font-semibold mr-1">연도별 보기:</span>
+              <button
+                onClick={() => prevYear && applyYearRange(prevYear)}
+                disabled={!prevYear}
+                className={`px-3 py-1.5 rounded border ${prevYear ? 'bg-white hover:bg-gray-50' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+              >
+                이전 연도
+              </button>
+              <select
+                value={selectedYear ?? ''}
+                onChange={(e) => {
+                  const yearValue = e.target.value
+                  if (!yearValue) {
+                    resetDateRange()
+                    return
+                  }
+                  applyYearRange(Number(yearValue))
+                }}
+                className="border rounded px-3 py-1.5 bg-white"
+              >
+                <option value="">연도 선택</option>
+                {yearOptions.map(year => (
+                  <option key={year} value={year}>{year}년</option>
+                ))}
+              </select>
+              <button
+                onClick={() => nextYear && applyYearRange(nextYear)}
+                disabled={!nextYear}
+                className={`px-3 py-1.5 rounded border ${nextYear ? 'bg-white hover:bg-gray-50' : 'bg-gray-100 text-gray-400 cursor-not-allowed'}`}
+              >
+                다음 연도
+              </button>
+              {selectedYear !== null && (
+                <button
+                  onClick={resetDateRange}
+                  className="px-3 py-1.5 rounded border border-gray-300 text-gray-600 hover:bg-gray-50"
+                >
+                  연도 해제
+                </button>
+              )}
+            </div>
+          )}
           {showAdvancedDates && (
             <div className="flex items-center gap-3">
               <input
                 type="date"
                 value={dateRange.start}
-                onChange={(e) => setDateRange(prev => ({ ...prev, start: e.target.value }))}
+                onChange={(e) => handleDateInputChange('start', e.target.value)}
                 className="px-3 py-1.5 border rounded-lg text-sm"
               />
               <span className="text-gray-500">~</span>
               <input
                 type="date"
                 value={dateRange.end}
-                onChange={(e) => setDateRange(prev => ({ ...prev, end: e.target.value }))}
+                onChange={(e) => handleDateInputChange('end', e.target.value)}
                 className="px-3 py-1.5 border rounded-lg text-sm"
               />
             </div>
@@ -638,7 +1220,26 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       {/* 선수별 납부 현황 탭 */}
       {selectedTab === 'player-stats' && (
         <Card title="선수별 납부 현황">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between mb-4">
+            <div className="text-sm text-gray-600">
+              총 {sortedPlayerStats.length}명 표시
+            </div>
+            <div className="w-full md:w-64">
+              <input
+                type="text"
+                value={playerStatsSearch}
+                onChange={(e) => setPlayerStatsSearch(e.target.value)}
+                placeholder="선수 이름 검색"
+                className="w-full px-3 py-2 border rounded-lg text-sm"
+              />
+            </div>
+          </div>
           {/* 리스트 뷰 */}
+          {sortedPlayerStats.length === 0 ? (
+            <div className="p-6 text-center text-sm text-gray-500 border rounded-lg bg-gray-50">
+              조건에 맞는 선수가 없습니다.
+            </div>
+          ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
@@ -783,6 +1384,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                         onClick={() => {
                           setSelectedTab('payments')
                           setShowAddPayment(true)
+                          setPlayerSearch(player.name)
                           setNewPayment(prev => ({ ...prev, playerId: '', selectedPlayerIds: [player.id] }))
                         }}
                         className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
@@ -795,6 +1397,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
               </tbody>
             </table>
           </div>
+          )}
           
           {/* 선택된 선수 상세 정보 */}
           {selectedPlayer && playerStats && (
@@ -1346,6 +1949,8 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                 key={match.id}
                 match={match}
                 players={players}
+                isVoided={voidedMatchIds.has(match.id)}
+                onSync={loadData}
               />
             ))}
             {sortedMatches.length === 0 && (
@@ -1379,142 +1984,99 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       {selectedTab === 'renewals' && (
         <Card title="회비 리뉴얼 & 미납 현황">
           <div className="space-y-6">
-            <div className="overflow-x-auto border rounded-lg">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-gray-50">
-                    <th className="text-left py-2 px-2">선수</th>
-                    <th className="text-center py-2 px-2">납부 방식</th>
-                    <th className="text-left py-2 px-2">최근 납부일</th>
-                    <th className="text-left py-2 px-2">다음 납부 예정일</th>
-                    <th className="text-center py-2 px-2">상태</th>
-                    <th className="text-center py-2 px-2">작업</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {players.filter(p=>!p.isUnknown).map(p => {
-                    const r = renewals[p.id] || {}
-                    const fmt = (iso) => iso ? new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' }) : '-'
-                    
-                    // 월회비 vs 연회비 판단
-                    const hasMonthly = r.lastMonthly && (!r.lastAnnual || new Date(r.lastMonthly) > new Date(r.lastAnnual))
-                    const hasAnnual = r.lastAnnual && (!r.lastMonthly || new Date(r.lastAnnual) > new Date(r.lastMonthly))
-                    
-                    let paymentMode = '미정'
-                    let lastPaid = '-'
-                    let nextDue = '-'
-                    let isOverdue = false
-                    let missedMonths = []
-                    
-                    const paymentsForRenewals = allPayments?.length ? allPayments : payments
-
-                    if (hasMonthly) {
-                      paymentMode = '월회비'
-                      lastPaid = fmt(r.lastMonthly)
-                      nextDue = fmt(r.nextMonthly)
-                      isOverdue = r.nextMonthly && new Date(r.nextMonthly) < new Date()
-
-                      // 최근 6개월 동안 미납한 월 목록 계산 (현재 월은 제외)
-                      const window = []
-                      const now = new Date()
-                      for (let i=1; i<=6; i++) {
-                        const d = new Date(now.getFullYear(), now.getMonth()-i, 1)
-                        window.push({ y: d.getFullYear(), m: d.getMonth()+1 })
-                      }
-                      const paidMonths = new Set(
-                        paymentsForRenewals
-                          .filter(pay => pay.player_id === p.id && pay.payment_type === 'monthly_dues')
-                          .map(pay => {
-                            const d = new Date(pay.payment_date)
-                            return `${d.getFullYear()}-${d.getMonth()+1}`
-                          })
-                      )
-                      missedMonths = window
-                        .filter(({y,m}) => !paidMonths.has(`${y}-${m}`))
-                        .map(({m}) => `${m}월`)
-                    } else if (hasAnnual) {
-                      paymentMode = '연회비'
-                      lastPaid = fmt(r.lastAnnual)
-                      nextDue = fmt(r.nextAnnual)
-                      isOverdue = r.nextAnnual && new Date(r.nextAnnual) < new Date()
-                    }
-                    
-                    const warnSoon = !isOverdue && (
-                      (r.nextMonthly && new Date(r.nextMonthly) < new Date(Date.now() + 5*24*60*60*1000)) ||
-                      (r.nextAnnual && new Date(r.nextAnnual) < new Date(Date.now() + 10*24*60*60*1000))
-                    )
-                    
-                    return (
-                      <tr key={p.id} className="border-b hover:bg-gray-50">
-                        <td className="py-2 px-2">
-                          <div className="flex items-center gap-2">
-                            <InitialAvatar id={p.id} name={p.name} size={24} photoUrl={p.photoUrl} />
-                            <span className="font-medium">{p.name}</span>
-                          </div>
-                        </td>
-                        <td className="py-2 px-2 text-center">
-                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            paymentMode === '월회비' ? 'bg-purple-100 text-purple-700' :
-                            paymentMode === '연회비' ? 'bg-indigo-100 text-indigo-700' :
-                            'bg-gray-100 text-gray-600'
-                          }`}>
-                            {paymentMode}
-                          </span>
-                        </td>
-                        <td className="py-2 px-2 text-gray-700">{lastPaid}</td>
-                        <td className={`py-2 px-2 ${
-                          isOverdue ? 'text-red-600 font-semibold' :
-                          warnSoon ? 'text-amber-600 font-semibold' :
-                          'text-gray-700'
-                        }`}>
-                          {nextDue}
-                          {isOverdue && <span className="ml-1 text-xs">(연체)</span>}
-                          {warnSoon && <span className="ml-1 text-xs">(임박)</span>}
-                        </td>
-                        <td className="py-2 px-2 text-center">
-                          <div className="flex flex-col items-center gap-0.5">
-                            {isOverdue ? (
-                              <span className="px-2 py-0.5 rounded text-xs bg-red-100 text-red-700 font-medium">미납</span>
-                            ) : warnSoon ? (
-                              <span className="px-2 py-0.5 rounded text-xs bg-amber-100 text-amber-700 font-medium">주의</span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded text-xs bg-emerald-100 text-emerald-700 font-medium">정상</span>
-                            )}
-                            {paymentMode === '월회비' && missedMonths.length > 0 && (
-                              <span className="text-[11px] text-red-600">미납: {missedMonths.join(', ')}</span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="py-2 px-2 text-center">
-                          <button
-                            onClick={() => {
-                              setSelectedTab('payments')
-                              setShowAddPayment(true)
-                              setNewPayment(prev => ({ 
-                                ...prev, 
-                                playerId: '',
-                                selectedPlayerIds: [p.id],
-                                paymentType: paymentMode === '월회비' ? 'monthly_dues' : paymentMode === '연회비' ? 'annual_dues' : 'monthly_dues'
-                              }))
-                            }}
-                            className={`px-2 py-1 text-xs rounded ${
-                              isOverdue ? 'bg-red-500 text-white hover:bg-red-600' :
-                              warnSoon ? 'bg-amber-500 text-white hover:bg-amber-600' :
-                              'bg-blue-500 text-white hover:bg-blue-600'
-                            }`}
-                          >
-                            {isOverdue ? '미납 처리' : '결제 입력'}
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {[{
+                label: '연체',
+                value: renewalStats.overdue,
+                accent: 'text-red-600',
+                bg: 'bg-red-50',
+                helper: '즉시 처리 필요'
+              }, {
+                label: '임박',
+                value: renewalStats.dueSoon,
+                accent: 'text-amber-600',
+                bg: 'bg-amber-50',
+                helper: '7~30일 내 만료'
+              }, {
+                label: '정상',
+                value: renewalStats.ok,
+                accent: 'text-emerald-600',
+                bg: 'bg-emerald-50',
+                helper: '일정 안정'
+              }, {
+                label: '미설정',
+                value: renewalStats.noPlan,
+                accent: 'text-gray-600',
+                bg: 'bg-gray-100',
+                helper: '납부 방식 없음'
+              }].map(stat => (
+                <div key={stat.label} className={`p-4 rounded-xl border ${stat.bg}`}>
+                  <div className={`text-sm font-semibold ${stat.accent}`}>{stat.label}</div>
+                  <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
+                  <div className="text-xs text-gray-600 mt-1">{stat.helper}</div>
+                </div>
+              ))}
             </div>
             <div className="text-xs text-gray-500">
-              * 각 선수의 최근 납부 이력을 기준으로 월회비/연회비 방식을 자동 판단합니다.<br/>
-              * 월회비는 다음 달까지, 연회비는 1년 뒤까지를 다음 납부일로 계산합니다.
+              추적 선수 {renewalStats.total}명 · 월회비 {renewalStats.monthly}명 · 연회비 {renewalStats.annual}명
+            </div>
+
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="relative w-full lg:max-w-sm">
+                <input
+                  type="text"
+                  value={renewalSearch}
+                  onChange={e => setRenewalSearch(e.target.value)}
+                  placeholder="선수 이름 검색"
+                  className="w-full border rounded-lg py-2 pl-3 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              </div>
+              <div className="flex flex-wrap gap-2 text-xs">
+                {[
+                  { key: 'all', label: '전체' },
+                  { key: 'overdue', label: `연체 (${renewalStats.overdue})` },
+                  { key: 'due-soon', label: `임박 (${renewalStats.dueSoon})` },
+                  { key: 'ok', label: `정상 (${renewalStats.ok})` },
+                  { key: 'no-plan', label: `미설정 (${renewalStats.noPlan})` }
+                ].map(filter => (
+                  <button
+                    key={filter.key}
+                    onClick={() => setRenewalFilter(filter.key)}
+                    className={`px-3 py-1.5 rounded-full border ${
+                      renewalFilter === filter.key
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'border-gray-300 text-gray-600 hover:border-gray-400'
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {filteredRenewalEntries.length === 0 && (
+                <div className="border rounded-xl p-8 text-center text-sm text-gray-500">
+                  조건에 맞는 선수가 없습니다.
+                </div>
+              )}
+              {filteredRenewalEntries.map(entry => (
+                <RenewalStatusCard
+                  key={entry.player.id}
+                  entry={entry}
+                  onPreferenceChange={handleUpdateRenewalPreference}
+                  quickPaymentSuggestions={{ monthly: duesAmountMap.monthly, annual: duesAmountMap.annual }}
+                  onQuickPayment={handleQuickRenewalPayment}
+                  quickSaving={Boolean(renewalSaving[entry.player.id])}
+                  onManualReset={handleRenewalManualReset}
+                  onManualResetClear={handleRenewalManualResetClear}
+                  manualResetSaving={Boolean(manualResetSaving[`${entry.player.id}:${entry.billingType}`])}
+                />
+              ))}
+            </div>
+            <div className="text-xs text-gray-500">
+              * 최근 결제 이력을 기반으로 월/연회비 주기를 자동 판단합니다. 빠른 기록 버튼을 사용하면 결제 탭이 열리고 선수/항목이 자동 선택됩니다.
             </div>
           </div>
         </Card>
@@ -1695,11 +2257,242 @@ function DuesSettingRow({ setting, onUpdate, label }) {
   )
 }
 
-function MatchFeesSection({ match, players }) {
+function RenewalStatusCard({
+  entry,
+  onPreferenceChange,
+  quickPaymentSuggestions = {},
+  onQuickPayment,
+  quickSaving,
+  onManualReset,
+  onManualResetClear,
+  manualResetSaving
+}) {
+  const statusTone = {
+    overdue: { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-200' },
+    'due-soon': { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-200' },
+    'no-plan': { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-200' },
+    ok: { bg: 'bg-emerald-100', text: 'text-emerald-700', border: 'border-emerald-200' }
+  }
+  const tone = statusTone[entry.status] || statusTone.ok
+  const daysLabel = entry.daysUntilDue === null
+    ? '미정'
+    : entry.daysUntilDue >= 0
+      ? `${entry.daysUntilDue}일`
+      : `${Math.abs(entry.daysUntilDue)}일 지연`
+  const allowTypeSelect = entry.billingType === 'unknown'
+  const initialQuickType = allowTypeSelect ? 'monthly' : entry.billingType
+  const [quickType, setQuickType] = useState(initialQuickType || 'monthly')
+  useEffect(() => {
+    setQuickType(allowTypeSelect ? 'monthly' : entry.billingType || 'monthly')
+  }, [entry.billingType, allowTypeSelect])
+
+  const effectiveQuickType = allowTypeSelect ? quickType : entry.billingType
+
+  const getDefaultAmount = useCallback((type) => {
+    if (type === 'annual') return quickPaymentSuggestions.annual ?? ''
+    if (type === 'monthly') return quickPaymentSuggestions.monthly ?? ''
+    return ''
+  }, [quickPaymentSuggestions])
+
+  const [quickAmount, setQuickAmount] = useState(() => getDefaultAmount(effectiveQuickType))
+  const [quickDate, setQuickDate] = useState(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  })
+  const [quickMethod, setQuickMethod] = useState('venmo')
+
+  useEffect(() => {
+    if (effectiveQuickType === 'monthly' && entry.outstandingAmount > 0) {
+      setQuickAmount(entry.outstandingAmount.toString())
+      return
+    }
+    setQuickAmount(getDefaultAmount(effectiveQuickType))
+  }, [effectiveQuickType, entry.outstandingAmount, getDefaultAmount])
+
+  const outstandingAmountLabel = entry.outstandingAmount > 0 ? formatCurrency(entry.outstandingAmount) : null
+
+  return (
+    <div className="border rounded-2xl p-5 bg-white shadow-sm">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-3">
+          <InitialAvatar id={entry.player.id} name={entry.player.name} size={40} photoUrl={entry.player.photoUrl} />
+          <div>
+            <div className="font-semibold text-gray-900 text-base">{entry.player.name}</div>
+            <div className="text-xs text-gray-500">
+              {entry.billingLabel}
+              {entry.player.membership && ` · ${entry.player.membership}`}
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-2 text-xs items-start lg:items-end">
+          <div className="flex items-center gap-2">
+            <span className={`px-3 py-1 rounded-full font-semibold ${tone.bg} ${tone.text} border ${tone.border}`}>
+              {entry.statusLabel}
+            </span>
+            <span className="text-gray-500">{entry.statusDescription}</span>
+          </div>
+          <div className="flex items-center gap-2 text-[11px]">
+            <span className="text-gray-500">납부 방식</span>
+            <select
+              value={entry.preference}
+              onChange={(e) => onPreferenceChange(entry.player.id, e.target.value)}
+              className="border rounded-lg px-2 py-1 text-xs"
+            >
+              <option value="auto">자동 감지</option>
+              <option value="monthly">월회비</option>
+              <option value="annual">연회비</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4 text-sm">
+        {[{
+          label: '적용 모드',
+          value: entry.preference === 'auto' ? `${entry.billingLabel} (자동)` : entry.billingLabel
+        }, {
+          label: '최근 납부',
+          value: entry.lastPaidLabel
+        }, {
+          label: '다음 납부',
+          value: entry.nextDueLabel
+        }, {
+          label: '남은 일수',
+          value: daysLabel
+        }].map(info => (
+          <div key={info.label} className="p-3 rounded-xl border bg-gray-50">
+            <div className="text-xs text-gray-500">{info.label}</div>
+            <div className="font-semibold text-gray-900">{info.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {entry.billingType === 'monthly' && entry.missedMonthsTotal > 0 && (
+        <div className="mt-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+          <div className="font-semibold">
+            총 미납 {entry.missedMonthsTotal}개월
+            {entry.missedMonthsHidden > 0 && (
+              <span className="text-[11px] text-red-500">
+                {' '}(최근 {DISPLAY_MISSED_MONTH_LIMIT}개월 중 {entry.missedMonths.length}개월 표시)
+              </span>
+            )}
+          </div>
+          <div className="mt-1 text-red-700">
+            {entry.missedMonths.join(', ')}
+          </div>
+          {outstandingAmountLabel && (
+            <div className="mt-1 font-semibold text-red-700">
+              총 미납 금액: {outstandingAmountLabel}
+            </div>
+          )}
+          {entry.missedMonthsHidden > 0 && (
+            <div className="mt-1 text-[11px] text-red-500">
+              나머지 {entry.missedMonthsHidden}개월은 목록에 표시되지 않지만 연체 금액에 포함되었습니다.
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="mt-4 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between text-sm">
+        <div className="text-gray-600 text-xs">{entry.recommendation}</div>
+        <div className="flex flex-wrap gap-2">
+          {entry.manualResetActive ? (
+            <button
+              onClick={() => onManualResetClear(entry.player.id, entry.billingType)}
+              disabled={manualResetSaving}
+              className="px-4 py-2 rounded-xl text-xs font-semibold border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              정상 처리 해제
+            </button>
+          ) : (
+            <button
+              onClick={() => onManualReset(entry.player.id, entry.billingType)}
+              disabled={manualResetSaving}
+              className="px-4 py-2 rounded-xl text-xs font-semibold border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              정상 처리
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4 border rounded-2xl bg-gray-50 p-4">
+        <div className="flex items-center justify-between text-xs font-semibold text-gray-700 mb-3">
+          빠른 결제 입력
+          <span className="text-gray-400">Payments 탭 이동 없이 기록</span>
+        </div>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+          {allowTypeSelect && (
+            <div>
+              <label className="text-xs text-gray-500">납부 유형</label>
+              <select
+                value={quickType}
+                onChange={(e) => setQuickType(e.target.value)}
+                className="border rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="monthly">월회비</option>
+                <option value="annual">연회비</option>
+              </select>
+            </div>
+          )}
+          <div>
+            <label className="text-xs text-gray-500">결제 방식</label>
+            <select
+              value={quickMethod}
+              onChange={(e) => setQuickMethod(e.target.value)}
+              className="border rounded-lg px-3 py-2 text-sm"
+            >
+              {Object.entries(paymentMethodLabels).map(([key, label]) => (
+                <option key={key} value={key}>{label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1">
+            <label className="text-xs text-gray-500">금액</label>
+            <input
+              type="number"
+              step="0.01"
+              value={quickAmount}
+              onChange={(e) => setQuickAmount(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">납부일</label>
+            <input
+              type="date"
+              value={quickDate}
+              onChange={(e) => setQuickDate(e.target.value)}
+              className="border rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => onQuickPayment({
+                playerId: entry.player.id,
+                billingType: effectiveQuickType,
+                amount: quickAmount,
+                paymentDate: quickDate,
+                paymentMethod: quickMethod
+              })}
+              disabled={quickSaving || !quickAmount || !effectiveQuickType || !quickMethod}
+              className="px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {quickSaving ? '기록 중...' : '빠른 입력'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MatchFeesSection({ match, players, isVoided = false, onSync = () => {} }) {
   const [matchPayments, setMatchPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [showReimbursement, setShowReimbursement] = useState(false)
   const [confirmState, setConfirmState] = useState({ open: false, kind: null, payload: null })
+  const VOID_ACTION_MESSAGE = 'VOID 처리된 매치는 조정할 수 없습니다'
 
   useEffect(() => {
     loadMatchPayments()
@@ -1716,21 +2509,41 @@ function MatchFeesSection({ match, players }) {
     }
   }
 
+  const abortIfVoided = () => {
+    if (!isVoided) return false
+    notify(VOID_ACTION_MESSAGE)
+    return true
+  }
+
   async function handleConfirmPayment(playerId, amount) {
+    if (abortIfVoided()) return
     try {
       await confirmMatchPayment(match.id, playerId, amount, 'venmo')
       notify('납부 확인되었습니다 ✅')
-      loadMatchPayments()
+      await loadMatchPayments()
+      await onSync()
     } catch (error) {
       notify('납부 확인 실패')
     }
   }
 
   async function handleCancelPayment(playerId) {
+    if (abortIfVoided()) return
     setConfirmState({ open: true, kind: 'cancel-payment', payload: { playerId } })
   }
 
+  function handleCancelAllPayments() {
+    if (abortIfVoided()) return
+    const paidPlayers = matchPayments.filter(p => p.payment_status === 'paid').map(p => p.player_id)
+    if (paidPlayers.length === 0) {
+      notify('취소할 납부가 없습니다')
+      return
+    }
+    setConfirmState({ open: true, kind: 'cancel-all', payload: { playerIds: paidPlayers } })
+  }
+
   async function handleReimbursement(playerId, amount) {
+    if (abortIfVoided()) return
     setConfirmState({ open: true, kind: 'reimburse', payload: { playerId, amount } })
   }
 
@@ -1744,9 +2557,10 @@ function MatchFeesSection({ match, players }) {
 
   // 통합된 구장비 계산 로직 사용
   const { memberFee, guestFee, participantIds } = calculateMatchFees(match, players)
+  const paidCount = matchPayments.filter(p => p.payment_status === 'paid').length
 
   return (
-    <div className="border rounded-lg p-4">
+    <div className={`border rounded-lg p-4 ${isVoided ? 'border-red-200 bg-red-50/40' : ''}`}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex-1">
           <div className="font-semibold">{matchDate}</div>
@@ -1754,6 +2568,12 @@ function MatchFeesSection({ match, players }) {
             {match.location?.name || '장소 미정'} · {participantIds.length}명 · 
             멤버 ${memberFee.toFixed(2)} / 게스트 ${guestFee.toFixed(2)}
           </div>
+          {isVoided && (
+            <div className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 mt-2">
+              <AlertCircle size={14} />
+              <span>VOID 처리됨 · 집계에서 제외</span>
+            </div>
+          )}
           {match.paidBy && (
             <div className="text-xs text-blue-600 mt-1">
               💳 {players.find(p => p.id === match.paidBy)?.name || 'Unknown'}님이 대신 결제
@@ -1764,11 +2584,27 @@ function MatchFeesSection({ match, players }) {
           <div>
           <ConfirmDialog
             open={confirmState.open}
-            title={confirmState.kind === 'cancel-payment' ? '납부 확인 취소' : '상환 처리'}
-            message={confirmState.kind === 'cancel-payment' 
-              ? '납부 확인을 취소하시겠습니까?'
-              : '이 선수에게 상환 처리하시겠습니까?'}
-            confirmLabel={confirmState.kind === 'cancel-payment' ? '취소하기' : '상환 처리'}
+            title={
+              confirmState.kind === 'cancel-payment'
+                ? '납부 확인 취소'
+                : confirmState.kind === 'cancel-all'
+                  ? '전체 납부 취소'
+                  : '상환 처리'
+            }
+            message={
+              confirmState.kind === 'cancel-payment'
+                ? '납부 확인을 취소하시겠습니까?'
+                : confirmState.kind === 'cancel-all'
+                  ? `${confirmState.payload?.playerIds?.length || 0}건의 납부 확인을 모두 취소하시겠습니까?`
+                  : '이 선수에게 상환 처리하시겠습니까?'
+            }
+            confirmLabel={
+              confirmState.kind === 'cancel-payment'
+                ? '취소하기'
+                : confirmState.kind === 'cancel-all'
+                  ? '전체 취소'
+                  : '상환 처리'
+            }
             cancelLabel="닫기"
             tone="danger"
             onCancel={() => setConfirmState({ open: false, kind: null, payload: null })}
@@ -1777,7 +2613,17 @@ function MatchFeesSection({ match, players }) {
                 if (confirmState.kind === 'cancel-payment') {
                   await cancelMatchPayment(match.id, confirmState.payload.playerId)
                   notify('납부 확인이 취소되었습니다')
-                  loadMatchPayments()
+                  await loadMatchPayments()
+                  await onSync()
+                } else if (confirmState.kind === 'cancel-all') {
+                  const ids = confirmState.payload?.playerIds || []
+                  const results = await Promise.allSettled(ids.map(playerId => cancelMatchPayment(match.id, playerId)))
+                  const successCount = results.filter(r => r.status === 'fulfilled').length
+                  const failCount = results.length - successCount
+                  if (successCount > 0) notify(`${successCount}건의 납부를 취소했습니다 ✅`)
+                  if (failCount > 0) notify(`${failCount}건 취소 실패`)
+                  await loadMatchPayments()
+                  await onSync()
                 } else if (confirmState.kind === 'reimburse') {
                   await addPayment({
                     playerId: confirmState.payload.playerId,
@@ -1789,9 +2635,14 @@ function MatchFeesSection({ match, players }) {
                   })
                   notify('상환 처리되었습니다 ✅')
                   setShowReimbursement(false)
+                  await onSync()
                 }
               } catch (error) {
-                notify(confirmState.kind === 'cancel-payment' ? '취소 실패' : '상환 처리 실패')
+                notify(
+                  confirmState.kind === 'reimburse'
+                    ? '상환 처리 실패'
+                    : '취소 실패'
+                )
               } finally {
                 setConfirmState({ open: false, kind: null, payload: null })
               }
@@ -1799,7 +2650,7 @@ function MatchFeesSection({ match, players }) {
           />
             <div className="text-xs text-gray-600">납부율</div>
             <div className="text-lg font-bold text-emerald-600">
-              {matchPayments.filter(p => p.payment_status === 'paid').length} / {participantIds.length}
+              {paidCount} / {participantIds.length}
             </div>
           </div>
           {match.paidBy && (
@@ -1808,13 +2659,29 @@ function MatchFeesSection({ match, players }) {
                 const totalCost = match.totalCost || (participantIds.length * memberFee)
                 handleReimbursement(match.paidBy, totalCost)
               }}
-              className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+              disabled={isVoided}
+              title={isVoided ? VOID_ACTION_MESSAGE : undefined}
+              className="px-3 py-1.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               상환
             </button>
           )}
+          <button
+            onClick={handleCancelAllPayments}
+            disabled={isVoided || paidCount === 0}
+            title={isVoided ? VOID_ACTION_MESSAGE : paidCount === 0 ? '취소할 납부가 없습니다' : undefined}
+            className="px-3 py-1.5 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            전체 취소
+          </button>
         </div>
       </div>
+
+      {isVoided && (
+        <div className="mb-3 rounded border border-red-200 bg-white/80 px-3 py-2 text-xs text-red-700">
+          이 매치는 Financial Dashboard에서 VOID 처리되어 요약/미납 집계에서 제외됩니다. 복구는 Financial Dashboard에서 진행해 주세요.
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-4 text-gray-500 text-sm">로딩 중...</div>
@@ -1874,14 +2741,18 @@ function MatchFeesSection({ match, players }) {
                       {isPaid ? (
                         <button
                           onClick={() => handleCancelPayment(playerId)}
-                          className="px-2 py-1 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200"
+                          disabled={isVoided}
+                          title={isVoided ? VOID_ACTION_MESSAGE : undefined}
+                          className="px-2 py-1 bg-red-100 text-red-600 rounded text-xs hover:bg-red-200 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           취소
                         </button>
                       ) : (
                         <button
                           onClick={() => handleConfirmPayment(playerId, expected)}
-                          className="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600"
+                          disabled={isVoided}
+                          title={isVoided ? VOID_ACTION_MESSAGE : undefined}
+                          className="px-2 py-1 bg-blue-500 text-white rounded text-xs hover:bg-blue-600 disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           확인
                         </button>

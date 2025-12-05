@@ -713,11 +713,17 @@ export async function cancelMatchPayment(matchId, playerId) {
 }
 
 /**
- * 전체 선수의 최근 월/연회비 결제 날짜와 다음 리뉴얼 예정일 반환
+ * 전체 선수의 최근 월/연/가입비 결제 날짜와 다음 리뉴얼 예정일 반환
  */
 export async function getDuesRenewals(players = []) {
-  const ids = players.map(p => p.id)
-  const buildEmpty = () => ({ lastMonthly: null, nextMonthly: null, lastAnnual: null, nextAnnual: null })
+  const ids = players.map(p => p.id).filter(Boolean)
+  const buildEmpty = () => ({
+    lastMonthly: null,
+    nextMonthly: null,
+    lastAnnual: null,
+    nextAnnual: null,
+    registrationPaidAt: null
+  })
   const byPlayer = new Map(ids.map(id => [id, buildEmpty()]))
   const applyLatest = (list) => {
     for (const p of list) {
@@ -728,6 +734,9 @@ export async function getDuesRenewals(players = []) {
       }
       if (p.payment_type === 'annual_dues') {
         if (!bag.lastAnnual || new Date(bag.lastAnnual) < dt) bag.lastAnnual = dt.toISOString()
+      }
+      if (p.payment_type === 'registration') {
+        if (!bag.registrationPaidAt || new Date(bag.registrationPaidAt) < dt) bag.registrationPaidAt = dt.toISOString()
       }
       byPlayer.set(p.player_id, bag)
     }
@@ -746,9 +755,13 @@ export async function getDuesRenewals(players = []) {
     }
   }
 
+  if (ids.length === 0) {
+    return {}
+  }
+
   if (isMockMode()) {
     const db = loadLS()
-    const list = (db.payments||[]).filter(p => p.payment_type === 'monthly_dues' || p.payment_type === 'annual_dues')
+    const list = (db.payments||[]).filter(p => ['monthly_dues', 'annual_dues', 'registration'].includes(p.payment_type))
     applyLatest(list)
     return Object.fromEntries(byPlayer)
   }
@@ -757,7 +770,8 @@ export async function getDuesRenewals(players = []) {
   const { data, error } = await supabase
     .from('payments')
     .select('player_id, payment_type, payment_date')
-    .in('payment_type', ['monthly_dues','annual_dues'])
+    .in('player_id', ids)
+    .in('payment_type', ['monthly_dues','annual_dues','registration'])
   if (error) {
     logger.error('[Accounting] Failed to get dues renewals:', error)
     return Object.fromEntries(byPlayer)

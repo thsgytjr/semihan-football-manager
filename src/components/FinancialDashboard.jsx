@@ -1,5 +1,6 @@
 // src/components/FinancialDashboard.jsx
 import React, { useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Card from './Card'
 import SimplePieChart from './charts/SimplePieChart'
 import SimpleBarChart from './charts/SimpleBarChart'
@@ -12,6 +13,7 @@ import { calculatePlayerMatchFee, calculateMatchFees } from '../lib/matchFeeCalc
 import { getMembershipSettings } from '../services/membership.service'
 import { getBadgesWithCustom } from '../lib/matchUtils'
 import { getMembershipBadge } from '../lib/membershipConfig'
+import ConfirmDialog from './ConfirmDialog'
 
 /**
  * 총무를 위한 재정 현황 대시보드
@@ -29,9 +31,21 @@ export default function FinancialDashboard({
   dateRange = {},
   onRefresh
 }) {
+  const VOID_STORAGE_KEY = 'sfm:accounting:voidMatches'
   const [showAllUnpaid, setShowAllUnpaid] = useState(false)
   const [selectedMatch, setSelectedMatch] = useState(null)
   const [customMemberships, setCustomMemberships] = useState([])
+  const [voidConfirmState, setVoidConfirmState] = useState({ open: false, matchId: null })
+  const [voidedMatchIds, setVoidedMatchIds] = useState(() => {
+    if (typeof window === 'undefined') return new Set()
+    try {
+      const raw = localStorage.getItem(VOID_STORAGE_KEY)
+      const arr = raw ? JSON.parse(raw) : []
+      return new Set(Array.isArray(arr) ? arr : [])
+    } catch {
+      return new Set()
+    }
+  })
   const isLocalMock = (() => {
     try {
       const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -54,6 +68,41 @@ export default function FinancialDashboard({
     })()
     return () => { mounted = false }
   }, [])
+
+  // voided match ID persistence
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      localStorage.setItem(VOID_STORAGE_KEY, JSON.stringify(Array.from(voidedMatchIds)))
+      window.dispatchEvent(new CustomEvent('sfm:void-matches-updated'))
+    } catch {
+      // ignore persist errors
+    }
+  }, [voidedMatchIds])
+
+  const markMatchVoided = (matchId) => {
+    let changed = false
+    setVoidedMatchIds(prev => {
+      if (!matchId || prev.has(matchId)) return prev
+      const next = new Set(prev)
+      next.add(matchId)
+      changed = true
+      return next
+    })
+    if (changed) notify('해당 매치를 VOID 처리했습니다')
+  }
+
+  const restoreVoidedMatch = (matchId) => {
+    let changed = false
+    setVoidedMatchIds(prev => {
+      if (!matchId || !prev.has(matchId)) return prev
+      const next = new Set(prev)
+      next.delete(matchId)
+      changed = true
+      return next
+    })
+    if (changed) notify('VOID 상태를 해제했습니다')
+  }
   // 수입(양수) 카테고리 데이터 (지출 제외) - 직관적 막대 구성 용
   const revenueCategories = useMemo(() => {
     const cats = []
@@ -92,6 +141,22 @@ export default function FinancialDashboard({
       })
       .sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))
   }, [payments])
+
+  const handleVoidMatchRequest = (matchId, { skipConfirm = false } = {}) => {
+    if (!matchId) return
+    if (!skipConfirm) {
+      setVoidConfirmState({ open: true, matchId })
+      return
+    }
+    markMatchVoided(matchId)
+    setSelectedMatch(prev => (prev?.matchId === matchId ? null : prev))
+    setVoidConfirmState({ open: false, matchId: null })
+  }
+
+  const handleRestoreMatchRequest = (matchId) => {
+    if (!matchId) return
+    restoreVoidedMatch(matchId)
+  }
 
   // 구장비 미납자 (저장된 매치 기준) - 매치별로 그룹화
   const unpaidMatchFees = useMemo(() => {
@@ -136,14 +201,19 @@ export default function FinancialDashboard({
           matchLocation: match.location?.name || '장소 미정',
           unpaidPlayers: unpaidInMatch,
           totalUnpaid: unpaidInMatch.reduce((sum, u) => sum + u.expectedFee, 0),
-          noFeeConfigured
+          noFeeConfigured,
+          isVoided: voidedMatchIds.has(match.id)
         })
       }
     })
     
     // 최신순으로 정렬 (최근 매치가 위로)
     return matchGroups.sort((a, b) => new Date(b.matchDate) - new Date(a.matchDate))
-  }, [matches, players, payments])
+  }, [matches, players, payments, voidedMatchIds])
+
+  const activeUnpaidMatches = useMemo(() => unpaidMatchFees.filter(match => !match.isVoided), [unpaidMatchFees])
+  const voidedUnpaidMatches = useMemo(() => unpaidMatchFees.filter(match => match.isVoided), [unpaidMatchFees])
+  const displayedUnpaidMatches = showAllUnpaid ? activeUnpaidMatches : activeUnpaidMatches.slice(0, 5)
 
   // 월별 수입 트렌드 (최근 6개월)
   const monthlyTrend = useMemo(() => {
@@ -182,10 +252,10 @@ export default function FinancialDashboard({
   const grossRevenue = netRevenue + totalExpenses
   
   // 미납 인원수와 금액 (구장비가 설정되지 않은 매치는 제외)
-  const totalUnpaidCount = unpaidMatchFees
+  const totalUnpaidCount = activeUnpaidMatches
     .filter(m => !m.noFeeConfigured)
     .reduce((sum, m) => sum + m.unpaidPlayers.length, 0)
-  const totalUnpaidAmount = unpaidMatchFees
+  const totalUnpaidAmount = activeUnpaidMatches
     .filter(m => !m.noFeeConfigured)
     .reduce((sum, m) => sum + m.totalUnpaid, 0)
 
@@ -318,93 +388,139 @@ export default function FinancialDashboard({
       {/* 구장비 미납자 목록 - 매치별 그룹화 */}
       {unpaidMatchFees.length > 0 && (
         <Card 
-          title={`구장비 미납 현황 (${unpaidMatchFees.length}개 매치)`}
+          title={`구장비 미납 현황 (${activeUnpaidMatches.length}개 매치${voidedUnpaidMatches.length ? ` · VOID ${voidedUnpaidMatches.length}` : ''})`}
           icon={<AlertTriangle className="text-orange-500" size={20} />}
         >
           <div className="space-y-3">
-            {(showAllUnpaid ? unpaidMatchFees : unpaidMatchFees.slice(0, 5)).map((matchGroup, idx) => (
-              <div 
-                key={idx} 
-                className="border rounded-lg p-3 bg-orange-50 hover:bg-orange-100 transition-colors cursor-pointer"
-                onClick={() => setSelectedMatch(matchGroup)}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <div className="font-semibold text-sm">
-                      {new Date(matchGroup.matchDate).toLocaleDateString('ko-KR', { 
-                        year: 'numeric',
-                        month: 'short', 
-                        day: 'numeric',
-                        weekday: 'short'
-                      })}
-                    </div>
-                    <div className="text-xs text-gray-600">{matchGroup.matchLocation}</div>
-                    {matchGroup.noFeeConfigured && (
-                      <div className="text-[11px] text-red-600 mt-0.5">구장비가 설정되지 않았습니다</div>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    {matchGroup.noFeeConfigured ? (
-                      <div className="text-sm font-semibold text-red-600">설정 필요</div>
-                    ) : (
-                      <>
-                        <div className="text-sm font-semibold text-orange-600">
-                          ${matchGroup.totalUnpaid.toFixed(2)}
+            {activeUnpaidMatches.length === 0 && (
+              <p className="text-sm text-gray-600 text-center py-4">모든 미납 매치가 VOID 처리되어 목록에서 제외되었습니다.</p>
+            )}
+            {activeUnpaidMatches.length > 0 && (
+              <>
+                {displayedUnpaidMatches.map((matchGroup, idx) => (
+                  <div 
+                    key={matchGroup.matchId || idx} 
+                    className="border rounded-lg p-3 bg-orange-50 hover:bg-orange-100 transition-colors cursor-pointer"
+                    onClick={() => setSelectedMatch(matchGroup)}
+                  >
+                    <div className="flex items-start justify-between mb-2 gap-3">
+                      <div>
+                        <div className="font-semibold text-sm">
+                          {new Date(matchGroup.matchDate).toLocaleDateString('ko-KR', { 
+                            year: 'numeric',
+                            month: 'short', 
+                            day: 'numeric',
+                            weekday: 'short'
+                          })}
                         </div>
-                        <div className="text-xs text-gray-500">{matchGroup.unpaidPlayers.length}명 미납</div>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {matchGroup.unpaidPlayers.map((unpaid, pidx) => {
-                    const player = players.find(p => p.id === unpaid.playerId)
-                    const badges = player ? getBadgesWithCustom(player.membership, customMemberships) : []
-                    const badgeInfo = player ? getMembershipBadge(player.membership, customMemberships) : null
-                    
-                    return (
-                      <div 
-                        key={pidx}
-                        className="flex items-center gap-1.5 px-2 py-1 bg-white rounded-md border border-orange-200"
-                      >
-                        <InitialAvatar 
-                          id={unpaid.playerId} 
-                          name={unpaid.playerName} 
-                          size={20} 
-                          photoUrl={unpaid.playerPhoto}
-                          badges={badges}
-                          badgeColor={badgeInfo?.badgeColor}
-                          customMemberships={customMemberships}
-                        />
-                        <span className="text-xs font-medium">{unpaid.playerName}</span>
-                        {!matchGroup.noFeeConfigured && (
-                          <span className="text-xs text-orange-600 font-semibold">
-                            ${unpaid.expectedFee.toFixed(1)}
-                          </span>
+                        <div className="text-xs text-gray-600">{matchGroup.matchLocation}</div>
+                        {matchGroup.noFeeConfigured && (
+                          <div className="text-[11px] text-red-600 mt-0.5">구장비가 설정되지 않았습니다</div>
                         )}
                       </div>
-                    )
-                  })}
-                </div>
-              </div>
-            ))}
-            {unpaidMatchFees.length > 5 && (
-              <button
-                onClick={() => setShowAllUnpaid(!showAllUnpaid)}
-                className="w-full py-2 text-sm text-blue-600 hover:text-blue-800 flex items-center justify-center gap-1"
-              >
-                {showAllUnpaid ? (
-                  <>
-                    <ChevronUp size={16} />
-                    접기
-                  </>
-                ) : (
-                  <>
-                    <ChevronDown size={16} />
-                    {unpaidMatchFees.length - 5}개 매치 더 보기
-                  </>
+                      <div className="flex items-center gap-2">
+                        <div className="text-right">
+                          {matchGroup.noFeeConfigured ? (
+                            <div className="text-sm font-semibold text-red-600">설정 필요</div>
+                          ) : (
+                            <>
+                              <div className="text-sm font-semibold text-orange-600">
+                                ${matchGroup.totalUnpaid.toFixed(2)}
+                              </div>
+                              <div className="text-xs text-gray-500">{matchGroup.unpaidPlayers.length}명 미납</div>
+                            </>
+                          )}
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleVoidMatchRequest(matchGroup.matchId)
+                          }}
+                          className="px-2 py-1 text-[11px] font-semibold text-red-600 border border-red-300 rounded hover:bg-red-50"
+                        >
+                          VOID
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {matchGroup.unpaidPlayers.map((unpaid, pidx) => {
+                        const player = players.find(p => p.id === unpaid.playerId)
+                        const badges = player ? getBadgesWithCustom(player.membership, customMemberships) : []
+                        const badgeInfo = player ? getMembershipBadge(player.membership, customMemberships) : null
+                        
+                        return (
+                          <div 
+                            key={pidx}
+                            className="flex items-center gap-1.5 px-2 py-1 bg-white rounded-md border border-orange-200"
+                          >
+                            <InitialAvatar 
+                              id={unpaid.playerId} 
+                              name={unpaid.playerName} 
+                              size={20} 
+                              photoUrl={unpaid.playerPhoto}
+                              badges={badges}
+                              badgeColor={badgeInfo?.badgeColor}
+                              customMemberships={customMemberships}
+                            />
+                            <span className="text-xs font-medium">{unpaid.playerName}</span>
+                            {!matchGroup.noFeeConfigured && (
+                              <span className="text-xs text-orange-600 font-semibold">
+                                ${unpaid.expectedFee.toFixed(1)}
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+                {activeUnpaidMatches.length > 5 && (
+                  <button
+                    onClick={() => setShowAllUnpaid(!showAllUnpaid)}
+                    className="w-full py-2 text-sm text-blue-600 hover:text-blue-800 flex items-center justify-center gap-1"
+                  >
+                    {showAllUnpaid ? (
+                      <>
+                        <ChevronUp size={16} />
+                        접기
+                      </>
+                    ) : (
+                      <>
+                        <ChevronDown size={16} />
+                        {activeUnpaidMatches.length - 5}개 매치 더 보기
+                      </>
+                    )}
+                  </button>
                 )}
-              </button>
+              </>
+            )}
+
+            {voidedUnpaidMatches.length > 0 && (
+              <details className="border rounded-lg p-3 bg-gray-50">
+                <summary className="flex items-center justify-between cursor-pointer text-sm font-semibold text-gray-700">
+                  VOID 처리된 매치 {voidedUnpaidMatches.length}건
+                  <span className="text-xs text-gray-500">탭하여 펼치기</span>
+                </summary>
+                <div className="mt-3 space-y-2">
+                  {voidedUnpaidMatches.map(match => (
+                    <div key={match.matchId} className="flex items-center justify-between gap-3 p-3 bg-white border rounded-lg">
+                      <div>
+                        <div className="text-sm font-medium">
+                          {new Date(match.matchDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', weekday: 'short' })}
+                        </div>
+                        <div className="text-xs text-gray-500">{match.matchLocation}</div>
+                        <div className="text-[11px] text-red-600 font-semibold mt-1">VOID 처리됨</div>
+                      </div>
+                      <button
+                        onClick={() => handleRestoreMatchRequest(match.matchId)}
+                        className="px-2 py-1 text-[11px] font-semibold text-emerald-700 border border-emerald-300 rounded hover:bg-emerald-50"
+                      >
+                        복구
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </details>
             )}
           </div>
         </Card>
@@ -418,6 +534,9 @@ export default function FinancialDashboard({
           customMemberships={customMemberships}
           onClose={() => setSelectedMatch(null)}
           onRefresh={onRefresh}
+          isVoided={selectedMatch.isVoided || voidedMatchIds.has(selectedMatch.matchId)}
+          onVoidMatch={() => handleVoidMatchRequest(selectedMatch.matchId)}
+          onRestoreMatch={() => handleRestoreMatchRequest(selectedMatch.matchId)}
         />
       )}
 
@@ -470,30 +589,44 @@ export default function FinancialDashboard({
           조회 기간: {dateRange.start || '처음'} ~ {dateRange.end || '현재'}
         </div>
       )}
+
+      <ConfirmDialog
+        open={voidConfirmState.open}
+        title="매치 VOID 처리"
+        message={`선택한 매치를 VOID 처리하면 미납 목록과 집계에서 제외됩니다.\n계속 진행할까요?`}
+        confirmLabel="VOID 처리"
+        cancelLabel="돌아가기"
+        tone="danger"
+        onCancel={() => setVoidConfirmState({ open: false, matchId: null })}
+        onConfirm={() => handleVoidMatchRequest(voidConfirmState.matchId, { skipConfirm: true })}
+      />
     </div>
   )
 }
 
 // 미납 매치 상세 모달 - Quick Update 가능
-function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onRefresh }) {
+function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onRefresh, isVoided = false, onVoidMatch, onRestoreMatch }) {
   const [updating, setUpdating] = useState({})
   const [editFeesOpen, setEditFeesOpen] = useState(false)
   const [feeForm, setFeeForm] = useState({ memberFee: '', guestSurcharge: '', total: '' })
   const [selected, setSelected] = useState(() => new Set())
   const [bulkUpdating, setBulkUpdating] = useState(false)
 
-  // 모달 표시 시 배경 스크롤 잠금 (모달 내부 스크롤은 허용)
+  // 모달 표시 시 배경 스크롤 방지
   React.useEffect(() => {
-    const prev = document.body.style.overflow
+    if (typeof document === 'undefined') return
+    const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
-    // 배경 페이지 위치 이동은 즉시 처리(모바일 사파리에서 smooth가 먹통처럼 느껴질 수 있음)
-    try { window.scrollTo(0, 0) } catch {}
     return () => {
-      document.body.style.overflow = prev
+      document.body.style.overflow = previous
     }
   }, [])
 
   async function handleTogglePayment(playerId, isPaid, amount) {
+    if (isVoided) {
+      notify('VOID 처리된 매치는 수정할 수 없습니다. VOID 해제 후 다시 시도해주세요.')
+      return
+    }
     setUpdating(prev => ({ ...prev, [playerId]: true }))
     
     try {
@@ -521,6 +654,10 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
   }
 
   async function handleSaveFeesOverride() {
+    if (isVoided) {
+      notify('VOID 처리된 매치는 수정할 수 없습니다. VOID 해제 후 다시 시도해주세요.')
+      return
+    }
     // 최소 한 항목이라도 입력되어야 함
     const hasAny = feeForm.memberFee !== '' || feeForm.guestSurcharge !== '' || feeForm.total !== ''
     if (!hasAny) {
@@ -569,6 +706,10 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
   }
 
   async function handleBulkConfirm() {
+    if (isVoided) {
+      notify('VOID 처리된 매치는 수정할 수 없습니다. VOID 해제 후 다시 시도해주세요.')
+      return
+    }
     if (selected.size === 0) {
       notify('선택된 선수가 없습니다')
       return
@@ -592,11 +733,32 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
     }
   }
 
-  return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-lg max-w-2xl w-full my-4 shadow-xl flex flex-col" style={{ maxHeight: 'calc(100vh - 2rem)' }}>
+  if (typeof document === 'undefined') return null
+
+  const modalContent = (
+    <>
+      {/* 오버레이 */}
+      <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
+      
+      {/* 모달 - 뷰포트 중앙 고정 (스크롤 무관) */}
+      <div
+        className="fixed z-50 bg-white rounded-lg shadow-2xl flex flex-col"
+        style={{
+          width: '90%',
+          maxWidth: '650px',
+          maxHeight: 'min(95vh, calc(100vh - 20px))',
+          height: 'auto',
+          top: '50%',
+          left: '50%',
+          right: 'auto',
+          bottom: 'auto',
+          transform: 'translate(-50%, -50%)',
+          display: 'flex',
+          flexDirection: 'column'
+        }}
+      >
         {/* 헤더 - 고정 */}
-        <div className="flex items-center justify-between p-4 border-b shrink-0">
+        <div className="flex items-center justify-between p-4 border-b flex-shrink-0 gap-3">
           <div>
             <h3 className="font-semibold text-lg">
               {new Date(match.matchDate).toLocaleDateString('ko-KR', {
@@ -608,16 +770,41 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
             </h3>
             <p className="text-sm text-gray-600">{match.matchLocation}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-full shrink-0"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            {!isVoided ? (
+              <button
+                onClick={() => onVoidMatch?.()}
+                className="px-3 py-1.5 text-xs font-semibold text-red-600 border border-red-300 rounded hover:bg-red-50"
+              >
+                매치 VOID
+              </button>
+            ) : (
+              <button
+                onClick={() => onRestoreMatch?.()}
+                className="px-3 py-1.5 text-xs font-semibold text-emerald-600 border border-emerald-300 rounded hover:bg-emerald-50"
+              >
+                VOID 해제
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-full flex-shrink-0"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
-  {/* 본문 - 스크롤 가능 */}
-  <div className="flex-1 overflow-y-auto p-4 min-h-0" style={{ WebkitOverflowScrolling: 'touch' }}>
+        {/* 본문 - 스크롤 가능 */}
+        <div
+          className="flex-1 overflow-y-auto p-4"
+          style={{ WebkitOverflowScrolling: 'touch', minHeight: 0, maxHeight: 'calc(95vh - 120px)' }}
+        >
+          {isVoided && (
+            <div className="mb-3 p-3 bg-gray-100 border border-gray-300 rounded text-sm text-gray-700">
+              이 매치는 VOID 처리되어 미납 카드에 포함되지 않습니다. VOID 해제 후 납부 확인을 진행할 수 있습니다.
+            </div>
+          )}
           {/* 수동 설정 패널 */}
           <div className="mb-3">
             <button
@@ -727,10 +914,10 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
                     key={unpaid.playerId}
                     className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
                       <input
                         type="checkbox"
-                        className="h-4 w-4"
+                        className="h-4 w-4 flex-shrink-0"
                         checked={selected.has(unpaid.playerId)}
                         onChange={() => toggleSelectOne(unpaid.playerId)}
                       />
@@ -743,9 +930,9 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
                         customMemberships={customMemberships}
                         badgeInfo={badgeInfo}
                       />
-                      <div>
-                        <div className="font-medium">{unpaid.playerName}</div>
-                        <div className="text-sm text-gray-600">
+                      <div className="min-w-0 flex-1">
+                        <div className="font-medium truncate">{unpaid.playerName}</div>
+                        <div className="text-xs text-orange-600 font-semibold">
                           ${unpaid.expectedFee.toFixed(2)}
                         </div>
                       </div>
@@ -753,9 +940,9 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
                     <button
                       onClick={() => handleTogglePayment(unpaid.playerId, false, unpaid.expectedFee)}
                       disabled={updating[unpaid.playerId] || bulkUpdating}
-                      className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                      className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium whitespace-nowrap flex-shrink-0 ml-2"
                     >
-                      {updating[unpaid.playerId] ? '처리 중...' : '납부 확인'}
+                      {updating[unpaid.playerId] ? '처리 중...' : '확인'}
                     </button>
                   </div>
                 )})}
@@ -765,7 +952,7 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
         </div>
 
         {/* 푸터 - 고정 */}
-        <div className="p-4 border-t bg-gray-50 shrink-0">
+        <div className="p-4 border-t bg-gray-50 flex-shrink-0">
           <button
             onClick={onClose}
             className="w-full py-2 bg-gray-200 hover:bg-gray-300 rounded-lg text-sm font-medium"
@@ -774,8 +961,10 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
           </button>
         </div>
       </div>
-    </div>
+    </>
   )
+
+  return createPortal(modalContent, document.body)
 }
 
 function MetricCard({ icon, label, value, subtitle, bgColor = 'bg-gray-50' }) {
