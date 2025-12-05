@@ -7,7 +7,7 @@ import SimpleBarChart from './charts/SimpleBarChart'
 import InitialAvatar from './InitialAvatar'
 import { AlertCircle, TrendingUp, TrendingDown, Users, DollarSign, AlertTriangle, ChevronDown, ChevronUp, X } from 'lucide-react'
 import { confirmMatchPayment, cancelMatchPayment } from '../lib/accounting'
-import { updateMatchInDB } from '../services/matches.service'
+import { updateMatchInDB, voidMatchInDB, restoreMatchFromVoid } from '../services/matches.service'
 import { notify } from './Toast'
 import { calculatePlayerMatchFee, calculateMatchFees } from '../lib/matchFeeCalculator'
 import { getMembershipSettings } from '../services/membership.service'
@@ -31,21 +31,17 @@ export default function FinancialDashboard({
   dateRange = {},
   onRefresh
 }) {
-  const VOID_STORAGE_KEY = 'sfm:accounting:voidMatches'
   const [showAllUnpaid, setShowAllUnpaid] = useState(false)
   const [selectedMatch, setSelectedMatch] = useState(null)
   const [customMemberships, setCustomMemberships] = useState([])
-  const [voidConfirmState, setVoidConfirmState] = useState({ open: false, matchId: null })
-  const [voidedMatchIds, setVoidedMatchIds] = useState(() => {
-    if (typeof window === 'undefined') return new Set()
-    try {
-      const raw = localStorage.getItem(VOID_STORAGE_KEY)
-      const arr = raw ? JSON.parse(raw) : []
-      return new Set(Array.isArray(arr) ? arr : [])
-    } catch {
-      return new Set()
-    }
-  })
+  const [voidConfirmState, setVoidConfirmState] = useState({ open: false, matchId: null, reason: '', processing: false })
+  const matchMap = useMemo(() => {
+    const map = new Map()
+    ;(matches || []).forEach(match => {
+      if (match?.id) map.set(match.id, match)
+    })
+    return map
+  }, [matches])
   const isLocalMock = (() => {
     try {
       const isLocal = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -69,39 +65,48 @@ export default function FinancialDashboard({
     return () => { mounted = false }
   }, [])
 
-  // voided match ID persistence
-  React.useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      localStorage.setItem(VOID_STORAGE_KEY, JSON.stringify(Array.from(voidedMatchIds)))
-      window.dispatchEvent(new CustomEvent('sfm:void-matches-updated'))
-    } catch {
-      // ignore persist errors
-    }
-  }, [voidedMatchIds])
-
-  const markMatchVoided = (matchId) => {
-    let changed = false
-    setVoidedMatchIds(prev => {
-      if (!matchId || prev.has(matchId)) return prev
-      const next = new Set(prev)
-      next.add(matchId)
-      changed = true
-      return next
-    })
-    if (changed) notify('해당 매치를 VOID 처리했습니다')
+  const handleVoidMatchRequest = (matchId) => {
+    if (!matchId) return
+    const existingReason = matchMap.get(matchId)?.voidReason || ''
+    setVoidConfirmState({ open: true, matchId, reason: existingReason, processing: false })
   }
 
-  const restoreVoidedMatch = (matchId) => {
-    let changed = false
-    setVoidedMatchIds(prev => {
-      if (!matchId || !prev.has(matchId)) return prev
-      const next = new Set(prev)
-      next.delete(matchId)
-      changed = true
-      return next
-    })
-    if (changed) notify('VOID 상태를 해제했습니다')
+  const confirmVoidMatch = async () => {
+    if (!voidConfirmState.matchId || voidConfirmState.processing) return
+    setVoidConfirmState(prev => ({ ...prev, processing: true }))
+    try {
+      await voidMatchInDB(voidConfirmState.matchId, { reason: voidConfirmState.reason?.trim() || null })
+      notify('해당 매치를 VOID 처리했습니다')
+      setSelectedMatch(prev => {
+        if (!prev || prev.matchId !== voidConfirmState.matchId) return prev
+        return {
+          ...prev,
+          isVoided: true,
+          voidReason: voidConfirmState.reason?.trim() || null,
+          voidedAt: new Date().toISOString(),
+        }
+      })
+      if (onRefresh) await onRefresh()
+    } catch (error) {
+      notify('VOID 처리에 실패했습니다')
+    } finally {
+      setVoidConfirmState({ open: false, matchId: null, reason: '', processing: false })
+    }
+  }
+
+  const handleRestoreMatchRequest = async (matchId) => {
+    if (!matchId) return
+    try {
+      await restoreMatchFromVoid(matchId)
+      notify('VOID 상태를 해제했습니다')
+      setSelectedMatch(prev => {
+        if (!prev || prev.matchId !== matchId) return prev
+        return { ...prev, isVoided: false, voidReason: null, voidedAt: null }
+      })
+      if (onRefresh) await onRefresh()
+    } catch (error) {
+      notify('VOID 해제에 실패했습니다')
+    }
   }
   // 수입(양수) 카테고리 데이터 (지출 제외) - 직관적 막대 구성 용
   const revenueCategories = useMemo(() => {
@@ -142,21 +147,7 @@ export default function FinancialDashboard({
       .sort((a, b) => new Date(b.payment_date) - new Date(a.payment_date))
   }, [payments])
 
-  const handleVoidMatchRequest = (matchId, { skipConfirm = false } = {}) => {
-    if (!matchId) return
-    if (!skipConfirm) {
-      setVoidConfirmState({ open: true, matchId })
-      return
-    }
-    markMatchVoided(matchId)
-    setSelectedMatch(prev => (prev?.matchId === matchId ? null : prev))
-    setVoidConfirmState({ open: false, matchId: null })
-  }
-
-  const handleRestoreMatchRequest = (matchId) => {
-    if (!matchId) return
-    restoreVoidedMatch(matchId)
-  }
+  const closeVoidDialog = () => setVoidConfirmState({ open: false, matchId: null, reason: '', processing: false })
 
   // 구장비 미납자 (저장된 매치 기준) - 매치별로 그룹화
   const unpaidMatchFees = useMemo(() => {
@@ -202,14 +193,17 @@ export default function FinancialDashboard({
           unpaidPlayers: unpaidInMatch,
           totalUnpaid: unpaidInMatch.reduce((sum, u) => sum + u.expectedFee, 0),
           noFeeConfigured,
-          isVoided: voidedMatchIds.has(match.id)
+          isVoided: Boolean(match.isVoided),
+          voidReason: match.voidReason || null,
+          voidedAt: match.voidedAt || null,
+          voidedBy: match.voidedBy || null,
         })
       }
     })
     
     // 최신순으로 정렬 (최근 매치가 위로)
     return matchGroups.sort((a, b) => new Date(b.matchDate) - new Date(a.matchDate))
-  }, [matches, players, payments, voidedMatchIds])
+  }, [matches, players, payments])
 
   const activeUnpaidMatches = useMemo(() => unpaidMatchFees.filter(match => !match.isVoided), [unpaidMatchFees])
   const voidedUnpaidMatches = useMemo(() => unpaidMatchFees.filter(match => match.isVoided), [unpaidMatchFees])
@@ -509,7 +503,12 @@ export default function FinancialDashboard({
                           {new Date(match.matchDate).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', weekday: 'short' })}
                         </div>
                         <div className="text-xs text-gray-500">{match.matchLocation}</div>
-                        <div className="text-[11px] text-red-600 font-semibold mt-1">VOID 처리됨</div>
+                        <div className="text-[11px] text-red-600 font-semibold mt-1">
+                          {match.voidReason ? `VOID · ${match.voidReason}` : 'VOID 처리됨'}
+                        </div>
+                        {match.voidedAt && (
+                          <div className="text-[10px] text-gray-500">{new Date(match.voidedAt).toLocaleString('ko-KR')}</div>
+                        )}
                       </div>
                       <button
                         onClick={() => handleRestoreMatchRequest(match.matchId)}
@@ -534,7 +533,7 @@ export default function FinancialDashboard({
           customMemberships={customMemberships}
           onClose={() => setSelectedMatch(null)}
           onRefresh={onRefresh}
-          isVoided={selectedMatch.isVoided || voidedMatchIds.has(selectedMatch.matchId)}
+          isVoided={Boolean(selectedMatch.isVoided)}
           onVoidMatch={() => handleVoidMatchRequest(selectedMatch.matchId)}
           onRestoreMatch={() => handleRestoreMatchRequest(selectedMatch.matchId)}
         />
@@ -593,13 +592,28 @@ export default function FinancialDashboard({
       <ConfirmDialog
         open={voidConfirmState.open}
         title="매치 VOID 처리"
-        message={`선택한 매치를 VOID 처리하면 미납 목록과 집계에서 제외됩니다.\n계속 진행할까요?`}
-        confirmLabel="VOID 처리"
+        message={`선택한 매치는 VOID 처리 즉시 재정 요약과 미납 목록에서 제외됩니다.\n사유를 남겨두면 이후 감사 시 추적이 용이합니다.`}
+        confirmLabel={voidConfirmState.processing ? '처리 중...' : 'VOID 처리'}
         cancelLabel="돌아가기"
         tone="danger"
-        onCancel={() => setVoidConfirmState({ open: false, matchId: null })}
-        onConfirm={() => handleVoidMatchRequest(voidConfirmState.matchId, { skipConfirm: true })}
-      />
+        onCancel={closeVoidDialog}
+        onConfirm={confirmVoidMatch}
+      >
+        <div className="space-y-2">
+          <label htmlFor="void-reason-input" className="text-xs font-medium text-stone-600">VOID 사유 (선택)</label>
+          <textarea
+            id="void-reason-input"
+            rows={3}
+            value={voidConfirmState.reason}
+            onChange={(e) => setVoidConfirmState(prev => ({ ...prev, reason: e.target.value }))}
+            className="w-full rounded-lg border border-stone-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-rose-400"
+            placeholder="예: 우천 취소, 오류 정정, 대관비 환불"
+          />
+          <p className="text-[11px] text-stone-500">
+            VOID 상태는 Financial Dashboard(개요 탭)에서만 해제할 수 있으며, 복구 전까지 Match Fees 섹션에서는 수정이 잠깁니다.
+          </p>
+        </div>
+      </ConfirmDialog>
     </div>
   )
 }
@@ -769,6 +783,16 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
               })}
             </h3>
             <p className="text-sm text-gray-600">{match.matchLocation}</p>
+            {isVoided && (
+              <div className="mt-1 text-xs font-semibold text-red-600">
+                {match.voidReason ? `VOID 처리됨 · ${match.voidReason}` : 'VOID 처리됨'}
+                {match.voidedAt && (
+                  <div className="text-[11px] text-gray-500 font-normal">
+                    {new Date(match.voidedAt).toLocaleString('ko-KR')}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {!isVoided ? (

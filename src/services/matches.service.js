@@ -51,6 +51,10 @@ function toAppFormat(row) {
     multiField: row.multiField || row.multi_field || false, // 2개 경기장 모드
     gameMatchups: row.gameMatchups || row.game_matchups || null, // 게임별 매치업
     statusOverride: row.statusOverride || row.status_override || null, // 상태 배지 수동 설정
+    isVoided: row.isVoided ?? row.is_voided ?? false,
+    voidReason: row.voidReason || row.void_reason || null,
+    voidedAt: row.voidedAt || row.voided_at || null,
+    voidedBy: row.voidedBy || row.voided_by || null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   }
@@ -91,6 +95,11 @@ function toDbFormat(match, userId = null) {
     fees: match.fees ?? null, // 📊 비용 정보 추가
     multiField: match.multiField ?? false, // 2개 경기장 모드
     gameMatchups: match.gameMatchups ?? null, // 게임별 매치업
+    statusOverride: match.statusOverride ?? null, // 상태 배지 수동 설정
+    isVoided: !!match.isVoided,
+    voidReason: match.voidReason ?? null,
+    voidedAt: match.voidedAt ?? null,
+    voidedBy: match.voidedBy ?? null,
   }
 }
 
@@ -140,6 +149,10 @@ export async function updateMatchInDB(matchId, patch) {
     if ('multiField' in patch) payload.multiField = patch.multiField // 2개 경기장 모드
     if ('gameMatchups' in patch) payload.gameMatchups = patch.gameMatchups // 게임별 매치업
     if ('statusOverride' in patch) payload.statusOverride = patch.statusOverride // 상태 배지 수동 설정
+    if ('isVoided' in patch) payload.isVoided = !!patch.isVoided // VOID 상태
+    if ('voidReason' in patch) payload.voidReason = patch.voidReason ?? null // VOID 사유
+    if ('voidedAt' in patch) payload.voidedAt = patch.voidedAt ?? null // VOID 처리 시각
+    if ('voidedBy' in patch) payload.voidedBy = patch.voidedBy ?? null // 처리한 사용자
     
     payload.updated_at = new Date().toISOString()
 
@@ -240,5 +253,35 @@ export function subscribeMatches(callback) {
 
   return () => {
     try { supabase.removeChannel?.(channel) } catch {}
+  }
+}
+
+export async function voidMatchInDB(matchId, { reason = null } = {}) {
+  try {
+    const user = await getCurrentUser()
+    const now = new Date().toISOString()
+    return await updateMatchInDB(matchId, {
+      isVoided: true,
+      voidReason: reason ?? null,
+      voidedAt: now,
+      voidedBy: user?.id || null,
+    })
+  } catch (e) {
+    logger.error('[voidMatchInDB] failed', e)
+    throw e
+  }
+}
+
+export async function restoreMatchFromVoid(matchId) {
+  try {
+    return await updateMatchInDB(matchId, {
+      isVoided: false,
+      voidReason: null,
+      voidedAt: null,
+      voidedBy: null,
+    })
+  } catch (e) {
+    logger.error('[restoreMatchFromVoid] failed', e)
+    throw e
   }
 }

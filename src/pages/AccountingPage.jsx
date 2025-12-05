@@ -27,7 +27,6 @@ import { getAccountingOverrides, updateAccountingOverrides } from '../lib/appSet
 import { calculateMatchFees, calculatePlayerMatchFee } from '../lib/matchFeeCalculator'
 import * as XLSX from 'xlsx'
 
-const VOID_STORAGE_KEY = 'sfm:accounting:voidMatches'
 const DISPLAY_MISSED_MONTH_LIMIT = 12
 const DEFAULT_MONTH_HISTORY = 18
 const MAX_MONTH_HISTORY = 60
@@ -156,17 +155,6 @@ const PAYMENT_TYPE_SELECT_GROUPS = [
   }
 ]
 
-function readVoidedMatchIdsFromStorage() {
-  if (typeof window === 'undefined') return new Set()
-  try {
-    const raw = window.localStorage.getItem(VOID_STORAGE_KEY)
-    const arr = raw ? JSON.parse(raw) : []
-    return new Set(Array.isArray(arr) ? arr : [])
-  } catch {
-    return new Set()
-  }
-}
-
 export default function AccountingPage({ players = [], matches = [], upcomingMatches = [], isAdmin }) {
 
   const [payments, setPayments] = useState([])
@@ -195,7 +183,6 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   const [renewals, setRenewals] = useState({})
   const [matchesLocal, setMatchesLocal] = useState(matches)
   const [allPayments, setAllPayments] = useState([])
-  const [voidedMatchIds, setVoidedMatchIds] = useState(() => readVoidedMatchIdsFromStorage())
   // 매치별 구장비 페이지네이션
   const [matchFeesPage, setMatchFeesPage] = useState(1)
   const [matchFeesPerPage, setMatchFeesPerPage] = useState(5)
@@ -237,20 +224,6 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   const [renewalResets, setRenewalResets] = useState(() => normalizeRenewalResetMap(feeOverrides?.renewalResets || {}))
   const [manualResetSaving, setManualResetSaving] = useState({})
 
-  const refreshVoidedMatches = useCallback(() => {
-    setVoidedMatchIds(readVoidedMatchIdsFromStorage())
-  }, [])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const handler = () => refreshVoidedMatches()
-    window.addEventListener('storage', handler)
-    window.addEventListener('sfm:void-matches-updated', handler)
-    return () => {
-      window.removeEventListener('storage', handler)
-      window.removeEventListener('sfm:void-matches-updated', handler)
-    }
-  }, [refreshVoidedMatches])
   const filteredPlayers = useMemo(() => {
     const q = playerSearch.trim().toLowerCase()
     const list = players.filter(p => !p.isSystemAccount).sort((a, b) => a.name.localeCompare(b.name))
@@ -2133,7 +2106,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                 key={match.id}
                 match={match}
                 players={players}
-                isVoided={voidedMatchIds.has(match.id)}
+                isVoided={Boolean(match.isVoided)}
                 onSync={loadData}
               />
             ))}
@@ -2807,7 +2780,7 @@ function MatchFeesSection({ match, players, isVoided = false, onSync = () => {} 
   const [loading, setLoading] = useState(true)
   const [showReimbursement, setShowReimbursement] = useState(false)
   const [confirmState, setConfirmState] = useState({ open: false, kind: null, payload: null })
-  const VOID_ACTION_MESSAGE = 'VOID 처리된 매치는 조정할 수 없습니다'
+  const VOID_ACTION_MESSAGE = 'VOID 처리된 매치는 개요 탭에서 복구하기 전까지 조정할 수 없습니다'
 
   useEffect(() => {
     loadMatchPayments()
@@ -2884,9 +2857,19 @@ function MatchFeesSection({ match, players, isVoided = false, onSync = () => {} 
             멤버 ${memberFee.toFixed(2)} / 게스트 ${guestFee.toFixed(2)}
           </div>
           {isVoided && (
-            <div className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 mt-2">
-              <AlertCircle size={14} />
-              <span>VOID 처리됨 · 집계에서 제외</span>
+            <div className="mt-2 space-y-1 text-xs">
+              <div className="inline-flex items-center gap-1 font-semibold text-red-600">
+                <AlertCircle size={14} />
+                <span>VOID 처리됨 · 집계에서 제외</span>
+              </div>
+              {match.voidReason && (
+                <div className="text-red-700">사유: {match.voidReason}</div>
+              )}
+              {match.voidedAt && (
+                <div className="text-[11px] text-gray-500">
+                  처리 시각 {new Date(match.voidedAt).toLocaleString('ko-KR')}
+                </div>
+              )}
             </div>
           )}
           {match.paidBy && (
@@ -2994,7 +2977,7 @@ function MatchFeesSection({ match, players, isVoided = false, onSync = () => {} 
 
       {isVoided && (
         <div className="mb-3 rounded border border-red-200 bg-white/80 px-3 py-2 text-xs text-red-700">
-          이 매치는 Financial Dashboard에서 VOID 처리되어 요약/미납 집계에서 제외됩니다. 복구는 Financial Dashboard에서 진행해 주세요.
+          이 매치는 개요 탭의 Financial Dashboard에서 VOID 처리되어 요약/미납 집계에서 제외됩니다. 복구도 동일한 위치에서만 가능합니다.
         </div>
       )}
 

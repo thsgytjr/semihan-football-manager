@@ -10,6 +10,7 @@ export default function ConfirmDialog({
   tone = 'danger', // 'danger' | 'default'
   onConfirm,
   onCancel,
+  children,
 }) {
   if (!open) return null
 
@@ -47,8 +48,13 @@ export default function ConfirmDialog({
             <p className="text-sm text-stone-500">이 작업은 되돌릴 수 없습니다</p>
           </div>
         </div>
-        {message && (
-          <p className="text-sm text-stone-700 mb-6 bg-stone-50 p-3 rounded-lg whitespace-pre-line">{message}</p>
+        {(message || children) && (
+          <div className="mb-6 space-y-3">
+            {message && (
+              <p className="text-sm text-stone-700 bg-stone-50 p-3 rounded-lg whitespace-pre-line">{message}</p>
+            )}
+            {children}
+          </div>
         )}
         <div className="flex items-center justify-end gap-3">
           {showCancel && (
