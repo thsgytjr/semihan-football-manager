@@ -192,6 +192,7 @@
     "count": "회수",
     "totalDuo": "총 듀오",
     "cardsTitle": "카드(Y/R/B)",
+    "blackCardNote": "블랙카드는 순위 계산에 포함되지 않고 기록 용도로만 표시됩니다.",
     "draftPlayerPoints": "Draft 선수 승점",
     "draftAttack": "Draft 골/어시",
     "draftCaptainPoints": "Draft 주장 승점",

@@ -2527,16 +2527,21 @@ function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMember
   )
 
   return (
-    <LeaderboardTable
-      rows={data}
-      showAll={showAll}
-      onToggle={onToggle}
-      controls={controls}
-      title={t('leaderboard.cardsTitle')}
-      columns={columns}
-      renderRow={renderRow}
-      membershipSettings={customMemberships}
-    />
+    <div className="space-y-2">
+      <LeaderboardTable
+        rows={data}
+        showAll={showAll}
+        onToggle={onToggle}
+        controls={controls}
+        title={t('leaderboard.cardsTitle')}
+        columns={columns}
+        renderRow={renderRow}
+        membershipSettings={customMemberships}
+      />
+      <p className="px-1 text-[11px] text-stone-500">
+        {t('leaderboard.blackCardNote')}
+      </p>
+    </div>
   )
 }
 

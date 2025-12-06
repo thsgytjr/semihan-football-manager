@@ -196,6 +196,7 @@
     "count": "Count",
     "totalDuo": "Total Duo",
     "cardsTitle": "Cards (Y/R/B)",
+    "blackCardNote": "Black cards are informational only and do not affect ranking order.",
     "draftPlayerPoints": "Draft Player Points",
     "draftAttack": "Draft Goals/Assists",
     "draftCaptainPoints": "Draft Captain Points",

@@ -1408,12 +1408,12 @@ export function computeCardsRows(players = [], matches = []) {
     }
   }
 
-  const rows = Array.from(tally.values()).filter(r => (r.y + r.r + r.b) > 0)
-  rows.sort((a, b) => (b.b - a.b) || (b.r - a.r) || (b.y - a.y) || a.name.localeCompare(b.name))
+  const rows = Array.from(tally.values()).filter(r => (r.y + r.r) > 0 || r.b > 0)
+  rows.sort((a, b) => (b.r - a.r) || (b.y - a.y) || a.name.localeCompare(b.name))
   let lastRank = 0
   let lastKey = null
   return rows.map((r, i) => {
-    const key = `${r.b}-${r.r}-${r.y}`
+    const key = `${r.r}-${r.y}`
     const rank = (i === 0) ? 1 : (key === lastKey ? lastRank : i + 1)
     lastRank = rank
     lastKey = key
