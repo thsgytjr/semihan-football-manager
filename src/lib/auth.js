@@ -7,6 +7,24 @@ let mockSession = null
 let mockAuthCallbacks = []
 
 /**
+ * Mock 인증 사용 여부 확인
+ * - localhost에서는 기본적으로 mock 사용 (빠른 개발)
+ * - localhost/?nomock 에서는 실제 Supabase 인증 사용 (프로덕션 데이터 테스트)
+ * - 프로덕션에서는 항상 실제 인증 사용
+ * @returns {boolean}
+ */
+function shouldUseMockAuth() {
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  if (!isLocalhost) return false
+  
+  const url = new URL(window.location.href)
+  const hasNoMockParam = url.searchParams.has('nomock')
+  
+  // localhost에서 ?nomock 파라미터가 없으면 mock 사용
+  return !hasNoMockParam
+}
+
+/**
  * Admin 로그인
  * @param {string} email - 관리자 이메일
  * @param {string} password - 비밀번호
@@ -14,12 +32,10 @@ let mockAuthCallbacks = []
  */
 export async function signInAdmin(email, password) {
   try {
-    // localhost에서 실제 Supabase 인증 사용 (Mock 로그인 비활성화)
-    // 프로덕션에서는 항상 실제 인증 사용
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    const useMockAuth = false // Mock 로그인 완전히 비활성화
-    logger.log('[Auth] isLocalhost:', isLocalhost, 'useMockAuth:', useMockAuth)
-    if (useMockAuth && isLocalhost) {
+    const useMockAuth = shouldUseMockAuth()
+    logger.log('[Auth] Mock auth enabled:', useMockAuth)
+    
+    if (useMockAuth) {
       const mockUser = {
         id: '00000000-0000-0000-0000-000000000001', // UUID 형식의 Mock ID
         email: email || 'admin@mock.local',
@@ -61,9 +77,9 @@ export async function signInAdmin(email, password) {
  */
 export async function signOut() {
   try {
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    const useMockAuth = false // Mock 로그인 완전히 비활성화
-    if (useMockAuth && isLocalhost) {
+    const useMockAuth = shouldUseMockAuth()
+    
+    if (useMockAuth) {
       mockSession = null
       mockAuthCallbacks.forEach(cb => cb(null))
       logger.log('✅ Mock 로그아웃 성공')
@@ -89,9 +105,9 @@ export async function signOut() {
  */
 export async function getSession() {
   try {
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    const useMockAuth = false // Mock 로그인 완전히 비활성화
-    if (useMockAuth && isLocalhost) {
+    const useMockAuth = shouldUseMockAuth()
+    
+    if (useMockAuth) {
       return mockSession
     }
     
@@ -114,9 +130,9 @@ export async function getSession() {
  */
 export async function getCurrentUser() {
   try {
-    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    const useMockAuth = false // Mock 로그인 완전히 비활성화
-    if (useMockAuth && isLocalhost) {
+    const useMockAuth = shouldUseMockAuth()
+    
+    if (useMockAuth) {
       return mockSession?.user || null
     }
     
@@ -139,9 +155,9 @@ export async function getCurrentUser() {
  * @returns {Function} - 구독 해제 함수
  */
 export function onAuthStateChange(callback) {
-  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  const useMockAuth = false // Mock 로그인 완전히 비활성화
-  if (useMockAuth && isLocalhost) {
+  const useMockAuth = shouldUseMockAuth()
+  
+  if (useMockAuth) {
     mockAuthCallbacks.push(callback)
     // 초기 상태 전달
     callback(mockSession)

@@ -3,6 +3,21 @@ import React, { useEffect, useRef, useState } from "react"
 import { Lock, Eye, EyeOff, ShieldCheck, AlertCircle, CheckCircle2, X } from "lucide-react"
 import { logger } from "../lib/logger"
 
+/**
+ * Mock 인증 사용 여부 확인
+ * - localhost에서는 기본적으로 mock 사용 (빠른 개발)
+ * - localhost/?nomock 에서는 실제 Supabase 인증 사용 (프로덕션 데이터 테스트)
+ */
+function shouldUseMockAuth() {
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  if (!isLocalhost) return false
+  
+  const url = new URL(window.location.href)
+  const hasNoMockParam = url.searchParams.has('nomock')
+  
+  return !hasNoMockParam
+}
+
 export default function AdminLoginDialog({
   isOpen,
   onClose,
@@ -18,8 +33,9 @@ export default function AdminLoginDialog({
   const emailInputRef = useRef(null)
   const pwInputRef = useRef(null)
   
-  // localhost 개발 환경에서도 실제 로그인 사용
-  const isLocalhost = false // Mock 로그인 완전히 비활성화
+  // localhost에서는 기본적으로 빠른 로그인 (MSW 전용)
+  // localhost/?nomock 에서는 실제 Supabase 인증
+  const useMockAuth = shouldUseMockAuth()
 
   useEffect(() => {
     if (isOpen) {
@@ -28,11 +44,13 @@ export default function AdminLoginDialog({
       setErr("")
       setCaps(false)
       setLoading(false)
-      if (!isLocalhost) {
+      
+      // Mock auth 모드에서는 자동 로그인 (포커스 불필요)
+      if (!useMockAuth) {
         setTimeout(() => emailInputRef.current?.focus(), 50)
       }
     }
-  }, [isOpen, isLocalhost])
+  }, [isOpen, useMockAuth])
 
   function handleKey(e) {
     if (e.getModifierState?.("CapsLock")) setCaps(true)
@@ -46,8 +64,9 @@ export default function AdminLoginDialog({
     setErr("")
     
     try {
-      // localhost에서는 비밀번호 검증 안함
-      if (isLocalhost) {
+      // Mock auth 모드: 비밀번호 검증 없이 즉시 로그인 (MSW 전용)
+      if (useMockAuth) {
+        logger.log('[AdminLoginDialog] Mock auth mode: instant login')
         const success = await onSuccess("dev@localhost", "")
         if (success) {
           setLoading(false)
@@ -56,7 +75,7 @@ export default function AdminLoginDialog({
           setLoading(false)
         }
       } else {
-        // 실제 환경에서는 이메일과 비밀번호 검증
+        // 실제 Supabase 인증 모드: 이메일과 비밀번호 검증
         if (!email) {
           setErr("이메일을 입력하세요.")
           setLoading(false)
@@ -69,6 +88,7 @@ export default function AdminLoginDialog({
           return
         }
         
+        logger.log('[AdminLoginDialog] Real auth mode: validating credentials')
         const success = await onSuccess(email, pw)
         if (success) {
           setLoading(false)
@@ -108,13 +128,14 @@ export default function AdminLoginDialog({
 
         {/* 본문 */}
         <div className="space-y-3 px-5 py-4">
-          {isLocalhost && (
+          {useMockAuth && (
             <div className="rounded-lg bg-blue-50 px-3 py-2 text-xs text-blue-700 border border-blue-200">
-              🚧 개발 모드: 비밀번호 검증을 건너뜁니다.
+              🚀 개발 모드 (MSW 전용): 자물쇠 버튼을 누르면 즉시 로그인됩니다.<br/>
+              <span className="text-blue-600">실제 인증 테스트: <code>localhost:5173/?nomock</code></span>
             </div>
           )}
           
-          {!isLocalhost && (
+          {!useMockAuth && (
             <>
               <label className="block text-xs font-medium text-stone-600">이메일</label>
               <div className={`flex items-center rounded-lg border px-3 ${err && err.includes('이메일') ? "border-rose-300 bg-rose-50" : "border-stone-300 bg-white"}`}>
@@ -173,9 +194,9 @@ export default function AdminLoginDialog({
 
           <button
             onClick={submit}
-            disabled={loading || (!isLocalhost && (!email || !pw))}
+            disabled={loading || (!useMockAuth && (!email || !pw))}
             className={`mt-2 flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition ${
-              loading || (!isLocalhost && (!email || !pw))
+              loading || (!useMockAuth && (!email || !pw))
                 ? "cursor-not-allowed bg-stone-200 text-stone-500"
                 : "bg-emerald-600 text-white hover:bg-emerald-700"
             }`}
@@ -187,7 +208,7 @@ export default function AdminLoginDialog({
               </>
             ) : (
               <>
-                <CheckCircle2 size={16} /> 로그인
+                <CheckCircle2 size={16} /> {useMockAuth ? "즉시 로그인" : "로그인"}
               </>
             )}
           </button>
