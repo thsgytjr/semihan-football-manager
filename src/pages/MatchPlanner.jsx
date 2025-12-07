@@ -302,15 +302,15 @@ export default function MatchPlanner({
     } : {
       selectionMode: 'manual',
       // 일반 모드에서도 주장 정보 저장
-      draft: {
+      draft: {  
         captains: captainIds.slice()
       }
     }
     
-    // 날짜 문자열을 타임존 정보와 함께 ISO 형식으로 변환
-  const dateISOFormatted = dateISO && dateISO.length >= 16 
-    ? localDateTimeToISO(dateISO.slice(0,16)) 
-    : localDateTimeToISO(getCurrentLocalDateTime())
+    // dateISO는 이미 YYYY-MM-DDTHH:mm 형식이므로 그대로 사용
+    const dateISOFormatted = dateISO && dateISO.length >= 16 
+      ? dateISO.slice(0,16)
+      : getCurrentLocalDateTime()
     
     const payload={
       ...mkMatch({
@@ -1195,10 +1195,10 @@ export default function MatchPlanner({
                       const teamsSnapshot = previewTeams.map(team => team.map(p => p.id))
                       const assignedPlayerIds = previewTeams.flat().map(p => p.id)
                       
-                      // 날짜 문자열을 타임존 정보와 함께 ISO 형식으로 변환
+                      // dateISO는 이미 YYYY-MM-DDTHH:mm 형식이므로 그대로 사용
                       const dateISOFormatted = dateISO && dateISO.length >= 16 
-                        ? localDateTimeToISO(dateISO.slice(0,16)) 
-                        : localDateTimeToISO(getNextSaturday630())
+                        ? dateISO.slice(0,16)
+                        : getNextSaturday630()
                       
                       const attendeeObjs = previewTeams.flat().map(p => p)
                       const fees = enablePitchFee ? computeFeesAtSave({ baseCostValue: baseCost, attendees: attendeeObjs, guestSurcharge }) : null

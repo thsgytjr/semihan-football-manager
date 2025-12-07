@@ -60,17 +60,21 @@ export function createUpcomingMatch(input = {}) {
 }
 
 // 날짜 포맷 정규화: 허용
-// 1) YYYY-MM-DDTHH:MM
-// 2) ISO 8601 (Z 포함)
-// 그 외는 null 반환
+// 1) YYYY-MM-DDTHH:MM (로컬 시간)
+// 2) ISO 8601 (타임존 포함) → 로컬 YYYY-MM-DDTHH:MM로 변환
 export function normalizeDateISO(v){
   if(!v||typeof v!=='string') return ''
+  
+  // 이미 YYYY-MM-DDTHH:MM 형식이면 그대로 반환
   const localPattern=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
   if(localPattern.test(v)) return v.slice(0,16)
-  // ISO 전체 형태면 로컬 부분(앞 16자)만 추출
+  
+  // ISO 8601 형태 (타임존 포함): YYYY-MM-DDTHH:mm:ss+09:00 또는 Z
+  // Date 객체로 변환 후 로컬 시간대로 표시
   try{
     const d=new Date(v)
     if(!isNaN(d.getTime())){
+      // 로컬 시간대로 변환된 값을 YYYY-MM-DDTHH:MM 형식으로 반환
       const y=d.getFullYear()
       const m=String(d.getMonth()+1).padStart(2,'0')
       const day=String(d.getDate()).padStart(2,'0')
@@ -79,6 +83,8 @@ export function normalizeDateISO(v){
       return `${y}-${m}-${day}T${hh}:${mm}`
     }
   }catch{}
+  
+  // 파싱 실패 시 앞 16자만 추출
   return v.slice(0,16)
 }
 
