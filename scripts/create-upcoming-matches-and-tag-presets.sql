@@ -65,6 +65,110 @@ do $$ begin
     alter table public.upcoming_matches add column participant_ids uuid[] default '{}'::uuid[];
   end if;
   
+  -- Add captain_ids if missing
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='upcoming_matches' and column_name='captain_ids'
+  ) then
+    alter table public.upcoming_matches add column captain_ids uuid[] default '{}'::uuid[];
+  end if;
+  
+  -- Add formations if missing
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='upcoming_matches' and column_name='formations'
+  ) then
+    alter table public.upcoming_matches add column formations jsonb default '[]'::jsonb;
+  end if;
+  
+  -- Add team_count if missing
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='upcoming_matches' and column_name='team_count'
+  ) then
+    alter table public.upcoming_matches add column team_count int not null default 2 check (team_count between 2 and 8);
+  end if;
+  
+  -- Add is_draft_mode if missing
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='upcoming_matches' and column_name='is_draft_mode'
+  ) then
+    alter table public.upcoming_matches add column is_draft_mode boolean not null default false;
+  end if;
+  
+  -- Add is_draft_complete if missing
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='upcoming_matches' and column_name='is_draft_complete'
+  ) then
+    alter table public.upcoming_matches add column is_draft_complete boolean not null default false;
+  end if;
+  
+  -- Add draft_completed_at if missing
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='upcoming_matches' and column_name='draft_completed_at'
+  ) then
+    alter table public.upcoming_matches add column draft_completed_at timestamptz;
+  end if;
+  
+  -- Add total_cost if missing
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='upcoming_matches' and column_name='total_cost'
+  ) then
+    alter table public.upcoming_matches add column total_cost numeric;
+  end if;
+  
+  -- Add fees_disabled if missing
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='upcoming_matches' and column_name='fees_disabled'
+  ) then
+    alter table public.upcoming_matches add column fees_disabled boolean not null default false;
+  end if;
+  
+  -- Add team_colors if missing
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='upcoming_matches' and column_name='team_colors'
+  ) then
+    alter table public.upcoming_matches add column team_colors jsonb default '{}'::jsonb;
+  end if;
+  
+  -- Add criterion if missing
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='upcoming_matches' and column_name='criterion'
+  ) then
+    alter table public.upcoming_matches add column criterion text default 'overall';
+  end if;
+  
+  -- Add status if missing
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='upcoming_matches' and column_name='status'
+  ) then
+    alter table public.upcoming_matches add column status text default 'scheduled';
+  end if;
+  
+  -- Add metadata if missing
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='upcoming_matches' and column_name='metadata'
+  ) then
+    alter table public.upcoming_matches add column metadata jsonb default '{}'::jsonb;
+  end if;
+  
+  -- Add location if missing
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema='public' and table_name='upcoming_matches' and column_name='location'
+  ) then
+    alter table public.upcoming_matches add column location jsonb default '{}'::jsonb;
+  end if;
+  
   -- Add date_iso if missing (already exists based on your schema)
   if not exists (
     select 1 from information_schema.columns

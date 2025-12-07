@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 import { execSync } from 'child_process'
 import { readFileSync } from 'fs'
 import { fileURLToPath } from 'url'
@@ -57,6 +58,47 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       react(),
+      VitePWA({
+        registerType: 'autoUpdate',
+        includeAssets: ['mockServiceWorker.js'],
+        workbox: {
+          // Cache strategies for different resource types
+          runtimeCaching: [
+            {
+              // Player photos and badges from Supabase Storage
+              urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/v1\/object\/public\/.*/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'supabase-images',
+                expiration: {
+                  maxEntries: 500,
+                  maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+            {
+              // Other images and assets
+              urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|avif)$/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'images',
+                expiration: {
+                  maxEntries: 100,
+                  maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
+                },
+              },
+            },
+          ],
+          // Don't cache MSW service worker
+          navigateFallback: null,
+        },
+        devOptions: {
+          enabled: false, // Service Worker disabled in dev (MSW conflicts)
+        },
+      }),
       {
         name: 'html-transform',
         transformIndexHtml(html) {

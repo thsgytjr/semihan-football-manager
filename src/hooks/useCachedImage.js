@@ -3,6 +3,10 @@ import { useEffect, useState } from 'react'
 const objectUrlCache = new Map()
 const inflightMap = new Map()
 
+/**
+ * Fetch and cache image with browser HTTP cache support
+ * Service Worker (via Vite PWA) handles persistent caching automatically
+ */
 function fetchAndCache(url) {
   if (!url) return Promise.resolve(null)
   if (objectUrlCache.has(url)) {
@@ -13,7 +17,11 @@ function fetchAndCache(url) {
   }
 
   const controller = new AbortController()
-  const promise = fetch(url, { signal: controller.signal })
+  // Let browser handle caching (Service Worker + HTTP cache)
+  const promise = fetch(url, { 
+    signal: controller.signal,
+    cache: 'default' // Use browser cache when available
+  })
     .then((res) => {
       if (!res.ok) throw new Error('Failed to fetch image')
       return res.blob()

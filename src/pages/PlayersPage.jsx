@@ -221,8 +221,8 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
       
       const publicUrl = await uploadPlayerPhoto(file, playerId, playerName, originalPhotoUrl)
       
-      // 강제 리렌더링을 위해 해시 추가
-      setDraft(prev => ({...prev, photoUrl: `${publicUrl}#${Date.now()}`}))
+      // Browser cache 활용: 타임스탬프 제거
+      setDraft(prev => ({...prev, photoUrl: publicUrl}))
       
       notify('✅ 사진이 업로드되었습니다.', 'success', 2000)
     } catch(err) {

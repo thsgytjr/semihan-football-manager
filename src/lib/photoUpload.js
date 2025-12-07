@@ -215,10 +215,8 @@ export async function uploadPlayerPhoto(file, playerId, playerName = null, oldPh
       throw new Error('Public URL 생성 실패')
     }
     
-    // 9. 캐시 방지용 타임스탬프 추가
-    const finalUrl = `${publicUrl}?t=${Date.now()}`
-    
-    return finalUrl
+    // Browser HTTP cache 활용 (Supabase provides ETag/Cache-Control headers)
+    return publicUrl
     
   } catch (error) {
     // 사용자 친화적인 에러 메시지
