@@ -2,8 +2,10 @@
 import React,{useEffect,useMemo,useState,useCallback,useRef,lazy,Suspense}from"react"
 import{Home,Users,CalendarDays,ListChecks,ShieldCheck,Lock,Eye,EyeOff,AlertCircle,CheckCircle2,X,Settings,BookOpen,Shuffle,DollarSign}from"lucide-react"
 import{useTranslation}from"react-i18next"
-import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,loadDB,saveDB,subscribeDB,incrementVisits,logVisit,getVisitStats,getTotalVisits,USE_MATCHES_TABLE}from"./services/storage.service"
-import { supabase } from './lib/supabaseClient'
+import{listPlayers,upsertPlayer,deletePlayer,subscribePlayers,saveDB,logVisit,getVisitStats,USE_MATCHES_TABLE}from"./services/storage.service"
+import{listUpcomingMatches,createUpcomingMatch as createUpcomingMatchRecord,updateUpcomingMatch as updateUpcomingMatchRecord,deleteUpcomingMatch as deleteUpcomingMatchRecord,subscribeUpcomingMatches}from"./services/upcomingMatches.service"
+import{listTagPresets,createTagPreset as createTagPresetRecord,updateTagPreset as updateTagPresetRecord,deleteTagPreset as deleteTagPresetRecord,subscribeTagPresets}from"./services/tagPresets.service"
+import{getVisitTotal,incrementVisitTotal,subscribeVisitTotals}from"./services/visitTotals.service"
 import{saveMatchToDB,updateMatchInDB,deleteMatchFromDB,listMatchesFromDB,subscribeMatches}from"./services/matches.service"
 import{getMembershipSettings,subscribeMembershipSettings}from"./services/membership.service"
 import{mkPlayer,isUnknownPlayer,isSystemAccount,mkSystemAccount}from"./lib/players";import{notify}from"./components/Toast"
@@ -249,11 +251,12 @@ export default function App(){
         // 각 네트워크 호출에 6초 타임아웃 적용 (모바일 고려)
         await withTimeout(runMigrations(), 6000, 'runMigrations')
 
-        const playersFromDB = await withTimeout(listPlayers(), 6000, 'listPlayers')
-        const shared = await withTimeout(loadDB(), 6000, 'loadDB')
-
-        // 멤버십 설정 로드 (새 테이블에서)
-        const membershipSettings = await withTimeout(getMembershipSettings(), 6000, 'getMembershipSettings')
+        const [playersFromDB, membershipSettings, upcomingRaw, tagPresetRaw] = await Promise.all([
+          withTimeout(listPlayers(), 6000, 'listPlayers'),
+          withTimeout(getMembershipSettings(), 6000, 'getMembershipSettings'),
+          withTimeout(listUpcomingMatches(), 6000, 'listUpcomingMatches'),
+          withTimeout(listTagPresets(), 6000, 'listTagPresets')
+        ])
 
         // Matches 로드: USE_MATCHES_TABLE 플래그에 따라 분기
         let matchesData = []
@@ -262,7 +265,7 @@ export default function App(){
           matchesData = await withTimeout(listMatchesFromDB(), 6000, 'listMatchesFromDB') || []
         } else {
           logger.log('[App] Loading matches from appdb JSON')
-          matchesData = (shared && shared.matches) || []
+          matchesData = []
         }
 
         if(!mounted) return
@@ -270,24 +273,27 @@ export default function App(){
         // 로딩 성공 시 재시도 카운터 초기화
         sessionStorage.removeItem('sfm:retry_count')
 
-        // 만료된 예정 매치들을 필터링
-        const activeUpcomingMatches = filterExpiredMatches((shared && shared.upcomingMatches) || [])
-
-        // 만료된 매치가 있었다면 DB에서도 제거
-        if(activeUpcomingMatches.length !== ((shared && shared.upcomingMatches) || []).length) {
-          const updatedShared = {...(shared || {}), upcomingMatches: activeUpcomingMatches}
-          await withTimeout(saveDB(updatedShared), 4000, 'saveDB').catch(logger.error)
+        const upcomingList = Array.isArray(upcomingRaw) ? upcomingRaw : []
+        const activeUpcomingMatches = filterExpiredMatches(upcomingList)
+        const activeIds = new Set(activeUpcomingMatches.map(m=>m.id))
+        const expiredIds = upcomingList.filter(m=>!activeIds.has(m.id)).map(m=>m.id)
+        if(expiredIds.length){
+          await Promise.all(expiredIds.map(id=>
+            withTimeout(deleteUpcomingMatchRecord(id), 4000, 'deleteExpiredUpcomingMatch').catch(logger.error)
+          ))
         }
 
-        // 총 방문자 수 조회 (visit_logs 테이블에서)
-        const totalVisits = await withTimeout(getTotalVisits(), 6000, 'getTotalVisits') || 0
+        const tagPresetList = Array.isArray(tagPresetRaw) ? tagPresetRaw : []
+
+        // 총 방문자 수 조회 (visit_totals 테이블)
+        const totalVisits = await withTimeout(getVisitTotal(), 6000, 'getVisitTotal') || 0
 
         setDb({
           players: playersFromDB || [],
           matches: matchesData,
           visits: totalVisits,
           upcomingMatches: activeUpcomingMatches,
-          tagPresets: (shared && shared.tagPresets) || [],
+          tagPresets: tagPresetList,
           membershipSettings: membershipSettings || []
         })
 
@@ -310,7 +316,7 @@ export default function App(){
 
             // 방문자 수 증가 (프리뷰 모드 재확인)
             if(!isPreviewMode() && !isDevelopmentEnvironment()){
-              await withTimeout(incrementVisits(), 4000, 'incrementVisits')
+              await withTimeout(incrementVisitTotal(), 4000, 'incrementVisitTotal')
             }
 
             // IP 주소 조회 후 로그 저장 (비동기, 실패해도 계속 진행)
@@ -361,26 +367,30 @@ export default function App(){
       offMatches = subscribeMatches(list=>setDb(prev=>({...prev,matches:list})))
     }
 
-    const offDB=subscribeDB(next=>{
-      const activeUpcomingMatches = filterExpiredMatches(next.upcomingMatches||[])
-      if (USE_MATCHES_TABLE) {
-        setDb(prev=>({...prev,upcomingMatches:activeUpcomingMatches,tagPresets:next.tagPresets||prev.tagPresets||[]}))
-      } else {
-        setDb(prev=>({...prev,matches:next.matches||prev.matches||[],upcomingMatches:activeUpcomingMatches,tagPresets:next.tagPresets||prev.tagPresets||[]}))
+    const offUpcoming = subscribeUpcomingMatches(async()=>{
+      try{
+        const list = await listUpcomingMatches()
+        const active = filterExpiredMatches(list)
+        setDb(prev=>({...prev,upcomingMatches:active}))
+      }catch(err){
+        logger.error('[App] upcoming match refresh failed', err)
       }
     })
 
-    const visitLogsChannel = supabase
-      .channel('visit_logs_changes')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'visit_logs' },
-        async () => {
-          const totalVisits = await getTotalVisits()
-          setDb(prev => ({ ...prev, visits: totalVisits }))
-        }
-      )
-      .subscribe()
+    const offTagPresets = subscribeTagPresets(async()=>{
+      try{
+        const presets = await listTagPresets()
+        setDb(prev=>({...prev,tagPresets:presets}))
+      }catch(err){
+        logger.error('[App] tag preset refresh failed', err)
+      }
+    })
+
+    const offVisitTotals = subscribeVisitTotals(total=>{
+      if(typeof total === 'number'){
+        setDb(prev=>({...prev,visits:total}))
+      }
+    })
 
     const offMembership=subscribeMembershipSettings(async()=>{
       const membershipSettings = await getMembershipSettings()
@@ -390,9 +400,10 @@ export default function App(){
     return()=>{
       offP?.()
       offMatches?.()
-      offDB?.()
+      offUpcoming?.()
+      offTagPresets?.()
+      offVisitTotals?.()
       offMembership?.()
-      try { supabase.removeChannel?.(visitLogsChannel) } catch {}
     }
   },[])
 
@@ -531,21 +542,11 @@ export default function App(){
         setDb(prev=>({...prev,matches:[...(prev.matches||[]),saved]}))
         notify("매치가 저장되었습니다.")
       } else {
-        // 기존 appdb JSON 방식
+        // 기존 appdb JSON 방식 (deprecated - Hangang은 USE_MATCHES_TABLE=true)
         setDb(prev=>{
           const next=[...(prev.matches||[]),match]
-          saveDB({players:[],matches:next,visits,upcomingMatches,tagPresets:prev.tagPresets||[]})
           notify("매치가 저장되었습니다.")
           return {...prev,matches:next}
-        })
-      }
-      
-      // 백업용으로 appdb에도 저장 (이중 저장)
-      if (USE_MATCHES_TABLE) {
-        const appdbMatches = await listMatchesFromDB()
-        setDb(prev=>{
-          saveDB({players:[],matches:appdbMatches,visits,upcomingMatches,tagPresets:prev.tagPresets||[]}).catch(logger.error)
-          return prev
         })
       }
     } catch(e) {
@@ -565,21 +566,11 @@ export default function App(){
         setDb(prev=>({...prev,matches:next}))
         notify("매치를 삭제했습니다.")
       } else {
-        // 기존 appdb JSON 방식
+        // 기존 appdb JSON 방식 (deprecated - Hangang은 USE_MATCHES_TABLE=true)
         setDb(prev=>{
           const next=(prev.matches||[]).filter(m=>m.id!==id)
-          saveDB({players:[],matches:next,visits,upcomingMatches,tagPresets:prev.tagPresets||[]})
           notify("매치를 삭제했습니다.")
           return {...prev,matches:next}
-        })
-      }
-      
-      // 백업용으로 appdb도 동기화 (이중 저장)
-      if (USE_MATCHES_TABLE) {
-        const appdbMatches = await listMatchesFromDB()
-        setDb(prev=>{
-          saveDB({players:[],matches:appdbMatches,visits,upcomingMatches,tagPresets:prev.tagPresets||[]}).catch(logger.error)
-          return prev
         })
       }
     } catch(e) {
@@ -599,21 +590,11 @@ export default function App(){
         setDb(prev=>({...prev,matches:next}))
         notify("업데이트되었습니다.")
       } else {
-        // 기존 appdb JSON 방식
+        // 기존 appdb JSON 방식 (deprecated - Hangang은 USE_MATCHES_TABLE=true)
         setDb(prev=>{
           const next=(prev.matches||[]).map(m=>m.id===id?{...m,...patch}:m)
-          saveDB({players:[],matches:next,visits,upcomingMatches,tagPresets:prev.tagPresets||[]})
           notify("업데이트되었습니다.")
           return {...prev,matches:next}
-        })
-      }
-      
-      // 백업용으로 appdb도 동기화 (이중 저장)
-      if (USE_MATCHES_TABLE) {
-        const appdbMatches = await listMatchesFromDB()
-        setDb(prev=>{
-          saveDB({players:[],matches:appdbMatches,visits,upcomingMatches,tagPresets:prev.tagPresets||[]}).catch(logger.error)
-          return prev
         })
       }
     } catch(e) {
@@ -622,26 +603,38 @@ export default function App(){
     }
   }
   
-  function handleSaveUpcomingMatch(upcomingMatch){
+  async function handleSaveUpcomingMatch(upcomingMatch){
     if(!isAdmin)return notify("Admin만 가능합니다.");
     const normalized={...upcomingMatch,dateISO:normalizeDateISO(upcomingMatch.dateISO)}
-    setDb(prev=>{
-      const next=[...(prev.upcomingMatches||[]),normalized]
-      saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:prev.tagPresets||[]})
-      return {...prev,upcomingMatches:next}
-    })
+    try{
+      const created=await createUpcomingMatchRecord(normalized)
+      setDb(prev=>{
+        const next=filterExpiredMatches([...(prev.upcomingMatches||[]),created])
+        return {...prev,upcomingMatches:next}
+      })
+      notify("예정된 매치가 저장되었습니다.")
+    }catch(err){
+      logger.error('[handleSaveUpcomingMatch] failed',err)
+      notify('예정된 매치를 저장하지 못했습니다.','error')
+    }
   }
-  function handleDeleteUpcomingMatch(id){
+  async function handleDeleteUpcomingMatch(id){
     if(!isAdmin)return notify("Admin만 가능합니다.");
-    setDb(prev=>{
-      const target=(prev.upcomingMatches||[]).find(m=>m.id===id)
-      const next=(prev.upcomingMatches||[]).filter(m=>m.id!==id)
-      saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:prev.tagPresets||[]})
-      if(target) console.info('[UpcomingMatch] Deleted', {id:target.id,dateISO:target.dateISO,participantCount:(target.participantIds||target.attendeeIds||[]).length})
-      return {...prev,upcomingMatches:next}
-    })
+    const target=(db.upcomingMatches||[]).find(m=>m.id===id)
+    try{
+      await deleteUpcomingMatchRecord(id)
+      setDb(prev=>{
+        const next=(prev.upcomingMatches||[]).filter(m=>m.id!==id)
+        if(target) console.info('[UpcomingMatch] Deleted',{id:target.id,dateISO:target.dateISO,participantCount:(target.participantIds||target.attendeeIds||[]).length})
+        return {...prev,upcomingMatches:next}
+      })
+      notify('예정된 매치를 삭제했습니다.')
+    }catch(err){
+      logger.error('[handleDeleteUpcomingMatch] failed',err)
+      notify('예정된 매치를 삭제하지 못했습니다.','error')
+    }
   }
-  function handleUpdateUpcomingMatch(id,patch,silent=false){
+  async function handleUpdateUpcomingMatch(id,patch,silent=false){
     if(!isAdmin)return notify("Admin만 가능합니다.");
     const before=(db.upcomingMatches||[]).find(m=>m.id===id)
     if(!before){console.warn('[UpcomingMatch] update target missing',id);return}
@@ -673,109 +666,139 @@ export default function App(){
     const hasChange=Object.keys(sanitized).length>0
     if(!hasChange){ if(!silent) notify('변경사항이 없습니다.'); return }
 
-    setDb(prev=>{
-      const next=(prev.upcomingMatches||[]).map(m=>m.id===id?{...m,...sanitized}:m)
-      saveDB({players:[],matches,visits,upcomingMatches:next,tagPresets:prev.tagPresets||[]})
-      
-      const after=next.find(m=>m.id===id)
-      if(after){
+    const payload={...before,...sanitized,id}
+    try{
+      const saved=await updateUpcomingMatchRecord(id,payload)
+      setDb(prev=>{
+        const nextList=(prev.upcomingMatches||[]).map(m=>m.id===id?saved:m)
+        const filtered=filterExpiredMatches(nextList)
+
         const beforeP=(before.participantIds||before.attendeeIds||[])
-        const afterP=(after.participantIds||after.attendeeIds||[])
+        const afterP=(saved.participantIds||saved.attendeeIds||[])
         const beforeC=before.captainIds||[]
-        const afterC=after.captainIds||[]
+        const afterC=saved.captainIds||[]
         if(beforeP.length!==afterP.length||beforeP.some((x,i)=>x!==afterP[i])){
           console.warn('[UpcomingMatch] participantIds changed',{id,before:beforeP,after:afterP})
         }
         if(beforeC.length!==afterC.length||beforeC.some((x,i)=>x!==afterC[i])){
           console.warn('[UpcomingMatch] captainIds changed',{id,before:beforeC,after:afterC})
         }
-        if(before.snapshot&&after.snapshot&&JSON.stringify(before.snapshot)!==JSON.stringify(after.snapshot)){
-          console.warn('[UpcomingMatch] snapshot changed',{id,beforeLen:before.snapshot.length,afterLen:after.snapshot.length})
+        if(before.snapshot&&saved.snapshot&&JSON.stringify(before.snapshot)!==JSON.stringify(saved.snapshot)){
+          console.warn('[UpcomingMatch] snapshot changed',{id,beforeLen:before.snapshot.length,afterLen:saved.snapshot.length})
         }
-        if(before.dateISO!==after.dateISO){
-          console.warn('[UpcomingMatch] dateISO changed',{id,before:before.dateISO,after:after.dateISO})
+        if(before.dateISO!==saved.dateISO){
+          console.warn('[UpcomingMatch] dateISO changed',{id,before:before.dateISO,after:saved.dateISO})
         }
-      }
-      
-      return {...prev,upcomingMatches:next}
-    })
 
-    if(!silent)notify("예정된 매치가 업데이트되었습니다.")
+        return {...prev,upcomingMatches:filtered}
+      })
+      if(!silent)notify("예정된 매치가 업데이트되었습니다.")
+    }catch(err){
+      logger.error('[handleUpdateUpcomingMatch] failed',err)
+      if(!silent)notify('예정된 매치를 업데이트하지 못했습니다.','error')
+    }
   }
 
   // 태그 프리셋 관리
-  function handleSaveTagPresets(tagPresets){
+  async function handleSaveTagPresets(tagPresets){
     if(!isAdmin)return notify("Admin만 가능합니다.");
-    setDb(prev=>{
-      const updated = {...prev,tagPresets};
-      saveDB({players:prev.players||[],matches:prev.matches||[],visits:prev.visits||0,upcomingMatches:prev.upcomingMatches||[],tagPresets,membershipSettings:prev.membershipSettings||[]});
-      return updated;
-    });
-    notify("태그 프리셋이 저장되었습니다.");
+    try{
+      await Promise.all((tagPresets||[]).map((preset,index)=>{
+        if(preset?.id){
+          return updateTagPresetRecord(preset.id,{...preset,sortOrder:index})
+        }
+        return createTagPresetRecord({...preset,sortOrder:index})
+      }))
+      const refreshed=await listTagPresets()
+      setDb(prev=>({...prev,tagPresets:refreshed}))
+      notify("태그 프리셋이 저장되었습니다.")
+    }catch(err){
+      logger.error('[handleSaveTagPresets] failed',err)
+      notify('태그 프리셋 저장에 실패했습니다.','error')
+    }
   }
-  function handleAddTagPreset(preset){
+  async function handleAddTagPreset(preset){
     if(!isAdmin)return notify("Admin만 가능합니다.");
-    setDb(prev=>{
-      const next=[...(prev.tagPresets||[]),preset];
-      const updated = {...prev,tagPresets:next};
-      saveDB({players:prev.players||[],matches:prev.matches||[],visits:prev.visits||0,upcomingMatches:prev.upcomingMatches||[],tagPresets:next,membershipSettings:prev.membershipSettings||[]});
-      return updated;
-    });
+    try{
+      const sortOrder=(db.tagPresets?.length)||0
+      const created=await createTagPresetRecord({...preset,sortOrder})
+      setDb(prev=>({...prev,tagPresets:[...(prev.tagPresets||[]),created]}))
+      notify('태그 프리셋이 추가되었습니다.')
+    }catch(err){
+      logger.error('[handleAddTagPreset] failed',err)
+      notify('태그 프리셋 추가에 실패했습니다.','error')
+    }
   }
-  function handleUpdateTagPreset(index,updatedPreset){
+  async function handleUpdateTagPreset(index,updatedPreset){
     if(!isAdmin)return notify("Admin만 가능합니다.");
-    setDb(prev=>{
-      const oldPreset=(prev.tagPresets||[])[index];
-      const next=(prev.tagPresets||[]).map((p,i)=>i===index?updatedPreset:p);
-      
-      // 모든 선수의 태그를 업데이트: 이전 프리셋과 일치하는 태그를 새 프리셋으로 교체
-      const updatedPlayers=(prev.players||[]).map(player=>{
-        if(!player.tags||player.tags.length===0)return player;
+    const tags=db.tagPresets||[]
+    const oldPreset=tags[index]
+    if(!oldPreset)return
+
+    const merged={...oldPreset,...updatedPreset}
+    try{
+      const saved=await updateTagPresetRecord(oldPreset.id,merged)
+      const changedPlayers=[]
+      const updatedPlayers=(db.players||[]).map(player=>{
+        if(!player.tags||player.tags.length===0)return player
+        let modified=false
         const updatedTags=player.tags.map(tag=>{
-          // 이전 프리셋과 일치하는 태그를 찾아서 새 프리셋으로 교체
           if(tag.name===oldPreset.name&&tag.color===oldPreset.color){
-            return updatedPreset;
+            modified=true
+            return saved
           }
-          return tag;
-        });
-        return{...player,tags:updatedTags};
-      });
-      
-      // 업데이트된 선수들을 Supabase에 저장
-      updatedPlayers.forEach(player=>{
-        upsertPlayer(player).catch(logger.error);
-      });
-      
-      saveDB({players:updatedPlayers,matches:prev.matches||[],visits:prev.visits||0,upcomingMatches:prev.upcomingMatches||[],tagPresets:next,membershipSettings:prev.membershipSettings||[]});
-      notify("태그 프리셋이 업데이트되었습니다.");
-      return {...prev,tagPresets:next,players:updatedPlayers};
-    });
+          return tag
+        })
+        if(!modified)return player
+        const nextPlayer={...player,tags:updatedTags}
+        changedPlayers.push(nextPlayer)
+        return nextPlayer
+      })
+
+      await Promise.all(changedPlayers.map(p=>upsertPlayer(p).catch(err=>logger.error('[handleUpdateTagPreset] player save failed',err))))
+
+      setDb(prev=>({
+        ...prev,
+        tagPresets:(prev.tagPresets||[]).map((p,i)=>i===index?saved:p),
+        players:updatedPlayers
+      }))
+      notify("태그 프리셋이 업데이트되었습니다.")
+    }catch(err){
+      logger.error('[handleUpdateTagPreset] failed',err)
+      notify('태그 프리셋 업데이트에 실패했습니다.','error')
+    }
   }
-  function handleDeleteTagPreset(index){
+  async function handleDeleteTagPreset(index){
     if(!isAdmin)return notify("Admin만 가능합니다.");
-    setDb(prev=>{
-      const deletedPreset=(prev.tagPresets||[])[index];
-      const next=(prev.tagPresets||[]).filter((_,i)=>i!==index);
-      
-      // 모든 선수의 태그에서 삭제되는 프리셋과 일치하는 태그를 제거
-      const updatedPlayers=(prev.players||[]).map(player=>{
-        if(!player.tags||player.tags.length===0)return player;
-        const updatedTags=player.tags.filter(tag=>{
-          // 삭제되는 프리셋과 일치하지 않는 태그만 유지
-          return!(tag.name===deletedPreset.name&&tag.color===deletedPreset.color);
-        });
-        return{...player,tags:updatedTags};
-      });
-      
-      // 업데이트된 선수들을 Supabase에 저장
-      updatedPlayers.forEach(player=>{
-        upsertPlayer(player).catch(logger.error);
-      });
-      
-      saveDB({players:updatedPlayers,matches:prev.matches||[],visits:prev.visits||0,upcomingMatches:prev.upcomingMatches||[],tagPresets:next,membershipSettings:prev.membershipSettings||[]});
-      notify("태그 프리셋이 삭제되었습니다.");
-      return {...prev,tagPresets:next,players:updatedPlayers};
-    });
+    const tagPresets=db.tagPresets||[]
+    const deletedPreset=tagPresets[index]
+    if(!deletedPreset)return
+
+    try{
+      await deleteTagPresetRecord(deletedPreset.id)
+
+      const changedPlayers=[]
+      const updatedPlayers=(db.players||[]).map(player=>{
+        if(!player.tags||player.tags.length===0)return player
+        const filteredTags=player.tags.filter(tag=>!(tag.name===deletedPreset.name&&tag.color===deletedPreset.color))
+        if(filteredTags.length===player.tags.length)return player
+        const nextPlayer={...player,tags:filteredTags}
+        changedPlayers.push(nextPlayer)
+        return nextPlayer
+      })
+
+      await Promise.all(changedPlayers.map(p=>upsertPlayer(p).catch(err=>logger.error('[handleDeleteTagPreset] player save failed',err))))
+
+      setDb(prev=>({
+        ...prev,
+        tagPresets:(prev.tagPresets||[]).filter((_,i)=>i!==index),
+        players:updatedPlayers
+      }))
+      notify("태그 프리셋이 삭제되었습니다.")
+    }catch(err){
+      logger.error('[handleDeleteTagPreset] failed',err)
+      notify('태그 프리셋 삭제에 실패했습니다.','error')
+    }
   }
 
 
@@ -784,7 +807,8 @@ export default function App(){
     if(!isAdmin)return notify("Admin만 가능합니다.");
     setDb(prev=>{
       const updated = {...prev,membershipSettings};
-      saveDB({players:prev.players||[],matches:prev.matches||[],visits:prev.visits||0,upcomingMatches:prev.upcomingMatches||[],tagPresets:prev.tagPresets||[],membershipSettings});
+      // Membership settings are now stored in Supabase membership_settings table
+      // No need for appdb backup
       notify("멤버십 설정이 저장되었습니다.");
       return updated;
     });
@@ -812,6 +836,22 @@ export default function App(){
       setLoginOpen(false)
       localStorage.setItem("isAdmin","1")
       notify("Admin 모드 활성화")
+      
+      // 로그인 후 RLS로 보호된 데이터 다시 로드
+      try {
+        const [presets, upcoming] = await Promise.all([
+          listTagPresets(),
+          listUpcomingMatches()
+        ])
+        setDb(prev => ({
+          ...prev,
+          tagPresets: presets,
+          upcomingMatches: upcoming
+        }))
+      } catch (err) {
+        logger.error('[App] Failed to reload protected data after login:', err)
+      }
+      
       return true // 성공 반환
     }
     

@@ -1,5 +1,5 @@
 import { http, HttpResponse, delay } from 'msw'
-import { mockPlayers, mockMatches, mockVisitLogs, mockAppDB, mockMembershipSettings } from './data'
+import { mockPlayers, mockMatches, mockVisitLogs, mockAppDB, mockMembershipSettings, mockTagPresets, mockUpcomingMatches, mockVisitTotals } from './data'
 import { logger } from '../lib/logger'
 
 // Mock 인증 상태
@@ -495,5 +495,148 @@ export const handlers = [
   http.all('*/realtime/*', async () => {
     await delay(100)
     return HttpResponse.json({ status: 'ok' })
+  }),
+
+  // ============ Tag Presets API ============
+  http.get('*/rest/v1/tag_presets', async ({ request }) => {
+    await delay(200)
+    const url = new URL(request.url)
+    const roomParam = url.searchParams.get('room_id')
+    let results = [...mockTagPresets]
+    if (roomParam) {
+      const roomId = roomParam.replace('eq.', '')
+      results = results.filter(t => t.room_id === roomId)
+    }
+    return HttpResponse.json(results)
+  }),
+
+  http.post('*/rest/v1/tag_presets', async ({ request }) => {
+    await delay(200)
+    const body = await request.json()
+    const newPreset = {
+      id: crypto.randomUUID(),
+      room_id: body.room_id,
+      name: body.name,
+      color: body.color || 'stone',
+      sort_order: body.sort_order || 0,
+      metadata: body.metadata || {},
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
+    mockTagPresets.push(newPreset)
+    return HttpResponse.json(newPreset, { status: 201 })
+  }),
+
+  http.patch('*/rest/v1/tag_presets*', async ({ request }) => {
+    await delay(200)
+    const body = await request.json()
+    const url = new URL(request.url)
+    const idParam = url.searchParams.get('id')
+    const id = idParam ? idParam.replace('eq.', '') : null
+    const index = mockTagPresets.findIndex(t => t.id === id)
+    if (index !== -1) {
+      mockTagPresets[index] = { ...mockTagPresets[index], ...body, updated_at: new Date().toISOString() }
+      return HttpResponse.json(mockTagPresets[index])
+    }
+    return HttpResponse.json({ error: 'Tag preset not found' }, { status: 404 })
+  }),
+
+  http.delete('*/rest/v1/tag_presets*', async ({ request }) => {
+    await delay(200)
+    const url = new URL(request.url)
+    const idParam = url.searchParams.get('id')
+    const id = idParam ? idParam.replace('eq.', '') : null
+    const index = mockTagPresets.findIndex(t => t.id === id)
+    if (index !== -1) {
+      mockTagPresets.splice(index, 1)
+      return HttpResponse.json({ success: true })
+    }
+    return HttpResponse.json({ error: 'Tag preset not found' }, { status: 404 })
+  }),
+
+  // ============ Upcoming Matches API ============
+  http.get('*/rest/v1/upcoming_matches', async ({ request }) => {
+    await delay(200)
+    const url = new URL(request.url)
+    const roomParam = url.searchParams.get('room_id')
+    let results = [...mockUpcomingMatches]
+    if (roomParam) {
+      const roomId = roomParam.replace('eq.', '')
+      results = results.filter(m => m.room_id === roomId)
+    }
+    return HttpResponse.json(results)
+  }),
+
+  http.post('*/rest/v1/upcoming_matches', async ({ request }) => {
+    await delay(200)
+    const body = await request.json()
+    const newMatch = {
+      id: crypto.randomUUID(),
+      ...body,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }
+    mockUpcomingMatches.push(newMatch)
+    return HttpResponse.json(newMatch, { status: 201 })
+  }),
+
+  http.patch('*/rest/v1/upcoming_matches*', async ({ request }) => {
+    await delay(200)
+    const body = await request.json()
+    const url = new URL(request.url)
+    const idParam = url.searchParams.get('id')
+    const id = idParam ? idParam.replace('eq.', '') : null
+    const index = mockUpcomingMatches.findIndex(m => m.id === id)
+    if (index !== -1) {
+      mockUpcomingMatches[index] = { ...mockUpcomingMatches[index], ...body, updated_at: new Date().toISOString() }
+      return HttpResponse.json(mockUpcomingMatches[index])
+    }
+    return HttpResponse.json({ error: 'Upcoming match not found' }, { status: 404 })
+  }),
+
+  http.delete('*/rest/v1/upcoming_matches*', async ({ request }) => {
+    await delay(200)
+    const url = new URL(request.url)
+    const idParam = url.searchParams.get('id')
+    const id = idParam ? idParam.replace('eq.', '') : null
+    const index = mockUpcomingMatches.findIndex(m => m.id === id)
+    if (index !== -1) {
+      mockUpcomingMatches.splice(index, 1)
+      return HttpResponse.json({ success: true })
+    }
+    return HttpResponse.json({ error: 'Upcoming match not found' }, { status: 404 })
+  }),
+
+  // ============ Visit Totals API ============
+  http.get('*/rest/v1/visit_totals', async ({ request }) => {
+    await delay(200)
+    const url = new URL(request.url)
+    const roomParam = url.searchParams.get('room_id')
+    let results = [...mockVisitTotals]
+    if (roomParam) {
+      const roomId = roomParam.replace('eq.', '')
+      results = results.filter(v => v.room_id === roomId)
+    }
+    return HttpResponse.json(results)
+  }),
+
+  http.post('*/rest/v1/rpc/increment_visit_total', async ({ request }) => {
+    await delay(200)
+    const body = await request.json()
+    const roomId = body.p_room_id
+    const existing = mockVisitTotals.find(v => v.room_id === roomId)
+    if (existing) {
+      existing.total_visits += 1
+      existing.updated_at = new Date().toISOString()
+      return HttpResponse.json(existing.total_visits)
+    } else {
+      const newTotal = {
+        room_id: roomId,
+        total_visits: 1,
+        updated_at: new Date().toISOString()
+      }
+      mockVisitTotals.push(newTotal)
+      return HttpResponse.json(1)
+    }
   })
 ]

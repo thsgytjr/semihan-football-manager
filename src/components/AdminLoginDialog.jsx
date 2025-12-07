@@ -18,8 +18,8 @@ export default function AdminLoginDialog({
   const emailInputRef = useRef(null)
   const pwInputRef = useRef(null)
   
-  // localhost 개발 환경 확인
-  const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  // localhost 개발 환경에서도 실제 로그인 사용
+  const isLocalhost = false // Mock 로그인 완전히 비활성화
 
   useEffect(() => {
     if (isOpen) {

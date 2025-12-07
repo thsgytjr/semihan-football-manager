@@ -886,12 +886,6 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
     if (m?.draft && Array.isArray(m.draft.quarterScores)) return m.draft.quarterScores
     if (Array.isArray(m.quarterScores)) return m.quarterScores
     if (Array.isArray(m.scores) && Array.isArray(draftSnap) && m.scores.length===draftSnap.length) return draftSnap.map((_,i)=>[m.scores[i]])
-    console.log('[SavedMatchesList] No displayedQuarterScores for match:', m.id, {
-      hasDraftQS: m?.draft && Array.isArray(m.draft.quarterScores),
-      hasQS: Array.isArray(m.quarterScores),
-      hasScores: Array.isArray(m.scores),
-      hasDraftSnap: Array.isArray(draftSnap)
-    })
     return null
   },[m, draftSnap])
 

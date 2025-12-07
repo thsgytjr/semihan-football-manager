@@ -5,6 +5,9 @@ import { logger } from '../lib/logger'
 export let mockPlayers = []
 export let mockMatches = []
 export let mockMembershipSettings = []
+export let mockTagPresets = []
+export let mockUpcomingMatches = []
+export let mockVisitTotals = []
 
 // sessionStorage에서 저장된 Mock 데이터 불러오기
 function loadMockFromSession() {
@@ -15,6 +18,9 @@ function loadMockFromSession() {
       mockPlayers = data.players || []
       mockMatches = data.matches || []
       mockMembershipSettings = data.membershipSettings || []
+      mockTagPresets = data.tagPresets || []
+      mockUpcomingMatches = data.upcomingMatches || []
+      mockVisitTotals = data.visitTotals || []
       logger.log('✨ SessionStorage에서 Mock 데이터 복구됨')
       logger.log(`   - 선수: ${mockPlayers.length}명, 매치: ${mockMatches.length}개, 멤버십: ${mockMembershipSettings.length}개`)
       return true
@@ -32,6 +38,9 @@ function saveMockToSession() {
       players: mockPlayers,
       matches: mockMatches,
       membershipSettings: mockMembershipSettings,
+      tagPresets: mockTagPresets,
+      upcomingMatches: mockUpcomingMatches,
+      visitTotals: mockVisitTotals,
       timestamp: new Date().toISOString()
     }
     sessionStorage.setItem('mock_data', JSON.stringify(data))
