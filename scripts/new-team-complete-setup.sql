@@ -70,6 +70,15 @@ CREATE INDEX IF NOT EXISTS idx_players_created_at ON public.players(created_at D
 CREATE INDEX IF NOT EXISTS idx_players_status ON public.players(status);
 CREATE INDEX IF NOT EXISTS idx_players_membership ON public.players(membership);
 CREATE INDEX IF NOT EXISTS idx_players_name ON public.players(name);
+CREATE INDEX IF NOT EXISTS idx_players_tags ON public.players USING GIN (tags);
+
+-- Enforce status domain (including system account)
+ALTER TABLE public.players 
+DROP CONSTRAINT IF EXISTS check_player_status;
+
+ALTER TABLE public.players 
+ADD CONSTRAINT check_player_status 
+CHECK (status IN ('active', 'recovering', 'inactive', 'suspended', 'nocontact', 'system'));
 
 -- Auto-update trigger
 DROP TRIGGER IF EXISTS trg_players_updated_at ON public.players;
@@ -122,6 +131,44 @@ END $$;
 
 COMMENT ON TABLE public.players IS 'Player roster with stats, positions, and membership info';
 COMMENT ON COLUMN public.players.photo_url IS 'URL to player photo in Supabase storage (bucket: player-photos)';
+
+-- Ensure exactly one canonical system account exists (safe on empty tables)
+WITH canonical AS (
+  SELECT id
+  FROM (
+    SELECT id, created_at FROM public.players WHERE status = 'system'
+    UNION ALL
+    SELECT id, created_at FROM public.players WHERE status <> 'system' AND LOWER(name) = 'system account'
+  ) merged
+  ORDER BY created_at NULLS LAST
+  LIMIT 1
+)
+UPDATE public.players
+SET
+  status = 'system',
+  name = 'System Account',
+  tags = '[]'::jsonb,
+  origin = 'none',
+  membership = COALESCE(membership, 'guest')
+WHERE id IN (SELECT id FROM canonical);
+
+UPDATE public.players
+SET status = 'inactive'
+WHERE status = 'system'
+  AND id NOT IN (
+    SELECT id FROM (
+      SELECT id
+      FROM (
+        SELECT id, created_at FROM public.players WHERE status = 'system'
+        UNION ALL
+        SELECT id, created_at FROM public.players WHERE status <> 'system' AND LOWER(name) = 'system account'
+      ) merged
+      ORDER BY created_at NULLS LAST
+      LIMIT 1
+    ) canonical_keep
+  );
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_players_system_account ON public.players(status) WHERE status = 'system';
 
 -- ------------------------------------------------------------------------------------------------------------
 -- TABLE: appdb
@@ -271,8 +318,8 @@ INSERT INTO public.settings (key, value)
 VALUES (
   'app_settings',
   '{
-    "appTitle": "NEWTEAM-FM",
-    "appName": "NewTeam Football Manager",
+    "appTitle": "JindoFC-FM",
+    "appName": "JindoFC Football Manager",
     "seasonRecapEnabled": true,
     "features": {
       "players": true,
@@ -394,6 +441,11 @@ CREATE TABLE IF NOT EXISTS public.matches (
   fees JSONB,                                       -- ✅ Match fee breakdown by player
   "multiField" BOOLEAN DEFAULT false,               -- ✅ Multi-field mode (2+ games simultaneously)
   "gameMatchups" JSONB,                             -- ✅ Game-by-game matchups for multi-field
+  "statusOverride" TEXT,                            -- ✅ Manual LIVE/UPDATING badge override
+  "isVoided" BOOLEAN DEFAULT false,                 -- ✅ Accounting void flag
+  "voidReason" TEXT,
+  "voidedAt" TIMESTAMPTZ,
+  "voidedBy" UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -454,6 +506,11 @@ COMMENT ON COLUMN public.matches.room_id IS 'Team shared room ID for multi-tenan
 COMMENT ON COLUMN public.matches."dateISO" IS 'Match date/time with timezone (TIMESTAMPTZ)';
 COMMENT ON COLUMN public.matches.fees IS 'Fee breakdown: {baseCost, perPlayerCost, guestSurcharge, playerFees: {playerId: amount}}';
 COMMENT ON COLUMN public.matches."multiField" IS 'True if multiple games played simultaneously on different fields';
+COMMENT ON COLUMN public.matches."statusOverride" IS 'Manual override for match status badge: null=auto, live=force LIVE, updating=force UPDATING, off=hide badge';
+COMMENT ON COLUMN public.matches."isVoided" IS 'TRUE if match should be excluded from accounting totals (VOID)';
+COMMENT ON COLUMN public.matches."voidReason" IS 'Optional free-text reason for VOID action';
+COMMENT ON COLUMN public.matches."voidedAt" IS 'Timestamp when VOID was applied or cleared';
+COMMENT ON COLUMN public.matches."voidedBy" IS 'Supabase auth user who performed the VOID action';
 
 -- ------------------------------------------------------------------------------------------------------------
 -- TABLE: upcoming_matches
@@ -541,6 +598,37 @@ BEGIN
 END $$;
 
 COMMENT ON TABLE public.upcoming_matches IS 'Scheduled future matches with draft support';
+
+-- ------------------------------------------------------------------------------------------------------------
+-- TABLE: mom_votes
+-- Crowd-sourced Man of the Match voting with duplicate prevention
+-- ------------------------------------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.mom_votes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  room_id TEXT NOT NULL,
+  match_id UUID NOT NULL REFERENCES public.matches(id) ON DELETE CASCADE,
+  player_id UUID NOT NULL,
+  voter_label TEXT,
+  ip_hash TEXT,
+  visitor_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_mom_votes_match_id ON public.mom_votes(match_id);
+CREATE INDEX IF NOT EXISTS idx_mom_votes_player_id ON public.mom_votes(player_id);
+
+-- Duplicate prevention (handles ip+visitor combos and legacy single identifiers)
+CREATE UNIQUE INDEX IF NOT EXISTS mom_votes_unique_device
+  ON public.mom_votes(match_id, ip_hash, visitor_id)
+  WHERE ip_hash IS NOT NULL AND visitor_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS mom_votes_unique_ip_only
+  ON public.mom_votes(match_id, ip_hash)
+  WHERE ip_hash IS NOT NULL AND visitor_id IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS mom_votes_unique_visitor_only
+  ON public.mom_votes(match_id, visitor_id)
+  WHERE visitor_id IS NOT NULL AND ip_hash IS NULL;
 
 -- ============================================================================================================
 -- SECTION 5: ACCOUNTING TABLES
@@ -730,7 +818,186 @@ BEGIN
 END $$;
 
 -- ============================================================================================================
--- SECTION 6: STORAGE BUCKET SETUP
+-- SECTION 6: GAMIFICATION & LEADERBOARD SUPPORT
+-- ============================================================================================================
+
+-- ------------------------------------------------------------------------------------------------------------
+-- TABLE GROUP: badge_definitions / player_badges / player_badge_progress
+-- Powers the player challenge badge system + enriched view
+-- ------------------------------------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.badge_definitions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  slug TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  description TEXT,
+  category TEXT DEFAULT 'general',
+  tier SMALLINT DEFAULT 1,
+  icon TEXT DEFAULT '🏅',
+  color_primary TEXT DEFAULT '#10b981',
+  color_secondary TEXT DEFAULT '#34d399',
+  has_numeric_value BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.player_badges (
+  id BIGSERIAL PRIMARY KEY,
+  player_id UUID NOT NULL,
+  badge_id UUID NOT NULL REFERENCES public.badge_definitions(id) ON DELETE CASCADE,
+  numeric_value INTEGER,
+  match_id UUID,
+  awarded_at TIMESTAMPTZ DEFAULT NOW(),
+  metadata JSONB DEFAULT '{}'::jsonb
+);
+
+CREATE TABLE IF NOT EXISTS public.player_badge_progress (
+  id BIGSERIAL PRIMARY KEY,
+  player_id UUID NOT NULL,
+  badge_slug TEXT NOT NULL,
+  current_value INTEGER NOT NULL DEFAULT 0,
+  last_match_id UUID,
+  last_event_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(player_id, badge_slug)
+);
+
+CREATE INDEX IF NOT EXISTS idx_player_badges_player ON public.player_badges(player_id);
+CREATE INDEX IF NOT EXISTS idx_player_badges_badge ON public.player_badges(badge_id);
+CREATE INDEX IF NOT EXISTS idx_badge_progress_player ON public.player_badge_progress(player_id);
+
+ALTER TABLE public.badge_definitions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.player_badges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.player_badge_progress ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='badge_definitions' AND policyname='Public read badge defs'
+  ) THEN
+    CREATE POLICY "Public read badge defs"
+    ON public.badge_definitions
+    FOR SELECT
+    USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='badge_definitions' AND policyname='Service manage badge defs'
+  ) THEN
+    CREATE POLICY "Service manage badge defs"
+    ON public.badge_definitions
+    FOR ALL
+    TO service_role
+    USING (true)
+    WITH CHECK (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='player_badges' AND policyname='Public read player badges'
+  ) THEN
+    CREATE POLICY "Public read player badges"
+    ON public.player_badges
+    FOR SELECT
+    USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='player_badges' AND policyname='Service manage player badges'
+  ) THEN
+    CREATE POLICY "Service manage player badges"
+    ON public.player_badges
+    FOR ALL
+    TO service_role
+    USING (true)
+    WITH CHECK (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='player_badge_progress' AND policyname='Public read badge progress'
+  ) THEN
+    CREATE POLICY "Public read badge progress"
+    ON public.player_badge_progress
+    FOR SELECT
+    USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='player_badge_progress' AND policyname='Service manage badge progress'
+  ) THEN
+    CREATE POLICY "Service manage badge progress"
+    ON public.player_badge_progress
+    FOR ALL
+    TO service_role
+    USING (true)
+    WITH CHECK (true);
+  END IF;
+END $$;
+
+CREATE OR REPLACE VIEW public.player_badges_enriched AS
+SELECT
+  pb.id,
+  pb.player_id,
+  pb.badge_id,
+  pb.numeric_value,
+  pb.match_id,
+  pb.awarded_at,
+  pb.metadata,
+  bd.slug,
+  bd.name,
+  bd.description,
+  bd.category,
+  bd.tier,
+  bd.icon,
+  bd.color_primary,
+  bd.color_secondary,
+  bd.has_numeric_value
+FROM public.player_badges pb
+JOIN public.badge_definitions bd ON bd.id = pb.badge_id;
+
+COMMENT ON TABLE public.badge_definitions IS 'Challenge badge catalog (slug, tier, colors)';
+COMMENT ON TABLE public.player_badges IS 'Awarded badges per player/match (history)';
+COMMENT ON TABLE public.player_badge_progress IS 'Running progress counters for incremental badges';
+COMMENT ON VIEW public.player_badges_enriched IS 'Convenience view joining badges with definitions';
+
+-- ------------------------------------------------------------------------------------------------------------
+-- TABLE: runner_scores (maintenance mini-game leaderboard)
+-- ------------------------------------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.runner_scores (
+  id BIGSERIAL PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  score INTEGER NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_runner_scores_score ON public.runner_scores(score DESC);
+CREATE INDEX IF NOT EXISTS idx_runner_scores_user ON public.runner_scores(user_id);
+
+ALTER TABLE public.runner_scores ENABLE ROW LEVEL SECURITY;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='runner_scores' AND policyname='Runner scores public read'
+  ) THEN
+    CREATE POLICY "Runner scores public read"
+    ON public.runner_scores
+    FOR SELECT
+    USING (true);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE schemaname='public' AND tablename='runner_scores' AND policyname='Runner scores public insert'
+  ) THEN
+    CREATE POLICY "Runner scores public insert"
+    ON public.runner_scores
+    FOR INSERT
+    WITH CHECK (true);
+  END IF;
+END $$;
+
+COMMENT ON TABLE public.runner_scores IS 'Stores high scores from the maintenance page runner mini-game';
+
+-- ============================================================================================================
+-- SECTION 7: STORAGE BUCKET SETUP
 -- ============================================================================================================
 -- Creates the 'player-photos' bucket with public read access and authenticated write policies
 -- Safe to run multiple times (idempotent)
@@ -753,75 +1020,98 @@ BEGIN
   ELSE
     RAISE NOTICE 'ℹ️  Storage bucket player-photos already exists';
   END IF;
+EXCEPTION
+  WHEN undefined_table THEN
+    RAISE NOTICE 'ℹ️ storage schema not initialized yet – create a bucket once Storage is enabled in Dashboard';
+  WHEN insufficient_privilege THEN
+    RAISE NOTICE 'ℹ️ Skipped creating bucket player-photos (requires storage schema owner); create it via Dashboard > Storage';
 END $$;
 
--- Enable RLS on storage.objects if not already enabled
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+-- Enable RLS on storage.objects if not already enabled (ignore if lacking ownership)
+DO $$
+BEGIN
+  BEGIN
+    EXECUTE 'ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY';
+    RAISE NOTICE '✅ Enabled RLS on storage.objects';
+  EXCEPTION
+    WHEN undefined_table THEN
+      RAISE NOTICE 'ℹ️ storage.objects does not exist yet – create a bucket in Dashboard first';
+    WHEN insufficient_privilege THEN
+      RAISE NOTICE 'ℹ️ Skipped enabling RLS on storage.objects (requires storage schema owner)';
+  END;
+END $$;
 
 -- Storage policies for player-photos bucket
 DO $$
 BEGIN
-  -- Public read for this bucket (both anon and authenticated)
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'Public read player-photos'
-  ) THEN
-    CREATE POLICY "Public read player-photos"
-    ON storage.objects
-    FOR SELECT
-    TO anon, authenticated
-    USING (bucket_id = 'player-photos');
-    RAISE NOTICE '✅ Created policy: Public read player-photos';
-  END IF;
+  BEGIN
+    -- Public read for this bucket (both anon and authenticated)
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies
+      WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'Public read player-photos'
+    ) THEN
+      CREATE POLICY "Public read player-photos"
+      ON storage.objects
+      FOR SELECT
+      TO anon, authenticated
+      USING (bucket_id = 'player-photos');
+      RAISE NOTICE '✅ Created policy: Public read player-photos';
+    END IF;
 
-  -- Authenticated users can upload new files under players/*
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'Upload player-photos by authenticated'
-  ) THEN
-    CREATE POLICY "Upload player-photos by authenticated"
-    ON storage.objects
-    FOR INSERT
-    TO authenticated
-    WITH CHECK (
-      bucket_id = 'player-photos'
-      AND (name LIKE 'players/%')
-    );
-    RAISE NOTICE '✅ Created policy: Upload player-photos by authenticated';
-  END IF;
+    -- Authenticated users can upload new files under the players directory
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies
+      WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'Upload player-photos by authenticated'
+    ) THEN
+      CREATE POLICY "Upload player-photos by authenticated"
+      ON storage.objects
+      FOR INSERT
+      TO authenticated
+      WITH CHECK (
+        bucket_id = 'player-photos'
+        AND (name LIKE 'players/%')
+      );
+      RAISE NOTICE '✅ Created policy: Upload player-photos by authenticated';
+    END IF;
 
-  -- Authenticated users can update files in this bucket (for upsert/replace)
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'Update player-photos by authenticated'
-  ) THEN
-    CREATE POLICY "Update player-photos by authenticated"
-    ON storage.objects
-    FOR UPDATE
-    TO authenticated
-    USING (bucket_id = 'player-photos')
-    WITH CHECK (bucket_id = 'player-photos');
-    RAISE NOTICE '✅ Created policy: Update player-photos by authenticated';
-  END IF;
+    -- Authenticated users can update files in this bucket (for upsert/replace)
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies
+      WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'Update player-photos by authenticated'
+    ) THEN
+      CREATE POLICY "Update player-photos by authenticated"
+      ON storage.objects
+      FOR UPDATE
+      TO authenticated
+      USING (bucket_id = 'player-photos')
+      WITH CHECK (bucket_id = 'player-photos');
+      RAISE NOTICE '✅ Created policy: Update player-photos by authenticated';
+    END IF;
 
-  -- Allow delete for in-app photo removal
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'Delete player-photos by authenticated'
-  ) THEN
-    CREATE POLICY "Delete player-photos by authenticated"
-    ON storage.objects
-    FOR DELETE
-    TO authenticated
-    USING (bucket_id = 'player-photos');
-    RAISE NOTICE '✅ Created policy: Delete player-photos by authenticated';
-  END IF;
+    -- Allow delete for in-app photo removal
+    IF NOT EXISTS (
+      SELECT 1 FROM pg_policies
+      WHERE schemaname = 'storage' AND tablename = 'objects' AND policyname = 'Delete player-photos by authenticated'
+    ) THEN
+      CREATE POLICY "Delete player-photos by authenticated"
+      ON storage.objects
+      FOR DELETE
+      TO authenticated
+      USING (bucket_id = 'player-photos');
+      RAISE NOTICE '✅ Created policy: Delete player-photos by authenticated';
+    END IF;
+  EXCEPTION
+    WHEN undefined_table THEN
+      RAISE NOTICE 'ℹ️ storage.objects not available yet – create Storage > player-photos bucket first';
+    WHEN insufficient_privilege THEN
+      RAISE NOTICE 'ℹ️ Skipped creating storage policies (requires storage schema owner). Create them via Dashboard if needed.';
+  END;
 END $$;
 
 COMMENT ON TABLE storage.buckets IS 'Storage buckets for file uploads';
 
 -- ============================================================================================================
--- SECTION 7: VERIFICATION QUERIES
+-- SECTION 8: VERIFICATION QUERIES
 -- ============================================================================================================
 
 -- Verify all tables were created
@@ -877,16 +1167,20 @@ DO $$
 DECLARE
   bucket_exists BOOLEAN;
 BEGIN
-  SELECT EXISTS(SELECT 1 FROM storage.buckets WHERE id = 'player-photos') INTO bucket_exists;
-  
-  IF bucket_exists THEN
-    RAISE NOTICE '✅ Storage bucket "player-photos" exists and is ready';
-  ELSE
-    RAISE WARNING '⚠️  Storage bucket "player-photos" not found - may need manual creation in Dashboard';
-  END IF;
-EXCEPTION
-  WHEN undefined_table THEN
-    RAISE WARNING '⚠️  Storage schema not available - create bucket manually in Supabase Dashboard > Storage';
+  BEGIN
+    SELECT EXISTS(SELECT 1 FROM storage.buckets WHERE id = 'player-photos') INTO bucket_exists;
+    
+    IF bucket_exists THEN
+      RAISE NOTICE '✅ Storage bucket "player-photos" exists and is ready';
+    ELSE
+      RAISE WARNING '⚠️  Storage bucket "player-photos" not found - may need manual creation in Dashboard';
+    END IF;
+  EXCEPTION
+    WHEN undefined_table THEN
+      RAISE WARNING '⚠️  Storage schema not available - create bucket manually in Supabase Dashboard > Storage';
+    WHEN insufficient_privilege THEN
+      RAISE NOTICE 'ℹ️ Skipped verifying player-photos bucket (requires storage schema owner)';
+  END;
 END $$;
 
 -- List storage policies (if storage schema exists)
