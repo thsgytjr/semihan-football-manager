@@ -5,7 +5,7 @@ import Card from'../components/Card'
 import ConfirmDialog from'../components/ConfirmDialog'
 import{mkMatch,decideMode,splitKTeams,hydrateMatch}from'../lib/match'
 import { extractSeason } from '../lib/matchUtils'
-import { localDateTimeToISO, getCurrentLocalDateTime } from '../lib/dateUtils'
+import { localDateTimeToISO, getCurrentLocalDateTime, isoToLocalDateTime } from '../lib/dateUtils'
 // ...other imports...
 
 // 포지션 고려 팀 분배 함수 (splitKTeamsPosAware)
@@ -307,10 +307,10 @@ export default function MatchPlanner({
       }
     }
     
-    // dateISO는 이미 YYYY-MM-DDTHH:mm 형식이므로 그대로 사용
+    // 로컬 시간대 정보를 포함한 ISO 형식으로 변환 (DB의 timestamptz 타입)
     const dateISOFormatted = dateISO && dateISO.length >= 16 
-      ? dateISO.slice(0,16)
-      : getCurrentLocalDateTime()
+      ? localDateTimeToISO(dateISO.slice(0,16))
+      : localDateTimeToISO(getCurrentLocalDateTime())
     
     const payload={
       ...mkMatch({
@@ -644,7 +644,7 @@ export default function MatchPlanner({
     setTeamCount(ts.length)
     if(match.criterion)setCriterion(match.criterion)
     if(match.location){setLocationName(match.location.name||'');setLocationAddress(match.location.address||'')}
-    if(match.dateISO)setDateISO(match.dateISO.slice(0,16))
+    if(match.dateISO)setDateISO(isoToLocalDateTime(match.dateISO))
     if(match.fees?.total)setCustomBaseCost(match.fees.total)
     setShuffleSeed(0)
     setManualTeams(ts)
@@ -689,7 +689,7 @@ export default function MatchPlanner({
     setUpcomingDirty(false)
 
     // Load basic match data
-    if (upcomingMatch.dateISO) setDateISO(upcomingMatch.dateISO.slice(0, 16))
+    if (upcomingMatch.dateISO) setDateISO(isoToLocalDateTime(upcomingMatch.dateISO))
     if (upcomingMatch.location) {
       setLocationName(upcomingMatch.location.name || '')
       setLocationAddress(upcomingMatch.location.address || '')
@@ -1195,10 +1195,10 @@ export default function MatchPlanner({
                       const teamsSnapshot = previewTeams.map(team => team.map(p => p.id))
                       const assignedPlayerIds = previewTeams.flat().map(p => p.id)
                       
-                      // dateISO는 이미 YYYY-MM-DDTHH:mm 형식이므로 그대로 사용
+                      // 로컬 시간대 정보를 포함한 ISO 형식으로 변환 (DB의 timestamptz 타입)
                       const dateISOFormatted = dateISO && dateISO.length >= 16 
-                        ? dateISO.slice(0,16)
-                        : getNextSaturday630()
+                        ? localDateTimeToISO(dateISO.slice(0,16))
+                        : localDateTimeToISO(getNextSaturday630())
                       
                       const attendeeObjs = previewTeams.flat().map(p => p)
                       const fees = enablePitchFee ? computeFeesAtSave({ baseCostValue: baseCost, attendees: attendeeObjs, guestSurcharge }) : null
