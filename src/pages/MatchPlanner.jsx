@@ -644,7 +644,22 @@ export default function MatchPlanner({
     setTeamCount(ts.length)
     if(match.criterion)setCriterion(match.criterion)
     if(match.location){setLocationName(match.location.name||'');setLocationAddress(match.location.address||'')}
-    if(match.dateISO)setDateISO(match.dateISO.slice(0,16))
+    // DB에서 timestamptz로 저장된 경우 로컬 시간으로 변환
+    if(match.dateISO){
+      const dateStr = match.dateISO
+      console.log('[MatchPlanner] Loading match dateISO:', dateStr, 'length:', dateStr.length)
+      // ISO 8601 형식 (타임존 포함)이면 로컬 시간으로 변환
+      if(dateStr.includes('Z') || dateStr.includes('+') || (dateStr.includes('T') && dateStr.length > 16)){
+        console.log('[MatchPlanner] Converting timezone-aware date to local')
+        const d = new Date(dateStr)
+        const local = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+        console.log('[MatchPlanner] Converted to local:', local)
+        setDateISO(local)
+      } else {
+        console.log('[MatchPlanner] Using date as-is (already local format)')
+        setDateISO(dateStr.slice(0,16))
+      }
+    }
     if(match.fees?.total)setCustomBaseCost(match.fees.total)
     setShuffleSeed(0)
     setManualTeams(ts)
@@ -689,7 +704,22 @@ export default function MatchPlanner({
     setUpcomingDirty(false)
 
     // Load basic match data
-    if (upcomingMatch.dateISO) setDateISO(upcomingMatch.dateISO.slice(0, 16))
+    // DB에서 timestamptz로 저장된 경우 로컬 시간으로 변환
+    if (upcomingMatch.dateISO) {
+      const dateStr = upcomingMatch.dateISO
+      console.log('[MatchPlanner] Loading upcoming match dateISO:', dateStr, 'length:', dateStr.length)
+      // ISO 8601 형식 (타임존 포함)이면 로컬 시간으로 변환
+      if(dateStr.includes('Z') || dateStr.includes('+') || (dateStr.includes('T') && dateStr.length > 16)){
+        console.log('[MatchPlanner] Converting timezone-aware date to local')
+        const d = new Date(dateStr)
+        const local = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+        console.log('[MatchPlanner] Converted to local:', local)
+        setDateISO(local)
+      } else {
+        console.log('[MatchPlanner] Using date as-is (already local format)')
+        setDateISO(dateStr.slice(0,16))
+      }
+    }
     if (upcomingMatch.location) {
       setLocationName(upcomingMatch.location.name || '')
       setLocationAddress(upcomingMatch.location.address || '')
