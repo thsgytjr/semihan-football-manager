@@ -307,10 +307,10 @@ export default function MatchPlanner({
       }
     }
     
-    // 로컬 시간대 정보를 포함한 ISO 형식으로 변환 (DB의 timestamptz 타입)
+    // UI에서 입력한 그대로 저장 (YYYY-MM-DDTHH:mm)
     const dateISOFormatted = dateISO && dateISO.length >= 16 
-      ? localDateTimeToISO(dateISO.slice(0,16))
-      : localDateTimeToISO(getCurrentLocalDateTime())
+      ? dateISO.slice(0,16)
+      : getCurrentLocalDateTime()
     
     const payload={
       ...mkMatch({
@@ -644,7 +644,7 @@ export default function MatchPlanner({
     setTeamCount(ts.length)
     if(match.criterion)setCriterion(match.criterion)
     if(match.location){setLocationName(match.location.name||'');setLocationAddress(match.location.address||'')}
-    if(match.dateISO)setDateISO(isoToLocalDateTime(match.dateISO))
+    if(match.dateISO)setDateISO(match.dateISO.slice(0,16))
     if(match.fees?.total)setCustomBaseCost(match.fees.total)
     setShuffleSeed(0)
     setManualTeams(ts)
@@ -689,7 +689,7 @@ export default function MatchPlanner({
     setUpcomingDirty(false)
 
     // Load basic match data
-    if (upcomingMatch.dateISO) setDateISO(isoToLocalDateTime(upcomingMatch.dateISO))
+    if (upcomingMatch.dateISO) setDateISO(upcomingMatch.dateISO.slice(0, 16))
     if (upcomingMatch.location) {
       setLocationName(upcomingMatch.location.name || '')
       setLocationAddress(upcomingMatch.location.address || '')
@@ -1195,10 +1195,10 @@ export default function MatchPlanner({
                       const teamsSnapshot = previewTeams.map(team => team.map(p => p.id))
                       const assignedPlayerIds = previewTeams.flat().map(p => p.id)
                       
-                      // 로컬 시간대 정보를 포함한 ISO 형식으로 변환 (DB의 timestamptz 타입)
+                      // UI에서 입력한 그대로 저장 (YYYY-MM-DDTHH:mm)
                       const dateISOFormatted = dateISO && dateISO.length >= 16 
-                        ? localDateTimeToISO(dateISO.slice(0,16))
-                        : localDateTimeToISO(getNextSaturday630())
+                        ? dateISO.slice(0,16)
+                        : getNextSaturday630().slice(0,16)
                       
                       const attendeeObjs = previewTeams.flat().map(p => p)
                       const fees = enablePitchFee ? computeFeesAtSave({ baseCostValue: baseCost, attendees: attendeeObjs, guestSurcharge }) : null
