@@ -617,18 +617,14 @@ CREATE TABLE IF NOT EXISTS public.mom_votes (
 CREATE INDEX IF NOT EXISTS idx_mom_votes_match_id ON public.mom_votes(match_id);
 CREATE INDEX IF NOT EXISTS idx_mom_votes_player_id ON public.mom_votes(player_id);
 
--- Duplicate prevention (handles ip+visitor combos and legacy single identifiers)
-CREATE UNIQUE INDEX IF NOT EXISTS mom_votes_unique_device
-  ON public.mom_votes(match_id, ip_hash, visitor_id)
-  WHERE ip_hash IS NOT NULL AND visitor_id IS NOT NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS mom_votes_unique_ip_only
-  ON public.mom_votes(match_id, ip_hash)
-  WHERE ip_hash IS NOT NULL AND visitor_id IS NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS mom_votes_unique_visitor_only
+-- Duplicate prevention (visitor ID 우선, 없으면 IP fallback)
+CREATE UNIQUE INDEX IF NOT EXISTS mom_votes_unique_visitor
   ON public.mom_votes(match_id, visitor_id)
-  WHERE visitor_id IS NOT NULL AND ip_hash IS NULL;
+  WHERE visitor_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS mom_votes_unique_ip_fallback
+  ON public.mom_votes(match_id, ip_hash)
+  WHERE visitor_id IS NULL AND ip_hash IS NOT NULL;
 
 -- ============================================================================================================
 -- SECTION 5: ACCOUNTING TABLES

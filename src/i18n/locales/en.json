@@ -376,11 +376,12 @@
       "voterLabel": "Voter name (optional)",
       "voterPlaceholder": "Leave blank to vote anonymously",
       "errorDuplicate": "You have already voted from this device.",
+      "errorDeviceId": "We could not lock your device ID. Refresh or try another browser to vote.",
       "errorGeneric": "An error occurred while submitting your vote.",
       "submitVoting": "Submitting...",
       "submitAlready": "Already voted",
       "submit": "Submit vote",
-      "rule1": "You can vote only once.",
+      "rule1": "Each device gets exactly one vote, even if you switch networks.",
       "rule2": "Recommended candidates are Top 5 by goals/assists, but you can vote for any attendee.",
       "rule3": "If you've already voted, this voting modal won't show again.",
       "rule4": "If votes tie, we compare goals → assists → clean sheets → appearances. If still tied, the leadership committee makes the final call."

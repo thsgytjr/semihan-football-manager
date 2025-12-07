@@ -164,36 +164,25 @@ export function useMoMPrompt({ matches = [], players = [] }) {
       setVoteStatusReady(false)
       return
     }
+    if (!visitorId && !ipHash) {
+      setVoteStatusReady(false)
+      return
+    }
+
     if (!votes || votes.length === 0) {
-      if (!ipHash && !visitorId) {
-        setVoteStatusReady(false)
-        return
-      }
       setAlreadyVoted(false)
       setVoteStatusReady(true)
       return
     }
-    if (!ipHash && !visitorId) {
-      setVoteStatusReady(false)
-      return
-    }
     
-    // ⭐ 개선된 중복 체크: IP **AND** Visitor ID가 모두 일치해야 중복으로 판단
-    // 같은 와이파이(같은 IP)를 쓰는 여러 디바이스(다른 visitor_id)는 각각 투표 가능
+    // ⭐ 중복 체크: visitor ID가 최우선, 없을 때만 IP fallback
     const hasVote = votes.some(v => {
-      // 둘 다 있는 경우: 둘 다 일치해야 중복
-      if (ipHash && visitorId && v.ipHash && v.visitorId) {
-        return v.ipHash === ipHash && v.visitorId === visitorId
-      }
-      
-      // 하나만 있는 경우 (레거시 호환성)
-      if (ipHash && v.ipHash && !v.visitorId) {
-        return v.ipHash === ipHash
-      }
-      if (visitorId && v.visitorId && !v.ipHash) {
+      if (visitorId && v.visitorId) {
         return v.visitorId === visitorId
       }
-      
+      if (!visitorId && ipHash && v.ipHash && !v.visitorId) {
+        return v.ipHash === ipHash
+      }
       return false
     })
     

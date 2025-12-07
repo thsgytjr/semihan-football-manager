@@ -33,10 +33,15 @@ export async function fetchMoMVotes(matchId) {
 export async function submitMoMVote({ matchId, playerId, voterLabel = null, ipHash = null, visitorId = null }) {
   if (!matchId || !playerId) throw new Error('matchId and playerId are required')
   
-  // ⭐ 중복 체크 개선: IP와 Visitor ID 모두 필수
-  // 같은 와이파이(같은 IP)를 쓰는 여러 디바이스가 각각 투표 가능하도록
-  if (!ipHash || !visitorId) {
-    console.warn('MOM Vote: IP or Visitor ID missing. Vote may be rejected by DB constraint.')
+  if (!visitorId) {
+    const err = new Error('device_id_missing')
+    err.code = 'device_id_missing'
+    err.message = '디바이스 인증에 실패했습니다. 새로고침 후 다시 시도하거나 다른 브라우저를 사용해주세요.'
+    throw err
+  }
+
+  if (!ipHash) {
+    console.warn('MOM Vote: IP hash missing. Duplicate prevention will rely on visitorId only.')
   }
   
   const payload = {
@@ -59,7 +64,7 @@ export async function submitMoMVote({ matchId, playerId, voterLabel = null, ipHa
       // Unique constraint violation (중복 투표)
       const dup = new Error('duplicate_vote')
       dup.code = 'duplicate_vote'
-      dup.message = '이미 투표하셨습니다. 같은 디바이스(IP + 브라우저)에서는 1회만 투표할 수 있습니다.'
+      dup.message = '이미 투표하셨습니다. 같은 디바이스에서는 네트워크가 달라도 1회만 투표할 수 있습니다.'
       throw dup
     }
     throw error

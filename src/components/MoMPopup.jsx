@@ -193,6 +193,8 @@ export function MoMPopup({
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {error.code === 'duplicate_vote'
                 ? t('mom.popup.errorDuplicate')
+                : error.code === 'device_id_missing'
+                ? t('mom.popup.errorDeviceId')
                 : t('mom.popup.errorGeneric')}
             </div>
           )}
