@@ -59,13 +59,21 @@ const hasVote = votes.some(v => {
 ### 마이그레이션 방법
 
 #### 1단계: DB 제약 조건 마이그레이션
-Supabase SQL Editor에서 실행:
-```bash
-scripts/migrate-mom-votes-unique-constraint.sql
-```
+Supabase SQL Editor에서 아래 중 하나를 실행하면 됩니다.
 
-이 스크립트는:
-- 기존 `mom_votes_unique_device`, `mom_votes_unique_ip_only`, `mom_votes_unique_visitor_only` 인덱스 정리
+- **권장 (원샷 업그레이드)**
+   ```bash
+   scripts/upgrade-mom-votes-visitor-only.sql
+   ```
+   - visitor_id / ip_hash 기준 중복 투표 레코드를 자동으로 정리한 뒤 새 인덱스를 생성합니다.
+
+- **기존 방식 (중복을 직접 정리했을 때)**
+   ```bash
+   scripts/migrate-mom-votes-unique-constraint.sql
+   ```
+
+두 스크립트 모두 아래 작업을 수행합니다.
+- 기존 `mom_votes_unique_device`, `mom_votes_unique_ip_only`, `mom_votes_unique_visitor_only` 등 레거시 인덱스 정리
 - `match_id + visitor_id`를 강제하는 `mom_votes_unique_visitor` 생성
 - Visitor ID가 비어 있을 때만 동작하는 `mom_votes_unique_ip_fallback` 생성
 
