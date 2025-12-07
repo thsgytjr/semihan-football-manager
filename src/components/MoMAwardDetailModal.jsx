@@ -54,7 +54,7 @@ export function MoMAwardDetailModal({
       onClick={() => onClose?.()}
     >
       <div
-        className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="max-h-[90vh] w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="flex items-start gap-3 border-b border-amber-100 bg-amber-50/60 px-5 py-4">
@@ -81,7 +81,7 @@ export function MoMAwardDetailModal({
           </button>
         </header>
 
-        <div className="space-y-4 overflow-y-auto px-5 py-5">
+        <div className="flex-1 min-h-0 space-y-4 overflow-y-auto px-5 py-5">
           <section className="flex items-center gap-3 rounded-2xl border border-stone-200 bg-stone-50 p-4">
             <InitialAvatar
               id={player?.id}
