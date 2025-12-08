@@ -640,19 +640,67 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     { id: 'assists', label: t('seasonRecap.finale.stats.assists'), value: stats.totalAssists }
   ]
 
-  const renderTieList = (players, metricKey) => {
+  const renderTieHero = (players, metricKey, { rowThreshold = 0, showAttackGA = false } = {}) => {
     if (!Array.isArray(players) || players.length <= 1) return null
-    const metricLabel = t(`seasonRecap.metrics.${metricKey}`)
+    const count = players.length
+    const isRowLayout = rowThreshold > 0 && count <= rowThreshold
+    const compact = !isRowLayout && count >= 3
+    // 점진적으로 축소하여 화면 넘침 방지
+    // 화면 넘침 방지를 위해 선수 수에 따라 강하게 축소
+    const avatarSize = isRowLayout
+      ? 60
+      : count >= 28
+      ? 22
+      : count >= 24
+      ? 24
+      : count >= 20
+      ? 26
+      : count >= 16
+      ? 30
+      : count >= 12
+      ? 34
+      : count >= 9
+      ? 40
+      : count >= 6
+      ? 48
+      : 60
+    const minCardWidth = Math.max(avatarSize + 12, 40)
+    const gapSize = count >= 24 ? '0.28rem' : count >= 16 ? '0.38rem' : count >= 10 ? '0.48rem' : '0.6rem'
+    const cardPadding = count >= 20 ? '3px 3px 5px' : count >= 12 ? '4px 4px 6px' : '8px'
     return (
-      <div className="mt-3 flex flex-wrap justify-center gap-2 text-[11px] text-white/80">
-        {players.map((p) => (
-          <span
-            key={`${metricKey}-${p.id}`}
-            className="rounded-full border border-white/30 px-2.5 py-0.5 backdrop-blur"
-          >
-            {(p.name || t('seasonRecap.common.unknown'))} · <AnimatedNumber value={p.value} className="font-semibold text-white" /> {metricLabel}
-          </span>
-        ))}
+      <div className="w-full max-w-6xl mx-auto mb-5 px-1">
+        <div
+          className={isRowLayout ? "flex flex-wrap justify-center" : "grid justify-center"}
+          style={
+            isRowLayout
+              ? { gap: gapSize }
+              : { gridTemplateColumns: `repeat(auto-fit, minmax(${minCardWidth}px, 1fr))`, gap: gapSize }
+          }
+        >
+          {players.map((p) => (
+            <div
+              key={`${metricKey}-${p.id}`}
+              className="flex flex-col items-center rounded-2xl border border-white/20 bg-white/10 text-white shadow-[0_12px_32px_rgba(0,0,0,0.35)] backdrop-blur"
+              style={{ padding: cardPadding, minWidth: `${minCardWidth}px` }}
+            >
+              <InitialAvatar
+                id={p.id}
+                name={p.name || t('seasonRecap.common.unknown')}
+                photoUrl={p.photoUrl}
+                size={avatarSize}
+                className="border border-white/30"
+              />
+              <p className={`mt-2 ${compact ? 'text-[11px]' : 'text-sm'} font-semibold text-center leading-tight break-words line-clamp-2`}>
+                {(p.name || t('seasonRecap.common.unknown')) ? `(${p.name || t('seasonRecap.common.unknown')})` : t('seasonRecap.common.unknown')}
+              </p>
+              {showAttackGA && (
+                <p className="mt-0.5 text-[11px] text-white/75">
+                  G {p.goals ?? 0} / A {p.assists ?? 0}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
@@ -859,40 +907,37 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
             <div className="mb-3 rounded-full border border-white/20 bg-white/10 px-4 py-1 text-[11px] uppercase tracking-[0.35em] text-white/70">
               {t('seasonRecap.slides.attackLeader.title')}
             </div>
-            <Flame className="h-14 w-14 text-amber-200 drop-shadow-[0_0_18px_rgba(251,191,36,0.45)] mb-3" />
-            <div className="relative mb-3">
-              <div className="absolute -inset-1 bg-amber-400/20 rounded-full blur-xl" />
-              <InitialAvatar
-                id={primaryAttackLeader.id}
-                name={primaryAttackLeader.name || t('seasonRecap.common.unknown')}
-                photoUrl={primaryAttackLeader.photoUrl}
-                size={96}
-                className="border-2 border-white/40 shadow-[0_12px_30px_rgba(0,0,0,0.45)]"
-              />
-            </div>
-            <h2 className="text-3xl font-black text-white mb-1">
-              {primaryAttackLeader.name || t('seasonRecap.common.unknown')}
-            </h2>
-            <p className="text-sm text-white/70 max-w-xs mb-4">
-              {t('seasonRecap.slides.attackLeader.subtitle')}
-            </p>
+            <Flame className="h-14 w-14 text-amber-200 drop-shadow-[0_0_18px_rgba(251,191,36,0.45)] mb-2" />
+            {renderTieHero(stats.attackLeaders, 'attackPoints', { rowThreshold: 3, showAttackGA: true })}
+            {(!Array.isArray(stats.attackLeaders) || stats.attackLeaders.length <= 1) && (
+              <>
+                <div className="relative mb-3">
+                  <div className="absolute -inset-1 bg-amber-400/20 rounded-full blur-xl" />
+                  <InitialAvatar
+                    id={primaryAttackLeader.id}
+                    name={primaryAttackLeader.name || t('seasonRecap.common.unknown')}
+                    photoUrl={primaryAttackLeader.photoUrl}
+                    size={96}
+                    className="border-2 border-white/40 shadow-[0_12px_30px_rgba(0,0,0,0.45)]"
+                  />
+                </div>
+                <h2 className="text-3xl font-black text-white mb-1">
+                  {primaryAttackLeader.name || t('seasonRecap.common.unknown')}
+                </h2>
+                <p className="text-[12px] text-white/75 mb-2">
+                  G {primaryAttackLeader.goals ?? 0} / A {primaryAttackLeader.assists ?? 0}
+                </p>
+                <p className="text-sm text-white/70 max-w-xs mb-4">
+                  {t('seasonRecap.slides.attackLeader.subtitle')}
+                </p>
+              </>
+            )}
             <div className="rounded-3xl border border-white/20 bg-white/10 px-5 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.45)]">
               <AnimatedNumber value={primaryAttackLeader.value} className="text-4xl font-black text-amber-200" />
               <p className="text-[11px] uppercase tracking-[0.25em] text-white/70 mt-1">
                 {t('seasonRecap.metrics.attackPoints')}
               </p>
             </div>
-            <div className="mt-5 flex w-full max-w-sm flex-col gap-3 sm:flex-row">
-              <div className="flex flex-1 flex-col items-center rounded-2xl border border-white/15 bg-white/5 px-4 py-2 text-center">
-                <p className="text-[11px] uppercase tracking-wide text-white/50">{t('seasonRecap.metrics.goals')}</p>
-                <AnimatedNumber value={primaryAttackLeader.goals || 0} className="text-2xl font-bold text-white" />
-              </div>
-              <div className="flex flex-1 flex-col items-center rounded-2xl border border-white/15 bg-white/5 px-4 py-2 text-center">
-                <p className="text-[11px] uppercase tracking-wide text-white/50">{t('seasonRecap.metrics.assists')}</p>
-                <AnimatedNumber value={primaryAttackLeader.assists || 0} className="text-2xl font-bold text-white" />
-              </div>
-            </div>
-            {renderTieList(stats.attackLeaders, 'attackPoints')}
           </div>
         </div>
       )
@@ -911,23 +956,27 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
             <h2 className="text-lg font-bold text-orange-200">{t('seasonRecap.slides.goldenBoot.title')}</h2>
             <h3 className="text-sm text-white/60 mb-3">{t('seasonRecap.slides.goldenBoot.subtitle')}</h3>
 
-            <div className="relative mb-3">
-              <div className="absolute -inset-2 bg-yellow-500/20 rounded-full blur-lg" />
-              <InitialAvatar
-                id={primaryScorer.id}
-                name={primaryScorer.name || t('seasonRecap.common.unknown')}
-                photoUrl={primaryScorer.photoUrl}
-                size={80}
-                className="border-2 border-yellow-400 shadow-xl"
-              />
-            </div>
+            {renderTieHero(stats.topScorers, 'goals')}
+            {(!Array.isArray(stats.topScorers) || stats.topScorers.length <= 1) && (
+              <>
+                <div className="relative mb-3">
+                  <div className="absolute -inset-2 bg-yellow-500/20 rounded-full blur-lg" />
+                  <InitialAvatar
+                    id={primaryScorer.id}
+                    name={primaryScorer.name || t('seasonRecap.common.unknown')}
+                    photoUrl={primaryScorer.photoUrl}
+                    size={80}
+                    className="border-2 border-yellow-400 shadow-xl"
+                  />
+                </div>
 
-            <h1 className="text-2xl font-black text-white mb-2">{primaryScorer.name || t('seasonRecap.common.unknown')}</h1>
+                <h1 className="text-2xl font-black text-white mb-2">{primaryScorer.name || t('seasonRecap.common.unknown')}</h1>
+              </>
+            )}
             <div className="bg-yellow-500/20 px-4 py-1.5 rounded-full border border-yellow-500/50">
               <AnimatedNumber value={primaryScorer.value} className="text-xl font-bold text-yellow-400" />
               <span className="text-xs text-yellow-200 ml-1.5 uppercase">{t('seasonRecap.metrics.goals')}</span>
             </div>
-            {renderTieList(stats.topScorers, 'goals')}
           </div>
         </div>
       )
@@ -946,23 +995,27 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
             <h2 className="text-lg font-bold text-cyan-200">{t('seasonRecap.slides.playmaker.title')}</h2>
             <h3 className="text-sm text-white/60 mb-3">{t('seasonRecap.slides.playmaker.subtitle')}</h3>
 
-            <div className="relative mb-3">
-              <div className="absolute -inset-2 bg-cyan-500/20 rounded-full blur-lg" />
-              <InitialAvatar
-                id={primaryAssister.id}
-                name={primaryAssister.name || t('seasonRecap.common.unknown')}
-                photoUrl={primaryAssister.photoUrl}
-                size={80}
-                className="border-2 border-cyan-400 shadow-xl"
-              />
-            </div>
+            {renderTieHero(stats.topAssisters, 'assists')}
+            {(!Array.isArray(stats.topAssisters) || stats.topAssisters.length <= 1) && (
+              <>
+                <div className="relative mb-3">
+                  <div className="absolute -inset-2 bg-cyan-500/20 rounded-full blur-lg" />
+                  <InitialAvatar
+                    id={primaryAssister.id}
+                    name={primaryAssister.name || t('seasonRecap.common.unknown')}
+                    photoUrl={primaryAssister.photoUrl}
+                    size={80}
+                    className="border-2 border-cyan-400 shadow-xl"
+                  />
+                </div>
 
-            <h1 className="text-2xl font-black text-white mb-2">{primaryAssister.name || t('seasonRecap.common.unknown')}</h1>
+                <h1 className="text-2xl font-black text-white mb-2">{primaryAssister.name || t('seasonRecap.common.unknown')}</h1>
+              </>
+            )}
             <div className="bg-cyan-500/20 px-4 py-1.5 rounded-full border border-cyan-500/50">
               <AnimatedNumber value={primaryAssister.value} className="text-xl font-bold text-cyan-400" />
               <span className="text-xs text-cyan-200 ml-1.5 uppercase">{t('seasonRecap.metrics.assists')}</span>
             </div>
-            {renderTieList(stats.topAssisters, 'assists')}
           </div>
         </div>
       )
@@ -980,23 +1033,27 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
             <h2 className="text-lg font-bold text-emerald-200">{t('seasonRecap.slides.ironman.title')}</h2>
             <h3 className="text-sm text-white/60 mb-3">{t('seasonRecap.slides.ironman.subtitle')}</h3>
 
-            <div className="relative mb-3">
-              <div className="absolute -inset-2 bg-emerald-500/20 rounded-full blur-lg" />
-              <InitialAvatar
-                id={primaryIron.id}
-                name={primaryIron.name || t('seasonRecap.common.unknown')}
-                photoUrl={primaryIron.photoUrl}
-                size={80}
-                className="border-2 border-emerald-400 shadow-xl"
-              />
-            </div>
+            {renderTieHero(stats.ironMen, 'matches')}
+            {(!Array.isArray(stats.ironMen) || stats.ironMen.length <= 1) && (
+              <>
+                <div className="relative mb-3">
+                  <div className="absolute -inset-2 bg-emerald-500/20 rounded-full blur-lg" />
+                  <InitialAvatar
+                    id={primaryIron.id}
+                    name={primaryIron.name || t('seasonRecap.common.unknown')}
+                    photoUrl={primaryIron.photoUrl}
+                    size={80}
+                    className="border-2 border-emerald-400 shadow-xl"
+                  />
+                </div>
 
-            <h1 className="text-2xl font-black text-white mb-2">{primaryIron.name || t('seasonRecap.common.unknown')}</h1>
+                <h1 className="text-2xl font-black text-white mb-2">{primaryIron.name || t('seasonRecap.common.unknown')}</h1>
+              </>
+            )}
             <div className="bg-emerald-500/20 px-4 py-1.5 rounded-full border border-emerald-500/50">
               <AnimatedNumber value={primaryIron.value} className="text-xl font-bold text-emerald-400" />
               <span className="text-xs text-emerald-200 ml-1.5 uppercase">{t('seasonRecap.metrics.matches')}</span>
             </div>
-            {renderTieList(stats.ironMen, 'matches')}
           </div>
         </div>
       )
@@ -1015,23 +1072,27 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
             <h2 className="text-lg font-bold text-blue-100">{t('seasonRecap.slides.wallKeepers.title')}</h2>
             <h3 className="text-sm text-white/60 mb-3">{t('seasonRecap.slides.wallKeepers.subtitle')}</h3>
 
-            <div className="relative mb-3">
-              <div className="absolute -inset-2 bg-blue-400/20 rounded-full blur-lg" />
-              <InitialAvatar
-                id={primaryKeeper.id}
-                name={primaryKeeper.name || t('seasonRecap.common.unknown')}
-                photoUrl={primaryKeeper.photoUrl}
-                size={80}
-                className="border-2 border-blue-200 shadow-xl"
-              />
-            </div>
+            {renderTieHero(stats.cleanSheetMasters, 'cleanSheets')}
+            {(!Array.isArray(stats.cleanSheetMasters) || stats.cleanSheetMasters.length <= 1) && (
+              <>
+                <div className="relative mb-3">
+                  <div className="absolute -inset-2 bg-blue-400/20 rounded-full blur-lg" />
+                  <InitialAvatar
+                    id={primaryKeeper.id}
+                    name={primaryKeeper.name || t('seasonRecap.common.unknown')}
+                    photoUrl={primaryKeeper.photoUrl}
+                    size={80}
+                    className="border-2 border-blue-200 shadow-xl"
+                  />
+                </div>
 
-            <h1 className="text-2xl font-black text-white mb-2">{primaryKeeper.name || t('seasonRecap.common.unknown')}</h1>
+                <h1 className="text-2xl font-black text-white mb-2">{primaryKeeper.name || t('seasonRecap.common.unknown')}</h1>
+              </>
+            )}
             <div className="bg-blue-400/20 px-4 py-1.5 rounded-full border border-blue-300/50">
               <AnimatedNumber value={primaryKeeper.value} className="text-xl font-bold text-blue-100" />
               <span className="text-xs text-blue-100/80 ml-1.5 uppercase">{t('seasonRecap.metrics.cleanSheets')}</span>
             </div>
-            {renderTieList(stats.cleanSheetMasters, 'cleanSheets')}
           </div>
         </div>
       )
