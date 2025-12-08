@@ -362,7 +362,7 @@
     "noGoals": "득점 없음",
     "totalEvents": "총 {{count}}건",
     "goalEvent": "⚽ 득점",
-    "ownGoal": "OG",
+    "ownGoal": "자책골",
     "fieldGoal": "G",
     "inducedBy": "유도: {{name}}",
     "assistBy": "도움: {{name}}",

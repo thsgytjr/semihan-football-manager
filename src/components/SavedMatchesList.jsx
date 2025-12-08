@@ -2209,8 +2209,12 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                         return (
                           <span className="inline-flex items-center gap-1">
                             <span
-                              className="h-2.5 w-2.5 rounded-full border border-white/60"
-                              style={{ backgroundColor: dotColor }}
+                              className="h-2.5 w-2.5 rounded-full border"
+                              style={{
+                                backgroundColor: dotColor,
+                                borderColor: '#cbd5e1', // slate-300 outline for visibility on light colors
+                                boxShadow: '0 0 0 1px rgba(148,163,184,0.6)'
+                              }}
                               aria-hidden="true"
                             />
                           </span>
@@ -2282,8 +2286,12 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   ) : (
                     <ul className="mt-2 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-100 bg-white/95 text-[11px] text-gray-900">
                       {evs.map(ev => {
-                        const scorerName = ev.scorerId ? (byId.get(String(ev.scorerId))?.name || ev.scorerId) : t('matchHistory.ownGoal')
-                        const assistName = ev.assistId ? (byId.get(String(ev.assistId))?.name || ev.assistId) : ''
+                        const scorerPlayer = ev.scorerId ? byId.get(String(ev.scorerId)) : null
+                        const assistPlayer = ev.assistId ? byId.get(String(ev.assistId)) : null
+                        const scorerName = scorerPlayer?.name || (ev.scorerId ? ev.scorerId : t('matchHistory.ownGoal'))
+                        const assistName = assistPlayer?.name || (ev.assistId ? ev.assistId : '')
+                        const scorerPhoto = (!ev.ownGoal && scorerPlayer?.photoUrl) ? scorerPlayer.photoUrl : null
+                        const assistPhoto = assistPlayer?.photoUrl || null
                         const isOwnGoal = !!ev.ownGoal
                         const kitPaletteRow = [
                           { bg: '#f8fafc', text: '#0f172a', border: '#e2e8f0', label: 'White' },
@@ -2305,7 +2313,6 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                         return (
                           <li key={ev.id} className="flex items-start gap-3 px-3 py-2.5">
                             <div className="flex flex-col items-start gap-1 text-[10px] font-semibold min-w-[88px]">
-                              <span className="inline-flex h-6 min-w-[70px] items-center justify-center rounded-full bg-sky-100 px-2 text-sky-800">{t('matchHistory.goalEvent')}</span>
                               <span
                                 className="inline-flex h-5 min-w-[70px] items-center justify-center rounded-full px-2 border"
                                 style={{ backgroundColor: resolvedColor?.bg, color: resolvedColor?.text, borderColor: resolvedColor?.border || resolvedColor?.bg }}
@@ -2316,17 +2323,31 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
 
                             <div className="flex-1 min-w-0 space-y-1">
                               <div className="flex items-center gap-2 text-[12px] font-semibold text-gray-900">
-                                <span className="truncate">{scorerName || t('matchHistory.scorerUnspecified')}</span>
+                                {!isOwnGoal && (
+                                  <span className="flex-shrink-0">
+                                    <InitialAvatar size={22} name={scorerName || t('matchHistory.scorerUnspecified')} photoUrl={scorerPhoto} />
+                                  </span>
+                                )}
+                                <span className="inline-flex min-w-0 max-w-[140px] overflow-x-auto whitespace-nowrap scrollbar-thin pr-1" title={scorerName || t('matchHistory.scorerUnspecified')}>
+                                  {scorerName || t('matchHistory.scorerUnspecified')}
+                                </span>
                                 <span className={`inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[10px] font-semibold ${isOwnGoal ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
                                   {isOwnGoal ? t('matchHistory.ownGoal') : t('matchHistory.fieldGoal')}
                                 </span>
                               </div>
-                              <div className="text-[10px] text-gray-600">
-                                {assistName
-                                  ? (isOwnGoal
-                                    ? t('matchHistory.inducedBy', { name: assistName })
-                                    : t('matchHistory.assistBy', { name: assistName }))
-                                  : t('matchHistory.assistNone')}
+                              <div className="text-[10px] text-gray-600 flex items-center gap-1.5">
+                                {assistName && (
+                                  <span className="flex-shrink-0">
+                                    <InitialAvatar size={18} name={assistName} photoUrl={assistPhoto} />
+                                  </span>
+                                )}
+                                <span className="inline-flex min-w-0 max-w-[140px] overflow-x-auto whitespace-nowrap scrollbar-thin pr-1" title={assistName || t('matchHistory.assistNone')}>
+                                  {assistName
+                                    ? (isOwnGoal
+                                      ? t('matchHistory.inducedBy', { name: assistName })
+                                      : t('matchHistory.assistBy', { name: assistName }))
+                                    : t('matchHistory.assistNone')}
+                                </span>
                               </div>
                             </div>
                           </li>
