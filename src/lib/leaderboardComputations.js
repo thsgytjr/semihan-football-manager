@@ -73,7 +73,14 @@ export function computeAttackRows(players = [], matches = []) {
     return all.some(s => s.includes('GK') || s.includes('골키퍼') || s.includes('KEEPER') || s.includes('DF') || s.includes('DEF') || s.includes('수비'))
   }
   
+  const seenMatchIds = new Set()
+
   for (const m of (matches || [])) {
+    const mid = toStr(m?.id)
+    if (mid) {
+      if (seenMatchIds.has(mid)) continue
+      seenMatchIds.add(mid)
+    }
     const attendedIds = new Set(extractAttendeeIds(m))
     const statsMap = extractStatsByPlayer(m)
   const teams = extractSnapshotTeams(m)

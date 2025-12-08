@@ -59,6 +59,7 @@ export default function App(){
   const[pageLoading,setPageLoading]=useState(false)
   const[loadError,setLoadError]=useState(null)
   const[loadAttempt,setLoadAttempt]=useState(0)
+  const[serverOutage,setServerOutage]=useState(false)
   const[appTitle,setAppTitle]=useState(()=>getAppSettings().appTitle)
   const[settingsOpen,setSettingsOpen]=useState(false)
   const[seasonRecapEnabled,setSeasonRecapEnabled]=useState(()=>getAppSettings().seasonRecapEnabled)
@@ -123,6 +124,7 @@ export default function App(){
   // 사용자가 수동 재시도할 때 호출 (새로고침 없이 재시도)
   const handleRetryLoading = useCallback(() => {
     setLoadError(null)
+    setServerOutage(false)
     setLoading(true)
     setLoadAttempt(prev => prev + 1)
   }, [])
@@ -260,15 +262,28 @@ export default function App(){
 
         // Matches 로드: USE_MATCHES_TABLE 플래그에 따라 분기
         let matchesData = []
+        let matchesRaw = null
         if (USE_MATCHES_TABLE) {
           logger.log('[App] Loading matches from Supabase matches table')
-          matchesData = await withTimeout(listMatchesFromDB(), 6000, 'listMatchesFromDB') || []
+          matchesRaw = await withTimeout(listMatchesFromDB(), 6000, 'listMatchesFromDB')
+          matchesData = matchesRaw || []
         } else {
           logger.log('[App] Loading matches from appdb JSON')
+          matchesRaw = []
           matchesData = []
         }
 
         if(!mounted) return
+
+        // 주요 Supabase 호출 실패 시 유지보수 화면으로 전환
+        const coreResponses=[playersFromDB,membershipSettings,upcomingRaw,tagPresetRaw]
+        const coreAllFailed=coreResponses.every(res=>res===null||res===undefined)
+        const matchesFailed=USE_MATCHES_TABLE&&matchesRaw===null
+        if(coreAllFailed||matchesFailed){
+          setServerOutage(true)
+          setLoadError('서버 연결에 문제가 있어 일시적으로 서비스가 중단되었습니다. 잠시 후 다시 시도해주세요.')
+          throw new Error('Core Supabase requests failed')
+        }
 
         // 로딩 성공 시 재시도 카운터 초기화
         sessionStorage.removeItem('sfm:retry_count')
@@ -344,6 +359,9 @@ export default function App(){
         }
       }catch(e){
         logger.error("[App] initial load failed",e)
+        if(!serverOutage){
+          setLoadError(prev=>prev||'데이터를 불러오지 못했어요. 잠시 후 다시 시도해주세요.')
+        }
       }
       finally{
         if(mounted) setLoading(false)
@@ -1111,7 +1129,7 @@ export default function App(){
     </header>
 
     <main className="mx-auto max-w-6xl p-4">
-      {(maintenanceMode || new URLSearchParams(window.location.search).has('maintenance')) && !isAnalyticsAdmin ? (
+      {(maintenanceMode || serverOutage || new URLSearchParams(window.location.search).has('maintenance')) && !isAnalyticsAdmin ? (
         <MaintenancePage />
       ) : showAuthError ? (
         <Suspense fallback={<div className="py-16 text-center text-sm text-stone-500">{t('skeleton.authError')}</div>}>
