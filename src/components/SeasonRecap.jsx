@@ -640,16 +640,12 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     { id: 'assists', label: t('seasonRecap.finale.stats.assists'), value: stats.totalAssists }
   ]
 
-  const renderTieHero = (players, metricKey, { rowThreshold = 0, showAttackGA = false } = {}) => {
+  const renderTieHero = (players, metricKey, { showAttackGA = false } = {}) => {
     if (!Array.isArray(players) || players.length <= 1) return null
     const count = players.length
-    const isRowLayout = rowThreshold > 0 && count <= rowThreshold
-    const compact = !isRowLayout && count >= 3
-    // 점진적으로 축소하여 화면 넘침 방지
+    const compact = count >= 3
     // 화면 넘침 방지를 위해 선수 수에 따라 강하게 축소
-    const avatarSize = isRowLayout
-      ? 60
-      : count >= 28
+    const avatarSize = count >= 28
       ? 22
       : count >= 24
       ? 24
@@ -667,15 +663,12 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     const minCardWidth = Math.max(avatarSize + 12, 40)
     const gapSize = count >= 24 ? '0.28rem' : count >= 16 ? '0.38rem' : count >= 10 ? '0.48rem' : '0.6rem'
     const cardPadding = count >= 20 ? '3px 3px 5px' : count >= 12 ? '4px 4px 6px' : '8px'
+    const columns = Math.min(4, Math.max(1, count))
     return (
       <div className="w-full max-w-6xl mx-auto mb-5 px-1">
         <div
-          className={isRowLayout ? "flex flex-wrap justify-center" : "grid justify-center"}
-          style={
-            isRowLayout
-              ? { gap: gapSize }
-              : { gridTemplateColumns: `repeat(auto-fit, minmax(${minCardWidth}px, 1fr))`, gap: gapSize }
-          }
+          className="grid justify-center"
+          style={{ gridTemplateColumns: `repeat(${columns}, minmax(${minCardWidth}px, 1fr))`, gap: gapSize }}
         >
           {players.map((p) => (
             <div
