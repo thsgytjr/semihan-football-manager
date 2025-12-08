@@ -356,7 +356,23 @@
     "weightedGamesNote": "💡 When teams play different number of games, only top {{minGames}} performances are compared",
     "weightedGamesExample": "e.g., T1 & T2 play 3, T3 plays 2 → Compare top 2 games for all teams",
     "decidedByGoalDiff": "Decided by goal difference",
-    "decidedByGoalsScored": "Decided by goals scored"
+    "decidedByGoalsScored": "Decided by goals scored",
+    "gameNumber": "Game {{n}}",
+    "gameWin": "{{team}} win",
+    "gameDraw": "Draw",
+    "gameEventsTitle": "Per-Game Scoring Detail",
+    "collapse": "Collapse",
+    "expand": "Expand",
+    "noGoals": "No goals",
+    "totalEvents": "Total {{count}} events",
+    "goalEvent": "⚽ Goal",
+    "ownGoal": "Own goal",
+    "fieldGoal": "Regular goal",
+    "inducedBy": "Induced by {{name}}",
+    "assistBy": "Assist: {{name}}",
+    "assistNone": "No assist recorded",
+    "scorerUnspecified": "Scorer not specified",
+    "noRecord": "No record"
   },
   "mom": {
     "popup": {

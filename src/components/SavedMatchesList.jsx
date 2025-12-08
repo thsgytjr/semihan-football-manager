@@ -9,32 +9,24 @@ import { formatMatchLabel } from "../lib/matchLabel"
 import { logger } from "../lib/logger"
 import { getMembershipBadge } from "../lib/membershipConfig"
 import * as MatchHelpers from "../lib/matchHelpers"
+import { computeGameEvents } from "../lib/gameEvents"
 import draftIcon from "../assets/draft.png"
 import captainIcon from "../assets/Captain.PNG"
 
-/* ---------------------- 유틸리티 함수 ---------------------- */
-/**
- * 2개 구장에서 팀들이 완전히 분리되어 경기했는지 판별
- * @param {Array} gameMatchups - 각 쿼터의 매치업 정보 [[field1_pairs], [field2_pairs], ...]
- * @param {number} teamCount - 전체 팀 수
- * @returns {Object|null} - 분리된 경우 { field1Teams: Set, field2Teams: Set }, 섞인 경우 null
- */
+// 두 구장에서 팀들이 완전히 분리되어 경기했는지 판별
 function checkFieldSeparation(gameMatchups, teamCount) {
   if (!gameMatchups || gameMatchups.length === 0) return null
-  
+
   const field1Teams = new Set()
   const field2Teams = new Set()
-  
+
   for (const matchup of gameMatchups) {
     if (!matchup || !Array.isArray(matchup)) continue
-    
     // 각 쿼터의 매치업은 보통 2개 페어 (2개 구장)
     matchup.forEach((pair, fieldIdx) => {
       if (!Array.isArray(pair) || pair.length !== 2) return
       const [a, b] = pair
       if (a === null || a === undefined || b === null || b === undefined) return
-      
-      // 첫 번째 페어는 구장1, 두 번째 페어는 구장2로 가정
       if (fieldIdx === 0) {
         field1Teams.add(a)
         field1Teams.add(b)
@@ -44,332 +36,23 @@ function checkFieldSeparation(gameMatchups, teamCount) {
       }
     })
   }
-  
+
   // 교집합이 있으면 섞인 것
   const intersection = new Set([...field1Teams].filter(t => field2Teams.has(t)))
   if (intersection.size > 0) return null
-  
+
   // 합집합이 전체 팀을 커버하지 못하면 무효
   const allTeamsInFields = new Set([...field1Teams, ...field2Teams])
   if (allTeamsInFields.size !== teamCount) return null
-  
+
   // 각 구장에 최소 2팀 이상 있어야 함
   if (field1Teams.size < 2 || field2Teams.size < 2) return null
-  
+
   return { field1Teams, field2Teams }
 }
 
-/* ---------------------- 폭죽 효과 컴포넌트 ---------------------- */
-function Confetti() {
-  const canvasRef = useRef(null)
-  const animationStartTime = useRef(null)
-  const ANIMATION_DURATION = 30000 // 30 seconds total animation
-
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-
-    const ctx = canvas.getContext('2d')
-    const colors = ['#fbbf24', '#f59e0b', '#ef4444', '#3b82f6', '#10b981', '#a855f7', '#fde047', '#e11d48']
-
-    // Reset animation start time when component mounts
-    animationStartTime.current = null
-
-    // DPI aware canvas sizing
-    const resize = () => {
-      const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1))
-      const w = canvas.offsetWidth
-      const h = canvas.offsetHeight
-      canvas.width = Math.max(1, Math.floor(w * dpr))
-      canvas.height = Math.max(1, Math.floor(h * dpr))
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-      ctx.clearRect(0, 0, w, h)
-    }
-    resize()
-    window.addEventListener('resize', resize)
-
-    // Firework shell and spark models
-    const shells = []
-    const sparks = []
-    const maxSparks = 400 // Increased for bigger explosions
-    const gravity = 0.06 // Slightly reduced gravity for longer hang time
-    const airDrag = 0.985 // Less drag for wider spread
-
-    let raf = 0
-    let lastSpawn = 0
-    let finaleTriggered = false
-
-    function spawnShell(now) {
-      const w = canvas.offsetWidth
-      const h = canvas.offsetHeight
-      if (w <= 0 || h <= 0) return // Guard against invalid dimensions
-      
-      const x = Math.random() * w * 0.8 + w * 0.1 // Wider launch area
-      const y = h + 10
-      const targetY = h * (0.2 + Math.random() * 0.3) // Higher explosions for better visibility
-      const vy = -(5 + Math.random() * 3) // More launch power
-      const vx = (Math.random() - 0.5) * 1.5 // More lateral movement
-      const color = colors[Math.floor(Math.random() * colors.length)]
-      shells.push({ x, y, vx, vy, targetY, color, trail: [] })
-      lastSpawn = now
-    }
-
-    function explode(shell) {
-      const w = canvas.offsetWidth
-      const h = canvas.offsetHeight
-      const count = 80 + Math.floor(Math.random() * 40) // Increased particle count for bigger show
-      const baseHue = shell.color
-      for (let i = 0; i < count; i++) {
-        const ang = (i / count) * Math.PI * 2 + Math.random() * 0.2
-        const spd = 3.5 + Math.random() * 3.0 // Much higher speed for wider spread
-        const vx = Math.cos(ang) * spd
-        const vy = Math.sin(ang) * spd
-        const life = 35 + Math.floor(Math.random() * 25) // Longer life for bigger show
-        const size = 1.5 + Math.random() * 1.5 // Larger particles
-        sparks.push({
-          x: shell.x,
-          y: shell.y,
-          vx,
-          vy,
-          life,
-          age: 0,
-          size,
-          color: baseHue,
-          trail: []
-        })
-      }
-      // More aggressive spark cleanup
-      if (sparks.length > maxSparks) {
-        sparks.splice(0, sparks.length - maxSparks)
-      }
-    }
-
-    function spawnFinaleConfetti() {
-      const w = canvas.offsetWidth
-      const h = canvas.offsetHeight
-      const finaleCount = 200 + Math.floor(Math.random() * 150) // 200-350 particles for better coverage
-      
-      // Create multiple explosion points with better right-side coverage
-      const explosionPoints = [
-        { x: w * 0.1, y: h * 0.25 },  // Far left top
-        { x: w * 0.25, y: h * 0.35 }, // Left
-        { x: w * 0.4, y: h * 0.2 },   // Left-center top
-        { x: w * 0.5, y: h * 0.3 },   // Center
-        { x: w * 0.6, y: h * 0.2 },   // Right-center top
-        { x: w * 0.75, y: h * 0.35 }, // Right
-        { x: w * 0.9, y: h * 0.25 },  // Far right top
-        { x: w * 0.15, y: h * 0.5 },  // Left middle
-        { x: w * 0.85, y: h * 0.5 },  // Right middle
-        { x: w * 0.95, y: h * 0.4 },  // Very far right
-        { x: w * 0.05, y: h * 0.4 }   // Very far left
-      ]
-      
-      explosionPoints.forEach((point, pointIndex) => {
-        const particlesPerPoint = Math.floor(finaleCount / explosionPoints.length)
-        for (let i = 0; i < particlesPerPoint; i++) {
-          const ang = (i / particlesPerPoint) * Math.PI * 2 + Math.random() * 0.4
-          const spd = 5.0 + Math.random() * 5.0 // Even higher speed for better coverage
-          const vx = Math.cos(ang) * spd
-          const vy = Math.sin(ang) * spd
-          const life = 60 + Math.floor(Math.random() * 40) // Longer lasting finale
-          const size = 2.5 + Math.random() * 2.5 // Even larger particles
-          const color = colors[Math.floor(Math.random() * colors.length)]
-          
-          sparks.push({
-            x: point.x,
-            y: point.y,
-            vx,
-            vy,
-            life,
-            age: 0,
-            size,
-            color,
-            trail: [],
-            isFinale: true // Mark as finale particle
-          })
-        }
-      })
-      
-      // Cap total sparks
-      if (sparks.length > maxSparks * 2) { // Allow more for finale
-        sparks.splice(0, sparks.length - maxSparks * 2)
-      }
-    }
-
-    function step(now) {
-      // Initialize animation start time
-      if (animationStartTime.current === null) {
-        animationStartTime.current = now
-      }
-
-      // Check if animation should end
-      const elapsed = now - animationStartTime.current
-      if (elapsed > ANIMATION_DURATION) {
-        // Complete canvas clearing - multiple methods to ensure all traces are gone
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-        ctx.clearRect(0, 0, canvas.offsetWidth, canvas.offsetHeight)
-        ctx.globalAlpha = 1
-        ctx.globalCompositeOperation = 'source-over'
-        // Clear all particle arrays
-        shells.length = 0
-        sparks.length = 0
-        return // Stop the animation loop
-      }
-
-      const w = canvas.offsetWidth
-      const h = canvas.offsetHeight
-      
-      // Clear entire canvas with proper dimensions - use canvas actual size
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      // Also clear with display dimensions as backup
-      ctx.clearRect(0, 0, w, h)
-
-      // Spawn shells for first 25 seconds, with more frequent launches for bigger show
-      if (elapsed < 25000 && now - lastSpawn > 800 + Math.random() * 600 && shells.length < 3) {
-        spawnShell(now)
-      }
-
-      // Trigger finale confetti at 27 seconds (3 seconds before end)
-      if (elapsed >= 27000 && !finaleTriggered) {
-        spawnFinaleConfetti()
-        finaleTriggered = true
-      }
-
-      // Update shells with bounds checking
-      for (let i = shells.length - 1; i >= 0; i--) {
-        const s = shells[i]
-        if (!s) continue // Safety check
-        
-        s.trail.push({ x: s.x, y: s.y })
-        if (s.trail.length > 6) s.trail.shift() // Shorter trail
-        
-        s.x += s.vx
-        s.y += s.vy
-        s.vy += gravity * 0.3
-        
-        // Draw shell trail with bounds checking
-        if (s.trail.length > 1) {
-          ctx.beginPath()
-          ctx.strokeStyle = s.color
-          ctx.lineWidth = 1.5
-          for (let t = 0; t < s.trail.length - 1; t++) {
-            const a = s.trail[t]
-            const b = s.trail[t + 1]
-            if (a && b) {
-              ctx.globalAlpha = (t + 1) / s.trail.length * 0.7
-              ctx.moveTo(a.x, a.y)
-              ctx.lineTo(b.x, b.y)
-            }
-          }
-          ctx.stroke()
-          ctx.globalAlpha = 1
-        }
-
-        // Check for explosion or removal
-        if (s.vy >= 0 || s.y <= s.targetY) {
-          explode(s)
-          shells.splice(i, 1)
-        } else if (s.x < -50 || s.x > w + 50 || s.y > h + 50) {
-          shells.splice(i, 1)
-        }
-      }
-
-      // Update sparks with more aggressive cleanup
-      for (let i = sparks.length - 1; i >= 0; i--) {
-        const p = sparks[i]
-        if (!p) continue // Safety check
-        
-        p.trail.push({ x: p.x, y: p.y })
-        if (p.trail.length > 4) p.trail.shift() // Much shorter trail
-        
-        p.x += p.vx
-        p.y += p.vy
-        p.vx *= airDrag
-        p.vy = p.vy * airDrag + gravity
-        p.age++
-
-        const alpha = Math.max(0, 1 - p.age / p.life)
-        
-        // Draw trail with bounds checking
-        if (p.trail.length > 1 && alpha > 0.1) {
-          ctx.beginPath()
-          ctx.strokeStyle = p.color
-          ctx.lineWidth = Math.max(0.5, p.size * 0.8)
-          for (let t = 0; t < p.trail.length - 1; t++) {
-            const a = p.trail[t]
-            const b = p.trail[t + 1]
-            if (a && b) {
-              ctx.globalAlpha = alpha * ((t + 1) / p.trail.length) * 0.6
-              ctx.moveTo(a.x, a.y)
-              ctx.lineTo(b.x, b.y)
-            }
-          }
-          ctx.stroke()
-        }
-
-        // Draw spark head - make finale particles more prominent
-        if (alpha > 0.1) {
-          ctx.beginPath()
-          ctx.fillStyle = p.color
-          ctx.globalAlpha = alpha
-          const sparkSize = p.isFinale ? Math.max(1.0, p.size * 1.5) : Math.max(0.5, p.size)
-          ctx.arc(p.x, p.y, sparkSize, 0, Math.PI * 2)
-          ctx.fill()
-          
-          // Add extra glow for finale particles
-          if (p.isFinale && alpha > 0.3) {
-            ctx.beginPath()
-            ctx.globalAlpha = alpha * 0.3
-            ctx.arc(p.x, p.y, sparkSize * 2, 0, Math.PI * 2)
-            ctx.fill()
-          }
-        }
-        
-        // Always reset global alpha to prevent accumulation
-        ctx.globalAlpha = 1
-
-        // More aggressive removal conditions - but keep finale particles longer and allow wider spread
-        const isFinaleParticle = p.isFinale === true
-        const removalThreshold = isFinaleParticle ? 0.05 : 0.1
-        const boundary = isFinaleParticle ? 100 : 50 // Allow finale particles to go further off-screen
-        if (p.age > p.life || alpha <= removalThreshold || p.x < -boundary || p.x > w + boundary || p.y > h + boundary || 
-            (!isFinaleParticle && Math.abs(p.vx) < 0.1 && Math.abs(p.vy) < 0.1)) {
-          sparks.splice(i, 1)
-        }
-      }
-
-      // Continue animation only if we haven't exceeded duration
-      if (elapsed < ANIMATION_DURATION) {
-        raf = requestAnimationFrame(step)
-      }
-    }
-
-    raf = requestAnimationFrame(step)
-
-    return () => {
-      window.removeEventListener('resize', resize)
-      if (raf) {
-        cancelAnimationFrame(raf)
-      }
-      // Clear canvas on cleanup - multiple methods to ensure complete clearing
-      if (ctx && canvas) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height)
-        ctx.clearRect(0, 0, canvas.offsetWidth, canvas.offsetHeight)
-        // Reset canvas state
-        ctx.globalAlpha = 1
-        ctx.globalCompositeOperation = 'source-over'
-      }
-    }
-  }, [])
-
-  return (
-    <canvas
-      ref={canvasRef}
-      className="absolute inset-0 pointer-events-none z-10"
-      style={{ width: '100%', height: '100%' }}
-    />
-  )
-}
+// Confetti effect disabled for now to avoid layout/compile issues
+function Confetti() { return null }
 
 const S = (v)=>v==null?"":String(v)
 const isMember = (m)=>{ const s=S(m).trim().toLowerCase(); return s==="member"||s.includes("정회원") }
@@ -766,6 +449,28 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
 
   // ✅ 이 매치의 선수별 G/A 매핑 계산
   const gaByPlayer = useMemo(()=>extractStatsByPlayerForOneMatch(m), [m])
+
+  // ✅ 경기별 득점/어시 매핑: 저장값 우선, 없으면 시간순 자동계산
+  const gameEvents = useMemo(() => {
+    const stored = Array.isArray(m?.gameEvents)
+      ? m.gameEvents
+      : Array.isArray(m?.statsMeta?.gameEvents)
+        ? m.statsMeta.gameEvents
+        : null
+    if (stored && stored.length > 0) return stored
+    return computeGameEvents(m, players)
+  }, [m, players])
+  const groupedGameEvents = useMemo(() => {
+    const maxGame = Math.max(1, ...gameEvents.map(ev => Number(ev.gameIndex || 0) + 1))
+    const base = Array.from({ length: maxGame }, () => [])
+    gameEvents.forEach(ev => {
+      const gi = Math.min(maxGame - 1, Math.max(0, Number(ev.gameIndex) || 0))
+      base[gi].push(ev)
+    })
+    return base
+  }, [gameEvents])
+  const hasGameEvents = useMemo(() => groupedGameEvents.some(arr => arr.length > 0), [groupedGameEvents])
+  const [showGameEvents, setShowGameEvents] = useState(false)
   
   // ✅ G/A 표시 토글: 기본 꺼짐
   const [showGA, setShowGA] = useState(false)
@@ -888,6 +593,51 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
     if (Array.isArray(m.scores) && Array.isArray(draftSnap) && m.scores.length===draftSnap.length) return draftSnap.map((_,i)=>[m.scores[i]])
     return null
   },[m, draftSnap])
+
+  const hasRecordedScores = useMemo(() => {
+    if (!Array.isArray(displayedQuarterScores)) return false
+    return displayedQuarterScores.some(teamScores => {
+      if (Array.isArray(teamScores)) {
+        return teamScores.some(v => v !== null && v !== undefined && v !== '')
+      }
+      return teamScores !== null && teamScores !== undefined && teamScores !== ''
+    })
+  }, [displayedQuarterScores])
+
+  const perGameScores = useMemo(() => {
+    const teamCount = draftSnap.length
+    if (!teamCount) return []
+
+    const maxGameFromQuarters = Array.isArray(displayedQuarterScores)
+      ? displayedQuarterScores.reduce((max, teamScores) => {
+          const len = Array.isArray(teamScores) ? teamScores.length : 0
+          return Math.max(max, len)
+        }, 0)
+      : 0
+
+    const gameCount = Math.max(groupedGameEvents.length || 0, maxGameFromQuarters)
+
+    return Array.from({ length: gameCount }, (_, gi) => {
+      const eventScoreByTeam = {}
+      const evs = groupedGameEvents[gi] || []
+      evs.forEach(ev => {
+        const ti = Math.max(0, Number(ev.teamIndex) || 0)
+        eventScoreByTeam[ti] = (eventScoreByTeam[ti] || 0) + 1
+      })
+
+      const scores = Array.from({ length: teamCount }, (_, ti) => {
+        const qScore = Array.isArray(displayedQuarterScores?.[ti]) ? displayedQuarterScores[ti][gi] : undefined
+        if (qScore !== undefined) return Number(qScore) || 0
+        return eventScoreByTeam[ti] || 0
+      })
+
+      const maxScore = scores.length ? Math.max(...scores) : 0
+      const winners = scores.map((score, idx) => score === maxScore ? idx : -1).filter(idx => idx >= 0)
+      const isDraw = winners.length > 1
+
+      return { scores, winners, isDraw }
+    })
+  }, [displayedQuarterScores, groupedGameEvents, draftSnap])
 
   // ✅ Check if match has any recorded stats (goals or assists)
   const hasStats = useMemo(() => {
@@ -1448,38 +1198,37 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   const hasFieldSeparation = currentStats.some(s => s.fieldName && s.fieldName !== '')
                   
                   if (hasFieldSeparation) {
-                    const field1Teams = currentStats.map((s, i) => ({ ...s, index: i })).filter(s => s.fieldName === '구장1')
-                    const field2Teams = currentStats.map((s, i) => ({ ...s, index: i })).filter(s => s.fieldName === '구장2')
+                        const field1Teams = currentStats.map((s, i) => ({ ...s, index: i })).filter(s => s.fieldName === '구장1')
+                        const field2Teams = currentStats.map((s, i) => ({ ...s, index: i })).filter(s => s.fieldName === '구장2')
                     
                     return (
                       <>
                         {/* 구장1 */}
                         <div className="mb-3">
-                          <div className="text-xs font-bold text-indigo-700 mb-1.5 px-2">🏟️ 구장 1</div>
+                          <div className="text-xs font-bold text-indigo-700 mb-1 px-2">{t('matchHistory.fieldN',{n:1})}</div>
                           <div className="space-y-1">
                             {field1Teams.map(({ index: ti, ...score }) => {
                               const isLeader = leaders.includes(ti)
                               return (
                                 <div 
                                   key={ti} 
-                                  className={`flex items-center justify-between px-2.5 py-2 rounded-lg transition-all ${
+                                  className={`flex items-center justify-between px-2 py-1.5 rounded-lg transition-all ${
                                     isLeader 
-                                      ? 'bg-gradient-to-r from-amber-100 via-yellow-100 to-amber-100 border border-amber-300 shadow-sm' 
+                                      ? 'bg-amber-50 border border-amber-200 shadow-sm' 
                                       : 'bg-white border border-blue-200'
                                   }`}
                                 >
-                                  <div className="flex items-center gap-2">
-                                    <span className={`text-sm font-bold ${isLeader ? 'text-amber-900' : 'text-gray-700'}`}>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`text-[12px] sm:text-sm font-semibold ${isLeader ? 'text-amber-900' : 'text-gray-700'}`}>
                                       {t('matchHistory.team')} {ti + 1}
                                     </span>
-                                    {isLeader && <span className="text-base">🏆</span>}
                                   </div>
                                   
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
+                                  <div className="flex items-center gap-1 sm:gap-1.5">
+                                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
                                       {t('matchHistory.points')} {score.totalPoints}
                                     </span>
-                                    <span className="text-xs text-gray-600">{t('matchHistory.totalGoals',{count: score.total})}</span>
+                                    <span className="text-[11px] text-gray-600">{t('matchHistory.totalGoals',{count: score.total})}</span>
                                   </div>
                                 </div>
                               )
@@ -1489,31 +1238,30 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                         
                         {/* 구장2 */}
                         <div>
-                          <div className="text-xs font-bold text-indigo-700 mb-1.5 px-2">🏟️ {t('matchHistory.fieldN',{n:2})}</div>
+                          <div className="text-xs font-bold text-indigo-700 mb-1 px-2">{t('matchHistory.fieldN',{n:2})}</div>
                           <div className="space-y-1">
                             {field2Teams.map(({ index: ti, ...score }) => {
                               const isLeader = leaders.includes(ti)
                               return (
                                 <div 
                                   key={ti} 
-                                  className={`flex items-center justify-between px-2.5 py-2 rounded-lg transition-all ${
+                                  className={`flex items-center justify-between px-2 py-1.5 rounded-lg transition-all ${
                                     isLeader 
-                                      ? 'bg-gradient-to-r from-amber-100 via-yellow-100 to-amber-100 border border-amber-300 shadow-sm' 
+                                      ? 'bg-amber-50 border border-amber-200 shadow-sm' 
                                       : 'bg-white border border-blue-200'
                                   }`}
                                 >
-                                  <div className="flex items-center gap-2">
-                                    <span className={`text-sm font-bold ${isLeader ? 'text-amber-900' : 'text-gray-700'}`}>
+                                  <div className="flex items-center gap-1">
+                                    <span className={`text-[12px] sm:text-sm font-semibold ${isLeader ? 'text-amber-900' : 'text-gray-700'}`}>
                                       {t('matchHistory.team')} {ti + 1}
                                     </span>
-                                    {isLeader && <span className="text-base">🏆</span>}
                                   </div>
                                   
-                                  <div className="flex items-center gap-3">
-                                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
+                                  <div className="flex items-center gap-1 sm:gap-1.5">
+                                    <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
                                       {t('matchHistory.points')} {score.totalPoints}
                                     </span>
-                                    <span className="text-xs text-gray-600">{t('matchHistory.totalGoals',{count: score.total})}</span>
+                                    <span className="text-[11px] text-gray-600">{t('matchHistory.totalGoals',{count: score.total})}</span>
                                   </div>
                                 </div>
                               )
@@ -1531,33 +1279,32 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                     return (
                       <div 
                         key={ti} 
-                        className={`flex items-center justify-between px-2.5 py-2 rounded-lg transition-all ${
+                        className={`flex items-center justify-between px-2 py-1.5 rounded-lg transition-all ${
                           isLeader 
-                            ? 'bg-gradient-to-r from-amber-100 via-yellow-100 to-amber-100 border border-amber-300 shadow-sm' 
+                            ? 'bg-amber-50 border border-amber-200 shadow-sm' 
                             : 'bg-white border border-blue-200'
                         }`}
                       >
-                        <div className="flex items-center gap-2">
-                          <span className={`text-sm font-bold ${isLeader ? 'text-amber-900' : 'text-gray-700'}`}>
+                                  <div className="flex items-center gap-1">
+                          <span className={`text-[12px] sm:text-sm font-semibold ${isLeader ? 'text-amber-900' : 'text-gray-700'}`}>
                             {t('matchHistory.team')} {ti + 1}
                           </span>
-                          {isLeader && <span className="text-base">🏆</span>}
                         </div>
                         
-                        <div className="flex items-center gap-3">
+                                  <div className="flex items-center gap-1.5 sm:gap-2">
                           {isThreeTeams || (score.totalPoints !== undefined) ? (
                             <>
-                              <span className="text-xs font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
+                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-emerald-100 text-emerald-700">
                                 {t('matchHistory.points')} {score.totalPoints}
                               </span>
                               {score.gp && (currentStats.some(s=>s.gp!==currentStats[0].gp)) && (
-                                <span className="text-xs font-semibold px-2 py-0.5 rounded bg-purple-100 text-purple-700" title={t('matchHistory.weightedCalc', { gp: score.gp, minGames: score.minGames, weightedPoints: score.weightedPoints })}>
+                                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-purple-100 text-purple-700" title={t('matchHistory.weightedCalc', { gp: score.gp, minGames: score.minGames, weightedPoints: score.weightedPoints })}>
                                   {t('matchHistory.weightedShort', { points: score.weightedPoints })}
                                 </span>
                               )}
                             </>
                           ) : (
-                            <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                            <span className={`text-[11px] font-semibold px-2 py-0.5 rounded ${
                               (score.bestDiff ?? 0) > 0 ? 'bg-blue-100 text-blue-700' :
                               (score.bestDiff ?? 0) < 0 ? 'bg-red-100 text-red-700' :
                               'bg-gray-100 text-gray-600'
@@ -1565,7 +1312,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                               {t('matchHistory.goalDiff')} {(score.bestDiff ?? 0) > 0 ? '+' : ''}{((score.bestDiff ?? 0)).toFixed(1)}
                             </span>
                           )}
-                          <span className="text-xs text-gray-600">{t('matchHistory.totalGoals',{count: score.total})}</span>
+                          <span className="text-[11px] text-gray-600">{t('matchHistory.totalGoals',{count: score.total})}</span>
                         </div>
                       </div>
                     )
@@ -1590,8 +1337,8 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
         })()
       )}
 
-      {/* 저장된 게임 점수 표시 */}
-      {displayedQuarterScores && (
+      {/* 저장된 게임 점수 표시 (스코어가 하나라도 있을 때만 렌더) */}
+      {hasRecordedScores && displayedQuarterScores && (
         (() => {
           const maxQ = Math.max(...displayedQuarterScores.map(a=>Array.isArray(a)?a.length:1))
           const teamTotals = displayedQuarterScores.map(a=>Array.isArray(a)?a.reduce((s,v)=>s+Number(v||0),0):Number(a||0))
@@ -2025,19 +1772,19 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                  </div>
               </div>              {/* 컬럼 헤더 */}
               {/* Responsive scoreboard header: wrap when narrow to avoid horizontal scroll */}
-              <div className="flex items-center justify-between text-[11px] text-gray-600 mb-1 px-2 gap-y-1">
-                <span className="w-24 flex-shrink-0">{t('matchHistory.team')}</span>
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="flex gap-1">
+              <div className="flex flex-wrap items-center justify-between text-[10px] sm:text-[11px] text-gray-600 mb-1 px-2 gap-y-0.5 gap-x-0.5">
+                <span className="min-w-[52px] flex-shrink-0 pr-0.5">{t('matchHistory.team')}</span>
+                <div className="flex flex-wrap items-center gap-0.5 sm:gap-1">
+                  <div className="flex gap-0.5 sm:gap-1">
                     {Array.from({length:maxQ}).map((_,qi)=>(
-                      <span key={qi} className="w-6 text-center font-medium">G{qi+1}</span>
+                      <span key={qi} className="w-[22px] sm:w-[26px] text-center font-medium">G{qi+1}</span>
                     ))}
                   </div>
-                  {(isThreeTeams || isFourPlusWithMatchups) && <span className="w-10 text-center">{t('matchHistory.points')}</span>}
-                  {(isThreeTeams || isFourPlusWithMatchups) && unequalGP && <span className="w-12 text-center">{t('matchHistory.weightedShort',{ points: '' }).trim() || t('matchHistory.points')}</span>}
-                  {(isThreeTeams || isFourPlusWithMatchups) && <span className="w-12 text-center">{t('matchHistory.goalDiff')}</span>}
-                  {(!isMultiTeam) && <span className="w-8 text-center">{t('matchHistory.victory')}</span>}
-                  {(!isThreeTeams && !isFourPlusWithMatchups && isMultiTeam) && <span className="w-12 text-center">{t('matchHistory.bestGoalDiff')}</span>}
+                  {(isThreeTeams || isFourPlusWithMatchups) && <span className="w-8 sm:w-9 text-center">{t('matchHistory.points')}</span>}
+                  {(isThreeTeams || isFourPlusWithMatchups) && unequalGP && <span className="w-10 sm:w-11 text-center">{t('matchHistory.weightedShort',{ points: '' }).trim() || t('matchHistory.points')}</span>}
+                  {(isThreeTeams || isFourPlusWithMatchups) && <span className="w-10 sm:w-11 text-center">{t('matchHistory.goalDiff')}</span>}
+                  {(!isMultiTeam) && <span className="w-6 sm:w-7 text-center">{t('matchHistory.victory')}</span>}
+                  {(!isThreeTeams && !isFourPlusWithMatchups && isMultiTeam) && <span className="w-10 sm:w-11 text-center">{t('matchHistory.bestGoalDiff')}</span>}
                   <span className="w-8 text-right">{t('matchHistory.total')}</span>
                 </div>
               </div>
@@ -2125,7 +1872,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                                 const wonThisQuarter = wonQuarters[qi]
                                 
                                 return (
-                                  <div key={qi} className="w-6 text-center text-xs text-gray-700 relative">
+                                  <div key={qi} className="w-6 sm:w-7 text-center text-xs text-gray-700 relative">
                                     <span className={wonThisQuarter ? 'font-semibold' : ''}>{numV}</span>
                                     {wonThisQuarter && (
                                       <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
@@ -2134,19 +1881,19 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                                 )
                               })}
                             </div>
-                            <div className="w-10 text-center">
+                            <div className="w-9 sm:w-10 text-center">
                               <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-700">
                                 {totalPts}
                               </span>
                             </div>
                             {unequalGP && (
-                              <div className="w-12 text-center">
+                              <div className="w-11 sm:w-12 text-center">
                                 <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-700" title={`가중 승점: ${thisWeightedPts}점 (각 팀의 최고 ${points.minGames}경기)`}>
                                   {thisWeightedPts}
                                 </span>
                               </div>
                             )}
-                            <div className="w-12 text-center">
+                            <div className="w-11 sm:w-12 text-center">
                               <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold ${
                                 points && (unequalGP ? points.weightedGoalDiff[ti] : points.goalDifference[ti]) > 0 ? 'bg-blue-100 text-blue-700' : 
                                 points && (unequalGP ? points.weightedGoalDiff[ti] : points.goalDifference[ti]) < 0 ? 'bg-red-100 text-red-700' : 
@@ -2257,7 +2004,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   
                   return (
                     <div key={ti} className={`flex items-center justify-between text-xs sm:text-sm py-1.5 sm:py-2 px-2 rounded ${isWinner ? 'bg-amber-100 font-medium' : 'bg-white'}`}> 
-                      <div className="w-24 flex-shrink-0 flex items-center gap-1">
+                      <div className="w-16 min-w-[56px] flex-shrink-0 flex items-center gap-1">
                         <span className="whitespace-nowrap">{t('matchHistory.teamN', { n: ti+1 })}</span>
                         {points && points.fieldNames[ti] && (
                           <span className="text-[10px] px-1 py-0.5 rounded bg-indigo-100 text-indigo-700 font-medium whitespace-nowrap flex-shrink-0">
@@ -2273,16 +2020,16 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                             {matchResult}
                           </span>
                         )}
-                        {isWinner && <span className="text-amber-600 flex-shrink-0">🏆</span>}
+                        {/* Trophy marker removed to save horizontal space */}
                       </div>
-                      <div className="flex items-center gap-2 sm:gap-3">
-                        <div className="flex gap-1">
+                      <div className="flex items-center gap-1 sm:gap-1.5">
+                        <div className="flex gap-0.5 sm:gap-1">
                           {Array.from({length:maxQ}).map((_,qi)=>{
                             const v = Array.isArray(arr) ? arr[qi] : (qi===0? (arr||0) : 0)
                             // null인 경우 대시 표시
                             if (v === null) {
                               return (
-                                <div key={qi} className="w-6 text-center text-xs text-gray-400 relative">
+                                <div key={qi} className="w-[22px] sm:w-[26px] text-center text-xs text-gray-400 relative">
                                   <span>–</span>
                                 </div>
                               )
@@ -2293,7 +2040,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                             const isBestQuarter = (!isThreeTeams && isMultiTeam) && Math.abs(qDiff - bestDiff) < 0.01
                             
                             return (
-                              <div key={qi} className="w-6 text-center text-xs text-gray-700 relative">
+                              <div key={qi} className="w-[22px] sm:w-[26px] text-center text-xs text-gray-700 relative">
                                 <span className={wonThisQuarter || isBestQuarter ? 'font-semibold' : ''}>{numV}</span>
                                 {(!isThreeTeams && isMultiTeam) ? (
                                   isBestQuarter && (
@@ -2310,19 +2057,19 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                         </div>
                         {(isThreeTeams || isFourPlusWithMatchups) ? (
                           <>
-                            <div className="w-10 text-center">
+                            <div className="w-8 sm:w-9 text-center">
                               <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold bg-emerald-100 text-emerald-700`}>
                                 {totalPts}
                               </span>
                             </div>
                             {unequalGP && (
-                              <div className="w-12 text-center">
+                              <div className="w-10 sm:w-11 text-center">
                                 <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold bg-purple-100 text-purple-700`} title={`가중 승점: ${thisWeightedPts}점 (각 팀의 최고 ${points.minGames}경기)`}>
                                   {thisWeightedPts}
                                 </span>
                               </div>
                             )}
-                            <div className="w-12 text-center">
+                            <div className="w-10 sm:w-11 text-center">
                               <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold ${
                                 points && (unequalGP ? points.weightedGoalDiff[ti] : points.goalDifference[ti]) > 0 ? 'bg-blue-100 text-blue-700' : 
                                 points && (unequalGP ? points.weightedGoalDiff[ti] : points.goalDifference[ti]) < 0 ? 'bg-red-100 text-red-700' : 
@@ -2333,7 +2080,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                             </div>
                           </>
                         ) : (isMultiTeam ? (
-                          <div className="w-12 text-center">
+                          <div className="w-10 sm:w-11 text-center">
                             <span className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded text-xs font-bold ${
                               bestDiff > 0 ? 'bg-blue-100 text-blue-700' : 
                               bestDiff < 0 ? 'bg-red-100 text-red-700' : 
@@ -2343,7 +2090,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                             </span>
                           </div>
                         ) : (
-                          <div className="w-8 text-center">
+                          <div className="w-6 sm:w-7 text-center">
                             <span className={`inline-flex items-center justify-center w-5 h-5 rounded-full text-xs font-semibold ${quarterWins > 0 ? 'bg-emerald-100 text-emerald-700' : 'text-gray-400'}`}>
                               {quarterWins}
                             </span>
@@ -2394,6 +2141,218 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
             </div>
           )
         })()
+      )}
+
+      {hasGameEvents && (
+        <div className="mt-3 mb-4 rounded-lg border border-sky-200 bg-sky-50/70 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-xs font-semibold text-sky-900">{t('matchHistory.gameEventsTitle')}</div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowGameEvents(v => !v)}
+                className="rounded border border-sky-300 bg-white px-2 py-0.5 text-[10px] font-semibold text-sky-700 hover:bg-sky-100"
+              >{showGameEvents ? t('matchHistory.collapse') : t('matchHistory.expand')}</button>
+            </div>
+          </div>
+
+          {showGameEvents && (
+            <div className="mt-2 space-y-2">
+              {groupedGameEvents.map((evs, gi) => {
+                const kitPalette = [
+                  { bg: '#f8fafc', text: '#0f172a', border: '#e2e8f0', label: 'White' },
+                  { bg: '#0f172a', text: '#ffffff', border: '#0b1220', label: 'Black' },
+                  { bg: '#2563eb', text: '#ffffff', border: '#1d4ed8', label: 'Blue' },
+                  { bg: '#dc2626', text: '#ffffff', border: '#b91c1c', label: 'Red' },
+                  { bg: '#059669', text: '#ffffff', border: '#047857', label: 'Green' },
+                  { bg: '#7c3aed', text: '#ffffff', border: '#6d28d9', label: 'Purple' },
+                  { bg: '#ea580c', text: '#ffffff', border: '#c2410c', label: 'Orange' },
+                  { bg: '#0d9488', text: '#ffffff', border: '#0f766e', label: 'Teal' },
+                  { bg: '#ec4899', text: '#ffffff', border: '#db2777', label: 'Pink' },
+                  { bg: '#facc15', text: '#0f172a', border: '#eab308', label: 'Yellow' }
+                ]
+                const getTeamColor = (ti) => {
+                  if (Array.isArray(m?.teamColors) && m.teamColors[ti] && typeof m.teamColors[ti] === 'object') return m.teamColors[ti]
+                  return kitPalette[ti % kitPalette.length]
+                }
+
+                return (
+                <div
+                  key={gi}
+                  className={`relative rounded-2xl border border-sky-100 bg-white/90 px-3 pb-2.5 pt-7 shadow-sm ${gi === 0 ? 'mt-3' : ''}`}
+                >
+                  <div className="absolute left-2 top-0 -translate-y-1/2 inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50/95 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] text-sky-900 shadow-sm">
+                    <span>{t('matchHistory.gameNumber', { n: gi + 1 })}</span>
+                  </div>
+                  {(() => {
+                    const scoreMeta = perGameScores[gi]
+                    if (!scoreMeta) return null
+                    const { scores, winners, isDraw } = scoreMeta
+
+                    const badges = Array.from({ length: scores?.length || 0 }, (_, ti) => {
+                      const color = getTeamColor(ti)
+                      const label = color?.label || t('matchHistory.teamN', { n: ti + 1 })
+                      const isWinner = !isDraw && winners.includes(ti)
+                      return { color, label, score: Number(scores?.[ti] ?? 0), isWinner }
+                    })
+
+                    const winnerLabel = (!isDraw && winners.length === 1)
+                      ? (badges[winners[0]]?.label || t('matchHistory.teamN', { n: (winners[0] || 0) + 1 }))
+                      : null
+                    const resultLabel = isDraw
+                      ? t('matchHistory.gameDraw')
+                      : (winnerLabel ? t('matchHistory.gameWin', { team: winnerLabel }) : null)
+
+                    if (badges.length === 2) {
+                      const renderTeamPill = (b, align) => {
+                        const style = {
+                          backgroundColor: b.color?.bg,
+                          color: b.color?.text,
+                          borderColor: b.color?.border || b.color?.bg
+                        }
+                        const dirClasses = align === 'right' ? 'flex-row-reverse text-right' : ''
+                        return (
+                          <div className={`flex items-center gap-2 ${dirClasses}`}>
+                            <span
+                              className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold shadow-sm"
+                              style={style}
+                            >
+                              <span
+                                className="h-2 w-2 rounded-full border border-white/60"
+                                style={{ backgroundColor: b.label === 'White' ? (b.color?.border || '#e2e8f0') : (b.color?.text || '#0f172a') }}
+                                aria-hidden="true"
+                              />
+                              <span>{b.label}</span>
+                            </span>
+                            {b.isWinner && <span aria-hidden="true" className="text-base sm:text-lg">🏅</span>}
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div className="mt-1 w-full rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white px-3 py-2 shadow-inner">
+                          <div className="flex flex-col items-center gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                            {renderTeamPill(badges[0], 'left')}
+                            <div className="flex flex-col items-center justify-center">
+                              <div className="flex items-baseline gap-1 text-slate-900">
+                                <span className="text-2xl sm:text-3xl font-black leading-none">{badges[0].score}</span>
+                                <span className="text-sm font-bold text-slate-400">-</span>
+                                <span className="text-2xl sm:text-3xl font-black leading-none">{badges[1].score}</span>
+                              </div>
+                              {resultLabel && (
+                                <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold text-amber-700">
+                                  {resultLabel}
+                                </span>
+                              )}
+                            </div>
+                            {renderTeamPill(badges[1], 'right')}
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-gray-800">
+                        <div className="flex flex-wrap items-center gap-1">
+                          {badges.map((b, idx) => {
+                            const style = {
+                              backgroundColor: b.color?.bg,
+                              color: b.color?.text,
+                              borderColor: b.color?.border || b.color?.bg
+                            }
+                            const divider = badges.length === 2 ? '-' : '/'
+                            return (
+                              <React.Fragment key={`${gi}-${idx}`}>
+                                <span
+                                  className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 shadow-sm"
+                                  style={style}
+                                >
+                                  <span
+                                    className="h-2 w-2 rounded-full border border-white/60"
+                                    style={{ backgroundColor: b.color?.text || '#0f172a' }}
+                                    aria-hidden="true"
+                                  />
+                                  <span className="text-[10px] font-semibold">{b.label}</span>
+                                  <span className="text-[11px] font-bold">{b.score}</span>
+                                  {b.isWinner && <span aria-hidden="true">🏅</span>}
+                                </span>
+                                {idx < badges.length - 1 && (
+                                  <span className="text-slate-400 font-semibold">{divider}</span>
+                                )}
+                              </React.Fragment>
+                            )
+                          })}
+                        </div>
+                        {resultLabel && (
+                          <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700 border border-amber-200">{resultLabel}</span>
+                        )}
+                      </div>
+                    )
+                  })()}
+
+                  {evs.length === 0 ? (
+                    <div className="mt-2 text-[11px] text-gray-500">{t('matchHistory.noRecord')}</div>
+                  ) : (
+                    <ul className="mt-2 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-100 bg-white/95 text-[11px] text-gray-900">
+                      {evs.map(ev => {
+                        const scorerName = ev.scorerId ? (byId.get(String(ev.scorerId))?.name || ev.scorerId) : t('matchHistory.ownGoal')
+                        const assistName = ev.assistId ? (byId.get(String(ev.assistId))?.name || ev.assistId) : ''
+                        const isOwnGoal = !!ev.ownGoal
+                        const kitPaletteRow = [
+                          { bg: '#f8fafc', text: '#0f172a', border: '#e2e8f0', label: 'White' },
+                          { bg: '#0f172a', text: '#ffffff', border: '#0b1220', label: 'Black' },
+                          { bg: '#2563eb', text: '#ffffff', border: '#1d4ed8', label: 'Blue' },
+                          { bg: '#dc2626', text: '#ffffff', border: '#b91c1c', label: 'Red' },
+                          { bg: '#059669', text: '#ffffff', border: '#047857', label: 'Green' },
+                          { bg: '#7c3aed', text: '#ffffff', border: '#6d28d9', label: 'Purple' },
+                          { bg: '#ea580c', text: '#ffffff', border: '#c2410c', label: 'Orange' },
+                          { bg: '#0d9488', text: '#ffffff', border: '#0f766e', label: 'Teal' },
+                          { bg: '#ec4899', text: '#ffffff', border: '#db2777', label: 'Pink' },
+                          { bg: '#facc15', text: '#0f172a', border: '#eab308', label: 'Yellow' }
+                        ]
+                        const resolvedColor = (Array.isArray(m?.teamColors) && m.teamColors[ev.teamIndex] && typeof m.teamColors[ev.teamIndex] === 'object')
+                          ? m.teamColors[ev.teamIndex]
+                          : kitPaletteRow[Number(ev.teamIndex) % kitPaletteRow.length]
+                        const teamLabel = resolvedColor?.label || t('matchHistory.teamN', { n: Number(ev.teamIndex) + 1 })
+
+                        return (
+                          <li key={ev.id} className="flex items-start gap-3 px-3 py-2.5">
+                            <div className="flex flex-col items-start gap-1 text-[10px] font-semibold min-w-[88px]">
+                              <span className="inline-flex h-6 min-w-[70px] items-center justify-center rounded-full bg-sky-100 px-2 text-sky-800">{t('matchHistory.goalEvent')}</span>
+                              <span
+                                className="inline-flex h-5 min-w-[70px] items-center justify-center rounded-full px-2 border"
+                                style={{ backgroundColor: resolvedColor?.bg, color: resolvedColor?.text, borderColor: resolvedColor?.border || resolvedColor?.bg }}
+                              >
+                                {teamLabel}
+                              </span>
+                            </div>
+
+                            <div className="flex-1 min-w-0 space-y-1">
+                              <div className="flex items-center gap-2 text-[12px] font-semibold text-gray-900">
+                                <span className="truncate">{scorerName || t('matchHistory.scorerUnspecified')}</span>
+                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[10px] font-semibold ${isOwnGoal ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                  {isOwnGoal ? t('matchHistory.ownGoal') : t('matchHistory.fieldGoal')}
+                                </span>
+                              </div>
+                              <div className="text-[10px] text-gray-600">
+                                {assistName
+                                  ? (isOwnGoal
+                                    ? t('matchHistory.inducedBy', { name: assistName })
+                                    : t('matchHistory.assistBy', { name: assistName }))
+                                  : t('matchHistory.assistNone')}
+                              </div>
+                            </div>
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
       )}
 
       {/* 삭제/초기화 확인 모달 */}
