@@ -499,6 +499,7 @@ export default function App(){
 
   const playerStatsModalEnabled = featuresEnabled?.playerStatsModal ?? (featuresEnabled?.playerFunFacts ?? true)
   const badgesFeatureEnabled = playerStatsModalEnabled && (featuresEnabled?.badges ?? true)
+  const maintenanceActive = (maintenanceMode || serverOutage || new URLSearchParams(window.location.search).has('maintenance')) && !isAnalyticsAdmin
 
   // ⬇️ 기존 기본값 생성 방식은 유지(필요시 다른 곳에서 사용)
   async function handleCreatePlayer(){if(!isAdmin)return notify(t('auth.adminOnly'));const p=mkPlayer(t('player.newPlayer'),"MF");setDb(prev=>({...prev,players:[p,...(prev.players||[])]}));setSelectedPlayerId(p.id);notify(t('player.playerAdded'));try{await upsertPlayer(p)}catch(e){logger.error(e)}}
@@ -1129,7 +1130,7 @@ export default function App(){
     </header>
 
     <main className="mx-auto max-w-6xl p-4">
-      {(maintenanceMode || serverOutage || new URLSearchParams(window.location.search).has('maintenance')) && !isAnalyticsAdmin ? (
+      {maintenanceActive ? (
         <MaintenancePage />
       ) : showAuthError ? (
         <Suspense fallback={<div className="py-16 text-center text-sm text-stone-500">{t('skeleton.authError')}</div>}>
@@ -1204,7 +1205,7 @@ export default function App(){
                   leaderboardToggles={featuresEnabled?.leaderboards || {}}
                   badgesEnabled={badgesFeatureEnabled}
                   playerStatsEnabled={playerStatsModalEnabled}
-                  seasonRecapEnabled={seasonRecapEnabled ?? true}
+                  seasonRecapEnabled={!maintenanceActive && (seasonRecapEnabled ?? true)}
                   seasonRecapReady={appSettingsLoaded}
                 />
               )}
