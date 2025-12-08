@@ -2196,6 +2196,38 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       return { color, label, score: Number(scores?.[ti] ?? 0), isWinner }
                     })
 
+                    const matchupsForGame = Array.isArray(m?.gameMatchups) ? m.gameMatchups[gi] : null
+                    const hasFieldMatchups = Array.isArray(matchupsForGame) && matchupsForGame.some(pair => Array.isArray(pair) && pair.some(v => v !== null && v !== undefined))
+                    const teamCount = badges.length
+                    const playingTeams = (() => {
+                      if (!Array.isArray(displayedQuarterScores)) return []
+                      return displayedQuarterScores.map((teamScores, ti) => {
+                        if (Array.isArray(teamScores)) return teamScores[gi]
+                        if (gi === 0) return teamScores
+                        return null
+                      }).map((v, ti) => ({ v, ti }))
+                        .filter(({ v }) => v !== null && v !== undefined)
+                        .map(({ ti }) => ti)
+                    })()
+                    const renderTeamChip = (b) => {
+                      const style = {
+                        backgroundColor: b.color?.bg,
+                        color: b.color?.text,
+                        borderColor: b.color?.border || b.color?.bg
+                      }
+                      return (
+                        <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 shadow-sm" style={style}>
+                          <span
+                            className="h-2 w-2 rounded-full border border-white/60"
+                            style={{ backgroundColor: b.color?.text || '#0f172a' }}
+                            aria-hidden="true"
+                          />
+                          <span className="text-[10px] font-semibold">{b.label}</span>
+                          <span className="text-[11px] font-bold">{b.score}</span>
+                        </span>
+                      )
+                    }
+
                     const winnerLabel = (!isDraw && winners.length === 1)
                       ? (badges[winners[0]]?.label || t('matchHistory.teamN', { n: (winners[0] || 0) + 1 }))
                       : null
@@ -2242,6 +2274,176 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                         </div>
                       )
                     }
+
+                    // 멀티 필드 매치업(4팀 이상) - 구장별로 명확히 표시
+                    if (hasFieldMatchups) {
+                      const renderFieldLabel = (idx) => {
+                        if (idx === 0) return t('matchHistory.field1')
+                        if (idx === 1) return t('matchHistory.field2')
+                        return `Field ${idx + 1}`
+                      }
+
+                      return (
+                        <div className="flex flex-col gap-1.5 text-[11px] font-semibold text-gray-800 w-full">
+                          {matchupsForGame.map((pair, fieldIdx) => {
+                            if (!Array.isArray(pair) || pair.length === 0) return null
+                            const validTeams = pair.filter(ti => ti !== null && ti !== undefined && ti >= 0 && ti < teamCount)
+                            if (validTeams.length === 0) return null
+                            return (
+                              <div key={`${gi}-field-${fieldIdx}`} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 shadow-sm">
+                                <span className="text-[10px] font-bold text-slate-600 bg-white border border-slate-200 rounded px-1.5 py-0.5 whitespace-nowrap">
+                                  {renderFieldLabel(fieldIdx)}
+                                </span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {validTeams.map((ti, idx) => {
+                                    const b = badges[ti]
+                                    const style = {
+                                      backgroundColor: b.color?.bg,
+                                      color: b.color?.text,
+                                      borderColor: b.color?.border || b.color?.bg
+                                    }
+                                    return (
+                                      <React.Fragment key={`${gi}-field-${fieldIdx}-team-${ti}`}>
+                                        {idx > 0 && <span className="text-slate-400 font-bold">vs</span>}
+                                        <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 shadow-sm" style={style}>
+                                          <span
+                                            className="h-2 w-2 rounded-full border border-white/60"
+                                            style={{ backgroundColor: b.color?.text || '#0f172a' }}
+                                            aria-hidden="true"
+                                          />
+                                          <span className="text-[10px] font-semibold">{b.label}</span>
+                                          <span className="text-[11px] font-bold">{b.score}</span>
+                                        </span>
+                                      </React.Fragment>
+                                    )
+                                  })}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )
+                    }
+
+                      // 3팀 경기: 실제 매치업 + 순위/점수
+                      if (teamCount === 3) {
+                        const sorted = badges
+                          .map((b, idx) => ({ ...b, teamIdx: idx }))
+                          .sort((a, b) => b.score - a.score)
+                        const rankLabel = (rank) => {
+                          if (rank === 0) return '1위'
+                          if (rank === 1) return '2위'
+                          return '3위'
+                        }
+
+                        // 2팀만 뛴 라운드는 2팀 전용 레이아웃으로 표기
+                        if (playingTeams.length === 2) {
+                          const [aIdx, bIdx] = playingTeams
+                          const a = badges[aIdx]
+                          const b = badges[bIdx]
+                          const aScore = Number(a?.score || 0)
+                          const bScore = Number(b?.score || 0)
+                          const isDraw2 = aScore === bScore
+                          const winnerIdx = isDraw2 ? null : (aScore > bScore ? aIdx : bIdx)
+                          const resultLabel2 = isDraw2
+                            ? t('matchHistory.gameDraw')
+                            : t('matchHistory.gameWin', { team: winnerIdx === aIdx ? (a?.label || t('matchHistory.teamN', { n: aIdx + 1 })) : (b?.label || t('matchHistory.teamN', { n: bIdx + 1 })) })
+                          const dot2 = (bVal) => {
+                            const dotColor = bVal?.color?.bg || bVal?.color?.border || bVal?.color?.text || '#0f172a'
+                            return (
+                              <span className="inline-flex items-center gap-1">
+                                <span
+                                  className="h-2.5 w-2.5 rounded-full border"
+                                  style={{
+                                    backgroundColor: dotColor,
+                                    borderColor: '#cbd5e1',
+                                    boxShadow: '0 0 0 1px rgba(148,163,184,0.6)'
+                                  }}
+                                  aria-hidden="true"
+                                />
+                              </span>
+                            )
+                          }
+
+                          return (
+                            <div className="flex flex-col gap-1 text-[11px] font-semibold text-gray-800 w-full">
+                              <div className="mt-1 w-full rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white px-3 py-2 shadow-inner">
+                                <div className="flex items-center justify-center gap-2 sm:gap-3">
+                                  {dot2(a)}
+                                  <div className="flex items-baseline gap-1 text-slate-900">
+                                    <span className="text-2xl sm:text-3xl font-black leading-none">{aScore}</span>
+                                    <span className="text-sm font-bold text-slate-400">-</span>
+                                    <span className="text-2xl sm:text-3xl font-black leading-none">{bScore}</span>
+                                  </div>
+                                  {dot2(b)}
+                                </div>
+                                {resultLabel2 && (
+                                  <div className="mt-1 flex justify-center">
+                                    <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold text-amber-700">
+                                      {resultLabel2}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        }
+
+                        return (
+                          <div className="flex flex-col gap-1.5 text-[11px] font-semibold text-gray-800 w-full">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[10px] font-bold text-slate-600 bg-white border border-slate-200 rounded px-1.5 py-0.5">매치업</span>
+                            {playingTeams.length > 0 ? (
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {playingTeams.map((ti, idx) => (
+                                  <React.Fragment key={`${gi}-playing-${ti}`}>
+                                    {idx > 0 && (
+                                      <span className="inline-flex items-center gap-1 text-slate-500 font-semibold">
+                                        <span className="text-[10px]">vs</span>
+                                        {playingTeams.length === 2 && (
+                                          <span className="text-[11px] font-bold text-slate-800">
+                                            {badges[playingTeams[0]]?.score ?? 0}
+                                            <span className="mx-1 text-slate-400">-</span>
+                                            {badges[playingTeams[1]]?.score ?? 0}
+                                          </span>
+                                        )}
+                                      </span>
+                                    )}
+                                    {renderTeamChip({ ...badges[ti] })}
+                                  </React.Fragment>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-slate-500">참여 팀 정보를 찾을 수 없음</span>
+                            )}
+                            </div>
+
+                            {sorted.map((b, idx) => {
+                              const style = {
+                                backgroundColor: b.color?.bg,
+                                color: b.color?.text,
+                                borderColor: b.color?.border || b.color?.bg
+                              }
+                              return (
+                                <div key={`${gi}-tri-${b.teamIdx}`} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5 shadow-sm">
+                                  <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold ${idx === 0 ? 'bg-amber-500 text-white' : idx === 1 ? 'bg-slate-400 text-white' : 'bg-slate-200 text-slate-700'}`}>
+                                    {rankLabel(idx)}
+                                  </span>
+                                  <span className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 shadow-sm" style={style}>
+                                    <span
+                                      className="h-2 w-2 rounded-full border border-white/60"
+                                      style={{ backgroundColor: b.color?.text || '#0f172a' }}
+                                      aria-hidden="true"
+                                    />
+                                    <span className="text-[10px] font-semibold">{b.label}</span>
+                                    <span className="text-[11px] font-bold">{b.score}</span>
+                                  </span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )
+                      }
 
                     return (
                       <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-gray-800">
