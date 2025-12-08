@@ -2292,6 +2292,10 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                         const assistName = assistPlayer?.name || (ev.assistId ? ev.assistId : '')
                         const scorerPhoto = (!ev.ownGoal && scorerPlayer?.photoUrl) ? scorerPlayer.photoUrl : null
                         const assistPhoto = assistPlayer?.photoUrl || null
+                        const scorerBadgeInfo = scorerPlayer ? getMembershipBadge(scorerPlayer.membership, customMemberships || []) : null
+                        const assistBadgeInfo = assistPlayer ? getMembershipBadge(assistPlayer.membership, customMemberships || []) : null
+                        const scorerBadges = scorerBadgeInfo?.badge ? [scorerBadgeInfo.badge] : []
+                        const assistBadges = assistBadgeInfo?.badge ? [assistBadgeInfo.badge] : []
                         const isOwnGoal = !!ev.ownGoal
                         const kitPaletteRow = [
                           { bg: '#f8fafc', text: '#0f172a', border: '#e2e8f0', label: 'White' },
@@ -2325,7 +2329,14 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                               <div className="flex items-center gap-2 text-[12px] font-semibold text-gray-900">
                                 {!isOwnGoal && (
                                   <span className="flex-shrink-0">
-                                    <InitialAvatar size={22} name={scorerName || t('matchHistory.scorerUnspecified')} photoUrl={scorerPhoto} />
+                                    <InitialAvatar 
+                                      size={22} 
+                                      name={scorerName || t('matchHistory.scorerUnspecified')} 
+                                      photoUrl={scorerPhoto}
+                                      badges={scorerBadges}
+                                      customMemberships={customMemberships || []}
+                                      badgeInfo={scorerBadgeInfo}
+                                    />
                                   </span>
                                 )}
                                 <span className="inline-flex min-w-0 max-w-[140px] overflow-x-auto whitespace-nowrap scrollbar-thin pr-1" title={scorerName || t('matchHistory.scorerUnspecified')}>
@@ -2338,7 +2349,14 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                               <div className="text-[10px] text-gray-600 flex items-center gap-1.5">
                                 {assistName && (
                                   <span className="flex-shrink-0">
-                                    <InitialAvatar size={18} name={assistName} photoUrl={assistPhoto} />
+                                    <InitialAvatar 
+                                      size={18} 
+                                      name={assistName} 
+                                      photoUrl={assistPhoto}
+                                      badges={assistBadges}
+                                      customMemberships={customMemberships || []}
+                                      badgeInfo={assistBadgeInfo}
+                                    />
                                   </span>
                                 )}
                                 <span className="inline-flex min-w-0 max-w-[140px] overflow-x-auto whitespace-nowrap scrollbar-thin pr-1" title={assistName || t('matchHistory.assistNone')}>

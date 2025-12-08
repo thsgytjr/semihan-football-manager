@@ -20,6 +20,7 @@ const DEFAULT_SETTINGS = {
     draft: true,        // 드래프트
     formation: true,    // 포메이션 보드
     stats: true,        // 기록 입력
+    cards: true,        // 카드(Y/R/B) 기록
     mom: true,          // MOM 투표/리더보드
     accounting: true,   // 회계
     analytics: true,    // 방문자 분석

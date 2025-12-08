@@ -111,8 +111,9 @@ function extractStatsByPlayer(m) {
 
 
 /* ======== Main Component ======== */
-export default function StatsInput({ players = [], matches = [], onUpdateMatch, isAdmin }) {
+export default function StatsInput({ players = [], matches = [], onUpdateMatch, isAdmin, cardsFeatureEnabled = true }) {
   const { t } = useTranslation()
+  const cardsEnabled = cardsFeatureEnabled !== false
   const sortedMatches = useMemo(() => {
     const arr = Array.isArray(matches) ? [...matches] : []
     return arr.sort((a, b) => getMatchTime(b) - getMatchTime(a))
@@ -811,6 +812,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
               setDraft={setDraft}
               onSave={save}
               showSaved={showSaved}
+              cardsEnabled={cardsEnabled}
             />
           </>
         )}
@@ -849,7 +851,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
 }
 
 /* ======== Quick Stats Editor Component ======== */
-function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSave, showSaved }) {
+function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSave, showSaved, cardsEnabled = true }) {
   const [showLinkPanel, setShowLinkPanel] = useState(false)
   const [addingGoalFor, setAddingGoalFor] = useState(null) // { playerId, teamIdx }
   const [addingAssistFor, setAddingAssistFor] = useState(null) // { playerId, teamIdx }
@@ -1369,15 +1371,20 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
                     <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="골">G</th>
                     <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="어시스트">A</th>
                     <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="클린시트">CS</th>
-                    <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="옐로우카드">YC</th>
-                    <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="레드카드">RC</th>
-                    <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="블랙카드">BC</th>
+                    {cardsEnabled && (
+                      <>
+                        <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="옐로우카드">YC</th>
+                        <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="레드카드">RC</th>
+                        <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="블랙카드">BC</th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {team.players.map(p => {
                     const rec = draft[toStr(p.id)] || { goals: 0, assists: 0, cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
-                    const hasStats = (rec.goals > 0 || rec.assists > 0 || rec.cleanSheet > 0 || rec.yellowCards > 0 || rec.redCards > 0 || rec.blackCards > 0)
+                    const hasCardStats = cardsEnabled && (rec.yellowCards > 0 || rec.redCards > 0 || rec.blackCards > 0)
+                    const hasStats = (rec.goals > 0 || rec.assists > 0 || rec.cleanSheet > 0 || hasCardStats)
 
                     return (
                       <tr key={toStr(p.id)} className={`transition-colors ${hasStats ? 'bg-blue-50/50' : 'hover:bg-gray-50'}`}>
@@ -1424,18 +1431,22 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
                         <td className="px-1 py-2">
                           <CompactCounterCS player={p} draft={draft} setDraft={setDraft} />
                         </td>
-                        {/* YC Counter - Compact */}
-                        <td className="px-1 py-2">
-                          <CompactCounterYC player={p} draft={draft} setDraft={setDraft} />
-                        </td>
-                        {/* RC Counter - Compact */}
-                        <td className="px-1 py-2">
-                          <CompactCounterRC player={p} draft={draft} setDraft={setDraft} />
-                        </td>
-                        {/* BC Counter - Compact */}
-                        <td className="px-1 py-2">
-                          <CompactCounterBC player={p} draft={draft} setDraft={setDraft} />
-                        </td>
+                        {cardsEnabled && (
+                          <>
+                            {/* YC Counter - Compact */}
+                            <td className="px-1 py-2">
+                              <CompactCounterYC player={p} draft={draft} setDraft={setDraft} />
+                            </td>
+                            {/* RC Counter - Compact */}
+                            <td className="px-1 py-2">
+                              <CompactCounterRC player={p} draft={draft} setDraft={setDraft} />
+                            </td>
+                            {/* BC Counter - Compact */}
+                            <td className="px-1 py-2">
+                              <CompactCounterBC player={p} draft={draft} setDraft={setDraft} />
+                            </td>
+                          </>
+                        )}
                       </tr>
                     )
                   })}

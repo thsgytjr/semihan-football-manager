@@ -1229,7 +1229,13 @@ export default function App(){
               )}
               {tab==="stats"&&isAdmin&&featuresEnabled.stats&&(
                 <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.stats')}</div>}>
-                  <StatsInput players={publicPlayers} matches={matches} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin}/>
+                  <StatsInput 
+                    players={publicPlayers} 
+                    matches={matches} 
+                    onUpdateMatch={handleUpdateMatch} 
+                    isAdmin={isAdmin}
+                    cardsFeatureEnabled={featuresEnabled?.cards ?? true}
+                  />
                 </Suspense>
               )}
                 {tab==="accounting"&&isAdmin&&featuresEnabled.accounting&&(
@@ -1549,6 +1555,7 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,seasonRecapEnable
     draft: t('nav.draft'),
     formation: t('nav.formation'),
     stats: t('nav.stats'),
+    cards: '카드 기록 (Y/R/B)',
     mom: 'MOM 투표/리더보드',
     badges: '챌린지 뱃지',
     playerStatsModal: '선수 기록 모달',
