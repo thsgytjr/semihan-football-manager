@@ -2157,7 +2157,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
           </div>
 
           {showGameEvents && (
-            <div className="mt-2 space-y-2">
+            <div className="mt-2 space-y-3">
               {groupedGameEvents.map((evs, gi) => {
                 const kitPalette = [
                   { bg: '#f8fafc', text: '#0f172a', border: '#e2e8f0', label: 'White' },
@@ -2179,9 +2179,9 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                 return (
                 <div
                   key={gi}
-                  className={`relative rounded-2xl border border-sky-100 bg-white/90 px-3 pb-2.5 pt-7 shadow-sm ${gi === 0 ? 'mt-3' : ''}`}
+                  className={`relative rounded-2xl border border-sky-100 bg-white/90 px-3 pb-2.5 pt-8 shadow-sm ${gi === 0 ? 'mt-3' : 'mt-4'}`}
                 >
-                  <div className="absolute left-2 top-0 -translate-y-1/2 inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50/95 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] text-sky-900 shadow-sm">
+                  <div className="absolute left-0 top-0 -translate-x-1 -translate-y-1/2 inline-flex items-center gap-1 rounded-full border border-sky-300 bg-sky-50/95 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.08em] text-sky-900 shadow-sm">
                     <span>{t('matchHistory.gameNumber', { n: gi + 1 })}</span>
                   </div>
                   {(() => {
@@ -2204,49 +2204,37 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       : (winnerLabel ? t('matchHistory.gameWin', { team: winnerLabel }) : null)
 
                     if (badges.length === 2) {
-                      const renderTeamPill = (b, align) => {
-                        const style = {
-                          backgroundColor: b.color?.bg,
-                          color: b.color?.text,
-                          borderColor: b.color?.border || b.color?.bg
-                        }
-                        const dirClasses = align === 'right' ? 'flex-row-reverse text-right' : ''
+                      const dot = (b) => {
+                        const dotColor = b.color?.bg || b.color?.border || b.color?.text || '#0f172a'
                         return (
-                          <div className={`flex items-center gap-2 ${dirClasses}`}>
+                          <span className="inline-flex items-center gap-1">
                             <span
-                              className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold shadow-sm"
-                              style={style}
-                            >
-                              <span
-                                className="h-2 w-2 rounded-full border border-white/60"
-                                style={{ backgroundColor: b.label === 'White' ? (b.color?.border || '#e2e8f0') : (b.color?.text || '#0f172a') }}
-                                aria-hidden="true"
-                              />
-                              <span>{b.label}</span>
-                            </span>
-                            {b.isWinner && <span aria-hidden="true" className="text-base sm:text-lg">🏅</span>}
-                          </div>
+                              className="h-2.5 w-2.5 rounded-full border border-white/60"
+                              style={{ backgroundColor: dotColor }}
+                              aria-hidden="true"
+                            />
+                          </span>
                         )
                       }
 
                       return (
                         <div className="mt-1 w-full rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white px-3 py-2 shadow-inner">
-                          <div className="flex flex-col items-center gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                            {renderTeamPill(badges[0], 'left')}
-                            <div className="flex flex-col items-center justify-center">
-                              <div className="flex items-baseline gap-1 text-slate-900">
-                                <span className="text-2xl sm:text-3xl font-black leading-none">{badges[0].score}</span>
-                                <span className="text-sm font-bold text-slate-400">-</span>
-                                <span className="text-2xl sm:text-3xl font-black leading-none">{badges[1].score}</span>
-                              </div>
-                              {resultLabel && (
-                                <span className="mt-1 inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold text-amber-700">
-                                  {resultLabel}
-                                </span>
-                              )}
+                          <div className="flex items-center justify-center gap-2 sm:gap-3">
+                            {dot(badges[0])}
+                            <div className="flex items-baseline gap-1 text-slate-900">
+                              <span className="text-2xl sm:text-3xl font-black leading-none">{badges[0].score}</span>
+                              <span className="text-sm font-bold text-slate-400">-</span>
+                              <span className="text-2xl sm:text-3xl font-black leading-none">{badges[1].score}</span>
                             </div>
-                            {renderTeamPill(badges[1], 'right')}
+                            {dot(badges[1])}
                           </div>
+                          {resultLabel && (
+                            <div className="mt-1 flex justify-center">
+                              <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold text-amber-700">
+                                {resultLabel}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       )
                     }
@@ -2274,7 +2262,6 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                                   />
                                   <span className="text-[10px] font-semibold">{b.label}</span>
                                   <span className="text-[11px] font-bold">{b.score}</span>
-                                  {b.isWinner && <span aria-hidden="true">🏅</span>}
                                 </span>
                                 {idx < badges.length - 1 && (
                                   <span className="text-slate-400 font-semibold">{divider}</span>
