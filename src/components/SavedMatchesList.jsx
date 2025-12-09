@@ -717,7 +717,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
   }, [m?.dateISO])
 
   return (
-  <li ref={ref} className={`relative rounded-2xl border border-gray-100 bg-gradient-to-br from-white via-stone-50 to-stone-100 p-5 shadow-lg ${isHighlighted ? 'match-highlight-pulse' : ''}`} style={isHighlighted ? { borderColor: '#3b82f6', borderWidth: '2px' } : {}}>
+  <li ref={ref} className={`relative min-w-0 rounded-2xl border border-gray-100 bg-gradient-to-br from-white via-stone-50 to-stone-100 p-5 shadow-lg ${isHighlighted ? 'match-highlight-pulse' : ''}`} style={isHighlighted ? { borderColor: '#3b82f6', borderWidth: '2px' } : {}}>
       {/* Status indicator based on match time and stats */}
       {matchStatus === 'live' && (
         <div className="absolute -top-3 -right-2 z-10 pointer-events-none">
@@ -1772,10 +1772,12 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                  </div>
               </div>              {/* 컬럼 헤더 */}
               {/* Responsive scoreboard header: wrap when narrow to avoid horizontal scroll */}
-              <div className="flex flex-wrap items-center justify-between text-[10px] sm:text-[11px] text-gray-600 mb-1 px-2 gap-y-0.5 gap-x-0.5">
-                <span className="min-w-[52px] flex-shrink-0 pr-0.5">{t('matchHistory.team')}</span>
-                <div className="flex flex-wrap items-center gap-0.5 sm:gap-1">
-                  <div className="flex gap-0.5 sm:gap-1">
+              <div className="overflow-x-auto -mx-2 px-2 pb-1">
+                <div className="min-w-max">
+                  <div className="flex flex-nowrap items-center justify-between text-[10px] sm:text-[11px] text-gray-600 mb-1 px-2 gap-y-0.5 gap-x-0.5">
+                    <span className="min-w-[52px] flex-shrink-0 pr-0.5">{t('matchHistory.team')}</span>
+                    <div className="flex flex-nowrap items-center gap-0.5 sm:gap-1">
+                      <div className="flex gap-0.5 sm:gap-1">
                     {Array.from({length:maxQ}).map((_,qi)=>(
                       <span key={qi} className="w-[22px] sm:w-[26px] text-center font-medium">G{qi+1}</span>
                     ))}
@@ -2022,7 +2024,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                         )}
                         {/* Trophy marker removed to save horizontal space */}
                       </div>
-                      <div className="flex items-center gap-1 sm:gap-1.5">
+                      <div className="flex items-center gap-0.5 sm:gap-1">
                         <div className="flex gap-0.5 sm:gap-1">
                           {Array.from({length:maxQ}).map((_,qi)=>{
                             const v = Array.isArray(arr) ? arr[qi] : (qi===0? (arr||0) : 0)
@@ -2104,6 +2106,8 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                     </>
                   )
                 })()}
+              </div>
+                </div>
               </div>
               
               {/* 하단 설명 */}

@@ -1352,73 +1352,39 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
             </div>
           ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full table-fixed min-w-[960px]">
+              <colgroup>
+                <col className="w-[26%]" />
+                <col className="w-[10%]" />
+                <col className="w-[9%]" />
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
+                <col className="w-[12%]" />
+                <col className="w-[19%]" />
+              </colgroup>
               <thead>
                 <tr className="border-b bg-gray-50">
-                  <th className="text-left py-3 px-4">
-                    <button
-                      onClick={() => handlePlayerStatsSort('name')}
-                      className="flex items-center gap-1 hover:text-blue-600 font-semibold"
-                    >
-                      선수
-                      <ArrowUpDown size={14} className={playerStatsSortConfig.key === 'name' ? 'text-blue-600' : 'text-gray-400'} />
-                    </button>
+                  <th onClick={() => handlePlayerStatsSort('name')} className="text-left py-3 px-4 font-semibold cursor-pointer hover:bg-gray-100 whitespace-nowrap">
+                    선수 {playerStatsSortConfig.key === 'name' && <ArrowUpDown size={14} className="inline text-blue-600" />}
                   </th>
-                  <th className="text-left py-3 px-4">
-                    <button
-                      onClick={() => handlePlayerStatsSort('membership')}
-                      className="flex items-center gap-1 hover:text-blue-600 font-semibold"
-                    >
-                      멤버십
-                      <ArrowUpDown size={14} className={playerStatsSortConfig.key === 'membership' ? 'text-blue-600' : 'text-gray-400'} />
-                    </button>
+                  <th onClick={() => handlePlayerStatsSort('membership')} className="text-left py-3 px-4 font-semibold cursor-pointer hover:bg-gray-100 whitespace-nowrap">
+                    멤버십 {playerStatsSortConfig.key === 'membership' && <ArrowUpDown size={14} className="inline text-blue-600" />}
                   </th>
-                  <th className="text-right py-3 px-4">
-                    <button
-                      onClick={() => handlePlayerStatsSort('registration')}
-                      className="flex items-center justify-end gap-1 hover:text-blue-600 font-semibold"
-                    >
-                      가입비
-                      <ArrowUpDown size={14} className={playerStatsSortConfig.key === 'registration' ? 'text-blue-600' : 'text-gray-400'} />
-                    </button>
+                  <th onClick={() => handlePlayerStatsSort('registration')} className="text-right py-3 px-4 font-semibold cursor-pointer hover:bg-gray-100 whitespace-nowrap">
+                    가입비 {playerStatsSortConfig.key === 'registration' && <ArrowUpDown size={14} className="inline text-blue-600" />}
                   </th>
-                  <th className="text-right py-3 px-4">
-                    <button
-                      onClick={() => handlePlayerStatsSort('monthly')}
-                      className="flex items-center justify-end gap-1 hover:text-blue-600 font-semibold"
-                    >
-                      월회비
-                      <ArrowUpDown size={14} className={playerStatsSortConfig.key === 'monthly' ? 'text-blue-600' : 'text-gray-400'} />
-                    </button>
+                  <th onClick={() => handlePlayerStatsSort('monthly')} className="text-right py-3 px-4 font-semibold cursor-pointer hover:bg-gray-100 whitespace-nowrap">
+                    월회비 {playerStatsSortConfig.key === 'monthly' && <ArrowUpDown size={14} className="inline text-blue-600" />}
                   </th>
-                  <th className="text-right py-3 px-4">
-                    <button
-                      onClick={() => handlePlayerStatsSort('annual')}
-                      className="flex items-center justify-end gap-1 hover:text-blue-600 font-semibold"
-                    >
-                      연회비
-                      <ArrowUpDown size={14} className={playerStatsSortConfig.key === 'annual' ? 'text-blue-600' : 'text-gray-400'} />
-                    </button>
+                  <th onClick={() => handlePlayerStatsSort('annual')} className="text-right py-3 px-4 font-semibold cursor-pointer hover:bg-gray-100 whitespace-nowrap">
+                    연회비 {playerStatsSortConfig.key === 'annual' && <ArrowUpDown size={14} className="inline text-blue-600" />}
                   </th>
-                  <th className="text-right py-3 px-4">
-                    <button
-                      onClick={() => handlePlayerStatsSort('match')}
-                      className="flex items-center justify-end gap-1 hover:text-blue-600 font-semibold"
-                    >
-                      구장비
-                      <ArrowUpDown size={14} className={playerStatsSortConfig.key === 'match' ? 'text-blue-600' : 'text-gray-400'} />
-                    </button>
+                  <th onClick={() => handlePlayerStatsSort('match')} className="text-right py-3 px-4 font-semibold cursor-pointer hover:bg-gray-100 whitespace-nowrap">
+                    구장비 {playerStatsSortConfig.key === 'match' && <ArrowUpDown size={14} className="inline text-blue-600" />}
                   </th>
-                  <th className="text-right py-3 px-4">
-                    <button
-                      onClick={() => handlePlayerStatsSort('total')}
-                      className="flex items-center justify-end gap-1 hover:text-blue-600 font-semibold"
-                    >
-                      총 납부
-                      <ArrowUpDown size={14} className={playerStatsSortConfig.key === 'total' ? 'text-blue-600' : 'text-gray-400'} />
-                    </button>
+                  <th onClick={() => handlePlayerStatsSort('total')} className="text-right py-3 px-4 font-semibold cursor-pointer hover:bg-gray-100 whitespace-nowrap">
+                    총 납부 {playerStatsSortConfig.key === 'total' && <ArrowUpDown size={14} className="inline text-blue-600" />}
                   </th>
-                  <th className="text-center py-3 px-4 font-semibold">작업</th>
                 </tr>
               </thead>
               <tbody>
@@ -1450,16 +1416,16 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                     <td className="py-3 px-4">
                       <span className="text-sm text-gray-600">{player.membership || 'Guest'}</span>
                     </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-3 px-4 text-right whitespace-nowrap align-middle">
                       {registration ? (
                         <span className="text-emerald-600 font-semibold">${parseFloat(registration.amount).toFixed(2)}</span>
                       ) : (
                         <span className="text-gray-400 text-sm">-</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-3 px-4 text-right whitespace-nowrap align-middle">
                       {monthlySum > 0 ? (
-                        <div>
+                        <div className="inline-block text-right">
                           <span className="font-semibold">${monthlySum.toFixed(2)}</span>
                           <span className="text-xs text-gray-500 ml-1">({monthlyCount}회)</span>
                         </div>
@@ -1467,9 +1433,9 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                         <span className="text-gray-400 text-sm">-</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-3 px-4 text-right whitespace-nowrap align-middle">
                       {annualSum > 0 ? (
-                        <div>
+                        <div className="inline-block text-right">
                           <span className="font-semibold">${annualSum.toFixed(2)}</span>
                           <span className="text-xs text-gray-500 ml-1">({annualCount}회)</span>
                         </div>
@@ -1477,9 +1443,9 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                         <span className="text-gray-400 text-sm">-</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-3 px-4 text-right whitespace-nowrap align-middle">
                       {matchSum > 0 ? (
-                        <div>
+                        <div className="inline-block text-right">
                           <span className="font-semibold">${matchSum.toFixed(2)}</span>
                           <span className="text-xs text-gray-500 ml-1">({matchCount}회)</span>
                         </div>
@@ -1487,16 +1453,8 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                         <span className="text-gray-400 text-sm">-</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-3 px-4 text-right whitespace-nowrap align-middle">
                       <span className="text-lg font-bold text-emerald-600">${total.toFixed(2)}</span>
-                    </td>
-                    <td className="py-3 px-4 text-center">
-                      <button
-                        onClick={() => openPaymentFormForPlayer(player)}
-                        className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
-                      >
-                        결제 추가
-                      </button>
                     </td>
                   </tr>
                 )})}
