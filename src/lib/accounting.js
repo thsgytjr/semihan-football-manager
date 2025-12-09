@@ -185,6 +185,39 @@ export async function deletePayment(id) {
   }
 }
 
+// 필터 기반 대량 삭제 (전역 삭제 포함)
+export async function deletePaymentsByFilter({ playerId, paymentType, matchId, startDate, endDate } = {}) {
+  try {
+    if (isMockMode()) {
+      const db = loadLS()
+      db.payments = (db.payments||[]).filter(p => {
+        if (playerId && p.player_id !== playerId) return true
+        if (paymentType && p.payment_type !== paymentType) return true
+        if (matchId && p.match_id !== matchId) return true
+        if (startDate && String(p.payment_date) < startDate) return true
+        if (endDate && String(p.payment_date) > endDate) return true
+        return false // 제거 대상
+      })
+      saveLS(db)
+      return { ok: true }
+    }
+
+    let query = supabase.from('payments').delete()
+    if (playerId) query = query.eq('player_id', playerId)
+    if (paymentType) query = query.eq('payment_type', paymentType)
+    if (matchId) query = query.eq('match_id', matchId)
+    if (startDate) query = query.gte('payment_date', startDate)
+    if (endDate) query = query.lte('payment_date', endDate)
+
+    const { error } = await query
+    if (error) throw error
+    return { ok: true }
+  } catch (error) {
+    logger.error('[Accounting] Failed to bulk delete payments:', error)
+    throw error
+  }
+}
+
 /**
  * 회비 설정 조회
  */
@@ -347,6 +380,40 @@ export async function upsertMatchPayment(matchPayment) {
     return data
   } catch (error) {
     logger.error('[Accounting] Failed to upsert match payment:', error)
+    throw error
+  }
+}
+
+// 매치 구장비 행 완전 삭제 (match_payments + payments 동시 정리)
+export async function hardDeleteMatchPayment(matchId, playerId) {
+  try {
+    if (isMockMode()) {
+      const db = loadLS()
+      db.match_payments = (db.match_payments||[]).filter(r => !(r.match_id === matchId && r.player_id === playerId))
+      db.payments = (db.payments||[]).filter(p => !(p.match_id === matchId && p.player_id === playerId && p.payment_type === 'match_fee'))
+      saveLS(db)
+      return { ok: true }
+    }
+
+    const [{ error: mpError }, { error: pError }] = await Promise.all([
+      supabase
+        .from('match_payments')
+        .delete()
+        .eq('match_id', matchId)
+        .eq('player_id', playerId),
+      supabase
+        .from('payments')
+        .delete()
+        .eq('match_id', matchId)
+        .eq('player_id', playerId)
+        .eq('payment_type', 'match_fee')
+    ])
+
+    if (mpError) throw mpError
+    if (pError) throw pError
+    return { ok: true }
+  } catch (error) {
+    logger.error('[Accounting] Failed to hard-delete match payment:', error)
     throw error
   }
 }
@@ -714,6 +781,31 @@ export async function cancelMatchPayment(matchId, playerId) {
     return { ok: true }
   } catch (error) {
     logger.error('[Accounting] Failed to cancel match payment:', error)
+    throw error
+  }
+}
+
+// payments + match_payments 전역 삭제 (필터 없음) — 위험 영역용
+export async function deleteAllPaymentsAndMatchPayments() {
+  try {
+    if (isMockMode()) {
+      const db = loadLS()
+      db.payments = []
+      db.match_payments = []
+      saveLS(db)
+      return { ok: true }
+    }
+
+    const [{ error: mpError }, { error: pError }] = await Promise.all([
+      supabase.from('match_payments').delete().not('id', 'is', null),
+      supabase.from('payments').delete().not('id', 'is', null)
+    ])
+
+    if (mpError) throw mpError
+    if (pError) throw pError
+    return { ok: true }
+  } catch (error) {
+    logger.error('[Accounting] Failed to wipe payments tables:', error)
     throw error
   }
 }

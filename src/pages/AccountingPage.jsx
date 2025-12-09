@@ -16,9 +16,11 @@ import {
   getMatchPayments,
   confirmMatchPayment,
   cancelMatchPayment,
+  hardDeleteMatchPayment,
   ensureDuesDefaults,
   getDuesRenewals
 } from '../lib/accounting'
+import { updateMatchInDB } from '../services/matches.service'
 import { isMember } from '../lib/fees'
 import { DollarSign, Users, Calendar, TrendingUp, Plus, X, Check, AlertCircle, RefreshCw, Trash2, ArrowUpDown, Download, Search } from 'lucide-react'
 import InitialAvatar from '../components/InitialAvatar'
@@ -164,6 +166,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   const [loadError, setLoadError] = useState(false)
   const [selectedTab, setSelectedTab] = useState('overview') // overview, payments, dues, match-fees, renewals, player-stats
   const [showAddPayment, setShowAddPayment] = useState(false)
+  const [showExpenseHistory, setShowExpenseHistory] = useState(false)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const [playerStats, setPlayerStats] = useState(null)
   const [selectedYear, setSelectedYear] = useState(() => readStoredYearFilter())
@@ -186,6 +189,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   // 매치별 구장비 페이지네이션
   const [matchFeesPage, setMatchFeesPage] = useState(1)
   const [matchFeesPerPage, setMatchFeesPerPage] = useState(5)
+  const [showVoidMatches, setShowVoidMatches] = useState(false)
 
   // Bulk delete state for payments
   const [selectedPayments, setSelectedPayments] = useState(new Set())
@@ -223,6 +227,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   const [renewalSaving, setRenewalSaving] = useState({})
   const [renewalResets, setRenewalResets] = useState(() => normalizeRenewalResetMap(feeOverrides?.renewalResets || {}))
   const [manualResetSaving, setManualResetSaving] = useState({})
+  const initialLoadDoneRef = React.useRef(false)
 
   const filteredPlayers = useMemo(() => {
     const q = playerSearch.trim().toLowerCase()
@@ -478,7 +483,9 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   }, [renewalEntries, renewalFilter, renewalSearch])
 
   useEffect(() => {
-    loadData()
+    const background = initialLoadDoneRef.current
+    loadData({ background })
+    if (!initialLoadDoneRef.current) initialLoadDoneRef.current = true
   }, [dateRange, players])
 
   // 초기 override 로드 (클라이언트 설정에서)
@@ -503,9 +510,9 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     }
   }, [feeOverrides])
 
-  async function loadData() {
+  async function loadData({ background = false } = {}) {
     if (!isAdmin) return
-    setLoading(true)
+    if (!background) setLoading(true)
     setLoadError(false)
     try {
       // 회비 기본값 보장
@@ -543,7 +550,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       setAllPayments([])
       setLoadError(true)
     } finally {
-      setLoading(false)
+      if (!background) setLoading(false)
     }
   }
 
@@ -616,7 +623,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
             notes: '',
             customPayee: ''
         })
-        loadData()
+        loadData({ background: true })
       }
     } catch (e) {
       notify('결제 내역 추가 실패')
@@ -672,7 +679,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       setRenewalResets(nextResets)
       setFeeOverrides(prev => ({ ...prev, renewalResets: nextResets }))
       notify('수동 정상 처리가 완료되었습니다 ✅')
-      await loadData()
+      await loadData({ background: true })
     } catch (error) {
       console.error('Failed to manually reset renewal status', error)
       notify('정상 처리에 실패했습니다')
@@ -712,7 +719,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       setRenewalResets(nextResets)
       setFeeOverrides(prev => ({ ...prev, renewalResets: nextResets }))
       notify('수동 정상 처리가 해제되었습니다')
-      await loadData()
+      await loadData({ background: true })
     } catch (error) {
       console.error('Failed to revert manual reset', error)
       notify('정상 처리 해제에 실패했습니다')
@@ -748,7 +755,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
         notes: '[renewals-tab]'
       })
       notify('회비 납부가 기록되었습니다 ✅')
-      await loadData()
+      await loadData({ background: true })
     } catch (error) {
       console.error('Failed to add quick renewal payment', error)
       notify('빠른 결제 입력 실패')
@@ -974,7 +981,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     try {
       await updateDuesSetting(settingType, amount, description)
       notify('회비 설정이 업데이트되었습니다 ✅')
-      loadData()
+      loadData({ background: true })
     } catch (error) {
       notify('회비 설정 업데이트 실패')
     }
@@ -1101,15 +1108,22 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     return [...(source || [])].sort((a, b) => new Date(b.dateISO) - new Date(a.dateISO))
   }, [matchesLocal, matches])
 
-  // 페이지네이션된 매치
+  const activeMatches = useMemo(() => sortedMatches.filter(m => !m.isVoided), [sortedMatches])
+  const voidMatches = useMemo(() => sortedMatches.filter(m => m.isVoided), [sortedMatches])
+
   const paginatedMatches = useMemo(() => {
     const startIdx = (matchFeesPage - 1) * matchFeesPerPage
-    return sortedMatches.slice(startIdx, startIdx + matchFeesPerPage)
-  }, [sortedMatches, matchFeesPage, matchFeesPerPage])
+    return activeMatches.slice(startIdx, startIdx + matchFeesPerPage)
+  }, [activeMatches, matchFeesPage, matchFeesPerPage])
 
-  const totalMatchPages = Math.max(1, Math.ceil(Math.max(sortedMatches.length, 1) / matchFeesPerPage))
-  const matchPageStart = sortedMatches.length === 0 ? 0 : (matchFeesPage - 1) * matchFeesPerPage + 1
-  const matchPageEnd = sortedMatches.length === 0 ? 0 : Math.min(sortedMatches.length, matchFeesPage * matchFeesPerPage)
+  const totalMatchPages = Math.max(1, Math.ceil(Math.max(activeMatches.length, 1) / matchFeesPerPage))
+  const matchPageStart = activeMatches.length === 0 ? 0 : (matchFeesPage - 1) * matchFeesPerPage + 1
+  const matchPageEnd = activeMatches.length === 0 ? 0 : Math.min(activeMatches.length, matchFeesPage * matchFeesPerPage)
+
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(Math.max(activeMatches.length, 1) / matchFeesPerPage))
+    if (matchFeesPage > maxPage) setMatchFeesPage(maxPage)
+  }, [activeMatches.length, matchFeesPerPage, matchFeesPage])
 
   if (!isAdmin) {
     return (
@@ -1274,7 +1288,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
             players={players}
             dateRange={dateRange}
             onRefresh={async () => {
-              await loadData()
+              await loadData({ background: true })
               try {
                 const latest = await listMatchesFromDB()
                 setMatchesLocal(latest)
@@ -1619,6 +1633,104 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                   <X size={20} className="text-gray-500 hover:text-gray-700" />
                 </button>
               </div>
+              
+              {/* Quick facility expense selector */}
+              <div className="mb-4 pb-3 border-b border-blue-300">
+                <button
+                  onClick={() => setShowExpenseHistory(!showExpenseHistory)}
+                  className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg font-medium transition-colors flex items-center gap-2"
+                >
+                  <span>⚡</span>
+                  <span>구장비 지출 내역 {showExpenseHistory ? '숨기기' : '불러오기'}</span>
+                </button>
+                <p className="text-[11px] text-gray-600 mt-1.5">
+                  이전 구장비/지출 내역을 선택해 빠르게 입력할 수 있어요
+                </p>
+                
+                {showExpenseHistory && (
+                  <div className="mt-3 max-h-64 overflow-y-auto border border-green-200 rounded-lg bg-white">
+                    {(() => {
+                      const allExpenses = payments
+                        .filter(p => p.payment_type === 'expense' || p.payment_type === 'facility_expense')
+                        .sort((a, b) => new Date(b.date || b.created_at) - new Date(a.date || a.created_at))
+                      
+                      // Remove duplicates: same amount, custom_payee, notes, payment_method
+                      const uniqueExpenses = []
+                      const seen = new Set()
+                      
+                      for (const expense of allExpenses) {
+                        const key = JSON.stringify({
+                          amount: expense.amount,
+                          custom_payee: expense.custom_payee || '',
+                          notes: expense.notes || '',
+                          payment_method: expense.payment_method || ''
+                        })
+                        
+                        if (!seen.has(key)) {
+                          seen.add(key)
+                          uniqueExpenses.push(expense)
+                        }
+                      }
+                      
+                      if (uniqueExpenses.length === 0) {
+                        return (
+                          <div className="p-4 text-center text-sm text-gray-500">
+                            구장비/지출 내역이 없습니다
+                          </div>
+                        )
+                      }
+                      
+                      return uniqueExpenses.map((expense, idx) => (
+                        <button
+                          key={expense.id || idx}
+                          onClick={() => {
+                            setNewPayment({
+                              ...newPayment,
+                              paymentType: 'facility_expense',
+                              amount: String(expense.amount || ''),
+                              paymentMethod: expense.payment_method || 'cash',
+                              customPayee: expense.custom_payee || '',
+                              notes: expense.notes || '구장비 지출'
+                            })
+                            setShowExpenseHistory(false)
+                          }}
+                          className="w-full p-3 hover:bg-green-50 text-left border-b last:border-b-0 transition-colors"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm font-semibold text-gray-900">
+                                  ${parseFloat(expense.amount || 0).toFixed(2)}
+                                </span>
+                                <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-700 rounded">
+                                  {expense.payment_type === 'facility_expense' ? '구장비' : '지출'}
+                                </span>
+                              </div>
+                              {expense.custom_payee && (
+                                <div className="text-xs text-gray-600 mb-0.5">
+                                  대상: {expense.custom_payee}
+                                </div>
+                              )}
+                              {expense.notes && (
+                                <div className="text-xs text-gray-500 truncate">
+                                  메모: {expense.notes}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-gray-400 whitespace-nowrap">
+                              {new Date(expense.date || expense.created_at).toLocaleDateString('ko-KR', { 
+                                month: 'short', 
+                                day: 'numeric' 
+                              })}
+                            </div>
+                          </div>
+                        </button>
+                      ))
+                    })()}
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-6">
                 <div>
                   <StepHeader step={1} title="결제 기본 정보" description="유형 · 금액 · 결제 수단" />
@@ -2049,7 +2161,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                           try {
                             await updatePayment(payment.id, { payment_method: e.target.value })
                             notify('결제 방법이 업데이트되었습니다 ✅')
-                            loadData()
+                            loadData({ background: true })
                           } catch (err) {
                             notify('결제 방법 업데이트 실패')
                           }
@@ -2100,61 +2212,95 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       {/* 매치별 구장비 탭 */}
       {selectedTab === 'match-fees' && (
         <Card title="저장된 매치 구장비 납부 현황">
-          <div className="space-y-6">
-            {paginatedMatches.map(match => (
-              <MatchFeesSection
-                key={match.id}
-                match={match}
-                players={players}
-                isVoided={Boolean(match.isVoided)}
-                onSync={loadData}
-              />
-            ))}
-            {sortedMatches.length === 0 && (
-              <p className="text-center text-gray-500 py-8">저장된 매치가 없습니다.</p>
-            )}
-            {sortedMatches.length > 0 && (
-              <div className="flex flex-col gap-2 pt-4">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-gray-600">
-                  <div>
-                    {matchPageStart}–{matchPageEnd} / {sortedMatches.length}개의 매치
+          <div className="space-y-4">
+            {activeMatches.length === 0 ? (
+              <p className="text-center text-gray-500 py-6">진행 중인 매치가 없습니다.</p>
+            ) : (
+              <>
+                <div className="text-sm font-semibold text-gray-800">최근 · 진행 중 매치</div>
+                {paginatedMatches.map((match, idx) => {
+                  const globalIdx = (matchFeesPage - 1) * matchFeesPerPage + idx
+                  return (
+                    <MatchFeesSection
+                      key={match.id}
+                      match={match}
+                      players={players}
+                      isVoided={Boolean(match.isVoided)}
+                      isRecent={globalIdx === 0}
+                      onSync={() => loadData({ background: true })}
+                    />
+                  )
+                })}
+
+                <div className="flex flex-col gap-2 pt-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-gray-600">
+                    <div>
+                      {matchPageStart}–{matchPageEnd} / {activeMatches.length}개의 진행 중 매치
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span>페이지당</span>
+                      <select
+                        value={matchFeesPerPage}
+                        onChange={(e) => {
+                          const next = Number(e.target.value) || 5
+                          setMatchFeesPerPage(next)
+                          setMatchFeesPage(1)
+                        }}
+                        className="border rounded-lg px-2 py-1"
+                      >
+                        {[5,10,20].map(size => (
+                          <option key={size} value={size}>{size}개</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span>페이지당</span>
-                    <select
-                      value={matchFeesPerPage}
-                      onChange={(e) => {
-                        const next = Number(e.target.value) || 5
-                        setMatchFeesPerPage(next)
-                        setMatchFeesPage(1)
-                      }}
-                      className="border rounded-lg px-2 py-1"
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => setMatchFeesPage(p => Math.max(1, p - 1))}
+                      disabled={matchFeesPage === 1}
+                      className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      {[5,10,20].map(size => (
-                        <option key={size} value={size}>{size}개</option>
-                      ))}
-                    </select>
+                      이전
+                    </button>
+                    <span className="px-4 py-2 text-sm text-gray-700">
+                      {matchFeesPage} / {totalMatchPages}
+                    </span>
+                    <button
+                      onClick={() => setMatchFeesPage(p => Math.min(totalMatchPages, p + 1))}
+                      disabled={matchFeesPage === totalMatchPages}
+                      className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      다음
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center justify-center gap-2">
-                  <button
-                    onClick={() => setMatchFeesPage(p => Math.max(1, p - 1))}
-                    disabled={matchFeesPage === 1}
-                    className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    이전
-                  </button>
-                  <span className="px-4 py-2 text-sm text-gray-700">
-                    {matchFeesPage} / {totalMatchPages}
-                  </span>
-                  <button
-                    onClick={() => setMatchFeesPage(p => Math.min(totalMatchPages, p + 1))}
-                    disabled={matchFeesPage === totalMatchPages}
-                    className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    다음
-                  </button>
-                </div>
+              </>
+            )}
+
+            {voidMatches.length > 0 && (
+              <div className="rounded-lg border border-red-200 bg-red-50/30">
+                <button
+                  onClick={() => setShowVoidMatches(prev => !prev)}
+                  className="flex w-full items-center justify-between px-4 py-3 text-sm font-semibold text-red-700 hover:bg-red-50"
+                >
+                  <span>VOID 처리된 매치 ({voidMatches.length}개)</span>
+                  <span className="text-xs text-red-500">{showVoidMatches ? '접기' : '펼치기'}</span>
+                </button>
+
+                {showVoidMatches && (
+                  <div className="space-y-2 px-3 pb-3">
+                    {voidMatches.map(match => (
+                      <MatchFeesSection
+                        key={match.id}
+                        match={match}
+                        players={players}
+                        isVoided={true}
+                        isRecent={false}
+                        onSync={() => loadData({ background: true })}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2289,12 +2435,12 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
           if (!payment) { setConfirmState({ open: false, kind: null, payload: null }); return }
           try {
             if (payment.payment_type === 'match_fee' && payment.match_id && payment.player_id) {
-              await cancelMatchPayment(payment.match_id, payment.player_id)
+              await hardDeleteMatchPayment(payment.match_id, payment.player_id)
             } else {
               await deletePayment(payment.id)
             }
             notify('삭제되었습니다')
-            loadData()
+            loadData({ background: true })
           } catch (error) {
             notify('삭제 실패')
           } finally {
@@ -2318,7 +2464,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
               const payment = payments.find(p => p.id === paymentId)
               if (!payment) return Promise.resolve()
               if (payment.payment_type === 'match_fee' && payment.match_id && payment.player_id) {
-                return cancelMatchPayment(payment.match_id, payment.player_id)
+                return hardDeleteMatchPayment(payment.match_id, payment.player_id)
               } else {
                 return deletePayment(paymentId)
               }
@@ -2329,7 +2475,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
             if (failCount === 0) notify(`${successCount}개의 결제 내역이 삭제되었습니다 ✅`)
             else notify(`${successCount}개 삭제 성공, ${failCount}개 실패`)
             setSelectedPayments(new Set())
-            loadData()
+            loadData({ background: true })
           } catch (error) {
             notify('일괄 삭제 실패')
           } finally {
@@ -2775,16 +2921,25 @@ function RenewalStatusCard({
   )
 }
 
-function MatchFeesSection({ match, players, isVoided = false, onSync = () => {} }) {
+function MatchFeesSection({ match, players, isVoided = false, isRecent = false, onSync = () => {} }) {
   const [matchPayments, setMatchPayments] = useState([])
   const [loading, setLoading] = useState(true)
   const [showReimbursement, setShowReimbursement] = useState(false)
   const [confirmState, setConfirmState] = useState({ open: false, kind: null, payload: null })
+  const [overrideInput, setOverrideInput] = useState('')
+  const [savingOverride, setSavingOverride] = useState(false)
+  const [isCollapsed, setIsCollapsed] = useState(true)
+  const [voidDialogState, setVoidDialogState] = useState({ open: false, reason: '', processing: false })
+  const [selectedPlayers, setSelectedPlayers] = useState(new Set())
+  const [bulkProcessing, setBulkProcessing] = useState(false)
   const VOID_ACTION_MESSAGE = 'VOID 처리된 매치는 개요 탭에서 복구하기 전까지 조정할 수 없습니다'
 
   useEffect(() => {
     loadMatchPayments()
-  }, [match.id])
+    const initial = match.fees?.total ?? match.totalCost ?? ''
+    setOverrideInput(initial === null || typeof initial === 'undefined' ? '' : String(initial))
+    setIsCollapsed(true)
+  }, [match.id, isRecent])
 
   async function loadMatchPayments() {
     try {
@@ -2835,6 +2990,107 @@ function MatchFeesSection({ match, players, isVoided = false, onSync = () => {} 
     setConfirmState({ open: true, kind: 'reimburse', payload: { playerId, amount } })
   }
 
+  const handleVoidMatch = async () => {
+    if (voidDialogState.processing) return
+    setVoidDialogState(prev => ({ ...prev, processing: true }))
+    try {
+      // 1) 먼저 해당 매치의 모든 납부 결제를 삭제
+      const paidPayments = matchPayments.filter(p => p.payment_status === 'paid')
+      if (paidPayments.length > 0) {
+        await Promise.all(
+          paidPayments.map(p => hardDeleteMatchPayment(match.id, p.player_id))
+        )
+      }
+      
+      // 2) 매치를 VOID 처리
+      await updateMatchInDB(match.id, { 
+        isVoided: true, 
+        voidReason: voidDialogState.reason?.trim() || null, 
+        voidedAt: new Date().toISOString() 
+      })
+      notify('매치가 VOID 처리되고 모든 결제 내역이 삭제되었습니다')
+      if (onSync) await onSync()
+    } catch {
+      notify('VOID 처리 실패')
+    } finally {
+      setVoidDialogState({ open: false, reason: '', processing: false })
+    }
+  }
+
+  const handleRestoreMatch = async () => {
+    try {
+      await updateMatchInDB(match.id, { isVoided: false, voidReason: null, voidedAt: null, voidedBy: null })
+      notify('매치가 복구되었습니다 ✅')
+      if (onSync) await onSync()
+    } catch {
+      notify('복구 실패')
+    }
+  }
+
+  const togglePlayerSelection = (playerId) => {
+    setSelectedPlayers(prev => {
+      const next = new Set(prev)
+      if (next.has(playerId)) {
+        next.delete(playerId)
+      } else {
+        next.add(playerId)
+      }
+      return next
+    })
+  }
+
+  const handleBulkConfirm = async () => {
+    if (abortIfVoided() || selectedPlayers.size === 0) return
+    setBulkProcessing(true)
+    try {
+      const unpaidSelected = Array.from(selectedPlayers).filter(playerId => {
+        const payment = matchPayments.find(p => p.player_id === playerId)
+        return !payment || payment.payment_status !== 'paid'
+      })
+      
+      await Promise.all(
+        unpaidSelected.map(playerId => {
+          const player = players.find(p => p.id === playerId)
+          const expected = calculatePlayerMatchFee(match, player, players)
+          return confirmMatchPayment(match.id, playerId, expected, 'venmo')
+        })
+      )
+      
+      notify(`${unpaidSelected.length}명의 납부를 확인했습니다 ✅`)
+      setSelectedPlayers(new Set())
+      await loadMatchPayments()
+      await onSync()
+    } catch (error) {
+      notify('일괄 확인 실패')
+    } finally {
+      setBulkProcessing(false)
+    }
+  }
+
+  const handleBulkCancel = async () => {
+    if (abortIfVoided() || selectedPlayers.size === 0) return
+    setBulkProcessing(true)
+    try {
+      const paidSelected = Array.from(selectedPlayers).filter(playerId => {
+        const payment = matchPayments.find(p => p.player_id === playerId)
+        return payment && payment.payment_status === 'paid'
+      })
+      
+      await Promise.all(
+        paidSelected.map(playerId => cancelMatchPayment(match.id, playerId))
+      )
+      
+      notify(`${paidSelected.length}명의 납부를 취소했습니다`)
+      setSelectedPlayers(new Set())
+      await loadMatchPayments()
+      await onSync()
+    } catch (error) {
+      notify('일괄 취소 실패')
+    } finally {
+      setBulkProcessing(false)
+    }
+  }
+
   const matchDate = new Date(match.dateISO).toLocaleDateString('ko-KR', {
     month: 'short',
     day: 'numeric',
@@ -2850,6 +3106,7 @@ function MatchFeesSection({ match, players, isVoided = false, onSync = () => {} 
     .filter(Boolean)
   const memberCount = participantPlayers.filter(p => isMember(p.membership)).length
   const guestCount = Math.max(0, participantPlayers.length - memberCount)
+  const totalParticipants = participantIds.length
 
   const normalizeNumber = (value) => {
     const num = Number(value)
@@ -2861,24 +3118,100 @@ function MatchFeesSection({ match, players, isVoided = false, onSync = () => {} 
     normalizeNumber(match.fees?.total) ??
     normalizeNumber(match.venueTotalOverride)
   const derivedPlanned = normalizeNumber(memberFee * memberCount + guestFee * guestCount)
-  const plannedTotal = normalizeNumber(plannedFromMeta ?? derivedPlanned ?? 0) || 0
+  const plannedTotalBase = normalizeNumber(plannedFromMeta ?? derivedPlanned ?? 0) || 0
+  const plannedTotal = overrideInput ? (Number(overrideInput) || 0) : plannedTotalBase
   const paidCount = matchPayments.filter(p => p.payment_status === 'paid').length
+  const unpaidCount = Math.max(0, totalParticipants - paidCount)
   const collectedTotal = matchPayments
     .filter(p => p.payment_status === 'paid')
     .reduce((sum, p) => sum + Number(p.paid_amount || p.expected_amount || 0), 0)
+  const isFullyPaid = totalParticipants > 0 && paidCount === totalParticipants
+  const isPaidMap = new Map(matchPayments.map(p => [p.player_id, p.payment_status === 'paid']))
+  const sortedParticipantIds = [...participantIds].sort((a, b) => {
+    const paidA = Boolean(isPaidMap.get(a))
+    const paidB = Boolean(isPaidMap.get(b))
+    if (paidA !== paidB) return Number(paidA) - Number(paidB) // unpaid first
+    const nameA = (players.find(p => p.id === a)?.name || '').toLowerCase()
+    const nameB = (players.find(p => p.id === b)?.name || '').toLowerCase()
+    return nameA.localeCompare(nameB)
+  })
 
   return (
     <div className={`border rounded-lg p-4 ${isVoided ? 'border-red-200 bg-red-50/40' : ''}`}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex-1">
-          <div className="font-semibold">{matchDate}</div>
-          <div className="text-xs text-gray-600">
-            {match.location?.name || '장소 미정'} · {participantIds.length}명 · 
-            멤버 ${memberFee.toFixed(2)} / 게스트 ${guestFee.toFixed(2)}
+          <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+            <span>{matchDate}</span>
+            {isVoided && <span className="rounded px-2 py-0.5 text-[11px] bg-red-100 text-red-700">VOID</span>}
+            {!isVoided && isFullyPaid && (
+              <span className="rounded px-2 py-0.5 text-[11px] bg-emerald-100 text-emerald-700">완납</span>
+            )}
+            {!isVoided && !isFullyPaid && totalParticipants > 0 && (
+              <span className="rounded px-2 py-0.5 text-[11px] bg-amber-100 text-amber-700">미납 {unpaidCount}명</span>
+            )}
+          </div>
+          <div className="mt-0.5 text-xs text-gray-600">
+            {match.location?.name || '장소 미정'} · {totalParticipants}명 · 멤버 ${memberFee.toFixed(2)} / 게스트 ${guestFee.toFixed(2)} · 납부율 {paidCount}/{totalParticipants || 0}
           </div>
           <div className="mt-1 text-[11px] text-gray-700">
             예정 구장비 ${plannedTotal.toFixed(2)} · 실수령 ${collectedTotal.toFixed(2)}
           </div>
+          <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-600">
+            <button
+              onClick={() => setIsCollapsed(prev => !prev)}
+              className="px-2 py-1 rounded border text-[11px] hover:bg-gray-100"
+            >
+              {isCollapsed ? '상세 열기' : '상세 접기'}
+            </button>
+          </div>
+          {!isCollapsed && (
+            <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-600 flex-wrap">
+              <span className="font-semibold">예정 구장비 직접 설정</span>
+              <input
+                type="number"
+                step="0.5"
+                value={overrideInput}
+                onChange={(e) => setOverrideInput(e.target.value)}
+                placeholder={plannedTotalBase ? plannedTotalBase.toFixed(2) : '예: 150'}
+                className="w-28 border rounded px-2 py-1 text-[11px]"
+                disabled={isVoided || savingOverride}
+              />
+              <button
+                onClick={async () => {
+                  if (isVoided) return
+                  const num = Number(overrideInput)
+                  if (!Number.isFinite(num) || num < 0) {
+                    notify('0 이상의 숫자를 입력해주세요')
+                    return
+                  }
+                  setSavingOverride(true)
+                  try {
+                    const nextFees = { ...(match.fees || {}), total: num }
+                    await updateMatchInDB(match.id, { fees: nextFees })
+                    notify('예정 구장비가 저장되었습니다 ✅')
+                    if (onSync) await onSync()
+                  } catch (e) {
+                    notify('예정 구장비 저장 실패')
+                  } finally {
+                    setSavingOverride(false)
+                  }
+                }}
+                disabled={isVoided || savingOverride}
+                className="px-2 py-1 rounded bg-blue-500 text-white text-[11px] hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingOverride ? '저장 중...' : '저장'}
+              </button>
+              <button
+                onClick={() => {
+                  setOverrideInput('')
+                }}
+                disabled={isVoided || savingOverride || overrideInput === ''}
+                className="px-2 py-1 rounded border text-[11px] text-gray-700 hover:bg-gray-100 disabled:opacity-40"
+              >
+                초기화
+              </button>
+            </div>
+          )}
           {isVoided && (
             <div className="mt-2 space-y-1 text-xs">
               <div className="inline-flex items-center gap-1 font-semibold text-red-600">
@@ -2902,6 +3235,18 @@ function MatchFeesSection({ match, players, isVoided = false, onSync = () => {} 
           )}
         </div>
         <div className="text-right flex items-center gap-3">
+          <button
+            onClick={() => {
+              if (isVoided) {
+                handleRestoreMatch()
+              } else {
+                setVoidDialogState({ open: true, reason: match.voidReason || '', processing: false })
+              }
+            }}
+            className={`px-3 py-1.5 text-xs rounded border ${isVoided ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'} hover:opacity-90`}
+          >
+            {isVoided ? 'VOID 해제' : 'VOID 처리'}
+          </button>
           <div>
           <ConfirmDialog
             open={confirmState.open}
@@ -2997,38 +3342,95 @@ function MatchFeesSection({ match, players, isVoided = false, onSync = () => {} 
         </div>
       </div>
 
-      {isVoided && (
-        <div className="mb-3 rounded border border-red-200 bg-white/80 px-3 py-2 text-xs text-red-700">
-          이 매치는 개요 탭의 Financial Dashboard에서 VOID 처리되어 요약/미납 집계에서 제외됩니다. 복구도 동일한 위치에서만 가능합니다.
-        </div>
-      )}
+      {!isCollapsed && (
+        <>
+          {isVoided && (
+            <div className="mb-3 rounded border border-red-200 bg-white/80 px-3 py-2 text-xs text-red-700">
+              이 매치는 VOID 처리되어 요약/미납 집계에서 제외됩니다. 복구도 동일한 위치에서만 가능합니다.
+            </div>
+          )}
 
-      {loading ? (
-        <div className="text-center py-4 text-gray-500 text-sm">로딩 중...</div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-xs text-gray-600">
-                <th className="text-left py-2 px-2">선수</th>
-                <th className="text-left py-2 px-2">구분</th>
-                <th className="text-right py-2 px-2">금액</th>
-                <th className="text-center py-2 px-2">상태</th>
-                <th className="text-right py-2 px-2">작업</th>
-              </tr>
-            </thead>
-            <tbody>
-              {participantIds.map(playerId => {
+          {selectedPlayers.size > 0 && !isVoided && (
+            <div className="mb-3 rounded border border-blue-200 bg-blue-50 px-3 py-2 flex items-center justify-between">
+              <span className="text-sm text-blue-700">
+                {selectedPlayers.size}명 선택됨
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleBulkConfirm}
+                  disabled={bulkProcessing}
+                  className="px-3 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-40"
+                >
+                  {bulkProcessing ? '처리 중...' : '선택 확인'}
+                </button>
+                <button
+                  onClick={handleBulkCancel}
+                  disabled={bulkProcessing}
+                  className="px-3 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-40"
+                >
+                  {bulkProcessing ? '처리 중...' : '선택 취소'}
+                </button>
+                <button
+                  onClick={() => setSelectedPlayers(new Set())}
+                  className="px-3 py-1 text-xs border border-gray-300 rounded hover:bg-gray-100"
+                >
+                  선택 해제
+                </button>
+              </div>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="text-center py-4 text-gray-500 text-sm">로딩 중...</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-xs text-gray-600">
+                    <th className="text-left py-2 px-2 w-8">
+                      <input
+                        type="checkbox"
+                        checked={selectedPlayers.size === sortedParticipantIds.length && sortedParticipantIds.length > 0}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedPlayers(new Set(sortedParticipantIds))
+                          } else {
+                            setSelectedPlayers(new Set())
+                          }
+                        }}
+                        disabled={isVoided}
+                        className="cursor-pointer"
+                      />
+                    </th>
+                    <th className="text-left py-2 px-2">선수</th>
+                    <th className="text-left py-2 px-2">구분</th>
+                    <th className="text-right py-2 px-2">금액</th>
+                    <th className="text-center py-2 px-2">상태</th>
+                    <th className="text-right py-2 px-2">작업</th>
+                  </tr>
+                </thead>
+                <tbody>
+              {sortedParticipantIds.map(playerId => {
                 const player = players.find(p => p.id === playerId)
                 const payment = matchPayments.find(p => p.player_id === playerId)
                 const isPaid = payment?.payment_status === 'paid'
                 const expected = calculatePlayerMatchFee(match, player, players)
+                const isSelected = selectedPlayers.has(playerId)
 
                 return (
                   <tr
                     key={playerId}
-                    className={`border-b last:border-b-0 ${isPaid ? 'bg-emerald-50' : 'hover:bg-gray-50'}`}
+                    className={`border-b last:border-b-0 ${isPaid ? 'bg-emerald-50' : 'hover:bg-gray-50'} ${isSelected ? 'ring-2 ring-blue-300' : ''}`}
                   >
+                    <td className="py-2 px-2">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => togglePlayerSelection(playerId)}
+                        disabled={isVoided}
+                        className="cursor-pointer"
+                      />
+                    </td>
                     <td className="py-2 px-2">
                       <div className="flex items-center gap-2">
                         <InitialAvatar id={player?.id} name={player?.name||'?'} size={24} photoUrl={player?.photoUrl} />
@@ -3085,6 +3487,35 @@ function MatchFeesSection({ match, players, isVoided = false, onSync = () => {} 
           </table>
         </div>
       )}
+        </>
+      )}
+
+      {/* VOID 처리 다이얼로그 */}
+      <ConfirmDialog
+        open={voidDialogState.open}
+        title="매치 VOID 처리"
+        message="선택한 매치는 VOID 처리 즉시 재정 요약과 미납 목록에서 제외됩니다.\n사유를 남겨두면 이후 감사 시 추적이 용이합니다."
+        confirmLabel={voidDialogState.processing ? '처리 중...' : 'VOID 처리'}
+        cancelLabel="돌아가기"
+        tone="danger"
+        onCancel={() => setVoidDialogState({ open: false, reason: '', processing: false })}
+        onConfirm={handleVoidMatch}
+      >
+        <div className="space-y-2">
+          <label htmlFor="void-reason-input" className="text-xs font-medium text-gray-600">VOID 사유 (선택)</label>
+          <textarea
+            id="void-reason-input"
+            rows={3}
+            value={voidDialogState.reason}
+            onChange={(e) => setVoidDialogState(prev => ({ ...prev, reason: e.target.value }))}
+            className="w-full rounded-lg border border-gray-200 p-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400"
+            placeholder="예: 우천 취소, 오류 정정, 대관비 환불"
+          />
+          <p className="text-[11px] text-gray-500">
+            VOID 상태는 복구 전까지 수정이 잠기며, 이 탭에서 바로 VOID 해제할 수 있습니다.
+          </p>
+        </div>
+      </ConfirmDialog>
     </div>
   )
 }

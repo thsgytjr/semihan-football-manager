@@ -836,9 +836,9 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
 
       <div className="mb-2 text-xs text-gray-600">
         {/* 요금 표시: 구장비 미사용 매치(feesDisabled) 또는 total 0이면 숨김 */}
-        {!(m.feesDisabled || (fees?.total ?? 0) === 0) ? (
+        {!(m.feesDisabled || ((fees?.total ?? m.venueTotalOverride ?? m.totalCost ?? 0) === 0)) ? (
           <>
-            {m.teamCount}{t('matchHistory.teams')} ·💰{t('matchHistory.totalFees')} ${fees?.total??0}
+            {m.teamCount}{t('matchHistory.teams')} ·💰{t('matchHistory.totalFees')} ${ (fees?.total ?? m.venueTotalOverride ?? m.totalCost ?? 0) }
             {typeof fees?.memberFee==="number" && (
               <> · {t('matchHistory.fees.memberEach', { amount: fees.memberFee })}</>
             )}

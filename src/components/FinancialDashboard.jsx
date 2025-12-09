@@ -936,14 +936,18 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
                   return (
                   <div
                     key={unpaid.playerId}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors"
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors cursor-pointer"
+                    onClick={() => toggleSelectOne(unpaid.playerId)}
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       <input
                         type="checkbox"
                         className="h-4 w-4 flex-shrink-0"
                         checked={selected.has(unpaid.playerId)}
-                        onChange={() => toggleSelectOne(unpaid.playerId)}
+                        onChange={(e) => {
+                          e.stopPropagation()
+                          toggleSelectOne(unpaid.playerId)
+                        }}
                       />
                       <InitialAvatar
                         id={unpaid.playerId}
@@ -963,6 +967,8 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
                     </div>
                     <button
                       onClick={() => handleTogglePayment(unpaid.playerId, false, unpaid.expectedFee)}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onClickCapture={(e) => e.stopPropagation()}
                       disabled={updating[unpaid.playerId] || bulkUpdating}
                       className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium whitespace-nowrap flex-shrink-0 ml-2"
                     >
