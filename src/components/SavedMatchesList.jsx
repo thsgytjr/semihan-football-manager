@@ -2282,7 +2282,10 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       const isWhite = label === 'white'
                       const isBlack = label === 'black'
                       const fill = isWhite ? '#ffffff' : (isBlack ? '#0f172a' : baseColor)
-                      const stroke = isWhite ? '#0f172a' : 'none'
+                      const stroke = isWhite
+                        ? '#0f172a'
+                        : (isBlack ? '#ffffff' : 'rgba(0,0,0,0.38)')
+                      const strokeW = isWhite ? 16 : (isBlack ? 16 : 12)
 
                       return (
                         <svg
@@ -2292,7 +2295,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                           aria-hidden="true"
                           className="drop-shadow-sm"
                         >
-                          <g fill={fill} stroke={stroke} strokeWidth={isWhite ? 25 : 0} strokeLinejoin="round">
+                          <g fill={fill} stroke={stroke} strokeWidth={strokeW} strokeLinejoin="round">
                             <path d="M937.031,250.555c-21.249-9.669-42.856-19.473-63.752-28.955c-40.639-18.439-82.662-37.507-123.886-56.416
                               c-7.768-3.562-15.452-7.376-23.589-11.414c-32.479-16.116-69.289-34.382-112.309-34.382h-24.032
                               c-9.62,0-18.902,3.651-26.139,10.282c-5.699,5.223-9.85,11.987-12.004,19.56c-0.424,1.492-4.271,6.993-15.981,12.504
