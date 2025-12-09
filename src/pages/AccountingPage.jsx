@@ -22,7 +22,7 @@ import {
 } from '../lib/accounting'
 import { updateMatchInDB } from '../services/matches.service'
 import { isMember } from '../lib/fees'
-import { DollarSign, Users, Calendar, TrendingUp, Plus, X, Check, AlertCircle, RefreshCw, Trash2, ArrowUpDown, Download, Search } from 'lucide-react'
+import { DollarSign, Users, Calendar, TrendingUp, Plus, X, Check, AlertCircle, RefreshCw, Trash2, ArrowUpDown, Download, Search, ChevronDown, ChevronUp } from 'lucide-react'
 import InitialAvatar from '../components/InitialAvatar'
 import { listMatchesFromDB } from '../services/matches.service'
 import { getAccountingOverrides, updateAccountingOverrides } from '../lib/appSettings'
@@ -3137,7 +3137,22 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
   })
 
   return (
-    <div className={`border rounded-lg p-4 ${isVoided ? 'border-red-200 bg-red-50/40' : ''}`}>
+    <div className={`border rounded-lg p-4 relative ${isVoided ? 'border-red-200 bg-red-50/40' : ''}`}>
+      <button
+        onClick={() => {
+          if (isVoided) {
+            handleRestoreMatch()
+          } else {
+            setVoidDialogState({ open: true, reason: match.voidReason || '', processing: false })
+          }
+        }}
+        className={`absolute -top-4 -right-4 inline-flex items-center gap-1 px-3 py-1 rounded-full border shadow-sm text-[11px] font-medium transition-colors ${isVoided ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'}`}
+        title={isVoided ? 'VOID 복구' : 'VOID 처리'}
+      >
+        {isVoided ? <RefreshCw size={14} /> : <AlertCircle size={14} />}
+        <span>{isVoided ? 'VOID 복구' : 'VOID 처리'}</span>
+      </button>
+
       <div className="flex items-center justify-between mb-3">
         <div className="flex-1">
           <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
@@ -3151,18 +3166,10 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
             )}
           </div>
           <div className="mt-0.5 text-xs text-gray-600">
-            {match.location?.name || '장소 미정'} · {totalParticipants}명 · 멤버 ${memberFee.toFixed(2)} / 게스트 ${guestFee.toFixed(2)} · 납부율 {paidCount}/{totalParticipants || 0}
+            {match.location?.name || '장소 미정'} · {totalParticipants}명 · 멤버 ${memberFee.toFixed(2)} / 게스트 ${guestFee.toFixed(2)}
           </div>
           <div className="mt-1 text-[11px] text-gray-700">
             예정 구장비 ${plannedTotal.toFixed(2)} · 실수령 ${collectedTotal.toFixed(2)}
-          </div>
-          <div className="mt-1 flex items-center gap-2 text-[11px] text-gray-600">
-            <button
-              onClick={() => setIsCollapsed(prev => !prev)}
-              className="px-2 py-1 rounded border text-[11px] hover:bg-gray-100"
-            >
-              {isCollapsed ? '상세 열기' : '상세 접기'}
-            </button>
           </div>
           {!isCollapsed && (
             <div className="mt-2 flex items-center gap-2 text-[11px] text-gray-600 flex-wrap">
@@ -3235,18 +3242,6 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
           )}
         </div>
         <div className="text-right flex items-center gap-3">
-          <button
-            onClick={() => {
-              if (isVoided) {
-                handleRestoreMatch()
-              } else {
-                setVoidDialogState({ open: true, reason: match.voidReason || '', processing: false })
-              }
-            }}
-            className={`px-3 py-1.5 text-xs rounded border ${isVoided ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'} hover:opacity-90`}
-          >
-            {isVoided ? 'VOID 해제' : 'VOID 처리'}
-          </button>
           <div>
           <ConfirmDialog
             open={confirmState.open}
@@ -3331,15 +3326,28 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
               상환
             </button>
           )}
-          <button
-            onClick={handleCancelAllPayments}
-            disabled={isVoided || paidCount === 0}
-            title={isVoided ? VOID_ACTION_MESSAGE : paidCount === 0 ? '취소할 납부가 없습니다' : undefined}
-            className="px-3 py-1.5 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            전체 취소
-          </button>
+          {!isCollapsed && (
+            <button
+              onClick={handleCancelAllPayments}
+              disabled={isVoided || paidCount === 0}
+              title={isVoided ? VOID_ACTION_MESSAGE : paidCount === 0 ? '취소할 납부가 없습니다' : undefined}
+              className="px-3 py-1.5 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              전체 취소
+            </button>
+          )}
         </div>
+      </div>
+
+      <div className="flex justify-center mb-2 text-gray-600 text-xs">
+        <button
+          onClick={() => setIsCollapsed(prev => !prev)}
+          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full hover:bg-gray-100 transition-colors"
+          title={isCollapsed ? '상세 열기' : '상세 접기'}
+        >
+          <span className="font-medium">{isCollapsed ? '상세 보기' : '상세 닫기'}</span>
+          {isCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+        </button>
       </div>
 
       {!isCollapsed && (
