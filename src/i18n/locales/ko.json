@@ -356,7 +356,7 @@
     "gameNumber": "Game {{n}}",
     "gameWin": "{{team}} 승",
     "gameDraw": "무승부",
-    "gameEventsTitle": "경기별 득점 상세",
+    "gameEventsTitle": "경기별 상세",
     "collapse": "접기",
     "expand": "펼치기",
     "noGoals": "득점 없음",

@@ -79,6 +79,7 @@ function collectEvents(match) {
   let globalOrder = 0
 
   for (const [pidRaw, rec] of Object.entries(stats)) {
+    if (String(pidRaw).startsWith('__')) continue
     const pid = toStr(pidRaw)
     if (!pid) continue
     const teamIdx = playerTeamMap.get(pid)
@@ -87,7 +88,7 @@ function collectEvents(match) {
     const seen = new Set()
     evs.forEach((ev, idx) => {
       const type = String(ev?.type || ev?.event || '').toLowerCase()
-      const isGoal = type.includes('goal')
+      const isGoal = type.includes('goal') || type === 'g'
       const isAssistOnly = type.includes('assist') && !isGoal
       if (!isGoal && !isAssistOnly) return
       const ts = parseTs(ev.dateISO || ev.date || ev.ts || ev.time)
@@ -131,10 +132,46 @@ function sortEvents(arr) {
 export function computeGameEvents(match, players = []) {
   const quarterScores = getQuarterScores(match)
   const teamCount = Math.max(match?.teamCount || 0, quarterScores.length || 0, Array.isArray(match?.snapshot) ? match.snapshot.length : 0, 2)
+
+  // If referee-mode timeline exists, prefer it for accurate per-game details
+  const timeline = Array.isArray(match?.stats?.__events) ? match.stats.__events : []
+  const hasTimeline = timeline.length > 0
+
+  if (hasTimeline) {
+    return timeline
+      .filter(ev => ev && (ev.type === 'goal' || ev.type === 'own_goal' || ev.type === 'foul' || ev.type === 'yellow' || ev.type === 'red' || ev.type === 'super_save'))
+      .map((ev, idx) => {
+        const gameIndex = Number(ev.gameIndex ?? 0)
+        const scoringTeam = ev.type === 'own_goal'
+          ? (ev.teamIndex === 0 ? 1 : 0)
+          : (ev.teamIndex ?? 0)
+        return {
+          id: ev.id || `${gameIndex}-${scoringTeam}-${idx}`,
+          gameIndex,
+          teamIndex: scoringTeam,
+          scorerId: toStr(ev.playerId),
+          assistId: ev.assistedBy ? toStr(ev.assistedBy) : '',
+          ownGoal: ev.type === 'own_goal',
+          eventType: ev.type,
+          minute: ev.minute ? String(ev.minute) : '',
+        }
+      })
+  }
   const eventsByTeam = collectEvents({ ...match, players })
   const byTeam = Array.from({ length: teamCount }, (_, i) => sortEvents(eventsByTeam[i] ? [...eventsByTeam[i]] : []))
 
-  const maxGames = Math.max(1, ...quarterScores.map(arr => (Array.isArray(arr) ? arr.length : 0)))
+  // Determine effective game count: ignore trailing 0-0 games
+  let lastNonZeroIdx = -1
+  quarterScores.forEach(teamArr => {
+    if (!Array.isArray(teamArr)) return
+    teamArr.forEach((val, idx) => {
+      const num = Number(val)
+      if (Number.isFinite(num) && num > 0) {
+        lastNonZeroIdx = Math.max(lastNonZeroIdx, idx)
+      }
+    })
+  })
+  const maxGames = Math.max(1, lastNonZeroIdx + 1)
   const result = []
 
   for (let ti = 0; ti < teamCount; ti++) {
@@ -145,12 +182,9 @@ export function computeGameEvents(match, players = []) {
       if (!Number.isFinite(score) || score <= 0) continue
 
       const goals = queue.filter(e => e.kind === 'goal')
-      const assists = queue.filter(e => e.kind === 'assist-only')
 
       const takeGoals = goals.slice(0, score)
-      const remaining = Math.max(0, score - takeGoals.length)
-      const takeAssists = remaining > 0 ? assists.slice(0, remaining) : []
-      const missing = Math.max(0, score - (takeGoals.length + takeAssists.length))
+      const missing = Math.max(0, score - takeGoals.length)
 
       takeGoals.forEach((ev, idx) => {
         result.push({
@@ -164,32 +198,20 @@ export function computeGameEvents(match, players = []) {
         })
       })
 
-      takeAssists.forEach((ev, idx) => {
-        result.push({
-          id: `${gi}-${ti}-og-${idx}-${ev.pid}`,
-          gameIndex: gi,
-          teamIndex: ti,
-          scorerId: '',
-          assistId: ev.assistedBy || ev.pid,
-          ownGoal: true,
-          minute: ev.minuteLabel || '',
-        })
-      })
-
       for (let k = 0; k < missing; k++) {
         result.push({
-          id: `${gi}-${ti}-og-missing-${k}`,
+          id: `${gi}-${ti}-missing-${k}`,
           gameIndex: gi,
           teamIndex: ti,
-          scorerId: '',
+          scorerId: '', // unknown scorer
           assistId: '',
-          ownGoal: true,
+          ownGoal: false,
           minute: '',
         })
       }
 
       // consume exactly the events we used (do not pop unrelated later events)
-      const used = new Set([...takeGoals, ...takeAssists])
+      const used = new Set([...takeGoals])
       const remainingQueue = queue.filter(ev => !used.has(ev))
       queue.length = 0
       queue.push(...remainingQueue)

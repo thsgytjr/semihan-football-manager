@@ -11,6 +11,7 @@ import MatchHelpers from '../lib/matchHelpers'
 import { formatMatchLabel } from '../lib/matchLabel'
 import { summarizeVotes, buildMoMTieBreakerScores, getMoMPhase } from '../lib/momUtils'
 import { fetchMoMVotes, submitMoMVote, deleteMoMVote, deleteMoMVotesByMatch } from '../services/momVotes.service'
+import RefereeTimelineEditor from '../components/RefereeTimelineEditor'
 
 const toStr = (v) => (v === null || v === undefined) ? '' : String(v)
 
@@ -66,7 +67,14 @@ function extractStatsByPlayer(m) {
         type: e.type || e.event || (e?.isAssist ? 'assist' : 'goal'),
         date: e.dateISO || e.date || e.ts || e.time,
         assistedBy: e.assistedBy,
-        linkedToGoal: e.linkedToGoal
+        assistedName: e.assistedName,
+        linkedToGoal: e.linkedToGoal,
+        teamIndex: e.teamIndex,
+        gameIndex: e.gameIndex,
+        minute: e.minute,
+        playerName: e.playerName,
+        timestamp: e.timestamp,
+        id: e.id,
       })).filter(Boolean) : []
       out[pid] = { goals, assists, events, cleanSheet, yellowCards, redCards, blackCards }
     }
@@ -111,7 +119,7 @@ function extractStatsByPlayer(m) {
 
 
 /* ======== Main Component ======== */
-export default function StatsInput({ players = [], matches = [], onUpdateMatch, isAdmin, cardsFeatureEnabled = true }) {
+export default function StatsInput({ players = [], matches = [], onUpdateMatch, isAdmin, cardsFeatureEnabled = true, onStartRefereeMode }) {
   const { t } = useTranslation()
   const cardsEnabled = cardsFeatureEnabled !== false
   const sortedMatches = useMemo(() => {
@@ -141,7 +149,10 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     if (!editingMatch) { setDraft({}); return }
     const src = extractStatsByPlayer(editingMatch)
     const next = {}
-    const ids = new Set(extractAttendeeIds(editingMatch))
+    const attendeeList = extractAttendeeIds(editingMatch)
+    const ids = attendeeList.length > 0
+      ? new Set(attendeeList)
+      : new Set((hydrateMatch(editingMatch, players).teams || []).flat().map(p => toStr(p.id)).filter(Boolean))
     for (const p of players) {
       if (!ids.has(toStr(p.id))) continue
       const rec = src?.[toStr(p.id)] || {}
@@ -159,14 +170,30 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     setDraft(next)
   }, [editingMatch, players])
 
+  const isRefMatch = (matchObj) => Array.isArray(matchObj?.stats?.__events) && matchObj.stats.__events.length > 0
+
   useEffect(() => {
+    const selected = sortedMatches?.find(m => toStr(m.id) === toStr(momMatchId))
+    if (selected && isRefMatch(selected)) {
+      // If currently pointing to a referee match, clear it so MoM UI hides
+      setMomMatchId('')
+      return
+    }
+
     if (momMatchId) return
+
     if (editingMatchId) {
+      const match = sortedMatches?.find(m => toStr(m.id) === toStr(editingMatchId))
+      const hasTimeline = isRefMatch(match)
+      // Never auto-trigger MOM voting for referee mode matches
+      if (hasTimeline) return
+
       setMomMatchId(toStr(editingMatchId))
       return
     }
-    const fallback = toStr(sortedMatches?.[0]?.id || '')
-    if (fallback) setMomMatchId(fallback)
+
+    const fallback = (sortedMatches || []).find(m => !isRefMatch(m))
+    if (fallback?.id) setMomMatchId(toStr(fallback.id))
   }, [momMatchId, editingMatchId, sortedMatches])
 
   const [bulkText, setBulkText] = useState('')
@@ -182,11 +209,70 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     return (sortedMatches || []).find(m => toStr(m.id) === toStr(momMatchId)) || null
   }, [momMatchId, sortedMatches, editingMatch])
 
+  const buildTimelineFromDraft = (draftStats, teamsArr = []) => {
+    const playerTeam = new Map()
+    teamsArr.forEach((team, idx) => {
+      (team || []).forEach(p => {
+        if (p?.id == null) return
+        playerTeam.set(toStr(p.id), idx)
+      })
+    })
+
+    const timeline = []
+    for (const [pid, rec] of Object.entries(draftStats || {})) {
+      const evs = Array.isArray(rec?.events) ? rec.events : []
+      evs.forEach((ev, idx) => {
+        const type = ev?.type || ''
+        if (!type) return
+        // Keep only goal/own_goal/foul/yellow/red/super_save for timeline rendering
+        const normalized = String(type).toLowerCase()
+        const allow = ['goal', 'own_goal', 'foul', 'yellow', 'red', 'super_save']
+        if (!allow.includes(normalized)) return
+
+        const teamIndex = ev.teamIndex != null ? ev.teamIndex : playerTeam.get(toStr(pid)) ?? 0
+        const gameIndex = ev.gameIndex != null ? ev.gameIndex : 0
+        timeline.push({
+          id: ev.id || `manual-${pid}-${idx}`,
+          type: normalized,
+          teamIndex,
+          gameIndex,
+          playerId: pid,
+          playerName: ev.playerName || '',
+          assistedBy: ev.assistedBy || null,
+          assistedName: ev.assistedName || '',
+          minute: ev.minute || '',
+          timestamp: ev.timestamp || null,
+          date: ev.date || ev.dateISO || null,
+        })
+      })
+    }
+    return timeline
+  }
+
   const save = () => {
     if (!editingMatch) return
-    onUpdateMatch?.(editingMatch.id, { stats: draft })
+    const baseStats = editingMatch?.stats && typeof editingMatch.stats === 'object' ? editingMatch.stats : {}
+    const rebuiltTimeline = buildTimelineFromDraft(draft, teams)
+    const mergedStats = {
+      ...baseStats,
+      ...draft,
+      __events: rebuiltTimeline,
+    }
+    onUpdateMatch?.(editingMatch.id, { stats: mergedStats })
     setShowSaved(true)
     setTimeout(() => setShowSaved(false), 1200)
+  }
+
+  const resetAllRecords = () => {
+    if (!editingMatch) return
+    setDraft({})
+    // Wipe per-game timelines/scores so match history also clears
+    onUpdateMatch?.(editingMatch.id, {
+      stats: {},
+      quarterScores: [],
+      statsMeta: { gameEvents: [] },
+      gameEvents: [],
+    })
   }
 
   const refreshMoMVotes = useCallback(async () => {
@@ -551,9 +637,13 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     return hydrated.teams || []
   }, [editingMatch, players])
 
+  const hasRefereeTimeline = useMemo(() => {
+    return Array.isArray(editingMatch?.stats?.__events) && editingMatch.stats.__events.length > 0
+  }, [editingMatch])
+
 
   const momMatchOptions = useMemo(() => {
-    return (sortedMatches || []).map(m => {
+    return (sortedMatches || []).filter(m => !isRefMatch(m)).map(m => {
       const label = typeof formatMatchLabel === 'function'
         ? formatMatchLabel(m, { withDate: true, withCount: true, t })
         : (m.label || m.title || m.name || `Match ${toStr(m.id)}`)
@@ -723,25 +813,57 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
             {/* Match Selector */}
             <div className="mb-4">
               <label className="block text-sm font-semibold text-gray-700 mb-2">📅 경기 선택</label>
-              <select
-                key={sortedMatches.map(m => toStr(m.id)).join('|')}
-                value={toStr(editingMatchId)}
-                onChange={(e) => {
-                  setEditingMatchId(toStr(e.target.value))
-                }}
-                className="w-full rounded-lg border-2 border-gray-300 bg-white px-4 py-3 text-sm font-medium shadow-sm hover:border-blue-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-              >
-                {sortedMatches.map(m => {
-                  const count = extractAttendeeIds(m).length
-                  const label =
-                    (typeof formatMatchLabel === 'function'
-                      ? formatMatchLabel(m, { withDate: true, withCount: true, count, t })
-                      : (m.label || m.title || m.name || `Match ${toStr(m.id)}`))
-                  return (
-                    <option key={toStr(m.id)} value={toStr(m.id)}>{label}</option>
-                  )
-                })}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  key={sortedMatches.map(m => toStr(m.id)).join('|')}
+                  value={toStr(editingMatchId)}
+                  onChange={(e) => {
+                    setEditingMatchId(toStr(e.target.value))
+                  }}
+                  className="w-full rounded-lg border-2 border-gray-300 bg-white px-4 py-3 text-sm font-medium shadow-sm hover:border-blue-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                >
+                  {sortedMatches.map(m => {
+                    const count = extractAttendeeIds(m).length
+                    const label =
+                      (typeof formatMatchLabel === 'function'
+                        ? formatMatchLabel(m, { withDate: true, withCount: true, count, t })
+                        : (m.label || m.title || m.name || `Match ${toStr(m.id)}`))
+                    return (
+                      <option key={toStr(m.id)} value={toStr(m.id)}>{label}</option>
+                    )
+                  })}
+                </select>
+                {editingMatch && onStartRefereeMode && (
+                  <>
+                    {editingMatch.stats?.__inProgress ? (
+                      <button
+                        onClick={() => {
+                          const hydrated = hydrateMatch(editingMatch, players)
+                          onStartRefereeMode(hydrated)
+                        }}
+                        className="shrink-0 rounded-lg bg-orange-500 hover:bg-orange-600 px-4 py-2 text-white font-semibold shadow-sm flex items-center gap-1"
+                        title="진행 중인 심판 모드로 돌아가기"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        <span className="hidden sm:inline">진행중 ⏱️</span>
+                        <span className="sm:hidden">⏱️</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          const hydrated = hydrateMatch(editingMatch, players)
+                          onStartRefereeMode(hydrated)
+                        }}
+                        className="shrink-0 rounded-lg bg-blue-500 hover:bg-blue-600 px-4 py-2 text-white font-semibold shadow-sm flex items-center gap-1"
+                        title="심판 모드 시작"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        <span className="hidden sm:inline">심판 모드</span>
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Bulk Input Section */}
@@ -803,20 +925,45 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
             </div>
 
             {/* Quick Stats Editor */}
-            <QuickStatsEditor
-              key={editingMatchId}
-              players={players}
-              editingMatch={editingMatch}
-              teams={teams}
-              draft={draft}
-              setDraft={setDraft}
-              onSave={save}
-              showSaved={showSaved}
-              cardsEnabled={cardsEnabled}
-            />
+            {hasRefereeTimeline ? (
+              <RefereeTimelineEditor
+                match={editingMatch}
+                players={players}
+                teams={teams}
+                onSave={onUpdateMatch}
+              />
+            ) : (
+              <QuickStatsEditor
+                key={editingMatchId}
+                players={players}
+                editingMatch={editingMatch}
+                teams={teams}
+                draft={draft}
+                setDraft={setDraft}
+                resetAllRecords={resetAllRecords}
+                onSave={save}
+                showSaved={showSaved}
+                cardsEnabled={cardsEnabled}
+              />
+            )}
           </>
         )}
       </Card>
+      {editingMatch && isAdmin && (() => {
+        const hasTimeline = isRefMatch(editingMatch)
+        const isMomActive = toStr(momMatchId) === toStr(editingMatch.id)
+        // Hide MoM start button for referee-mode matches
+        return !hasTimeline && !isMomActive ? (
+          <div className="mb-4">
+            <button
+              onClick={() => setMomMatchId(toStr(editingMatch.id))}
+              className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold shadow-sm transition"
+            >
+              🏆 MoM 투표 시작하기
+            </button>
+          </div>
+        ) : null
+      })()}
       {momMatch && (
         <MoMAdminPanel
           match={momMatch}
@@ -851,7 +998,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
 }
 
 /* ======== Quick Stats Editor Component ======== */
-function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSave, showSaved, cardsEnabled = true }) {
+function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, resetAllRecords = () => {}, onSave, showSaved, cardsEnabled = true }) {
   const [showLinkPanel, setShowLinkPanel] = useState(false)
   const [addingGoalFor, setAddingGoalFor] = useState(null) // { playerId, teamIdx }
   const [addingAssistFor, setAddingAssistFor] = useState(null) // { playerId, teamIdx }
@@ -860,13 +1007,17 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
 
   if (!editingMatch) return null
 
-  const attendeeIds = new Set(extractAttendeeIds(editingMatch))
+  const attendeeList = extractAttendeeIds(editingMatch)
+  const hasAttendees = attendeeList.length > 0
+  const attendeeIds = hasAttendees
+    ? new Set(attendeeList)
+    : new Set(teams.flat().map(p => toStr(p.id)).filter(Boolean))
 
-  // Group by team
+  // Group by team - include all players if no attendeeIds (referee mode)
   const teamRosters = teams.map((team, idx) => ({
     idx,
     name: `팀 ${idx + 1}`,
-    players: team.filter(p => attendeeIds.has(toStr(p.id)))
+    players: hasAttendees ? team.filter(p => attendeeIds.has(toStr(p.id))) : team
   }))
 
   const addGoal = (playerId, teamIdx) => {
@@ -881,7 +1032,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
       const k = toStr(playerId)
       const rec = next[k] || { goals: 0, assists: 0, events: [] }
       rec.goals = (rec.goals || 0) + 1
-      const goalEvent = { type: 'goal', date: now }
+      const goalEvent = { type: 'goal', date: now, teamIndex: addingGoalFor?.teamIdx }
       if (assisterId) {
         goalEvent.assistedBy = toStr(assisterId)
       }
@@ -893,7 +1044,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
         const ak = toStr(assisterId)
         const arec = next[ak] || { goals: 0, assists: 0, events: [] }
         arec.assists = (arec.assists || 0) + 1
-        arec.events.push({ type: 'assist', date: now, linkedToGoal: toStr(playerId) })
+        arec.events.push({ type: 'assist', date: now, linkedToGoal: toStr(playerId), teamIndex: addingGoalFor?.teamIdx })
         next[ak] = arec
       }
 
@@ -914,7 +1065,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
       const ak = toStr(assisterId)
       const arec = next[ak] || { goals: 0, assists: 0, events: [] }
       arec.assists = (arec.assists || 0) + 1
-      const assistEvent = { type: 'assist', date: now }
+      const assistEvent = { type: 'assist', date: now, teamIndex: addingAssistFor?.teamIdx }
       if (goalPlayerId) {
         assistEvent.linkedToGoal = toStr(goalPlayerId)
       }
@@ -926,7 +1077,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
         const gk = toStr(goalPlayerId)
         const grec = next[gk] || { goals: 0, assists: 0, events: [] }
         grec.goals = (grec.goals || 0) + 1
-        grec.events.push({ type: 'goal', date: now, assistedBy: toStr(assisterId) })
+        grec.events.push({ type: 'goal', date: now, assistedBy: toStr(assisterId), teamIndex: addingAssistFor?.teamIdx })
         next[gk] = grec
       }
 
@@ -1471,7 +1622,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, onSav
         cancelLabel="취소"
         tone="danger"
         onCancel={() => setConfirmState({ open: false, kind: null })}
-        onConfirm={() => { setDraft({}); setConfirmState({ open: false, kind: null }) }}
+        onConfirm={() => { resetAllRecords(); setConfirmState({ open: false, kind: null }) }}
       />
       <ConfirmDialog
         open={alertState.open}

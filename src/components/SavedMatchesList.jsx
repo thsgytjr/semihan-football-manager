@@ -82,7 +82,10 @@ function extractStatsByPlayerForOneMatch(m){
       if (!pid) continue
       const goals = Number(v?.goals || v?.G || 0)
       const assists = Number(v?.assists || v?.A || 0)
-      out[pid] = { goals, assists }
+      const fouls = Number(v?.fouls || 0)
+      const yellowCards = Number(v?.yellowCards || 0)
+      const redCards = Number(v?.redCards || 0)
+      out[pid] = { goals, assists, fouls, yellowCards, redCards }
     }
     return out
   }
@@ -95,8 +98,8 @@ function extractStatsByPlayerForOneMatch(m){
       const isAssist = /assist/i.test(type)
       const g = Number(rec?.goals || (isGoal ? 1 : 0) || 0)
       const a = Number(rec?.assists || (isAssist ? 1 : 0) || 0)
-      const prev = out[pid] || { goals: 0, assists: 0 }
-      out[pid] = { goals: prev.goals + (g||0), assists: prev.assists + (a||0) }
+      const prev = out[pid] || { goals: 0, assists: 0, fouls: 0, yellowCards: 0, redCards: 0 }
+      out[pid] = { goals: prev.goals + (g||0), assists: prev.assists + (a||0), fouls: prev.fouls, yellowCards: prev.yellowCards, redCards: prev.redCards }
     }
     return out
   }
@@ -461,14 +464,23 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
     return computeGameEvents(m, players)
   }, [m, players])
   const groupedGameEvents = useMemo(() => {
-    const maxGame = Math.max(1, ...gameEvents.map(ev => Number(ev.gameIndex || 0) + 1))
+    const fromEvents = Math.max(1, ...gameEvents.map(ev => Number(ev.gameIndex || 0) + 1))
+    const fromQuarterScores = (() => {
+      const qs = Array.isArray(m?.quarterScores) ? m.quarterScores : Array.isArray(m?.draft?.quarterScores) ? m.draft.quarterScores : []
+      return Array.isArray(qs) ? qs.reduce((max, arr) => Math.max(max, Array.isArray(arr) ? arr.length : 0), 0) : 0
+    })()
+    const fromGames = Array.isArray(m?.stats?.__games) ? m.stats.__games.length : 0
+    const maxGame = Math.max(1, fromEvents, fromQuarterScores, fromGames)
+
     const base = Array.from({ length: maxGame }, () => [])
     gameEvents.forEach(ev => {
       const gi = Math.min(maxGame - 1, Math.max(0, Number(ev.gameIndex) || 0))
       base[gi].push(ev)
     })
     return base
-  }, [gameEvents])
+  }, [gameEvents, m])
+  // Show game events section for all matches
+  const hasTimeline = Array.isArray(m?.stats?.__events) && m.stats.__events.length > 0
   const hasGameEvents = useMemo(() => groupedGameEvents.some(arr => arr.length > 0), [groupedGameEvents])
   const [showGameEvents, setShowGameEvents] = useState(false)
   
@@ -596,6 +608,16 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
 
   const hasRecordedScores = useMemo(() => {
     if (!Array.isArray(displayedQuarterScores)) return false
+    // Show table if any team has game data (even if scores are all 0)
+    const hasGameData = displayedQuarterScores.some(teamScores => {
+      if (Array.isArray(teamScores)) {
+        return teamScores.length > 0
+      }
+      return teamScores !== null && teamScores !== undefined && teamScores !== ''
+    })
+    if (hasGameData) return true
+    
+    // Fallback: check if any non-empty score exists
     return displayedQuarterScores.some(teamScores => {
       if (Array.isArray(teamScores)) {
         return teamScores.some(v => v !== null && v !== undefined && v !== '')
@@ -2561,19 +2583,61 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   {evs.length === 0 ? (
                     <div className="mt-2 text-[11px] text-gray-500">{t('matchHistory.noRecord')}</div>
                   ) : (
-                    <ul className="mt-2 divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-100 bg-white/95 text-[11px] text-gray-900">
+                    <>
+                      {(() => {
+                        // Collect unique event types in this game
+                        const eventTypes = new Set(evs.map(ev => ev.eventType || 'goal'))
+                        const legends = []
+                        
+                        if (eventTypes.has('goal') || evs.some(ev => !ev.eventType && !ev.ownGoal)) {
+                          legends.push({ emoji: '⚽', label: t('matchHistory.legendGoal', '골') })
+                        }
+                        if (eventTypes.has('own_goal') || evs.some(ev => ev.ownGoal)) {
+                          legends.push({ emoji: '🥅', label: t('matchHistory.legendOwnGoal', '자책골') })
+                        }
+                        if (eventTypes.has('foul')) {
+                          legends.push({ emoji: '⚠️', label: t('matchHistory.legendFoul', '파울') })
+                        }
+                        if (eventTypes.has('yellow')) {
+                          legends.push({ emoji: '🟨', label: t('matchHistory.legendYellow', '옐로카드') })
+                        }
+                        if (eventTypes.has('red')) {
+                          legends.push({ emoji: '🟥', label: t('matchHistory.legendRed', '레드카드') })
+                        }
+                        if (eventTypes.has('super_save')) {
+                          legends.push({ emoji: '🧤', label: t('matchHistory.legendSuperSave', '슈퍼세이브') })
+                        }
+                        
+                        return legends.length > 0 ? (
+                          <div className="mt-2 mb-1 flex flex-wrap items-center gap-2 text-[9px] text-gray-500">
+                            {legends.map((l, i) => (
+                              <span key={i} className="inline-flex items-center gap-1">
+                                <span>{l.emoji}</span>
+                                <span>{l.label}</span>
+                              </span>
+                            ))}
+                          </div>
+                        ) : null
+                      })()}
+                    <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-100 bg-white/95 text-[11px] text-gray-900">
                       {evs.map(ev => {
                         const scorerPlayer = ev.scorerId ? byId.get(String(ev.scorerId)) : null
                         const assistPlayer = ev.assistId ? byId.get(String(ev.assistId)) : null
                         const scorerName = scorerPlayer?.name || (ev.scorerId ? ev.scorerId : t('matchHistory.ownGoal'))
                         const assistName = assistPlayer?.name || (ev.assistId ? ev.assistId : '')
-                        const scorerPhoto = (!ev.ownGoal && scorerPlayer?.photoUrl) ? scorerPlayer.photoUrl : null
+                        const scorerPhoto = scorerPlayer?.photoUrl || null
                         const assistPhoto = assistPlayer?.photoUrl || null
                         const scorerBadgeInfo = scorerPlayer ? getMembershipBadge(scorerPlayer.membership, customMemberships || []) : null
                         const assistBadgeInfo = assistPlayer ? getMembershipBadge(assistPlayer.membership, customMemberships || []) : null
                         const scorerBadges = scorerBadgeInfo?.badge ? [scorerBadgeInfo.badge] : []
                         const assistBadges = assistBadgeInfo?.badge ? [assistBadgeInfo.badge] : []
                         const isOwnGoal = !!ev.ownGoal
+                        const eventType = ev.eventType || 'goal'
+                        const isFoul = eventType === 'foul'
+                        const isYellow = eventType === 'yellow'
+                        const isRed = eventType === 'red'
+                        const isSuperSave = eventType === 'super_save'
+                        const minuteText = ev.minute ? `${ev.minute}'` : ''
                         const kitPaletteRow = [
                           { bg: '#f8fafc', text: '#0f172a', border: '#e2e8f0', label: 'White' },
                           { bg: '#0f172a', text: '#ffffff', border: '#0b1220', label: 'Black' },
@@ -2625,31 +2689,41 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                                 {jerseySwatchEvent(resolvedColor)}
                                 <span className="text-gray-800">{teamLabel}</span>
                               </span>
+                              {hasTimeline && minuteText && (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                                  ⏱️ {minuteText}
+                                </span>
+                              )}
                             </div>
 
                             <div className="flex-1 min-w-0 space-y-1">
                               <div className="flex items-center gap-2 text-[12px] font-semibold text-gray-900">
-                                {!isOwnGoal && (
-                                  <span className="flex-shrink-0">
-                                    <InitialAvatar 
-                                      size={22} 
-                                      name={scorerName || t('matchHistory.scorerUnspecified')} 
-                                      photoUrl={scorerPhoto}
-                                      badges={scorerBadges}
-                                      customMemberships={customMemberships || []}
-                                      badgeInfo={scorerBadgeInfo}
-                                    />
-                                  </span>
-                                )}
+                                <span className="flex-shrink-0">
+                                  <InitialAvatar 
+                                    size={22} 
+                                    name={scorerName || t('matchHistory.scorerUnspecified')} 
+                                    photoUrl={scorerPhoto}
+                                    badges={scorerBadges}
+                                    customMemberships={customMemberships || []}
+                                    badgeInfo={scorerBadgeInfo}
+                                  />
+                                </span>
                                 <span className="inline-flex min-w-0 max-w-[140px] overflow-x-auto whitespace-nowrap scrollbar-thin pr-1" title={scorerName || t('matchHistory.scorerUnspecified')}>
                                   {scorerName || t('matchHistory.scorerUnspecified')}
                                 </span>
-                                <span className={`inline-flex items-center gap-1 rounded-full px-2 py-[2px] text-[10px] font-semibold ${isOwnGoal ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                  {isOwnGoal ? t('matchHistory.ownGoal') : t('matchHistory.fieldGoal')}
+                                <span className={`inline-flex items-center rounded-full px-1 py-[1px] text-[10px] shrink-0 ${
+                                  isFoul ? 'bg-gray-100' :
+                                  isYellow ? 'bg-yellow-100' :
+                                  isRed ? 'bg-red-100' :
+                                  isOwnGoal ? 'bg-rose-100' :
+                                  isSuperSave ? 'bg-sky-100' :
+                                  'bg-emerald-100'
+                                }`}>
+                                  {isFoul ? '⚠️' : isYellow ? '🟨' : isRed ? '🟥' : isOwnGoal ? '🥅' : isSuperSave ? '🧤' : '⚽'}
                                 </span>
                               </div>
-                              <div className="text-[10px] text-gray-600 flex items-center gap-1.5">
-                                {assistName && (
+                              {!isFoul && !isYellow && !isRed && !isSuperSave && assistName && (
+                                <div className="text-[10px] text-gray-600 flex items-center gap-1.5">
                                   <span className="flex-shrink-0">
                                     <InitialAvatar 
                                       size={18} 
@@ -2660,20 +2734,19 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                                       badgeInfo={assistBadgeInfo}
                                     />
                                   </span>
-                                )}
-                                <span className="inline-flex min-w-0 max-w-[140px] overflow-x-auto whitespace-nowrap scrollbar-thin pr-1" title={assistName || t('matchHistory.assistNone')}>
-                                  {assistName
-                                    ? (isOwnGoal
+                                  <span className="inline-flex min-w-0 max-w-[140px] overflow-x-auto whitespace-nowrap scrollbar-thin pr-1" title={assistName}>
+                                    {isOwnGoal
                                       ? t('matchHistory.inducedBy', { name: assistName })
-                                      : t('matchHistory.assistBy', { name: assistName }))
-                                    : t('matchHistory.assistNone')}
-                                </span>
-                              </div>
+                                      : t('matchHistory.assistBy', { name: assistName })}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </li>
                         )
                       })}
                     </ul>
+                    </>
                   )}
                 </div>
                 )
@@ -2697,6 +2770,20 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
         onConfirm={() => {
           if (confirmDelete.id === '__reset_quarter_scores__') {
             setQuarterScores(initialSnap.map(()=>[]))
+            // Reset referee mode data if present
+            if (hasTimeline && onUpdateMatch) {
+              const cleanedStats = { ...(m?.stats || {}) }
+              delete cleanedStats.__games
+              delete cleanedStats.__events
+              delete cleanedStats.__scores
+              delete cleanedStats.__matchMeta
+              // Also reset player stats to empty shell
+              Object.keys(cleanedStats).forEach(key => {
+                if (key.startsWith('__')) return
+                cleanedStats[key] = { goals: 0, assists: 0, yellowCards: 0, redCards: 0, fouls: 0, events: [] }
+              })
+              onUpdateMatch(m.id, { stats: cleanedStats, quarterScores: initialSnap.map(()=>[]) })
+            }
             setDirty(true)
           } else if (confirmDelete.id && onDeleteMatch) {
             onDeleteMatch(confirmDelete.id)
@@ -3054,7 +3141,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               <ul className="divide-y divide-gray-100 relative z-10">
                 {isWinner && isDraftMode && m?.id===latestDraftId && <Confetti />}
                 {listOrdered.map(p=>{
-                  const rec = gaByPlayer[toStr(p.id)] || { goals: 0, assists: 0 }
+                  const rec = gaByPlayer[toStr(p.id)] || { goals: 0, assists: 0, fouls: 0, yellowCards: 0, redCards: 0 }
                   const isCaptain = captainIds && captainIds[i] === String(p.id)
                   
                   // 멤버십 뱃지 계산
@@ -3112,6 +3199,12 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                                 <span className="absolute right-0 bottom-0 flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full bg-black text-[10px] font-bold text-white shadow-sm">{rec.assists}</span>
                               </div>
                             )}
+                            {rec.fouls>0 && (
+                              <div className="relative inline-flex items-center justify-center" title="반칙">
+                                <span role="img" aria-label="fouls" className="text-xl leading-none">⚠️</span>
+                                <span className="absolute right-0 bottom-0 flex items-center justify-center min-w-[16px] h-4 px-0.5 rounded-full bg-gray-700 text-[10px] font-bold text-white shadow-sm">{rec.fouls}</span>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -3165,10 +3258,14 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
         if (qs.length > teamLen) qs.length = teamLen
         const maxQ = Math.max(0, ...qs.map(a => a.length))
 
+        // Hide score editing for referee mode with recorded games
+        const hasRefereeGames = hasTimeline && Array.isArray(m?.stats?.__games) && m.stats.__games.length > 0
+
         return (
 
           <div className="mt-3">
             {/* Redesigned Game Scores Input - Mobile Optimized */}
+            {!hasRefereeGames && (
             <div className="rounded-lg border-2 border-blue-100 p-2 sm:p-4 bg-gradient-to-br from-blue-50 to-white shadow-sm">
               {/* 경기장 모드 토글 (4팀 이상일 때만 표시) */}
               {teamLen >= 4 && (
@@ -3559,6 +3656,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                 </button>
               </div>
             </div>
+            )}
 
             <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2 mt-2 sm:mt-3">
               <button className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-2.5 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium transition-colors" title="주장/게임 점수 입력값을 모두 비웁니다." onClick={()=>{

@@ -100,7 +100,8 @@ export default function MatchPlanner({
   onSaveUpcomingMatch,
   onDeleteUpcomingMatch,
   onUpdateUpcomingMatch,
-  membershipSettings = []
+  membershipSettings = [],
+  onStartRefereeMode
 }){
   const customMemberships = membershipSettings.length > 0 ? membershipSettings : []
   const[dateISO,setDateISO]=useState(()=>getCurrentLocalDateTime()),[attendeeIds,setAttendeeIds]=useState([]),[criterion,setCriterion]=useState('overall'),[shuffleSeed,setShuffleSeed]=useState(0)
@@ -326,6 +327,64 @@ export default function MatchPlanner({
       ...(teamColors && teamColors.length > 0 && teamColors.some(c => c !== null && c !== undefined) ? { teamColors } : {})
     }
     onSaveMatch(payload);notify(`${isDraftMode ? '드래프트 ' : ''}매치가 저장되었습니다 ✅`)
+  }
+
+  function startReferee(){
+    if(!isAdmin){notify('Admin만 가능합니다.');return}
+    let baseTeams=(latestTeamsRef.current&&latestTeamsRef.current.length)?latestTeamsRef.current:previewTeams
+    
+    // 주장을 각 팀의 맨 앞으로 정렬
+    baseTeams = baseTeams.map((team, teamIdx) => {
+      const capId = captainIds[teamIdx]
+      if (!capId || !team || team.length === 0) return team
+      
+      const capIdStr = String(capId)
+      const captainIndex = team.findIndex(p => String(p.id) === capIdStr)
+      if (captainIndex <= 0) return team
+      
+      const newTeam = [...team]
+      const captain = newTeam.splice(captainIndex, 1)[0]
+      newTeam.unshift(captain)
+      return newTeam
+    })
+    
+    const snapshot=baseTeams.map(team=>team.map(p=>p.id))
+    const ids=snapshot.flat()
+    const objs=players.filter(p=>ids.includes(p.id))
+    const fees= enablePitchFee ? computeFeesAtSave({baseCostValue:baseCost,attendees:objs,guestSurcharge}) : null
+    
+    const draftFields = isDraftMode ? {
+      selectionMode: 'draft',
+      draftMode: true,
+      draft: { captains: captainIds.slice() }
+    } : {
+      selectionMode: 'manual',
+      draft: { captains: captainIds.slice() }
+    }
+    
+    const dateISOFormatted = dateISO && dateISO.length >= 16 
+      ? dateISO.slice(0,16)
+      : getCurrentLocalDateTime()
+    
+    const payload={
+      ...mkMatch({
+        id:crypto.randomUUID?.()||String(Date.now()),
+        dateISO: dateISOFormatted,attendeeIds:ids,criterion:posAware?'pos-aware':criterion,players,
+        teamCount:baseTeams.length,
+        location:{preset:locationPreset,name:locationName,address:locationAddress},
+        mode,snapshot,board:placedByTeam,formations,locked:true,videos:[],
+        ...draftFields
+      }),
+      teams: baseTeams, // Explicitly pass teams for Referee Mode
+      ...(enablePitchFee && fees ? { fees } : { feesDisabled:true }),
+      ...(teamColors && teamColors.length > 0 && teamColors.some(c => c !== null && c !== undefined) ? { teamColors } : {})
+    }
+    
+    if (onStartRefereeMode) {
+      onStartRefereeMode(payload)
+    } else {
+      notify('Referee Mode not available')
+    }
   }
 
   function saveAsUpcomingMatch(){

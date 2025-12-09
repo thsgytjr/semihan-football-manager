@@ -360,7 +360,7 @@
     "gameNumber": "Game {{n}}",
     "gameWin": "{{team}} win",
     "gameDraw": "Draw",
-    "gameEventsTitle": "Per-Game Scoring Detail",
+    "gameEventsTitle": "Per-Game Details",
     "collapse": "Collapse",
     "expand": "Expand",
     "noGoals": "No goals",

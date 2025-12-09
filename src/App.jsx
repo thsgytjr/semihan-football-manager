@@ -30,6 +30,7 @@ import { getBadgeTierRuleCatalog } from './lib/playerBadgeEngine'
 const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden role="img" className="shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5"/><rect x="2" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/><rect x="18.5" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>)
 
 const MatchPlanner=lazy(()=>import("./pages/MatchPlanner"))
+const RefereeMode=lazy(()=>import("./pages/RefereeMode"))
 const DraftPage=lazy(()=>import("./pages/DraftPage"))
 const FormationBoard=lazy(()=>import("./pages/FormationBoard"))
 const StatsInput=lazy(()=>import("./pages/StatsInput"))
@@ -72,6 +73,7 @@ export default function App(){
   const[showInviteSetup,setShowInviteSetup]=useState(false)
   const[showAuthError,setShowAuthError]=useState(false)
   const[authError,setAuthError]=useState({ error:null, errorCode:null, description:null })
+  const[activeMatch,setActiveMatch]=useState(null)
 
   // Core-load tracking to avoid race-triggered reloads/timeouts
   const coreLoadedRef = useRef(false)
@@ -597,8 +599,194 @@ export default function App(){
       notify("매치 삭제에 실패했습니다.")
     }
   }
+
+  function handleStartRefereeMode(matchData) {
+    setActiveMatch(matchData)
+    setTab('referee')
+  }
+
+  async function handleAutoSaveRefereeMode(inProgressData) {
+    if (!activeMatch?.id) return
+    
+    try {
+      // Save in-progress state to match stats.__inProgress
+      const updatedStats = {
+        ...(activeMatch?.stats || {}),
+        __inProgress: inProgressData,
+      }
+      
+      await handleUpdateMatch(activeMatch.id, { stats: updatedStats }, true) // silent=true
+    } catch (err) {
+      console.warn('Auto-save failed:', err)
+    }
+  }
+
+  async function handleCancelRefereeMode() {
+    if (activeMatch?.id) {
+      try {
+        // Clear in-progress data even if the local activeMatch snapshot lacks it
+        const matchFromDb = (db?.matches || []).find(m => m.id === activeMatch.id)
+        const cleanedStats = { ...(matchFromDb?.stats || activeMatch?.stats || {}) }
+        if (cleanedStats.__inProgress) delete cleanedStats.__inProgress
+        await handleUpdateMatch(activeMatch.id, { stats: cleanedStats }, true) // silent=true
+      } catch (err) {
+        console.warn('Failed to clear in-progress data:', err)
+      }
+    }
+    setActiveMatch(null)
+    setTab('stats')
+  }
+
+  async function handleFinishRefereeMode(matchData) {
+    try {
+      const rebuildStatsFromEvents = (teamsArr = [], eventsArr = [], cleanSheetAwardees = []) => {
+        const stats = {}
+        const ensureStat = (pid) => {
+          const key = pid == null ? '' : String(pid)
+          if (!key) return null
+          if (!stats[key]) {
+            stats[key] = { goals: 0, assists: 0, yellowCards: 0, redCards: 0, fouls: 0, cleanSheet: 0, events: [] }
+          }
+          return stats[key]
+        }
+
+        teamsArr.flat().forEach(p => {
+          if (p?.id) ensureStat(p.id)
+        })
+
+        eventsArr.forEach(ev => {
+          const entry = ensureStat(ev.playerId)
+          if (entry) entry.events.push(ev)
+
+          if (ev.type === 'goal') {
+            if (entry) entry.goals += 1
+            if (ev.assistedBy) {
+              const assistEntry = ensureStat(ev.assistedBy)
+              if (assistEntry) assistEntry.assists += 1
+            }
+          }
+
+          if (ev.type === 'own_goal' && ev.assistedBy) {
+            const assistEntry = ensureStat(ev.assistedBy)
+            if (assistEntry) assistEntry.assists += 1
+          }
+
+          if (ev.type === 'yellow' && entry) entry.yellowCards += 1
+          if (ev.type === 'red' && entry) entry.redCards += 1
+          if (ev.type === 'foul' && entry) entry.fouls += 1
+        })
+
+        cleanSheetAwardees.forEach(pid => {
+          const entry = ensureStat(pid)
+          if (entry) entry.cleanSheet = (entry.cleanSheet || 0) + 1
+        })
+
+        return stats
+      }
+
+      // Persist Referee Mode result to the existing match (or create if new)
+      const prevGames = activeMatch?.stats?.__games || []
+      const nextGameNumber = matchData?.matchNumber || (prevGames.length + 1)
+      const gameResult = {
+        id: Date.now(),
+        matchNumber: nextGameNumber,
+        scores: matchData.scores,
+        duration: matchData.duration,
+        startTime: matchData.startTime,
+        endTime: matchData.endTime,
+        events: matchData.events
+      }
+
+      // Check if we're overriding an existing game
+      const existingGameIndex = prevGames.findIndex(g => g.matchNumber === nextGameNumber)
+      let updatedGames
+      let updatedEvents
+      
+      if (existingGameIndex >= 0) {
+        // Override existing game
+        updatedGames = [...prevGames]
+        updatedGames[existingGameIndex] = gameResult
+        
+        // Remove old events for this game and add new ones
+        const prevEvents = activeMatch?.stats?.__events || []
+        const otherEvents = prevEvents.filter(ev => ev.gameIndex !== (nextGameNumber - 1))
+        updatedEvents = [...otherEvents, ...matchData.events]
+      } else {
+        // Append new game
+        updatedGames = [...prevGames, gameResult]
+        const prevEvents = activeMatch?.stats?.__events || []
+        updatedEvents = [...prevEvents, ...matchData.events]
+      }
+
+      // Pack timeline & game history into stats payload to keep schema compatibility (stats is jsonb)
+      const rebuiltStats = rebuildStatsFromEvents(matchData?.teams || activeMatch?.teams || [], updatedEvents, matchData?.cleanSheetAwardees || [])
+      const mergedStats = {
+        ...(activeMatch?.stats || {}),
+        ...rebuiltStats,
+        __events: updatedEvents,
+        __games: updatedGames,
+        __scores: matchData.scores,
+        __matchMeta: {
+          matchNumber: nextGameNumber,
+          duration: matchData.duration,
+          startTime: matchData.startTime,
+          endTime: matchData.endTime,
+        },
+      }
+      
+      // Clear in-progress data when match finishes
+      if (matchData.clearInProgress) {
+        delete mergedStats.__inProgress
+      }
+
+      // Ensure attendance reflects all players who appeared in referee mode so leaderboard GP counts apply
+      const attendeeIds = Array.from(new Set([
+        ...((activeMatch?.attendeeIds || []).map(id => String(id))),
+        ...((matchData?.teams || activeMatch?.teams || []).flat().map(p => p?.id).filter(Boolean).map(id => String(id))),
+      ]))
+
+      // Derive quarterScores in team-major format for existing UI consumption (StatsInput, CS calc)
+      const teamCount = Array.isArray(matchData?.teams) ? matchData.teams.length : 2
+      const quarterScores = Array.from({ length: teamCount }, () => [])
+      mergedStats.__games.forEach(g => {
+        if (!Array.isArray(g?.scores)) return
+        g.scores.forEach((val, idx) => {
+          if (quarterScores[idx]) {
+            quarterScores[idx].push(Number(val) || 0)
+          }
+        })
+      })
+
+      const nextDraft = {
+        ...(activeMatch?.draft || {}),
+        quarterScores,
+      }
+
+      const updatedMatch = {
+        ...activeMatch,
+        ...matchData,
+        attendeeIds,
+        stats: mergedStats,
+        quarterScores,
+        draft: nextDraft,
+      }
+
+      if (matchData?.id) {
+        await handleUpdateMatch(matchData.id, { stats: mergedStats, quarterScores, draft: nextDraft })
+      } else {
+        await handleSaveMatch(updatedMatch)
+      }
+
+      setActiveMatch(null)
+      setTab('stats')
+      notify("경기 결과가 저장되었습니다.", "success")
+    } catch (err) {
+      logger.error('Failed to save referee match', err)
+      notify("경기 결과 저장 실패", "error")
+    }
+  }
   
-  async function handleUpdateMatch(id,patch){
+  async function handleUpdateMatch(id, patch, silent = false){
     if(!isAdmin)return notify("Admin만 가능합니다.")
     
     try {
@@ -607,12 +795,12 @@ export default function App(){
         const updated = await updateMatchInDB(id, patch)
         const next=(db.matches||[]).map(m=>m.id===id?updated:m)
         setDb(prev=>({...prev,matches:next}))
-        notify("업데이트되었습니다.")
+        if (!silent) notify("업데이트되었습니다.")
       } else {
         // 기존 appdb JSON 방식 (deprecated - Hangang은 USE_MATCHES_TABLE=true)
         setDb(prev=>{
           const next=(prev.matches||[]).map(m=>m.id===id?{...m,...patch}:m)
-          notify("업데이트되었습니다.")
+          if (!silent) notify("업데이트되었습니다.")
           return {...prev,matches:next}
         })
       }
@@ -1048,6 +1236,24 @@ export default function App(){
     [matches]
   )
 
+  // Referee Mode Full Screen Override
+  if (tab === 'referee' && isAdmin) {
+    return (
+      <>
+        <ToastHub />
+        <Suspense fallback={<div className="flex h-screen items-center justify-center bg-stone-900 text-white">Loading Referee Mode...</div>}>
+          <RefereeMode 
+            activeMatch={activeMatch} 
+            onFinish={handleFinishRefereeMode}
+            onAutoSave={handleAutoSaveRefereeMode}
+            onCancel={handleCancelRefereeMode}
+            cardsEnabled={featuresEnabled?.cards ?? true}
+          />
+        </Suspense>
+      </>
+    )
+  }
+
   return(
   <div className={`min-h-screen bg-stone-100 text-stone-800 antialiased leading-relaxed w-full max-w-full overflow-x-auto ${
     (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') && new URLSearchParams(window.location.search).has('nomock') ? 'pt-[50px]' : ''
@@ -1233,9 +1439,10 @@ export default function App(){
               )}
               {tab==="planner"&&isAdmin&&featuresEnabled.planner&&(
                 <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.planner')}</div>}>
-                  <MatchPlanner players={publicPlayers} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch} membershipSettings={db.membershipSettings||[]}/>
+                  <MatchPlanner players={publicPlayers} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch} membershipSettings={db.membershipSettings||[]} onStartRefereeMode={handleStartRefereeMode}/>
                 </Suspense>
               )}
+
               {tab==="draft"&&isAdmin&&featuresEnabled.draft&&(
                 <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.draft')}</div>}>
                   <DraftPage players={publicPlayers} upcomingMatches={db.upcomingMatches} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>
@@ -1254,6 +1461,7 @@ export default function App(){
                     onUpdateMatch={handleUpdateMatch} 
                     isAdmin={isAdmin}
                     cardsFeatureEnabled={featuresEnabled?.cards ?? true}
+                    onStartRefereeMode={handleStartRefereeMode}
                   />
                 </Suspense>
               )}
