@@ -2845,7 +2845,27 @@ function MatchFeesSection({ match, players, isVoided = false, onSync = () => {} 
 
   // 통합된 구장비 계산 로직 사용
   const { memberFee, guestFee, participantIds } = calculateMatchFees(match, players)
+  const participantPlayers = participantIds
+    .map(id => players.find(p => p.id === id))
+    .filter(Boolean)
+  const memberCount = participantPlayers.filter(p => isMember(p.membership)).length
+  const guestCount = Math.max(0, participantPlayers.length - memberCount)
+
+  const normalizeNumber = (value) => {
+    const num = Number(value)
+    return Number.isFinite(num) ? num : null
+  }
+
+  const plannedFromMeta =
+    normalizeNumber(match.totalCost) ??
+    normalizeNumber(match.fees?.total) ??
+    normalizeNumber(match.venueTotalOverride)
+  const derivedPlanned = normalizeNumber(memberFee * memberCount + guestFee * guestCount)
+  const plannedTotal = normalizeNumber(plannedFromMeta ?? derivedPlanned ?? 0) || 0
   const paidCount = matchPayments.filter(p => p.payment_status === 'paid').length
+  const collectedTotal = matchPayments
+    .filter(p => p.payment_status === 'paid')
+    .reduce((sum, p) => sum + Number(p.paid_amount || p.expected_amount || 0), 0)
 
   return (
     <div className={`border rounded-lg p-4 ${isVoided ? 'border-red-200 bg-red-50/40' : ''}`}>
@@ -2855,6 +2875,9 @@ function MatchFeesSection({ match, players, isVoided = false, onSync = () => {} 
           <div className="text-xs text-gray-600">
             {match.location?.name || '장소 미정'} · {participantIds.length}명 · 
             멤버 ${memberFee.toFixed(2)} / 게스트 ${guestFee.toFixed(2)}
+          </div>
+          <div className="mt-1 text-[11px] text-gray-700">
+            예정 구장비 ${plannedTotal.toFixed(2)} · 실수령 ${collectedTotal.toFixed(2)}
           </div>
           {isVoided && (
             <div className="mt-2 space-y-1 text-xs">
@@ -2954,8 +2977,7 @@ function MatchFeesSection({ match, players, isVoided = false, onSync = () => {} 
           {match.paidBy && (
             <button
               onClick={() => {
-                const totalCost = match.totalCost || (participantIds.length * memberFee)
-                handleReimbursement(match.paidBy, totalCost)
+                handleReimbursement(match.paidBy, plannedTotal)
               }}
               disabled={isVoided}
               title={isVoided ? VOID_ACTION_MESSAGE : undefined}
