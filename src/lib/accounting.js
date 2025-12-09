@@ -616,6 +616,8 @@ export async function confirmMatchPayment(matchId, playerId, amount, paymentMeth
       } else {
         (db.match_payments ||= []).push({ id: uuid(), match_id: matchId, player_id: playerId, expected_amount: amount, paid_amount: amount, payment_status: 'paid', payment_date: new Date().toISOString() })
       }
+      // match_id + player_id + match_fee 중복 방지: 기존 항목 제거 후 추가
+      db.payments = (db.payments || []).filter(p => !(p.match_id === matchId && p.player_id === playerId && p.payment_type === 'match_fee'))
       ;(db.payments ||= []).push({ id: uuid(), player_id: playerId, payment_type: 'match_fee', amount, payment_method: paymentMethod, match_id: matchId, verified_by: verifiedBy, verified_at: new Date().toISOString(), payment_date: new Date().toISOString() })
       saveLS(db)
       return { ok: true }
@@ -639,16 +641,20 @@ export async function confirmMatchPayment(matchId, playerId, amount, paymentMeth
     if (mpError) throw mpError
 
     // 2. payments 테이블에 기록
+    // 2. payments 테이블에 기록 (중복 방지: match_id + player_id + payment_type)
     const { data: payment, error: pError } = await supabase
       .from('payments')
-      .insert({
+      .upsert({
         player_id: playerId,
         payment_type: 'match_fee',
         amount: amount,
         payment_method: paymentMethod,
         match_id: matchId,
         verified_by: verifiedBy,
-        verified_at: new Date().toISOString()
+        verified_at: new Date().toISOString(),
+        payment_date: new Date().toISOString()
+      }, {
+        onConflict: 'match_id,player_id,payment_type'
       })
       .select()
       .single()
