@@ -32,13 +32,14 @@ export function isDraftMatch(match) {
   // 2순위: 레거시 draftMode 필드
   if (match.draftMode === true) return true
   
-  // 3순위: 실제 드래프트 데이터 존재 여부
+  // 3순위: 실제 드래프트 데이터 존재 여부 (드래프트 필드에 한정)
   if (match.draft?.quarterScores && match.draft.quarterScores.length > 0) {
     return true
   }
-  
-  // 레거시: quarterScores가 최상위에 있는 경우
-  if (match.quarterScores && Array.isArray(match.quarterScores) && match.quarterScores.length > 0) {
+
+  // 레거시: snapshot(팀 배열) + quarterScores 조합만 드래프트로 인정
+  const hasSnapshot = Array.isArray(match?.snapshot) && match.snapshot.every(Array.isArray)
+  if (hasSnapshot && match.quarterScores && Array.isArray(match.quarterScores) && match.quarterScores.length > 0) {
     return true
   }
   
@@ -130,6 +131,31 @@ export function getQuarterScores(match) {
     if (match.quarterScores[0]?.teamScores) {
       return match.quarterScores.map(q => q.teamScores)
     }
+  }
+
+  // 2.5순위: referee __games를 팀-기준 점수 배열로 변환
+  if (Array.isArray(match?.stats?.__games) && match.stats.__games.length > 0) {
+    const teamCount = match.stats.__games.reduce((max, g) => {
+      const len = Array.isArray(g?.scores) ? g.scores.length : 0
+      return Math.max(max, len)
+    }, Array.isArray(match?.teams) ? match.teams.length : 0)
+
+    if (teamCount > 0) {
+      const teamMajor = Array.from({ length: teamCount }, () => [])
+      match.stats.__games.forEach(g => {
+        if (!Array.isArray(g?.scores)) return
+        g.scores.forEach((val, idx) => {
+          if (!teamMajor[idx]) teamMajor[idx] = []
+          teamMajor[idx].push(Number(val) || 0)
+        })
+      })
+      if (teamMajor.some(arr => arr.length > 0)) return teamMajor
+    }
+  }
+
+  // 2.6순위: 간단 합산 점수 (__scores)
+  if (Array.isArray(match?.stats?.__scores) && match.stats.__scores.length > 0) {
+    return match.stats.__scores.map(v => [Number(v) || 0])
   }
   
   // 3순위: scores를 단일 쿼터로 변환

@@ -325,6 +325,7 @@
     "weightedPointsInfo": "💡 When teams have different match counts, only the top {{minGames}} matches per team are compared (weighted points)",
     "pointsSystemInfo": "💡 Winner determined by points (Win 3 · Draw 1 · Loss 0)",
     "goalDiffInfo": "💡 Winner determined by best goal difference per team",
+    "regularNoDraftImpact": "Regular match results do not affect the draft leaderboard.",
     "weightedCalc": "{{gp}} matches → top {{minGames}} matches = {{weightedPoints}} pts",
     "totalFees": "Total",
     "bestGoalDiff": "Best Goal Diff",

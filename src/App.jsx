@@ -27,6 +27,7 @@ import logoUrl from"./assets/GoalifyLogo.png"
 import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateSeasonRecapEnabled,updateMaintenanceMode,updateFeatureEnabled,updateLeaderboardCategoryEnabled,updateBadgeTierOverrides}from"./lib/appSettings"
 import { localDateTimeToISO } from './lib/dateUtils'
 import { getBadgeTierRuleCatalog } from './lib/playerBadgeEngine'
+import { isDraftMatch } from './lib/matchHelpers'
 
 const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden role="img" className="shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5"/><rect x="2" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/><rect x="18.5" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>)
 
@@ -905,34 +906,39 @@ export default function App(){
         ...((matchData?.teams || activeMatch?.teams || []).flat().map(p => p?.id).filter(Boolean).map(id => String(id))),
       ]))
 
-      // Derive quarterScores in team-major format for existing UI consumption (StatsInput, CS calc)
+      // Draft-only payload (avoid polluting non-draft matches with draft data)
+      const isDraft = isDraftMatch(activeMatch || matchData)
       const teamCount = Array.isArray(matchData?.teams) ? matchData.teams.length : 2
       const quarterScores = Array.from({ length: teamCount }, () => [])
-      mergedStats.__games.forEach(g => {
-        if (!Array.isArray(g?.scores)) return
-        g.scores.forEach((val, idx) => {
-          if (quarterScores[idx]) {
-            quarterScores[idx].push(Number(val) || 0)
-          }
+      if (isDraft) {
+        mergedStats.__games.forEach(g => {
+          if (!Array.isArray(g?.scores)) return
+          g.scores.forEach((val, idx) => {
+            if (quarterScores[idx]) {
+              quarterScores[idx].push(Number(val) || 0)
+            }
+          })
         })
-      })
+      }
 
-      const nextDraft = {
+      const nextDraft = isDraft ? {
         ...(activeMatch?.draft || {}),
         quarterScores,
-      }
+      } : undefined
 
       const updatedMatch = {
         ...activeMatch,
         ...matchData,
         attendeeIds,
         stats: mergedStats,
-        quarterScores,
-        draft: nextDraft,
+        ...(isDraft ? { quarterScores, draft: nextDraft } : { quarterScores: null, draft: null }),
       }
 
       if (matchData?.id) {
-        await handleUpdateMatch(matchData.id, { stats: mergedStats, quarterScores, draft: nextDraft })
+        const patch = isDraft
+          ? { stats: mergedStats, quarterScores, draft: nextDraft }
+          : { stats: mergedStats, quarterScores: null, draft: null }
+        await handleUpdateMatch(matchData.id, patch)
       } else {
         await handleSaveMatch(updatedMatch)
       }
@@ -966,11 +972,28 @@ export default function App(){
     
     try {
       if (USE_MATCHES_TABLE) {
-        // Supabase matches 테이블 업데이트
-        const updated = await updateMatchInDB(id, patched)
-        const next=(db.matches||[]).map(m=>m.id===id?updated:m)
-        setDb(prev=>({...prev,matches:next}))
-        if (!silent) notify("업데이트되었습니다.")
+        try {
+          const updated = await updateMatchInDB(id, patched)
+          const next=(db.matches||[]).map(m=>m.id===id?updated:m)
+          setDb(prev=>({...prev,matches:next}))
+          if (!silent) notify("업데이트되었습니다.")
+        } catch (err) {
+          const msg = err?.message || ''
+          const isMissing = msg.includes('Row not found') || msg.includes('0 rows') || err?.code === 'PGRST116'
+          if (isMissing) {
+            try {
+              const existing = (db.matches||[]).find(m=>m.id===id) || { id }
+              const recovered = await saveMatchToDB({ ...existing, ...patched })
+              const next=(db.matches||[]).map(m=>m.id===id?recovered:m)
+              setDb(prev=>({...prev,matches:next}))
+              if (!silent) notify("기존 매치가 없어 새로 저장했습니다.")
+              return
+            } catch (saveErr) {
+              logger.error('[handleUpdateMatch] recovery save failed', saveErr)
+            }
+          }
+          throw err
+        }
       } else {
         // 기존 appdb JSON 방식 (deprecated - Hangang은 USE_MATCHES_TABLE=true)
         setDb(prev=>{
@@ -981,7 +1004,10 @@ export default function App(){
       }
     } catch(e) {
       logger.error('[handleUpdateMatch] failed', e)
-      notify("업데이트에 실패했습니다.")
+      if (!silent) {
+        const detail = e?.message ? ` (${e.message})` : ''
+        notify(`업데이트에 실패했습니다.${detail}`)
+      }
     }
   }
   

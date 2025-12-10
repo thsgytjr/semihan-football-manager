@@ -240,6 +240,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     if (!editingMatch) return
     const baseStats = editingMatch?.stats && typeof editingMatch.stats === 'object' ? editingMatch.stats : {}
     const keepTimeline = isRefMatch(editingMatch)
+
     const mergedStats = {
       ...baseStats,
       ...draft,

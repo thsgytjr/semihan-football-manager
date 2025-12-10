@@ -321,6 +321,7 @@
     "weightedPointsInfo": "💡 팀별 경기수가 다르면 각 팀의 최고 성적 {{minGames}}경기만 비교 (가중 승점)",
     "pointsSystemInfo": "💡 승점(승3·무1·패0)으로 승자를 결정합니다",
     "goalDiffInfo": "💡 각 팀의 최고 골득실로 승자를 결정합니다",
+    "regularNoDraftImpact": "일반 매치의 경기 결과는 드래프트 리더보드에 영향을 주지 않습니다.",
     "weightedCalc": "{{gp}}경기 중 최고 성적 {{minGames}}경기 = {{weightedPoints}}점",
     "totalFees": "총액",
     "bestGoalDiff": "최고 골득실",

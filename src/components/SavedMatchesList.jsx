@@ -9,6 +9,7 @@ import { formatMatchLabel } from "../lib/matchLabel"
 import { logger } from "../lib/logger"
 import { getMembershipBadge } from "../lib/membershipConfig"
 import * as MatchHelpers from "../lib/matchHelpers"
+import { isRefMatch } from "../lib/matchUtils"
 import { computeGameEvents } from "../lib/gameEvents"
 import draftIcon from "../assets/draft.png"
 import captainIcon from "../assets/Captain.PNG"
@@ -600,8 +601,38 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
 
   const locLink = getLocationLink(m)
   const displayedQuarterScores = useMemo(()=>{
-    if (m?.draft && Array.isArray(m.draft.quarterScores)) return m.draft.quarterScores
-    if (Array.isArray(m.quarterScores)) return m.quarterScores
+    const hasNonEmpty = (arr) => Array.isArray(arr) && arr.some(item => {
+      if (Array.isArray(item)) return item.some(v => v !== null && v !== undefined && v !== '')
+      return item !== null && item !== undefined && item !== ''
+    })
+
+    const refMode = isRefMatch(m)
+
+    if (m?.draft && hasNonEmpty(m.draft.quarterScores)) return m.draft.quarterScores
+    if (hasNonEmpty(m.quarterScores)) return m.quarterScores
+    const baseTeamCount = (Array.isArray(draftSnap) ? draftSnap.length : 0) || (Array.isArray(m?.teams) ? m.teams.length : 0) || Number(m?.teamCount) || 0
+    const gameScores = m?.stats?.__games
+    if (refMode && Array.isArray(gameScores) && gameScores.length > 0) {
+      const teamCount = gameScores.reduce((max, g) => {
+        const len = Array.isArray(g?.scores) ? g.scores.length : 0
+        return Math.max(max, len)
+      }, baseTeamCount)
+      if (teamCount > 0) {
+        const teamMajor = Array.from({ length: teamCount }, () => [])
+        gameScores.forEach(g => {
+          if (!Array.isArray(g?.scores)) return
+          g.scores.forEach((val, idx) => {
+            if (!teamMajor[idx]) teamMajor[idx] = []
+            teamMajor[idx].push(Number(val) || 0)
+          })
+        })
+        if (teamMajor.some(arr => arr.length > 0)) return teamMajor
+      }
+    }
+    const statScores = m?.stats?.__scores
+    if (refMode && Array.isArray(statScores) && statScores.length > 0) {
+      return statScores.map(val => [Number(val) || 0])
+    }
     if (Array.isArray(m.scores) && Array.isArray(draftSnap) && m.scores.length===draftSnap.length) return draftSnap.map((_,i)=>[m.scores[i]])
     return null
   },[m, draftSnap])
@@ -816,33 +847,24 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
         </div>
         <div className="flex items-center gap-2">
           {isAdmin && (
-            <>
-              <label className="flex items-center gap-1 text-[10px] leading-tight">
-                <input type="checkbox" className="w-3 h-3" checked={localDraftMode} onChange={e=>{
-                  setLocalDraftMode(e.target.checked)
-                  setDirty(true)
-                }} />
-                <span>Draft</span>
-              </label>
-              <div className="flex items-center gap-1 text-[10px] leading-tight">
-                <select 
-                  className="w-16 h-5 text-[10px] rounded border border-gray-300 bg-white"
-                  value={statusOverride || ''}
-                  onChange={e => {
-                    const val = e.target.value || null
-                    setStatusOverride(val)
-                    // 즉시 저장
-                    onUpdateMatch?.(m.id, { statusOverride: val })
-                  }}
-                  title="상태 배지 수동 설정"
-                >
-                  <option value="">Auto</option>
-                  <option value="live">Live</option>
-                  <option value="updating">Update</option>
-                  <option value="off">Off</option>
-                </select>
-              </div>
-            </>
+            <div className="flex items-center gap-1 text-[10px] leading-tight">
+              <select 
+                className="w-16 h-5 text-[10px] rounded border border-gray-300 bg-white"
+                value={statusOverride || ''}
+                onChange={e => {
+                  const val = e.target.value || null
+                  setStatusOverride(val)
+                  // 즉시 저장
+                  onUpdateMatch?.(m.id, { statusOverride: val })
+                }}
+                title="상태 배지 수동 설정"
+              >
+                <option value="">Auto</option>
+                <option value="live">Live</option>
+                <option value="updating">Update</option>
+                <option value="off">Off</option>
+              </select>
+            </div>
           )}
           {enableLoadToPlanner&&<button className="text-[10px] rounded border border-blue-300 bg-blue-50 text-blue-700 px-1.5 py-0.5 hover:bg-blue-100 transition-colors leading-tight" onClick={()=>onLoadToPlanner?.(m)}>로드</button>}
           {isAdmin&&onDeleteMatch&&(
@@ -1357,6 +1379,12 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
             </div>
           )
         })()
+      )}
+
+      {!isDraftMode && hasRecordedScores && displayedQuarterScores && (
+        <div className="mb-2 text-[11px] text-gray-600 text-center">
+          {t('matchHistory.regularNoDraftImpact')}
+        </div>
       )}
 
       {/* 저장된 게임 점수 표시 (스코어가 하나라도 있을 때만 렌더) */}

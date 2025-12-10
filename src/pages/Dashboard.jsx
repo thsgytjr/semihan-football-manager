@@ -1456,29 +1456,25 @@ export default function Dashboard({
   // 팀 보기 버튼 클릭 시 …
   const handleShowTeams = (upcomingMatch) => {
     if (!upcomingMatch?.dateISO) return
-    const upcomingAttendeeCount = (upcomingMatch.attendeeIds?.length || upcomingMatch.participantIds?.length || 0)
     const upcomingDate = upcomingMatch.dateISO.slice(0, 10)
-    let matchingMatch = matches.find(m => {
-      if (!m?.dateISO) return false
-      const historicalDate = m.dateISO.slice(0, 10)
-      const historicalAttendeeCount = m.snapshot ? m.snapshot.flat().length : 0
-      return historicalDate === upcomingDate && Math.abs(historicalAttendeeCount - upcomingAttendeeCount) === 0
-    })
-    if (!matchingMatch) {
-      matchingMatch = matches.find(m => {
-        if (!m?.dateISO) return false
-        const historicalDate = m.dateISO.slice(0, 10)
-        const historicalAttendeeCount = m.snapshot ? m.snapshot.flat().length : 0
-        return historicalDate === upcomingDate && Math.abs(historicalAttendeeCount - upcomingAttendeeCount) <= 1
-      })
+    const attendeeCandidates = (upcomingMatch.attendeeIds || upcomingMatch.participantIds || []).map(String)
+    const attendeeCount = attendeeCandidates.length
+
+    const sameDayMatches = matches.filter(m => m?.dateISO?.slice(0,10) === upcomingDate)
+
+    const bySnapshotScore = (m) => {
+      const snap = Array.isArray(m?.snapshot) ? m.snapshot : []
+      const flat = snap.flat()
+      return flat.length
     }
-    if (!matchingMatch) {
-      matchingMatch = matches.find(m => {
-        if (!m?.dateISO) return false
-        const historicalDate = m.dateISO.slice(0, 10)
-        return historicalDate === upcomingDate
-      })
-    }
+
+    // 1) exact attendee count match on the same day (even if captains missing)
+    let matchingMatch = sameDayMatches.find(m => Math.abs(bySnapshotScore(m) - attendeeCount) === 0)
+    // 2) +/-1 leniency
+    if (!matchingMatch) matchingMatch = sameDayMatches.find(m => Math.abs(bySnapshotScore(m) - attendeeCount) <= 1)
+    // 3) fallback: any same-day match
+    if (!matchingMatch) matchingMatch = sameDayMatches[0]
+
     if (matchingMatch) {
       setHighlightedMatchId(matchingMatch.id)
       setTimeout(() => setHighlightedMatchId(null), 5000)
