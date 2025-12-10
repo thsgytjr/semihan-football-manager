@@ -20,10 +20,10 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
 
   const captains = useMemo(() => getCaptains(activeMatch), [activeMatch])
 
-  const [duration, setDuration] = useState(25)
+  const [duration, setDuration] = useState(20)
   const [matchNumber, setMatchNumber] = useState(initialGameIndex + 1)
   const [matchNumberInput, setMatchNumberInput] = useState(String(initialGameIndex + 1))
-  const [durationInput, setDurationInput] = useState('25')
+  const [durationInput, setDurationInput] = useState('20')
   const [gameStatus, setGameStatus] = useState('setup') // setup -> ready -> playing/paused -> finished
   const [startTime, setStartTime] = useState(null)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
@@ -122,8 +122,8 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       // Restore in-progress game
       setMatchNumber(inProgress.matchNumber)
       setMatchNumberInput(String(inProgress.matchNumber || initialGameIndex + 1))
-      setDuration(inProgress.duration || 25)
-      setDurationInput(String(inProgress.duration || 25))
+      setDuration(inProgress.duration || 20)
+      setDurationInput(String(inProgress.duration || 20))
       setTeams(inProgress.teams || activeMatch?.teams || [[], []])
       setScores(inProgress.scores || [0, 0])
       setEvents(inProgress.events || [])
@@ -140,14 +140,14 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       // Start fresh game
       setMatchNumber(initialGameIndex + 1)
       setMatchNumberInput(String(initialGameIndex + 1))
-      setDuration(25)
+      setDuration(20)
       setTeams(activeMatch?.teams || [[], []])
       setScores([0, 0])
       setEvents([])
       setGameStatus('setup')
       setElapsedSeconds(0)
       setStartTime(null)
-      setDurationInput('25')
+      setDurationInput('20')
     }
     setSelectedPlayer(null)
     setSelectedTeamIndex(null)
@@ -490,8 +490,8 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                     onBlur={(e) => {
                       const val = e.target.value
                       if (val === '' || parseInt(val, 10) < 1) {
-                        setDuration(25)
-                        setDurationInput('25')
+                        setDuration(20)
+                        setDurationInput('20')
                       }
                     }}
                     className="w-full p-3 border rounded-lg bg-white"
