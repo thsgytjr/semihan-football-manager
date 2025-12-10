@@ -310,8 +310,8 @@ export default function MatchPlanner({
     
     // UI에서 입력한 그대로 저장 (YYYY-MM-DDTHH:mm)
     const dateISOFormatted = dateISO && dateISO.length >= 16 
-      ? dateISO.slice(0,16)
-      : getCurrentLocalDateTime()
+      ? localDateTimeToISO(dateISO.slice(0,16))
+      : localDateTimeToISO(getCurrentLocalDateTime())
     
     const payload={
       ...mkMatch({

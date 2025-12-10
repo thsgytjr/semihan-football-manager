@@ -25,6 +25,7 @@ import LanguageSwitcher from"./components/LanguageSwitcherNew"
 import Dashboard from"./pages/Dashboard";import PlayersPage from"./pages/PlayersPage";import MaintenancePage from"./pages/MaintenancePage"
 import logoUrl from"./assets/GoalifyLogo.png"
 import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateSeasonRecapEnabled,updateMaintenanceMode,updateFeatureEnabled,updateLeaderboardCategoryEnabled,updateBadgeTierOverrides}from"./lib/appSettings"
+import { localDateTimeToISO } from './lib/dateUtils'
 import { getBadgeTierRuleCatalog } from './lib/playerBadgeEngine'
 
 const IconPitch=({size=16})=>(<svg width={size} height={size} viewBox="0 0 24 24" aria-hidden role="img" className="shrink-0"><rect x="2" y="5" width="20" height="14" rx="2" ry="2" fill="none" stroke="currentColor" strokeWidth="1.5"/><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" strokeWidth="1.5"/><rect x="2" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/><rect x="18.5" y="8" width="3.5" height="8" fill="none" stroke="currentColor" strokeWidth="1.2"/></svg>)
@@ -74,6 +75,26 @@ export default function App(){
   const[showAuthError,setShowAuthError]=useState(false)
   const[authError,setAuthError]=useState({ error:null, errorCode:null, description:null })
   const[activeMatch,setActiveMatch]=useState(null)
+  const isRefModeLink = useMemo(() => {
+    try {
+      const path = (window.location.pathname || '').toLowerCase()
+      const params = new URLSearchParams(window.location.search)
+      return path.includes('/refmode') || params.get('refMode') === '1'
+    } catch {
+      return false
+    }
+  }, [])
+  const refModeMatchId = useMemo(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      return params.get('matchId') || params.get('match') || params.get('id')
+    } catch {
+      return null
+    }
+  }, [])
+  const refModeResolvedRef = useRef(false)
+  const[refModeError,setRefModeError]=useState(null)
+  const[refModeSelectedId,setRefModeSelectedId]=useState(refModeMatchId||'')
 
   // Core-load tracking to avoid race-triggered reloads/timeouts
   const coreLoadedRef = useRef(false)
@@ -443,6 +464,133 @@ export default function App(){
     const attendanceProxy=Math.round(60+publicPlayers.length*2)
     return{count:cnt,goals:goalsProxy,attendance:attendanceProxy}
   },[publicPlayers])
+  const formatMatchLabel=useCallback((m)=>{
+    const name=m?.title||m?.name||m?.label||`Match ${m?.id||''}`
+    const d=m?.dateISO||m?.dateIso||m?.date||m?.dateStr
+    if(!d)return name
+    try{
+      const dateStr=new Date(d).toLocaleDateString('ko-KR',{month:'short',day:'numeric',weekday:'short'})
+      return `${name} · ${dateStr}`
+    }catch{return name}
+  },[])
+  const sortedMatchesRefMode=useMemo(()=>{
+    if(!Array.isArray(matches))return[]
+    return [...matches].sort((a,b)=>{
+      const da=new Date(a?.dateISO||a?.date||a?.createdAt||0).getTime()
+      const db=new Date(b?.dateISO||b?.date||b?.createdAt||0).getTime()
+      if(!isNaN(db-da) && db!==da) return db-da
+      return String(b?.id||'').localeCompare(String(a?.id||''))
+    })
+  },[matches])
+  const isSameLocalDay = useCallback((dateA, dateB)=>{
+    if(!dateA||!dateB) return false
+    const a=new Date(dateA)
+    const b=new Date(dateB)
+    if(isNaN(a)||isNaN(b)) return false
+    return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate()
+  },[])
+  const withinHours = useCallback((dateValue, hours)=>{
+    if(!dateValue) return false
+    const t=new Date(dateValue).getTime()
+    if(isNaN(t)) return false
+    const now=Date.now()
+    const diffHours=(now - t)/ (1000*60*60)
+    return diffHours <= hours
+  },[])
+  const todayMatchesRefMode=useMemo(()=>{
+    const now=new Date()
+    return sortedMatchesRefMode.filter(m=>{
+      const d=m?.dateISO||m?.date||m?.dateStr||m?.createdAt
+      return isSameLocalDay(d, now) && withinHours(d, 3)
+    })
+  },[sortedMatchesRefMode,isSameLocalDay,withinHours])
+  const hydrateMatchForRefMode=useCallback((match)=>{
+    if(!match)return null
+    // If teams already hydrated with players, reuse
+    if(Array.isArray(match.teams) && match.teams.some(team=>Array.isArray(team)&&team.some(p=>p&&p.name))) return match
+
+    const playerMap=new Map((players||[]).map(p=>[String(p.id),p]))
+    const resolvePlayer=(id)=>{
+      const found=playerMap.get(String(id))
+      if(found) return found
+      return {id, name:`#${id}`}
+    }
+
+    // snapshot: array of playerId arrays
+    if(Array.isArray(match.snapshot) && match.snapshot.every(Array.isArray)){
+      const teamsHydrated=match.snapshot.map(teamIds=>teamIds.map(resolvePlayer))
+      return {...match,teams:teamsHydrated}
+    }
+
+    // board: array of player objects or ids
+    if(Array.isArray(match.board) && match.board.every(Array.isArray)){
+      const teamsHydrated=match.board.map(team=>team.map(p=>p?.name?p:resolvePlayer(p?.id||p)))
+      return {...match,teams:teamsHydrated}
+    }
+
+    // attendeeIds fallback: single team
+    if(Array.isArray(match.attendeeIds)){
+      return {...match,teams:[match.attendeeIds.map(resolvePlayer)]}
+    }
+
+    return match
+  },[players])
+
+  // Public referee-mode deep link: auto-switch tab and pick match from URL (matchId/match/id). Defaults to latest.
+  useEffect(()=>{
+    if(isRefModeLink){
+      setTab('referee')
+    }
+  },[isRefModeLink])
+
+  useEffect(()=>{
+    if(!isRefModeLink)return
+    // Seed selection from URL param once
+    if(refModeMatchId && !refModeSelectedId){
+      setRefModeSelectedId(refModeMatchId)
+    }
+  },[isRefModeLink,refModeMatchId,refModeSelectedId])
+
+  useEffect(()=>{
+    if(!isRefModeLink)return
+    if(!Array.isArray(todayMatchesRefMode)||todayMatchesRefMode.length===0){
+      setActiveMatch(null)
+      setRefModeError('오늘 진행중인 매치가 없습니다. (No active matches today)')
+      return
+    }
+
+    // Default selection: last referee match if available for today, else today's latest
+    if(!refModeSelectedId){
+      let nextId=null
+      try {
+        const lastId=localStorage.getItem('sfm:lastRefMatchId')
+        if(lastId && todayMatchesRefMode.some(m=>String(m.id)===lastId)){
+          nextId=lastId
+        }
+      } catch {}
+      if(!nextId){
+        nextId=String(todayMatchesRefMode[0].id)
+      }
+      setRefModeSelectedId(nextId)
+      return
+    }
+
+    const targetRaw=todayMatchesRefMode.find(m=>String(m.id)===String(refModeSelectedId))
+    const target=hydrateMatchForRefMode(targetRaw)
+
+    if(target){
+      refModeResolvedRef.current=true
+      setRefModeError(null)
+      setActiveMatch(prev=>{
+        if(prev?.id === target.id) return prev
+        return target
+      })
+    }else{
+      setActiveMatch(null)
+      setRefModeError('해당 매치를 찾을 수 없습니다. URL을 확인해주세요.')
+      refModeResolvedRef.current=true
+    }
+  },[isRefModeLink,sortedMatchesRefMode,refModeSelectedId,hydrateMatchForRefMode])
 
   const handleEnsureSystemAccount=useCallback(async()=>{
     if(systemAccount){
@@ -557,15 +705,27 @@ export default function App(){
     if(!isAdmin)return notify("Admin만 가능합니다.")
     
     try {
+      const normalizeMatchDateISO = (v) => {
+        if(!v) return v
+        if((v.includes('+')||v.endsWith('Z')) && v.length>16) return v
+        const trimmed = v.length>=16 ? v.slice(0,16) : v
+        return localDateTimeToISO(trimmed)
+      }
+
+      const matchWithDate = {
+        ...match,
+        dateISO: normalizeMatchDateISO(match?.dateISO)
+      }
+
       if (USE_MATCHES_TABLE) {
         // Supabase matches 테이블에 저장
-        const saved = await saveMatchToDB(match)
+        const saved = await saveMatchToDB(matchWithDate)
         setDb(prev=>({...prev,matches:[...(prev.matches||[]),saved]}))
         notify("매치가 저장되었습니다.")
       } else {
         // 기존 appdb JSON 방식 (deprecated - Hangang은 USE_MATCHES_TABLE=true)
         setDb(prev=>{
-          const next=[...(prev.matches||[]),match]
+          const next=[...(prev.matches||[]),matchWithDate]
           notify("매치가 저장되었습니다.")
           return {...prev,matches:next}
         })
@@ -634,7 +794,7 @@ export default function App(){
       }
     }
     setActiveMatch(null)
-    setTab('stats')
+    setTab(isRefModeLink ? 'dashboard' : 'stats')
   }
 
   async function handleFinishRefereeMode(matchData) {
@@ -777,8 +937,13 @@ export default function App(){
         await handleSaveMatch(updatedMatch)
       }
 
+      // Remember last referee match for quick re-entry
+      try {
+        if (matchData?.id) localStorage.setItem('sfm:lastRefMatchId', String(matchData.id))
+      } catch {}
+
       setActiveMatch(null)
-      setTab('stats')
+      setTab(isRefModeLink ? 'dashboard' : 'stats')
       notify("경기 결과가 저장되었습니다.", "success")
     } catch (err) {
       logger.error('Failed to save referee match', err)
@@ -787,19 +952,29 @@ export default function App(){
   }
   
   async function handleUpdateMatch(id, patch, silent = false){
-    if(!isAdmin)return notify("Admin만 가능합니다.")
+    const canEditMatches = isAdmin || isRefModeLink
+    if(!canEditMatches)return notify("Admin만 가능합니다.")
+
+    const normalizeMatchDateISO = (v) => {
+      if(!v) return v
+      if((v.includes('+')||v.endsWith('Z')) && v.length>16) return v
+      const trimmed = v.length>=16 ? v.slice(0,16) : v
+      return localDateTimeToISO(trimmed)
+    }
+
+    const patched = patch?.dateISO ? { ...patch, dateISO: normalizeMatchDateISO(patch.dateISO) } : patch
     
     try {
       if (USE_MATCHES_TABLE) {
         // Supabase matches 테이블 업데이트
-        const updated = await updateMatchInDB(id, patch)
+        const updated = await updateMatchInDB(id, patched)
         const next=(db.matches||[]).map(m=>m.id===id?updated:m)
         setDb(prev=>({...prev,matches:next}))
         if (!silent) notify("업데이트되었습니다.")
       } else {
         // 기존 appdb JSON 방식 (deprecated - Hangang은 USE_MATCHES_TABLE=true)
         setDb(prev=>{
-          const next=(prev.matches||[]).map(m=>m.id===id?{...m,...patch}:m)
+          const next=(prev.matches||[]).map(m=>m.id===id?{...m,...patched}:m)
           if (!silent) notify("업데이트되었습니다.")
           return {...prev,matches:next}
         })
@@ -1236,11 +1411,43 @@ export default function App(){
     [matches]
   )
 
-  // Referee Mode Full Screen Override
-  if (tab === 'referee' && isAdmin) {
+  // Referee Mode Full Screen Override (admin or deep-link bypass)
+  if (tab === 'referee' && (isAdmin || isRefModeLink)) {
+    const showSelector = isRefModeLink && Array.isArray(todayMatchesRefMode) && todayMatchesRefMode.length > 0
+    const selector = showSelector ? (
+      <div className="bg-stone-900 text-white px-3 py-2 border-b border-stone-800 flex justify-center">
+        <div className="w-full max-w-4xl flex items-center gap-2">
+          <span className="text-xs font-semibold whitespace-nowrap text-stone-200">매치 선택</span>
+          <select
+            value={refModeSelectedId}
+            onChange={(e)=>setRefModeSelectedId(e.target.value)}
+            className="w-72 bg-stone-800 text-white rounded-md px-3 py-2 text-sm border border-stone-700 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          >
+            <option value="">매치를 선택하세요</option>
+            {todayMatchesRefMode.map(m=>(
+              <option key={m.id} value={m.id}>{formatMatchLabel(m)}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+    ) : null
+
+    if (!activeMatch) {
+      return (
+        <>
+          <ToastHub />
+          {selector}
+          <div className="flex h-[calc(100vh-56px)] items-center justify-center bg-stone-900 text-white text-sm px-4 text-center">
+            {refModeError || '오늘 진행중인 매치가 없습니다. (No active matches today)'}
+          </div>
+        </>
+      )
+    }
+
     return (
       <>
         <ToastHub />
+        {selector}
         <Suspense fallback={<div className="flex h-screen items-center justify-center bg-stone-900 text-white">Loading Referee Mode...</div>}>
           <RefereeMode 
             activeMatch={activeMatch} 

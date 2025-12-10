@@ -824,7 +824,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                   <span className="text-2xl mb-1">⚠️</span>
                   <span className="font-bold">{t('referee.foul', 'Foul')}</span>
                 </button>
-
+                {/* Super Save temporarily disabled
                 <button
                   onClick={() => {
                     handleEvent('super_save', selectedTeamIndex, selectedPlayer)
@@ -836,6 +836,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                   <span className="text-2xl mb-1">🧤</span>
                   <span className="font-bold">{t('referee.superSave', 'Super Save')}</span>
                 </button>
+                */}
 
                 <button
                   onClick={() => setSelectedPlayer(null)}
