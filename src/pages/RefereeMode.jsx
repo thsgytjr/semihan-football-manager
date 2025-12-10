@@ -692,7 +692,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-sm rounded-2xl p-4 space-y-4">
             <div className="flex items-center gap-3 border-b pb-3">
-              <InitialAvatar name={selectedPlayer.name} photoUrl={selectedPlayer.avatar} size={48} />
+              <InitialAvatar name={selectedPlayer.name} photoUrl={selectedPlayer.photoUrl || selectedPlayer.avatar} size={48} />
               <div>
                 <div className="font-bold text-lg">{selectedPlayer.name}</div>
                 <div className="text-sm text-gray-500">{t('referee.team', 'Team')} {selectedTeamIndex + 1}</div>
