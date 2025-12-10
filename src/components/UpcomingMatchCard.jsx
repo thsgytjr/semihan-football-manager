@@ -407,30 +407,6 @@ export default function UpcomingMatchCard({
                   matches={matches}
                   teamCount={teamCount}
                 />
-                {/* 팀 보기 버튼 - 매칭되는 매치가 있을 때 표시 (드래프트 여부 무관) */}
-                {hasMatchingHistoricalMatch && (
-                  <button
-                    onClick={() => onShowTeams?.(upcomingMatch)}
-                    style={{
-                      width: '100%',
-                      marginTop: '8px',
-                      padding: '8px 12px',
-                      fontSize: '12px',
-                      fontWeight: '500',
-                      backgroundColor: '#10b981',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      transition: 'background-color 0.2s'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#059669'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#10b981'}
-                    title={t('upcoming.viewTeamsTitle')}
-                  >
-                    {t('upcoming.viewTeams')}
-                  </button>
-                )}
               </div>
             )
           }
@@ -461,8 +437,32 @@ export default function UpcomingMatchCard({
         })()}
       </div>
 
-      {/* 참가자 - 복권 추첨 애니메이션 */}
-      {/* 팀 보기 버튼이 없을 때만 표시 (드래프트 완료 전) */}
+      {/* 팀 보기 버튼 - 주장 유무와 무관, 매칭되는 매치가 있으면 노출 */}
+      {hasMatchingHistoricalMatch && (
+        <button
+          onClick={() => onShowTeams?.(upcomingMatch)}
+          style={{
+            width: '100%',
+            marginTop: '8px',
+            padding: '10px 12px',
+            fontSize: '12px',
+            fontWeight: '600',
+            backgroundColor: '#10b981',
+            color: 'white',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            transition: 'background-color 0.2s'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#059669'}
+          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#10b981'}
+          title={t('upcoming.viewTeamsTitle')}
+        >
+          {t('upcoming.viewTeams')}
+        </button>
+      )}
+
+      {/* 참가자 - 복권 추첨 애니메이션 (팀 보기 버튼이 없을 때만 표시) */}
       {attendees.length > 0 && !hasMatchingHistoricalMatch && (
         <BouncingPlayersLottery attendees={attendees} isDraftComplete={isDraftComplete} />
       )}
