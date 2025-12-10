@@ -9,6 +9,7 @@ import { notify } from '../components/Toast'
 import { hydrateMatch } from '../lib/match'
 import MatchHelpers from '../lib/matchHelpers'
 import { formatMatchLabel } from '../lib/matchLabel'
+import { isRefMatch } from '../lib/matchUtils'
 import { summarizeVotes, buildMoMTieBreakerScores, getMoMPhase } from '../lib/momUtils'
 import { fetchMoMVotes, submitMoMVote, deleteMoMVote, deleteMoMVotesByMatch } from '../services/momVotes.service'
 import RefereeTimelineEditor from '../components/RefereeTimelineEditor'
@@ -170,29 +171,15 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     setDraft(next)
   }, [editingMatch, players])
 
-  const isRefMatch = (matchObj) => Array.isArray(matchObj?.stats?.__events) && matchObj.stats.__events.length > 0
-
   useEffect(() => {
-    const selected = sortedMatches?.find(m => toStr(m.id) === toStr(momMatchId))
-    if (selected && isRefMatch(selected)) {
-      // If currently pointing to a referee match, clear it so MoM UI hides
-      setMomMatchId('')
-      return
-    }
-
     if (momMatchId) return
 
     if (editingMatchId) {
-      const match = sortedMatches?.find(m => toStr(m.id) === toStr(editingMatchId))
-      const hasTimeline = isRefMatch(match)
-      // Never auto-trigger MOM voting for referee mode matches
-      if (hasTimeline) return
-
       setMomMatchId(toStr(editingMatchId))
       return
     }
 
-    const fallback = (sortedMatches || []).find(m => !isRefMatch(m))
+    const fallback = (sortedMatches || [])[0]
     if (fallback?.id) setMomMatchId(toStr(fallback.id))
   }, [momMatchId, editingMatchId, sortedMatches])
 
@@ -252,12 +239,19 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
   const save = () => {
     if (!editingMatch) return
     const baseStats = editingMatch?.stats && typeof editingMatch.stats === 'object' ? editingMatch.stats : {}
-    const rebuiltTimeline = buildTimelineFromDraft(draft, teams)
+    const keepTimeline = isRefMatch(editingMatch)
     const mergedStats = {
       ...baseStats,
       ...draft,
-      __events: rebuiltTimeline,
     }
+
+    if (keepTimeline) {
+      mergedStats.__events = buildTimelineFromDraft(draft, teams)
+    } else if (mergedStats.__events) {
+      // Remove referee timeline marker for manual-input matches
+      delete mergedStats.__events
+    }
+
     onUpdateMatch?.(editingMatch.id, { stats: mergedStats })
     setShowSaved(true)
     setTimeout(() => setShowSaved(false), 1200)
@@ -633,11 +627,16 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
 
   const teams = useMemo(() => {
     if (!editingMatch) return []
+    // If this is a referee-mode match with timeline, use the stored teams to avoid losing mapping
+    if (Array.isArray(editingMatch?.teams) && editingMatch.teams.length > 0) {
+      return editingMatch.teams
+    }
     const hydrated = hydrateMatch(editingMatch, players)
     return hydrated.teams || []
   }, [editingMatch, players])
 
   const hasRefereeTimeline = useMemo(() => {
+    if (!editingMatch) return false
     return Array.isArray(editingMatch?.stats?.__events) && editingMatch.stats.__events.length > 0
   }, [editingMatch])
 
@@ -760,6 +759,25 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       notify('관리자 확정을 해제했습니다.', 'success')
     } catch (err) {
       notify('확정 해제에 실패했습니다.', 'error')
+    }
+  }
+
+  const handleMomManualToggle = async () => {
+    if (!momMatch) return
+    const current = momMatch.stats?.momManualOpen === true
+    const next = !current
+    
+    const updatedStats = {
+      ...(momMatch.stats || {}),
+      momManualOpen: next
+    }
+    
+    try {
+      await onUpdateMatch(momMatch.id, { stats: updatedStats })
+      notify(next ? '투표가 수동으로 활성화되었습니다.' : '투표 수동 활성화가 해제되었습니다.', 'success')
+    } catch (err) {
+      console.error(err)
+      notify('설정 변경에 실패했습니다.', 'error')
     }
   }
 
@@ -949,21 +967,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
           </>
         )}
       </Card>
-      {editingMatch && isAdmin && (() => {
-        const hasTimeline = isRefMatch(editingMatch)
-        const isMomActive = toStr(momMatchId) === toStr(editingMatch.id)
-        // Hide MoM start button for referee-mode matches
-        return !hasTimeline && !isMomActive ? (
-          <div className="mb-4">
-            <button
-              onClick={() => setMomMatchId(toStr(editingMatch.id))}
-              className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-bold shadow-sm transition"
-            >
-              🏆 MoM 투표 시작하기
-            </button>
-          </div>
-        ) : null
-      })()}
+      {/* MoM admin panel is always visible when editingMatch is set (no extra button needed) */}
       {momMatch && (
         <MoMAdminPanel
           match={momMatch}
@@ -985,6 +989,9 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
           momOverride={momOverride}
           onClearOverride={handleMomAdminClearOverride}
           overrideLocked={momOverrideLocked}
+          isRefMatch={isRefMatch(momMatch)}
+          momManualOpen={momMatch?.stats?.momManualOpen === true}
+          onToggleManualOpen={handleMomManualToggle}
           tieBreakMeta={{
             applied: momSummary.tieBreakApplied,
             category: momSummary.tieBreakCategory,

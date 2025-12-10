@@ -1,4 +1,4 @@
-import { toStr, extractStatsByPlayer, extractAttendeeIds } from './matchUtils'
+import { toStr, extractStatsByPlayer, extractAttendeeIds, isRefMatch } from './matchUtils'
 
 const HOUR_MS = 60 * 60 * 1000
 export const MOM_VOTE_WINDOW_HOURS = 24
@@ -62,6 +62,29 @@ export function getMoMWindow(match) {
 export function getMoMPhase(match, now = new Date()) {
   const windowMeta = getMoMWindow(match)
   if (!windowMeta) return 'hidden'
+
+  // Referee Mode Logic: Only open if manually enabled OR 3 hours passed since match time
+  if (isRefMatch(match)) {
+    const isManuallyOpen = match?.stats?.momManualOpen === true
+    
+    // If manually opened, force 'vote' phase immediately (unless already closed by time)
+    if (isManuallyOpen) {
+      const ts = now.getTime()
+      if (ts < windowMeta.voteEnd.getTime()) return 'vote'
+      if (ts < windowMeta.announceEnd.getTime()) return 'announce'
+      return 'closed'
+    }
+
+    // Use dateISO (scheduled time) if available, otherwise fallback to anchor
+    const matchTime = match.dateISO ? new Date(match.dateISO).getTime() : windowMeta.anchor.getTime()
+    const threeHours = 3 * 60 * 60 * 1000
+    const timePassed = (now.getTime() - matchTime) >= threeHours
+
+    if (!timePassed) {
+      return 'hidden'
+    }
+  }
+
   const ts = now.getTime()
   if (ts < windowMeta.anchor.getTime()) return 'pending'
   if (ts < windowMeta.voteEnd.getTime()) return 'vote'

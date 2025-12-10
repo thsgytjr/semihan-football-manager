@@ -35,10 +35,8 @@ export function useMoMPrompt({ matches = [], players = [] }) {
 
   const phase = useMemo(() => {
     if (!latestMatch) return 'hidden'
-    const base = getMoMPhase(latestMatch, new Date(nowTs))
-    if (base === 'hidden' && windowMeta) return 'vote'
-    return base
-  }, [latestMatch, nowTs, windowMeta])
+    return getMoMPhase(latestMatch, new Date(nowTs))
+  }, [latestMatch, nowTs])
 
   const statsByPlayer = useMemo(() => {
     if (!latestMatch) return {}

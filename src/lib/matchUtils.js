@@ -134,3 +134,10 @@ export function getBadgesWithCustom(membership, customMemberships = []) {
   const badgeInfo = getMembershipBadge(membership, customMemberships)
   return badgeInfo ? [badgeInfo.badge] : []
 }
+
+/**
+ * Check if the match is a Referee Mode match
+ */
+export function isRefMatch(matchObj) {
+  return Array.isArray(matchObj?.stats?.__events) && matchObj.stats.__events.length > 0
+}

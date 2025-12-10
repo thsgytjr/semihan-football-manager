@@ -34,6 +34,9 @@ export default function MoMAdminPanel({
   onClearOverride,
   overrideLocked = false,
   tieBreakMeta = null,
+  isRefMatch = false,
+  momManualOpen = false,
+  onToggleManualOpen,
 }) {
   const [selectedPlayerId, setSelectedPlayerId] = useState('')
   const [note, setNote] = useState('')
@@ -249,6 +252,30 @@ export default function MoMAdminPanel({
                     확정 해제
                   </button>
                 )}
+              </div>
+            </section>
+          )}
+
+          {isRefMatch && (
+            <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-blue-900">심판 모드 투표 제어</div>
+                  <p className="text-xs text-blue-800">
+                    심판 모드 경기는 투표가 자동으로 시작되지 않습니다. (3시간 후 자동 시작)
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={onToggleManualOpen}
+                  className={`rounded-xl px-3 py-1.5 text-xs font-semibold shadow transition-colors ${
+                    momManualOpen
+                      ? 'bg-red-100 text-red-700 border border-red-200 hover:bg-red-200'
+                      : 'bg-blue-500 text-white hover:bg-blue-600'
+                  }`}
+                >
+                  {momManualOpen ? '투표 강제 종료 (자동전환)' : '투표 즉시 시작'}
+                </button>
               </div>
             </section>
           )}
