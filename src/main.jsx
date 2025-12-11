@@ -48,22 +48,6 @@ async function startApp() {
   const mockDisabledParam = urlParams.has('mockDisabled') || urlParams.has('nomock')
   const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   const isMockMode = isLocalhost && !mockDisabledParam
-
-  // Handle optional `start` fallback (used by static redirect pages like /refMode/index.html)
-  // If present, rewrite the URL in-place so the SPA sees the intended pathname before render.
-  try {
-    const startParam = urlParams.get('start')
-    if (startParam) {
-      const resolved = new URL(startParam, window.location.origin)
-      const newPath = resolved.pathname + (resolved.search || '') + (resolved.hash || '')
-      if (newPath !== window.location.pathname + window.location.search + window.location.hash) {
-        // Replace history without a reload so app boots at requested path
-        window.history.replaceState(null, '', newPath)
-      }
-    }
-  } catch (e) {
-    // swallow URL parsing errors
-  }
   
   if (isMockMode) {
     try {

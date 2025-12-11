@@ -1,28 +1,13 @@
+<!-- refMode helper (neutralized) -->
 <!doctype html>
 <html lang="ko">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>RefMode Redirect</title>
-    <link rel="manifest" href="/refMode/manifest.webmanifest">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="RefMode">
-    <link rel="apple-touch-icon" href="/GoalifyLogo.png">
-    <meta name="theme-color" content="#0ea5a4">
-    <script>
-      // Immediately navigate to SPA root with start param so SPA can route to /refMode
-      (function(){
-        try{
-          const target = '/?start=/refMode'
-          // Use replace to avoid back button noise
-          window.location.replace(target)
-        }catch(e){
-          // fallback: do nothing
-        }
-      })()
-    </script>
+    <title>Not Found</title>
   </head>
   <body>
-    <p>Redirecting…</p>
+    <h1>Not Found</h1>
+    <p>This helper page was neutralized during revert.</p>
   </body>
 </html>
