@@ -353,7 +353,40 @@ export function shouldTrackVisit() {
     if (botLike.test(ua)) {
       return false
     }
-    // 프리렌더 시점(visibilityState)도 건너뜀
+    
+    // Headless Chrome/자동화 도구 감지
+    if (navigator.webdriver || window.chrome?.webdriver) {
+      return false
+    }
+    
+    // AWS/클라우드 봇 패턴 감지 (Linux + Chrome + Desktop)
+    const platform = navigator?.platform?.toLowerCase() || ''
+    const isLinux = platform.includes('linux') || ua.includes('linux')
+    const hasChrome = ua.includes('chrome') && !ua.includes('edg') && !ua.includes('opr')
+    const isMobile = /mobile|android|iphone|ipad/i.test(ua)
+    
+    // Linux + Chrome + Desktop (모바일 아님) = AWS/Vercel 모니터링 봇
+    if (isLinux && hasChrome && !isMobile) {
+      // 추가 체크: navigator.languages 없거나 비정상적이면 봇
+      const langs = navigator?.languages || []
+      if (langs.length === 0) {
+        console.log('🤖 봇 감지: Linux+Chrome (언어 설정 없음)')
+        return false
+      }
+      
+      // 추가 체크: screen 정보가 비정상적이면 봇
+      const screenValid = window.screen?.width > 0 && window.screen?.height > 0
+      if (!screenValid) {
+        console.log('🤖 봇 감지: Linux+Chrome (화면 정보 없음)')
+        return false
+      }
+      
+      // 위 체크를 통과해도 Linux+Chrome+Desktop은 의심스러우므로 필터링
+      console.log('🤖 봇 감지: Linux+Chrome+Desktop (AWS/모니터링 서비스)')
+      return false
+    }
+    
+    // 프리렌더 시점도 건너뜀
     if (document?.visibilityState === 'prerender') {
       return false
     }
