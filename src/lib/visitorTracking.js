@@ -345,6 +345,30 @@ export function isPreviewMode() {
  * @returns {boolean} 추적해야 하면 true
  */
 export function shouldTrackVisit() {
+  // 봇/모니터링 트래픽은 카운트하지 않음
+  try {
+    const uaRaw = navigator?.userAgent || ''
+    const ua = uaRaw.toLowerCase()
+    const botLike = /bot|crawl|spider|headless|lighthouse|pagespeed|uptime|pingdom|statuscake|datadog|newrelic|synthetic|monitor|vercel|preview/i
+    if (botLike.test(ua)) {
+      return false
+    }
+    // 프리렌더 시점(visibilityState)도 건너뜀
+    if (document?.visibilityState === 'prerender') {
+      return false
+    }
+  } catch (e) {
+    // UA 파싱 실패 시 나머지 체크 진행
+  }
+
+  // 방문자 분석을 보는 개발자(analytics admin)라면 카운트하지 않음
+  try {
+    const analyticsAdmin = window.localStorage.getItem('isAnalyticsAdmin') === '1'
+    if (analyticsAdmin) return false
+  } catch (e) {
+    // localStorage 접근 불가 시에도 나머지 체크 진행
+  }
+
   // 개발 환경이면 추적하지 않음
   if (isDevelopmentEnvironment()) {
     return false
