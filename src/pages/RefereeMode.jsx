@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Play, Pause, Save, X, Clock } from 'lucide-react'
+import { Play, Save, X, Clock } from 'lucide-react'
 import Card from '../components/Card'
 import InitialAvatar from '../components/InitialAvatar'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -39,7 +39,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
   const [matchNumber, setMatchNumber] = useState(initialGameIndex + 1)
   const [matchNumberInput, setMatchNumberInput] = useState(String(initialGameIndex + 1))
   const [durationInput, setDurationInput] = useState('20')
-  const [gameStatus, setGameStatus] = useState('setup') // setup -> ready -> playing/paused -> finished
+  const [gameStatus, setGameStatus] = useState('setup') // setup -> ready -> playing -> finished
   const [startTime, setStartTime] = useState(null)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [teams, setTeams] = useState(activeMatch?.teams || [[], []])
@@ -52,6 +52,8 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
   const [pendingGoalEvent, setPendingGoalEvent] = useState(null)
   const [ownGoalAssistMode, setOwnGoalAssistMode] = useState(false)
   const [pendingOwnGoal, setPendingOwnGoal] = useState(null)
+  const [showTimeline, setShowTimeline] = useState(false)
+  const [revertTarget, setRevertTarget] = useState(null)
   const [showCleanSheetPicker, setShowCleanSheetPicker] = useState(false)
   const [cleanSheetCandidates, setCleanSheetCandidates] = useState([])
   const [cleanSheetSelections, setCleanSheetSelections] = useState([])
@@ -204,7 +206,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     const extra = min - duration
     return `${duration} +${extra}'`
   }, [elapsedSeconds, duration])
-  const canRecord = gameStatus === 'playing' || gameStatus === 'paused' || gameStatus === 'finished'
+  const canRecord = gameStatus === 'playing' || gameStatus === 'finished'
 
   const handleStartSetup = () => {
     // Filter teams based on selection
@@ -220,9 +222,6 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     setGameStatus('playing')
     setStartTime(Date.now())
   }
-
-  const handlePause = () => setGameStatus('paused')
-  const handleResume = () => setGameStatus('playing')
 
   const ensureStat = (stats, playerId) => {
     const pid = playerId || ''
@@ -271,12 +270,9 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     }
   }
 
-  const handleRemoveEvent = (eventId) => {
-    const target = events.find(e => e.id === eventId)
+  const applyRemoveEvent = (target) => {
     if (!target) return
-    if (!window.confirm(t('referee.confirmDeleteEvent', 'Delete this event?'))) return
-
-    setEvents(prev => prev.filter(e => e.id !== eventId))
+    setEvents(prev => prev.filter(e => e.id !== target.id))
 
     if (target.type === 'goal') {
       setScores(prev => {
@@ -294,6 +290,12 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
         return next
       })
     }
+  }
+
+  const handleRemoveEvent = (eventId) => {
+    const target = events.find(e => e.id === eventId)
+    if (!target) return
+    setRevertTarget(target)
   }
 
   const buildStats = (cleanSheetAwardees = []) => {
@@ -430,18 +432,28 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       <button
         key={player.id}
         onClick={() => openPlayerActions(player, teamIndex)}
-        className={`p-3 rounded-xl border w-full text-left flex items-center gap-3 bg-white/90 hover:border-gray-300 active:scale-[0.99] transition shadow-sm ${!canRecord ? 'opacity-60 cursor-not-allowed' : ''}`}
+        className={`p-2 rounded-xl border border-slate-200/60 w-full text-center flex flex-col items-center gap-0.5 bg-gradient-to-b from-white to-slate-50/30 hover:from-slate-50 hover:to-white hover:border-slate-300/80 hover:shadow-md active:scale-[0.98] transition-all duration-200 shadow-sm h-[100px] ${!canRecord ? 'opacity-60 cursor-not-allowed' : ''}`}
         disabled={!canRecord}
       >
-        <InitialAvatar name={player.name} photoUrl={photo} size={42} />
-        <div className="flex-1 min-w-0">
-          <div className="font-semibold truncate text-[14px] text-gray-900">{player.name}</div>
-          {(player.position || player.pos) && (
-            <div className="text-xs text-gray-500 truncate">{player.position || player.pos}</div>
-          )}
+        <InitialAvatar name={player.name} photoUrl={photo} size={50} />
+        <div className="w-full min-h-[22px] flex items-center justify-center">
+          <div className="font-semibold text-[11px] text-slate-800 leading-tight break-words whitespace-normal max-h-9 overflow-hidden">
+            {player.name}
+          </div>
         </div>
       </button>
     )
+  }
+
+  const latestEvent = events?.[0]
+  const describeEvent = (ev) => {
+    if (!ev) return ''
+    if (ev.type === 'goal') return ev.assistedName ? `${ev.playerName} (assist ${ev.assistedName})` : `${ev.playerName} 골`
+    if (ev.type === 'own_goal') return `${ev.playerName} 자책골`
+    if (ev.type === 'yellow') return `${ev.playerName} 경고`
+    if (ev.type === 'red') return `${ev.playerName} 퇴장`
+    if (ev.type === 'foul') return `${ev.playerName} 파울`
+    return ev.playerName || '이벤트'
   }
 
   if (gameStatus === 'setup') {
@@ -621,135 +633,82 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
 
   return (
     <div className="fixed inset-0 bg-gradient-to-b from-slate-50 via-white to-slate-100 z-50 overflow-y-auto flex flex-col">
-      <div className="bg-white/90 shadow-sm p-3 sticky top-0 z-20 border-b backdrop-blur">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm text-gray-700 font-semibold">
-            <Clock size={16} />
-            <span>Game {matchNumber}</span>
+      <div className="bg-white/90 shadow-sm px-3 py-4 sticky top-0 z-20 border-b backdrop-blur">
+        <div className="relative flex items-center justify-between">
+          <div className="absolute left-0 top-1/2 -translate-y-1/2 flex items-center gap-2 text-sm text-slate-600 font-bold">
+            <Clock size={16} className="text-slate-500" />
+            <span className="tracking-tight">Game {matchNumber}</span>
           </div>
-          <div className="flex flex-col items-center gap-0.5">
-            <div className={`text-3xl font-mono font-bold leading-none ${
-              gameStatus === 'paused' || gameStatus === 'ready' 
-                ? 'text-yellow-600' 
-                : currentMinute > duration 
-                  ? 'text-red-600' 
-                  : 'text-gray-900'
+
+          <div className="flex-1 flex flex-col items-center gap-1">
+            <div className={`text-4xl sm:text-5xl font-mono font-black leading-none tracking-tight ${
+              currentMinute > duration ? 'text-red-600' : 'text-slate-900'
             }`}>
               {formatTime(elapsedSeconds)}
             </div>
-            <div className="flex items-center gap-1 text-xs font-semibold">
-              <div className={`${
-                currentMinute > duration ? 'text-red-600' : 'text-gray-500'
-              }`}>{displayMinute}</div>
-              <span className="text-gray-400">/</span>
-              <span className="text-gray-500">{duration} min</span>
-            </div>
-          </div>
-          <div className="flex gap-2 items-center">
-            {gameStatus === 'playing' && (
-              <button onClick={handlePause} className="p-2 bg-yellow-100 text-yellow-700 rounded-full">
-                <Pause size={22} />
-              </button>
-            )}
-            {gameStatus === 'paused' && (
-              <button onClick={handleResume} className="p-2 bg-green-100 text-green-700 rounded-full">
-                <Play size={22} />
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-3 items-center bg-slate-50 rounded-xl p-3 border border-slate-200">
-          {[0, 1].map(idx => {
-            const color = resolveTeamColor(idx)
-            return (
-              <div key={idx} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {renderJersey(color, 20)}
-                  <div>
-                    <div className="text-[11px] uppercase text-slate-500 font-semibold">{t('referee.team', 'Team')} {idx + 1}</div>
-                    <div className="text-xs text-slate-500">{color?.label || 'Kit'}</div>
-                  </div>
-                </div>
-                <span className="text-3xl font-bold text-slate-900">{scores[idx] || 0}</span>
+            <span className="text-xs font-bold text-slate-500 tracking-wide">{displayMinute} / {duration} min</span>
+            {latestEvent && (
+              <div className="mt-1 px-3 py-1 rounded-full bg-gradient-to-r from-slate-100 to-slate-50 border border-slate-200/60 text-[11px] text-slate-700 flex items-center gap-2 shadow-sm">
+                <span className="font-bold">최근:</span>
+                <span className="line-clamp-1 font-medium">{describeEvent(latestEvent)}</span>
               </div>
-            )
-          })}
+            )}
+          </div>
+
+          <div className="absolute right-0 top-1/2 -translate-y-1/2 flex flex-col items-end gap-1">
+            <button
+              onClick={() => setShowTimeline(true)}
+              className="px-3 py-1.5 text-xs font-bold rounded-full bg-gradient-to-br from-slate-900 to-slate-800 text-white hover:from-slate-800 hover:to-slate-700 shadow-md hover:shadow-lg active:scale-[0.97] transition-all duration-200"
+            >
+              Timeline ({events.length})
+            </button>
+          </div>
         </div>
 
         {gameStatus === 'ready' && (
           <div className="mt-4">
             <button
               onClick={handleKickOff}
-              className="w-full py-6 rounded-2xl bg-emerald-600 text-white text-2xl font-extrabold shadow-xl shadow-emerald-200 active:scale-[0.99]"
+              className="w-full py-6 rounded-2xl bg-gradient-to-br from-emerald-600 via-emerald-600 to-emerald-700 text-white text-2xl font-extrabold shadow-2xl shadow-emerald-300/50 hover:shadow-emerald-400/60 hover:from-emerald-700 hover:to-emerald-800 active:scale-[0.98] transition-all duration-300"
             >
               {t('referee.kickoff', 'Kick Off')}
             </button>
-            <div className="text-center text-sm text-slate-700 mt-2 font-semibold">킥오프를 눌러야 기록을 시작할 수 있습니다.</div>
+            <div className="text-center text-sm text-slate-600 mt-2 font-medium">킥오프를 눌러야 기록을 시작할 수 있습니다.</div>
           </div>
         )}
       </div>
 
       <div className="p-4 pb-40 flex-1 space-y-4">
-        <div className={`bg-white border rounded-xl p-3 ${!canRecord ? 'opacity-60' : ''}`}>
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-bold text-gray-700 uppercase">{t('referee.timeline', 'Timeline')}</h3>
-            {events.length > 0 && <span className="text-xs text-gray-500">{events.length} events</span>}
-          </div>
-          <div className="space-y-2 max-h-60 overflow-y-auto">
-            {events.length === 0 && (
-              <div className="text-xs text-gray-400 italic">{t('referee.noEvents', 'No events yet')}</div>
-            )}
-            {events.map((ev, idx) => {
-              const scoringTeam = ev.type === 'own_goal' ? (ev.teamIndex === 0 ? 1 : 0) : ev.teamIndex
-              const minDisplay = ev.minute > duration ? `${duration} +${ev.minute - duration}'` : `${ev.minute}'`
-              return (
-                <div key={ev.id || `${ev.timestamp}-${idx}`} className="flex items-center gap-2 text-sm group">
-                  <span className="font-mono text-xs text-gray-500 w-14">{minDisplay}</span>
-                  <span className={`font-semibold ${scoringTeam === 0 ? 'text-blue-600' : 'text-red-600'}`}>
-                    {ev.playerName}
-                  </span>
-                  <span className="text-gray-700 flex-1">
-                    {ev.type === 'goal' && (ev.assistedName ? `⚽ Goal (assist: ${ev.assistedName})` : '⚽ Goal')}
-                    {ev.type === 'own_goal' && '🥅 Own Goal'}
-                    {ev.type === 'yellow' && '🟨 Yellow Card'}
-                    {ev.type === 'red' && '🟥 Red Card'}
-                    {ev.type === 'foul' && '⚠️ Foul'}
-                    {ev.type === 'super_save' && '🧤 Super Save'}
-                  </span>
-                  <button
-                    onClick={() => handleRemoveEvent(ev.id)}
-                    className="px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 rounded transition"
-                    title="Revert"
-                  >
-                    Revert
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-2">
           {teams.map((team, idx) => {
             const color = resolveTeamColor(idx)
             const captain = findCaptainPlayer(idx)
+            const accent = color?.border || color?.bg || '#0f172a'
             return (
-              <div key={idx} className="bg-white/95 rounded-2xl border border-slate-200 p-3 space-y-3 shadow-sm">
+              <div
+                key={idx}
+                className="bg-gradient-to-br from-white to-slate-50/30 rounded-2xl border-2 p-3 space-y-3 shadow-lg hover:shadow-xl transition-all duration-300"
+                style={{ borderColor: accent, boxShadow: `0 8px 32px ${accent}20` }}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3">
                     {renderJersey(color, 24)}
                     <div>
-                      <div className="text-xs uppercase text-slate-500 font-semibold">{t('referee.team', 'Team')} {idx + 1}</div>
-                      <div className="text-sm text-slate-600">{color?.label || 'Kit'}</div>
+                      <div className="text-[11px] uppercase font-black tracking-wider" style={{ color: accent }}>
+                        {t('referee.team', 'Team')} {idx + 1}
+                      </div>
+                      <div className="text-xs text-slate-500 font-medium">{color?.label || 'Kit'}</div>
                     </div>
                   </div>
-                  <div className="text-2xl font-extrabold text-slate-900">{scores[idx] || 0}</div>
+                  <div className="text-3xl font-black text-slate-900 tracking-tight">{scores[idx] || 0}</div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {Array.isArray(team) && team.length > 0 ? team.map(player => renderPlayerCard(player, idx)) : (
-                    <div className="text-sm text-gray-500 italic">{t('referee.noPlayers', 'No players')}</div>
-                  )}
+                <div className="bg-gradient-to-b from-slate-50/60 to-white/80 border border-slate-200/50 rounded-xl p-2 max-h-[720px] overflow-y-auto shadow-inner">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {Array.isArray(team) && team.length > 0 ? team.map(player => renderPlayerCard(player, idx)) : (
+                      <div className="text-sm text-gray-500 italic">{t('referee.noPlayers', 'No players')}</div>
+                    )}
+                  </div>
                 </div>
               </div>
             )
@@ -758,30 +717,117 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       </div>
 
       {gameStatus === 'ready' && (
-        <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 text-center space-y-4">
-            <div className="text-sm font-semibold text-slate-500 uppercase tracking-wide">Kick Off Required</div>
-            <div className="text-2xl font-extrabold text-slate-900">Game {matchNumber}</div>
-            <div className="text-sm text-slate-600">킥오프를 누르기 전까지 어떤 액션도 기록되지 않습니다.</div>
+        <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-md flex items-center justify-center p-6">
+          <div className="w-full max-w-md bg-gradient-to-br from-white to-slate-50 rounded-3xl shadow-2xl p-6 text-center space-y-4 border border-slate-200/50">
+            <div className="text-sm font-bold text-slate-500 uppercase tracking-wide">Kick Off Required</div>
+            <div className="text-2xl font-black text-slate-900">Game {matchNumber}</div>
+            <div className="text-sm text-slate-600 font-medium">킥오프를 누르기 전까지 어떤 액션도 기록되지 않습니다.</div>
             <button
               onClick={handleKickOff}
-              className="w-full py-5 rounded-2xl bg-emerald-600 text-white text-xl font-extrabold shadow-lg shadow-emerald-200 active:scale-[0.99]"
+              className="w-full py-5 rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-700 text-white text-xl font-extrabold shadow-xl shadow-emerald-300/50 hover:shadow-2xl hover:from-emerald-700 hover:to-emerald-800 active:scale-[0.98] transition-all duration-300"
             >
               {t('referee.kickoff', 'Kick Off')}
             </button>
-            <div className="text-xs text-slate-500">타이머와 기록이 함께 시작됩니다.</div>
+            <div className="text-xs text-slate-500 font-medium">타이머와 기록이 함께 시작됩니다.</div>
           </div>
         </div>
       )}
 
-      <div className="bg-white/95 border-t p-4 sticky bottom-0 backdrop-blur shadow-[0_-4px_24px_rgba(0,0,0,0.08)]">
+      {showTimeline && (
+        <div className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm flex items-start justify-center p-0">
+          <div className="absolute inset-0" onClick={() => setShowTimeline(false)} />
+          <div className="relative w-full max-w-4xl bg-white rounded-b-3xl shadow-2xl overflow-hidden max-h-[80vh] mt-2 animate-[slideDown_180ms_ease-out]">
+            <div className="sticky top-0 bg-slate-50 border-b px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
+                <div>
+                  <div className="text-xs font-semibold text-slate-500 uppercase">Timeline</div>
+                  <div className="text-sm text-slate-600">{events.length} events</div>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowTimeline(false)}
+                className="p-2 text-slate-600 hover:bg-slate-100 rounded-full"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="max-h-[70vh] overflow-y-auto px-4 py-3 space-y-2">
+              {events.length === 0 && (
+                <div className="text-sm text-gray-400 italic">No events yet</div>
+              )}
+              {events.map((ev, idx) => {
+                const scoringTeam = ev.type === 'own_goal' ? (ev.teamIndex === 0 ? 1 : 0) : ev.teamIndex
+                const minDisplay = ev.minute > duration ? `${duration} +${ev.minute - duration}'` : `${ev.minute}'`
+                const badge = ev.type === 'goal' ? '⚽' : ev.type === 'own_goal' ? '🥅' : ev.type === 'yellow' ? '🟨' : ev.type === 'red' ? '🟥' : '⚠️'
+                return (
+                  <div key={ev.id || `${ev.timestamp}-${idx}`} className="flex items-center gap-2 text-sm group bg-slate-50/60 hover:bg-slate-100 rounded-lg px-3 py-2">
+                    <span className="font-mono text-xs text-gray-500 w-14">{minDisplay}</span>
+                    <span className="text-lg" aria-hidden>{badge}</span>
+                    <span className={`font-semibold ${scoringTeam === 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                      {ev.playerName}
+                    </span>
+                    <span className="text-gray-700 flex-1 truncate">
+                      {ev.type === 'goal' && (ev.assistedName ? `Goal (assist: ${ev.assistedName})` : 'Goal')}
+                      {ev.type === 'own_goal' && 'Own Goal'}
+                      {ev.type === 'yellow' && 'Yellow Card'}
+                      {ev.type === 'red' && 'Red Card'}
+                      {ev.type === 'foul' && 'Foul'}
+                      {ev.type === 'super_save' && 'Super Save'}
+                    </span>
+                    <button
+                      onClick={() => handleRemoveEvent(ev.id)}
+                      className="px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 rounded transition"
+                      title="Revert"
+                    >
+                      Revert
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {revertTarget && (
+        <div className="fixed inset-0 z-[80] bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="bg-gradient-to-br from-white to-slate-50 w-full max-w-sm rounded-2xl shadow-2xl p-5 space-y-4 border border-slate-200/50">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center font-bold">!</div>
+              <div className="flex-1">
+                <div className="text-lg font-bold text-slate-900">Revert this event?</div>
+                <div className="text-sm text-slate-600 mt-1 break-words">
+                  {revertTarget.playerName} · {revertTarget.type}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setRevertTarget(null)}
+                className="flex-1 py-3 rounded-lg border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 active:scale-[0.98] transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { applyRemoveEvent(revertTarget); setRevertTarget(null) }}
+                className="flex-1 py-3 rounded-lg bg-gradient-to-br from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200"
+              >
+                Revert
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="bg-white/90 border-t border-slate-200/50 p-4 sticky bottom-0 backdrop-blur-xl shadow-[0_-8px_32px_rgba(0,0,0,0.12)]">
         <div className="flex gap-2">
-          <button onClick={() => setShowCancelConfirm(true)} className="flex-1 py-3 bg-gray-200 rounded-xl font-bold text-gray-700">
+          <button onClick={() => setShowCancelConfirm(true)} className="flex-1 py-3 bg-gradient-to-br from-slate-200 to-slate-100 hover:from-slate-300 hover:to-slate-200 rounded-xl font-bold text-slate-700 shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200">
             {t('common.cancel', 'Cancel')}
           </button>
           <button
             onClick={() => setShowSaveConfirm(true)}
-            className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold flex items-center justify-center gap-2"
+            className="flex-1 py-3 bg-gradient-to-br from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 text-white rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:shadow-xl active:scale-[0.98] transition-all duration-200"
           >
             <Save size={18} />
             {t('referee.finish', 'Finish Match')}
@@ -790,8 +836,8 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       </div>
 
       {selectedPlayer && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-sm rounded-2xl p-4 space-y-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-gradient-to-br from-white to-slate-50 w-full max-w-sm rounded-2xl p-4 space-y-4 shadow-2xl border border-slate-200/50">
             <div className="flex items-center gap-3 border-b pb-3">
               <InitialAvatar name={selectedPlayer.name} photoUrl={selectedPlayer.photoUrl || selectedPlayer.avatar} size={48} />
               <div>
@@ -811,97 +857,107 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
             </div>
 
             {assistSelectionMode ? (
-              <div className="fixed inset-0 bg-white z-[60] flex flex-col">
-                <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white py-2 px-4 shadow-lg">
-                  <h3 className="font-bold text-center text-lg">Select Assist</h3>
-                </div>
-                <div className="flex-1 overflow-y-auto p-2">
-                  <div className="grid grid-cols-2 gap-1.5">
+              <div className="fixed inset-0 bg-slate-50/90 z-[60] flex items-center justify-center p-3">
+                <div className="flex-1 max-w-3xl w-full bg-white shadow-2xl rounded-2xl overflow-hidden max-h-[85vh] flex flex-col">
+                  <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white py-2 px-4 shadow-lg">
+                    <h3 className="font-bold text-center text-lg">Select Assist</h3>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => recordGoalWithAssist(null)}
+                        className="col-span-2 p-2.5 bg-yellow-400 hover:bg-yellow-500 rounded-lg font-bold text-gray-900 text-sm active:scale-[0.98] transition border-2 border-yellow-600"
+                      >
+                        NO ASSIST
+                      </button>
+                      {teams[selectedTeamIndex]
+                        .filter(p => p.id !== selectedPlayer.id)
+                        .map(teammate => (
+                          <button
+                            key={teammate.id}
+                            onClick={() => recordGoalWithAssist(teammate)}
+                            className="p-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg flex flex-col items-center gap-1 active:scale-[0.98] transition"
+                          >
+                            <InitialAvatar name={teammate.name} photoUrl={teammate.photoUrl || teammate.avatar} size={40} />
+                            <span className="text-xs font-bold text-gray-900 truncate w-full text-center leading-tight px-0.5">{teammate.name}</span>
+                          </button>
+                        ))}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-white border-t">
                     <button
-                      onClick={() => recordGoalWithAssist(null)}
-                      className="col-span-2 p-2.5 bg-yellow-400 hover:bg-yellow-500 rounded-lg font-bold text-gray-900 text-sm active:scale-[0.98] transition border-2 border-yellow-600"
+                      onClick={() => setAssistSelectionMode(false)}
+                      className="w-full py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-bold text-sm active:scale-[0.98] transition"
                     >
-                      NO ASSIST
+                      Back
                     </button>
-                    {teams[selectedTeamIndex]
-                      .filter(p => p.id !== selectedPlayer.id)
-                      .map(teammate => (
+                  </div>
+                </div>
+              </div>
+            ) : ownGoalAssistMode ? (
+              <div className="fixed inset-0 bg-slate-50/90 z-[60] flex items-center justify-center p-3">
+                <div className="flex-1 max-w-3xl w-full bg-white shadow-2xl rounded-2xl overflow-hidden max-h-[85vh] flex flex-col">
+                  <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white py-2 px-4 shadow-lg">
+                    <h3 className="font-bold text-center text-lg">{t('referee.ownGoalAssistPrompt', 'Did someone force the own goal?')}</h3>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-3">
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => {
+                          handleEvent('own_goal', pendingOwnGoal?.teamIndex, pendingOwnGoal?.player, { ownGoal: true })
+                          setOwnGoalAssistMode(false)
+                          setPendingOwnGoal(null)
+                          setSelectedPlayer(null)
+                          setSelectedTeamIndex(null)
+                        }}
+                        className="col-span-2 p-2.5 bg-yellow-400 hover:bg-yellow-500 rounded-lg font-bold text-gray-900 text-sm active:scale-[0.98] transition border-2 border-yellow-600"
+                      >
+                        NO ASSIST
+                      </button>
+                      {(teams[pendingOwnGoal?.teamIndex === 0 ? 1 : 0] || []).map(teammate => (
                         <button
                           key={teammate.id}
-                          onClick={() => recordGoalWithAssist(teammate)}
-                          className="p-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg flex flex-col items-center gap-1 active:scale-[0.98] transition"
+                          onClick={() => {
+                            handleEvent('own_goal', pendingOwnGoal?.teamIndex, pendingOwnGoal?.player, {
+                              ownGoal: true,
+                              assistedBy: teammate.id,
+                              assistedName: teammate.name,
+                            })
+                            setOwnGoalAssistMode(false)
+                            setPendingOwnGoal(null)
+                            setSelectedPlayer(null)
+                            setSelectedTeamIndex(null)
+                          }}
+                          className="p-1.5 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-lg flex flex-col items-center gap-1 active:scale-[0.98] transition"
                         >
                           <InitialAvatar name={teammate.name} photoUrl={teammate.photoUrl || teammate.avatar} size={40} />
                           <span className="text-xs font-bold text-gray-900 truncate w-full text-center leading-tight px-0.5">{teammate.name}</span>
                         </button>
                       ))}
+                    </div>
+                  </div>
+                  <div className="p-3 bg-white border-t">
+                    <button
+                      onClick={() => { setOwnGoalAssistMode(false); setPendingOwnGoal(null); setSelectedPlayer(null); setSelectedTeamIndex(null) }}
+                      className="w-full py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-bold text-sm active:scale-[0.98] transition"
+                    >
+                      Back
+                    </button>
                   </div>
                 </div>
-                <div className="p-2 bg-white border-t">
-                  <button
-                    onClick={() => setAssistSelectionMode(false)}
-                    className="w-full py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-bold text-sm active:scale-[0.98] transition"
-                  >
-                    Back
-                  </button>
-                </div>
-              </div>
-            ) : ownGoalAssistMode ? (
-              <div className="space-y-3">
-                <h3 className="font-bold text-center text-lg">{t('referee.ownGoalAssistPrompt', 'Did someone force the own goal?')}</h3>
-                <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
-                  <button
-                    onClick={() => {
-                      handleEvent('own_goal', pendingOwnGoal?.teamIndex, pendingOwnGoal?.player, { ownGoal: true })
-                      setOwnGoalAssistMode(false)
-                      setPendingOwnGoal(null)
-                      setSelectedPlayer(null)
-                      setSelectedTeamIndex(null)
-                    }}
-                    className="col-span-2 p-3 bg-gray-100 rounded-lg font-medium text-gray-700"
-                  >
-                    {t('referee.noAssist', 'No Assist')}
-                  </button>
-                  {(teams[pendingOwnGoal?.teamIndex === 0 ? 1 : 0] || []).map(teammate => (
-                    <button
-                      key={teammate.id}
-                      onClick={() => {
-                        handleEvent('own_goal', pendingOwnGoal?.teamIndex, pendingOwnGoal?.player, {
-                          ownGoal: true,
-                          assistedBy: teammate.id,
-                          assistedName: teammate.name,
-                        })
-                        setOwnGoalAssistMode(false)
-                        setPendingOwnGoal(null)
-                        setSelectedPlayer(null)
-                        setSelectedTeamIndex(null)
-                      }}
-                      className="p-2 bg-orange-50 border border-orange-100 rounded-lg flex items-center gap-2"
-                    >
-                      <InitialAvatar name={teammate.name} photoUrl={teammate.photoUrl || teammate.avatar} size={24} />
-                      <span className="text-sm font-medium truncate">{teammate.name}</span>
-                    </button>
-                  ))}
-                </div>
-                <button
-                  onClick={() => { setOwnGoalAssistMode(false); setPendingOwnGoal(null); setSelectedPlayer(null); setSelectedTeamIndex(null) }}
-                  className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-bold"
-                >
-                  {t('common.cancel', 'Cancel')}
-                </button>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={startGoalFlow}
-                  className="flex flex-col items-center justify-center p-4 bg-green-50 text-green-700 rounded-xl border border-green-100"
+                  className="flex flex-col items-center justify-center p-4 bg-gradient-to-br from-green-50 to-emerald-50 hover:from-green-100 hover:to-emerald-100 text-green-700 rounded-xl border border-green-200 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-200"
                 >
                   <span className="text-2xl mb-1">⚽</span>
                   <span className="font-bold">{t('referee.goal', 'Goal')}</span>
                 </button>
                 <button
                   onClick={recordOwnGoal}
-                  className="flex flex-col items-center justify-center p-4 bg-orange-50 text-orange-700 rounded-xl border border-orange-100"
+                  className="flex flex-col items-center justify-center p-4 bg-gradient-to-br from-orange-50 to-red-50 hover:from-orange-100 hover:to-red-100 text-orange-700 rounded-xl border border-orange-200 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-200"
                 >
                   <span className="text-2xl mb-1">🥅</span>
                   <span className="font-bold">{t('referee.ownGoal', 'Own Goal')}</span>
@@ -910,9 +966,9 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                 {cardsEnabled && (
                   <button
                     onClick={() => recordCard('yellow')}
-                    className="flex flex-col items-center justify-center p-4 bg-yellow-50 text-yellow-700 rounded-xl border border-yellow-200"
+                    className="flex flex-col items-center justify-center p-4 bg-gradient-to-br from-yellow-50 to-amber-50 hover:from-yellow-100 hover:to-amber-100 text-yellow-700 rounded-xl border border-yellow-200 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-200"
                   >
-                    <span className="w-6 h-8 bg-yellow-400 rounded-sm mb-1 border border-yellow-500" />
+                    <span className="w-6 h-8 bg-yellow-400 rounded-sm mb-1 border border-yellow-500 shadow-sm" />
                     <span className="font-bold">{t('referee.yellowCard', 'Yellow Card')}</span>
                   </button>
                 )}
@@ -920,9 +976,9 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                 {cardsEnabled && (
                   <button
                     onClick={() => recordCard('red')}
-                    className="flex flex-col items-center justify-center p-4 bg-red-50 text-red-700 rounded-xl border border-red-200"
+                    className="flex flex-col items-center justify-center p-4 bg-gradient-to-br from-red-50 to-rose-50 hover:from-red-100 hover:to-rose-100 text-red-700 rounded-xl border border-red-200 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-200"
                   >
-                    <span className="w-6 h-8 bg-red-600 rounded-sm mb-1 border border-red-700" />
+                    <span className="w-6 h-8 bg-red-600 rounded-sm mb-1 border border-red-700 shadow-sm" />
                     <span className="font-bold">{t('referee.redCard', 'Red Card')}</span>
                   </button>
                 )}
@@ -933,7 +989,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                     setSelectedPlayer(null)
                     setSelectedTeamIndex(null)
                   }}
-                  className="flex flex-col items-center justify-center p-4 bg-gray-50 text-gray-700 rounded-xl border border-gray-300"
+                  className="flex flex-col items-center justify-center p-4 bg-gradient-to-br from-slate-50 to-gray-50 hover:from-slate-100 hover:to-gray-100 text-slate-700 rounded-xl border border-slate-300 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-200"
                 >
                   <span className="text-2xl mb-1">⚠️</span>
                   <span className="font-bold">{t('referee.foul', 'Foul')}</span>
@@ -1015,7 +1071,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
 
       {showCleanSheetPicker && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-2xl p-5 space-y-4 shadow-2xl">
+          <div className="bg-white w-full max-w-3xl max-h-[80vh] rounded-2xl p-6 space-y-5 shadow-2xl flex flex-col">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-xs uppercase text-slate-500 font-semibold">클린시트 지정</div>
@@ -1025,7 +1081,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
               <button onClick={() => { setShowCleanSheetPicker(false); setCleanSheetSelections([]); }} className="text-slate-400 hover:text-slate-600"><X size={22} /></button>
             </div>
 
-            <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-1">
+            <div className="space-y-4 flex-1 overflow-y-auto pr-1">
               {cleanSheetCandidates.map(group => (
                 <div key={group.teamIndex} className="border rounded-xl p-3 bg-slate-50/70">
                   <div className="text-xs font-semibold text-slate-500 mb-2">Team {group.teamIndex + 1}</div>
