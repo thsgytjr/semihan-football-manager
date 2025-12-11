@@ -1513,7 +1513,7 @@ function TeamColumn({teamIndex,labelKit,players,showOVR,isAdmin,dropHint,isDraft
     { bg: '#1c1917', label: 'Black' },
     { bg: '#2563eb', label: 'Blue' },
     { bg: '#dc2626', label: 'Red' },
-    { bg: '#059669', label: 'Green' },
+    { bg: '#6dff2e', label: 'Green' },
     { bg: '#7c3aed', label: 'Purple' },
     { bg: '#f97316', label: 'Orange' },
     { bg: '#0d9488', label: 'Teal' },

@@ -78,7 +78,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     { bg: '#0f172a', text: '#ffffff', border: '#0b1220', label: 'Black' },
     { bg: '#2563eb', text: '#ffffff', border: '#1d4ed8', label: 'Blue' },
     { bg: '#dc2626', text: '#ffffff', border: '#b91c1c', label: 'Red' },
-    { bg: '#059669', text: '#ffffff', border: '#047857', label: 'Green' },
+    { bg: '#6dff2e', text: '#0f172a', border: '#5ce625', label: 'Green' },
     { bg: '#7c3aed', text: '#ffffff', border: '#6d28d9', label: 'Purple' },
     { bg: '#ea580c', text: '#ffffff', border: '#c2410c', label: 'Orange' },
     { bg: '#0d9488', text: '#ffffff', border: '#0f766e', label: 'Teal' },
@@ -599,7 +599,12 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                 </button>
                 <button
                   onClick={handleStartSetup}
-                  className="flex-1 py-3 bg-emerald-600 text-white rounded-lg font-bold flex items-center justify-center gap-2 text-lg"
+                  disabled={activeMatch?.teams && activeMatch.teams.length > 2 && selectedTeamIndices.length !== 2}
+                  className={`flex-1 py-3 rounded-lg font-bold flex items-center justify-center gap-2 text-lg ${
+                    activeMatch?.teams && activeMatch.teams.length > 2 && selectedTeamIndices.length !== 2
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-emerald-600 text-white'
+                  }`}
                 >
                   <Play size={18} />
                   {t('referee.start', 'Start')}
