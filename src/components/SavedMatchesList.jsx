@@ -1877,7 +1877,15 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                     const field1Indices = []
                     const field2Indices = []
                     
-                    displayedQuarterScores.forEach((_, ti) => {
+                    displayedQuarterScores.forEach((arr, ti) => {
+                      // Check if this team played in any game
+                      const hasPlayedAnyGame = Array.isArray(arr) 
+                        ? arr.some(v => v !== null && v !== undefined)
+                        : arr !== null && arr !== undefined
+                      
+                      // Skip teams that didn't play in any game
+                      if (!hasPlayedAnyGame) return
+                      
                       if (points.fieldNames[ti] === '구장1') field1Indices.push(ti)
                       else if (points.fieldNames[ti] === '구장2') field2Indices.push(ti)
                     })
@@ -2011,6 +2019,16 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   return (
                     <>
                       {displayedQuarterScores.map((arr,ti)=>{
+                  // Check if this team played in any game (has at least one non-null score)
+                  const hasPlayedAnyGame = Array.isArray(arr) 
+                    ? arr.some(v => v !== null && v !== undefined)
+                    : arr !== null && arr !== undefined
+                  
+                  // Skip teams that didn't play in any game (all nulls)
+                  if (!hasPlayedAnyGame) {
+                    return null
+                  }
+                  
                   const teamTotal = teamTotals[ti]
                   
                   // 승/무/패 결정 - pointWinners 재사용 (모든 타이브레이커 포함)
