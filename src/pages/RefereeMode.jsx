@@ -388,6 +388,8 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     setSelectedTeamIndex(teamIndex)
     setAssistSelectionMode(false)
     setPendingGoalEvent(null)
+    setOwnGoalAssistMode(false)
+    setPendingOwnGoal(null)
   }
 
   const startGoalFlow = () => {
@@ -796,40 +798,53 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                 <div className="font-bold text-lg">{selectedPlayer.name}</div>
                 <div className="text-sm text-gray-500">{t('referee.team', 'Team')} {selectedTeamIndex + 1}</div>
               </div>
-              <button onClick={() => setSelectedPlayer(null)} className="ml-auto p-2 text-gray-400">
+              <button onClick={() => {
+                setSelectedPlayer(null)
+                setSelectedTeamIndex(null)
+                setAssistSelectionMode(false)
+                setPendingGoalEvent(null)
+                setOwnGoalAssistMode(false)
+                setPendingOwnGoal(null)
+              }} className="ml-auto p-2 text-gray-400">
                 <X size={22} />
               </button>
             </div>
 
             {assistSelectionMode ? (
-              <div className="space-y-3">
-                <h3 className="font-bold text-center text-lg">{t('referee.assistPrompt', 'Who assisted?')}</h3>
-                <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
-                  <button
-                    onClick={() => recordGoalWithAssist(null)}
-                    className="col-span-2 p-3 bg-gray-100 rounded-lg font-medium text-gray-700"
-                  >
-                    {t('referee.noAssist', 'No Assist')}
-                  </button>
-                  {teams[selectedTeamIndex]
-                    .filter(p => p.id !== selectedPlayer.id)
-                    .map(teammate => (
-                      <button
-                        key={teammate.id}
-                        onClick={() => recordGoalWithAssist(teammate)}
-                        className="p-2 bg-blue-50 border border-blue-100 rounded-lg flex items-center gap-2"
-                      >
-                        <InitialAvatar name={teammate.name} photoUrl={teammate.photoUrl || teammate.avatar} size={24} />
-                        <span className="text-sm font-medium truncate">{teammate.name}</span>
-                      </button>
-                    ))}
+              <div className="fixed inset-0 bg-white z-[60] flex flex-col">
+                <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white py-2 px-4 shadow-lg">
+                  <h3 className="font-bold text-center text-lg">Select Assist</h3>
                 </div>
-                <button
-                  onClick={() => setAssistSelectionMode(false)}
-                  className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-bold"
-                >
-                  {t('common.back', 'Back')}
-                </button>
+                <div className="flex-1 overflow-y-auto p-2">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <button
+                      onClick={() => recordGoalWithAssist(null)}
+                      className="col-span-2 p-2.5 bg-yellow-400 hover:bg-yellow-500 rounded-lg font-bold text-gray-900 text-sm active:scale-[0.98] transition border-2 border-yellow-600"
+                    >
+                      NO ASSIST
+                    </button>
+                    {teams[selectedTeamIndex]
+                      .filter(p => p.id !== selectedPlayer.id)
+                      .map(teammate => (
+                        <button
+                          key={teammate.id}
+                          onClick={() => recordGoalWithAssist(teammate)}
+                          className="p-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg flex flex-col items-center gap-1 active:scale-[0.98] transition"
+                        >
+                          <InitialAvatar name={teammate.name} photoUrl={teammate.photoUrl || teammate.avatar} size={40} />
+                          <span className="text-xs font-bold text-gray-900 truncate w-full text-center leading-tight px-0.5">{teammate.name}</span>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+                <div className="p-2 bg-white border-t">
+                  <button
+                    onClick={() => setAssistSelectionMode(false)}
+                    className="w-full py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-bold text-sm active:scale-[0.98] transition"
+                  >
+                    Back
+                  </button>
+                </div>
               </div>
             ) : ownGoalAssistMode ? (
               <div className="space-y-3">

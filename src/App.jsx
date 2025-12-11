@@ -878,11 +878,20 @@ export default function App(){
   async function handleCancelRefereeMode() {
     if (activeMatch?.id) {
       try {
-        // Clear in-progress data even if the local activeMatch snapshot lacks it
-        const matchFromDb = (db?.matches || []).find(m => m.id === activeMatch.id)
+        // Force reload from DB to get the latest stats with __inProgress
+        const freshMatches = await listMatchesFromDB()
+        const matchFromDb = freshMatches.find(m => m.id === activeMatch.id)
         const cleanedStats = { ...(matchFromDb?.stats || activeMatch?.stats || {}) }
         if (cleanedStats.__inProgress) delete cleanedStats.__inProgress
         await handleUpdateMatch(activeMatch.id, { stats: cleanedStats }, true) // silent=true
+        
+        // Update local state to reflect the cleared __inProgress immediately
+        setDb(prev => ({
+          ...prev,
+          matches: (prev.matches || []).map(m => 
+            m.id === activeMatch.id ? { ...m, stats: cleanedStats } : m
+          )
+        }))
       } catch (err) {
         console.warn('Failed to clear in-progress data:', err)
       }
