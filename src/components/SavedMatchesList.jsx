@@ -658,8 +658,10 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
   }, [displayedQuarterScores])
 
   const perGameScores = useMemo(() => {
-    const teamCount = draftSnap.length
-    if (!teamCount) return []
+    const baseTeamCount = draftSnap.length
+    if (!baseTeamCount) return []
+
+    const gamesMeta = Array.isArray(m?.stats?.__games) ? m.stats.__games : []
 
     const maxGameFromQuarters = Array.isArray(displayedQuarterScores)
       ? displayedQuarterScores.reduce((max, teamScores) => {
@@ -668,9 +670,15 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
         }, 0)
       : 0
 
-    const gameCount = Math.max(groupedGameEvents.length || 0, maxGameFromQuarters)
+    const gameCount = Math.max(groupedGameEvents.length || 0, maxGameFromQuarters, gamesMeta.length)
 
     return Array.from({ length: gameCount }, (_, gi) => {
+      const gameMeta = gamesMeta[gi] || {}
+      const teamMap = Array.isArray(gameMeta.teamIndices) && gameMeta.teamIndices.length > 0
+        ? gameMeta.teamIndices
+        : Array.from({ length: baseTeamCount }, (_, i) => i)
+      const viewTeamCount = teamMap.length
+
       const eventScoreByTeam = {}
       const evs = groupedGameEvents[gi] || []
       evs.forEach(ev => {
@@ -678,19 +686,20 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
         eventScoreByTeam[ti] = (eventScoreByTeam[ti] || 0) + 1
       })
 
-      const scores = Array.from({ length: teamCount }, (_, ti) => {
-        const qScore = Array.isArray(displayedQuarterScores?.[ti]) ? displayedQuarterScores[ti][gi] : undefined
+      const scores = Array.from({ length: viewTeamCount }, (_, idx) => {
+        const originalIdx = teamMap[idx] ?? idx
+        const qScore = Array.isArray(displayedQuarterScores?.[originalIdx]) ? displayedQuarterScores[originalIdx][gi] : undefined
         if (qScore !== undefined) return Number(qScore) || 0
-        return eventScoreByTeam[ti] || 0
+        return eventScoreByTeam[idx] || 0
       })
 
       const maxScore = scores.length ? Math.max(...scores) : 0
       const winners = scores.map((score, idx) => score === maxScore ? idx : -1).filter(idx => idx >= 0)
       const isDraw = winners.length > 1
 
-      return { scores, winners, isDraw }
+      return { scores, winners, isDraw, teamMap }
     })
-  }, [displayedQuarterScores, groupedGameEvents, draftSnap])
+  }, [displayedQuarterScores, groupedGameEvents, draftSnap, m?.stats?.__games])
 
   // ✅ Check if match has any recorded stats (goals or assists)
   const hasStats = useMemo(() => {
@@ -2241,26 +2250,29 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   {(() => {
                     const scoreMeta = perGameScores[gi]
                     if (!scoreMeta) return null
-                    const { scores, winners, isDraw } = scoreMeta
+                    const { scores, winners, isDraw, teamMap } = scoreMeta
 
-                    const badges = Array.from({ length: scores?.length || 0 }, (_, ti) => {
-                      const color = getTeamColor(ti)
-                      const label = color?.label || t('matchHistory.teamN', { n: ti + 1 })
-                      const isWinner = !isDraw && winners.includes(ti)
-                      return { color, label, score: Number(scores?.[ti] ?? 0), isWinner }
+                    const badges = Array.from({ length: scores?.length || 0 }, (_, idx) => {
+                      const originalIdx = Array.isArray(teamMap) ? teamMap[idx] : idx
+                      const color = getTeamColor(originalIdx)
+                      const label = color?.label || t('matchHistory.teamN', { n: (originalIdx ?? idx) + 1 })
+                      const isWinner = !isDraw && winners.includes(idx)
+                      return { color, label, score: Number(scores?.[idx] ?? 0), isWinner }
                     })
 
                     const findCaptainPlayer = (teamIdx) => {
-                      const capId = Array.isArray(captainIds) ? captainIds[teamIdx] : null
+                      const originalIdx = Array.isArray(teamMap) ? teamMap[teamIdx] : teamIdx
+                      const capId = Array.isArray(captainIds) ? captainIds[originalIdx] : null
                       if (!capId) return null
-                      const teamList = Array.isArray(draftTeams?.[teamIdx]) ? draftTeams[teamIdx] : []
+                      const teamList = Array.isArray(draftTeams?.[originalIdx]) ? draftTeams[originalIdx] : []
                       return teamList.find(p => String(p.id) === String(capId)) || null
                     }
 
                     const labelForTeam = (teamIdx) => {
+                      const originalIdx = Array.isArray(teamMap) ? teamMap[teamIdx] : teamIdx
                       const captain = findCaptainPlayer(teamIdx)
                       if (captain?.name) return `Team ${captain.name}`
-                      return badges[teamIdx]?.label || t('matchHistory.teamN', { n: teamIdx + 1 })
+                      return badges[teamIdx]?.label || t('matchHistory.teamN', { n: (originalIdx ?? teamIdx) + 1 })
                     }
 
                     const renderCaptainAvatar = (teamIdx) => {
@@ -2269,13 +2281,14 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       const tint = badges?.[teamIdx]?.color || {}
                       const isWhiteTeam = (tint.label || '').toLowerCase() === 'white' || (tint.bg || '').toLowerCase() === '#f8fafc'
                       const ring = isWhiteTeam ? '#ffffff' : (tint.border || tint.bg || '#0f172a')
+                      const originalIdx = Array.isArray(teamMap) ? teamMap[teamIdx] : teamIdx
                       const innerBg = '#fff'
                       return (
                         <div
                           key={`cap-${teamIdx}`}
                           className="relative flex items-center justify-center shrink-0"
                           style={{ width: 32, height: 32 }}
-                          aria-label={`${t('matchHistory.teamN', { n: teamIdx + 1 })} captain`}
+                          aria-label={`${t('matchHistory.teamN', { n: (originalIdx ?? teamIdx) + 1 })} captain`}
                         >
                           <span
                             className="absolute inset-0 rounded-full border-2 shadow-sm"

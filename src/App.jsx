@@ -948,7 +948,9 @@ export default function App(){
         duration: matchData.duration,
         startTime: matchData.startTime,
         endTime: matchData.endTime,
-        events: matchData.events
+        events: matchData.events,
+        teamIndices: Array.isArray(matchData.selectedTeamIndices) ? matchData.selectedTeamIndices : undefined,
+        teams: Array.isArray(matchData.teams) ? matchData.teams : undefined,
       }
 
       // Check if we're overriding an existing game
@@ -973,7 +975,8 @@ export default function App(){
       }
 
       // Pack timeline & game history into stats payload to keep schema compatibility (stats is jsonb)
-      const rebuiltStats = rebuildStatsFromEvents(matchData?.teams || activeMatch?.teams || [], updatedEvents, matchData?.cleanSheetAwardees || [])
+      const teamsForGame = matchData?.teams || activeMatch?.teams || []
+      const rebuiltStats = rebuildStatsFromEvents(teamsForGame, updatedEvents, matchData?.cleanSheetAwardees || [])
       const mergedStats = {
         ...(activeMatch?.stats || {}),
         ...rebuiltStats,
@@ -996,12 +999,12 @@ export default function App(){
       // Ensure attendance reflects all players who appeared in referee mode so leaderboard GP counts apply
       const attendeeIds = Array.from(new Set([
         ...((activeMatch?.attendeeIds || []).map(id => String(id))),
-        ...((matchData?.teams || activeMatch?.teams || []).flat().map(p => p?.id).filter(Boolean).map(id => String(id))),
+        ...(teamsForGame.flat().map(p => p?.id).filter(Boolean).map(id => String(id))),
       ]))
 
       // Draft-only payload (avoid polluting non-draft matches with draft data)
       const isDraft = isDraftMatch(activeMatch || matchData)
-      const teamCount = Array.isArray(matchData?.teams) ? matchData.teams.length : 2
+      const teamCount = Array.isArray(teamsForGame) ? teamsForGame.length : 2
       const quarterScores = Array.from({ length: teamCount }, () => [])
       if (isDraft) {
         mergedStats.__games.forEach(g => {
