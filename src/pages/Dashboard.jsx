@@ -38,7 +38,7 @@ import { getMembershipBadge } from '../lib/membershipConfig'
 import MobileCategoryCarousel from '../components/MobileCategoryCarousel'
 import { buildPlayerBadgeFactsMap, generateBadgesFromFacts } from '../lib/playerBadgeEngine'
 import { fetchPlayerBadges } from '../services/badgeService'
-import SeasonRecap from '../components/SeasonRecap'
+import SeasonRecap, { prefetchSeasonRecapVideos } from '../components/SeasonRecap'
 
 // 멤버십 helper 함수
 const S = (v) => v == null ? '' : String(v)
@@ -209,6 +209,13 @@ export default function Dashboard({
   
   // Season Recap 모달 상태
   const [showSeasonRecap, setShowSeasonRecap] = useState(() => seasonRecapEnabled && seasonRecapReady) // 기능 토글 반영
+
+  // 시즌 리캡 토글이 켜질 때 미리 비디오 프리페치
+  useEffect(() => {
+    if (seasonRecapEnabled && seasonRecapReady) {
+      prefetchSeasonRecapVideos()
+    }
+  }, [seasonRecapEnabled, seasonRecapReady])
   
   // seasonRecapEnabled/Ready 상태 변화 시 모달 표시 여부 업데이트
   useEffect(() => {

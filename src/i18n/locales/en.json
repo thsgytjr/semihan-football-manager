@@ -635,7 +635,7 @@
     "overview": {
       "label": "Season Pulse",
       "title": "Season Overview",
-      "description": "No major injuries, no off weeks—just everyone showing up for one another. Thanks for carrying the season all the way through.",
+      "description": "Thank you to everyone who powered through without major injuries. Let's look back on the {{season}} season with the players who worked hard and left their mark.",
       "cards": {
         "consistency": {
           "title": "Consistency",
@@ -643,7 +643,7 @@
         },
         "care": {
           "title": "Care",
-          "body": "All the subtle cover runs and quick check-ins kept everyone safe until the final whistle."
+          "body": "Because we kept looking out for one another, we saw the {{season}} season through safely."
         },
         "passion": {
           "title": "Passion",

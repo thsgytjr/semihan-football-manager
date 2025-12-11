@@ -4,6 +4,7 @@ import { X, Users, Activity, Calendar, Star, Target, Sparkles, Flame, Smile, Cro
 import { extractStatsByPlayer, extractAttendeeIds, extractDateKey } from '../lib/matchUtils'
 import InitialAvatar from './InitialAvatar'
 import { useTranslation } from 'react-i18next'
+import { TEAM_CONFIG } from '../lib/teamConfig'
 
 const ActiveSlideContext = React.createContext('season-recap-initial')
 
@@ -39,6 +40,83 @@ const LANGUAGE_FLAGS = {
 }
 
 const INTERACTIVE_TOUCH_SELECTOR = 'button, a, input, select, textarea, [data-recap-interactive="true"], [role="button"]'
+
+const R2_SHARED_MEDIA_BASE = `${(TEAM_CONFIG?.r2?.publicUrl || '').replace(/\/+$/, '')}/shared/season-recaps-media`
+const RECAP_INTRO_VIDEO = `${R2_SHARED_MEDIA_BASE}/begin.mp4`
+const RECAP_OUTRO_VIDEO = `${R2_SHARED_MEDIA_BASE}/ending.mp4`
+const RECAP_STORY_VIDEO = `${R2_SHARED_MEDIA_BASE}/season-story.mp4`
+const RECAP_ATTACK_VIDEO = `${R2_SHARED_MEDIA_BASE}/best-attack-point.mp4`
+const RECAP_GOLDEN_BOOT_VIDEO = `${R2_SHARED_MEDIA_BASE}/golden-boot.mp4`
+const RECAP_PLAYMAKER_VIDEO = `${R2_SHARED_MEDIA_BASE}/top-assist.mp4`
+const RECAP_DEFENDER_VIDEO = `${R2_SHARED_MEDIA_BASE}/best-defender.mp4`
+const RECAP_IRONMAN_VIDEO = `${R2_SHARED_MEDIA_BASE}/most-game-played.mp4`
+const RECAP_VIDEO_SOURCES = [
+  RECAP_INTRO_VIDEO,
+  RECAP_STORY_VIDEO,
+  RECAP_OUTRO_VIDEO,
+  RECAP_ATTACK_VIDEO,
+  RECAP_GOLDEN_BOOT_VIDEO,
+  RECAP_PLAYMAKER_VIDEO,
+  RECAP_DEFENDER_VIDEO,
+  RECAP_IRONMAN_VIDEO
+]
+
+const prefetchVideo = (src) => {
+  if (typeof window === 'undefined') return
+  if (!src) return
+  const video = document.createElement('video')
+  video.preload = 'auto'
+  video.src = src
+  video.muted = true
+  video.playsInline = true
+  // Safari iOS는 load 호출이 필요할 수 있음
+  try {
+    video.load()
+  } catch (_) {
+    /* noop */
+  }
+}
+
+const ensurePreloadLinks = () => {
+  if (typeof document === 'undefined') return
+  const head = document.head || document.getElementsByTagName('head')[0]
+  if (!head) return
+  RECAP_VIDEO_SOURCES.forEach((src) => {
+    if (!src) return
+    const existing = head.querySelector(`link[data-recap-preload="${src}"]`)
+    if (existing) return
+    const link = document.createElement('link')
+    link.rel = 'preload'
+    link.as = 'video'
+    link.href = src
+    link.crossOrigin = 'anonymous'
+    link.setAttribute('data-recap-preload', src)
+    head.appendChild(link)
+  })
+}
+
+export const prefetchSeasonRecapVideos = () => {
+  ensurePreloadLinks()
+  RECAP_VIDEO_SOURCES.forEach(prefetchVideo)
+}
+
+const VideoBackground = ({ src, overlayClass = '' }) => (
+  <div className="absolute inset-0 overflow-hidden pointer-events-none rounded-3xl md:rounded-[28px]">
+    <video
+      key={src}
+      className="h-full w-full object-cover scale-[1.08]"
+      autoPlay
+      loop
+      muted
+      playsInline
+      preload="auto"
+      aria-hidden="true"
+    >
+      <source src={src} type="video/mp4" />
+    </video>
+    {overlayClass ? <div className={`absolute inset-0 ${overlayClass}`} aria-hidden="true" /> : null}
+  </div>
+)
 
 const isInteractiveTouchTarget = (target) => {
   if (typeof window === 'undefined') return false
@@ -321,6 +399,10 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     setLanguageMenuOpen(false)
     void i18n.changeLanguage(normalized)
   }, [i18n, activeLanguage])
+
+  useEffect(() => {
+    prefetchSeasonRecapVideos()
+  }, [])
 
   const hatTrickTotal = stats.hatTrickClub.reduce((sum, p) => sum + p.count, 0)
   const topHatTrickNames = formatListWithMore(stats.hatTrickClub, (p) => `${p.name}${p.count > 1 ? ` (${p.count})` : ''}`)
@@ -802,7 +884,7 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
       icon: Users,
       colorClass: 'text-blue-300',
       title: t('seasonRecap.overview.cards.care.title'),
-      body: t('seasonRecap.overview.cards.care.body')
+      body: t('seasonRecap.overview.cards.care.body', { season: resolvedSeasonName })
     },
     {
       id: 'passion',
@@ -816,17 +898,23 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
   const slides = [
     {
       id: 'intro',
-      bg: 'bg-gradient-to-br from-purple-900 via-indigo-900 to-black',
+      bg: 'bg-black',
       content: (
-        <div className="relative flex flex-col items-center justify-center h-full text-center p-4 animate-fade-in-up">
-          <h1 className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-pink-500 mb-3">
-            {resolvedSeasonName}
-            <br />
-            {t('seasonRecap.intro.titleSuffix')}
-          </h1>
-          <p className="text-base text-indigo-200 mb-4">{t('seasonRecap.intro.tagline')}</p>
-          <div className="text-5xl mb-4 animate-bounce">⚽️</div>
-          <p className="text-xs text-white/50 uppercase tracking-widest">{t('seasonRecap.common.tapHint')}</p>
+        <div className="relative h-full w-full overflow-hidden">
+          <VideoBackground
+            src={RECAP_INTRO_VIDEO}
+            overlayClass="bg-gradient-to-br from-black/70 via-black/60 to-black/85"
+          />
+          <div className="relative flex flex-col items-center justify-center h-full text-center p-4 animate-fade-in-up">
+            <h1 className="text-3xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-pink-500 mb-3">
+              {resolvedSeasonName}
+              <br />
+              {t('seasonRecap.intro.titleSuffix')}
+            </h1>
+            <p className="text-base text-indigo-100 drop-shadow mb-4">{t('seasonRecap.intro.tagline')}</p>
+            <div className="text-5xl mb-4 animate-bounce drop-shadow">⚽️</div>
+            <p className="text-xs text-white/70 uppercase tracking-widest">{t('seasonRecap.common.tapHint')}</p>
+          </div>
         </div>
       )
     },
@@ -868,7 +956,7 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
             <p className="text-[11px] uppercase tracking-[0.4em] text-white/60">{t('seasonRecap.overview.label')}</p>
             <h2 className="text-2xl font-bold text-white mt-2 mb-4">{t('seasonRecap.overview.title')}</h2>
             <p className="text-sm text-white/70 max-w-xs">
-              {t('seasonRecap.overview.description')}
+              {t('seasonRecap.overview.description', { season: resolvedSeasonName })}
             </p>
             <div className="mt-6 w-full max-w-xs space-y-3 text-left">
               {overviewCards.map((card) => (
@@ -889,14 +977,17 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     },
     {
       id: 'attack-leader',
-      bg: 'bg-gradient-to-br from-rose-900 via-amber-900 to-black',
       content: (
-        <div className="relative flex flex-col items-center justify-center h-full text-center p-4">
+        <div className="relative h-full w-full overflow-hidden">
+          <VideoBackground
+            src={RECAP_ATTACK_VIDEO}
+            overlayClass=""
+          />
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
             <div className="attack-flare" />
             <div className="attack-orbit" />
           </div>
-          <div className="relative z-10 flex flex-col items-center">
+          <div className="relative z-10 flex flex-col items-center justify-center h-full text-center p-4">
             <div className="mb-3 rounded-full border border-white/20 bg-white/10 px-4 py-1 text-[11px] uppercase tracking-[0.35em] text-white/70">
               {t('seasonRecap.slides.attackLeader.title')}
             </div>
@@ -937,17 +1028,22 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     },
     {
       id: 'top-scorer',
-      bg: 'bg-gradient-to-tr from-yellow-900 via-orange-900 to-black',
       content: (
-        <div className="relative flex flex-col items-center justify-center h-full text-center p-4">
+        <div className="relative h-full w-full overflow-hidden">
+          <VideoBackground
+            src={RECAP_GOLDEN_BOOT_VIDEO}
+            overlayClass=""
+          />
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
             <div className="golden-boot-rings" />
             <div className="golden-boot-sparkles" />
           </div>
-          <div className="relative z-10 flex flex-col items-center">
-            <GoldenBootIcon className="w-14 h-14 text-yellow-300 mb-2 drop-shadow-[0_0_12px_rgba(250,204,21,0.6)]" />
-            <h2 className="text-lg font-bold text-orange-200">{t('seasonRecap.slides.goldenBoot.title')}</h2>
-            <h3 className="text-sm text-white/60 mb-3">{t('seasonRecap.slides.goldenBoot.subtitle')}</h3>
+          <div className="relative z-10 flex flex-col items-center justify-center h-full text-center p-4">
+            <div className="bg-black/60 px-6 py-3 rounded-xl mb-3">
+              <GoldenBootIcon className="w-14 h-14 text-yellow-300 mb-2 drop-shadow-[0_0_12px_rgba(250,204,21,0.6)] mx-auto" />
+              <h2 className="text-lg font-bold text-white">{t('seasonRecap.slides.goldenBoot.title')}</h2>
+              <h3 className="text-sm text-white/80">{t('seasonRecap.slides.goldenBoot.subtitle')}</h3>
+            </div>
 
             {renderTieHero(stats.topScorers, 'goals')}
             {(!Array.isArray(stats.topScorers) || stats.topScorers.length <= 1) && (
@@ -963,12 +1059,12 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
                   />
                 </div>
 
-                <h1 className="text-2xl font-black text-white mb-2">{primaryScorer.name || t('seasonRecap.common.unknown')}</h1>
+                <h1 className="text-2xl font-black text-white mb-2 bg-black/60 px-4 py-2 rounded-xl">{primaryScorer.name || t('seasonRecap.common.unknown')}</h1>
               </>
             )}
-            <div className="bg-yellow-500/20 px-4 py-1.5 rounded-full border border-yellow-500/50">
-              <AnimatedNumber value={primaryScorer.value} className="text-xl font-bold text-yellow-400" />
-              <span className="text-xs text-yellow-200 ml-1.5 uppercase">{t('seasonRecap.metrics.goals')}</span>
+            <div className="bg-yellow-600 px-4 py-1.5 rounded-full border border-yellow-400">
+              <AnimatedNumber value={primaryScorer.value} className="text-xl font-bold text-white" />
+              <span className="text-xs text-white/90 ml-1.5 uppercase">{t('seasonRecap.metrics.goals')}</span>
             </div>
           </div>
         </div>
@@ -976,17 +1072,22 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     },
     {
       id: 'top-assister',
-      bg: 'bg-gradient-to-br from-blue-900 via-cyan-900 to-black',
       content: (
-        <div className="relative flex flex-col items-center justify-center h-full text-center p-4">
+        <div className="relative h-full w-full overflow-hidden">
+          <VideoBackground
+            src={RECAP_PLAYMAKER_VIDEO}
+            overlayClass=""
+          />
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
             <div className="playmaker-orbit" />
             <div className="playmaker-dots" />
           </div>
-          <div className="relative z-10 flex flex-col items-center">
-            <Target className="w-12 h-12 text-cyan-400 mb-2 animate-spin-slow" />
-            <h2 className="text-lg font-bold text-cyan-200">{t('seasonRecap.slides.playmaker.title')}</h2>
-            <h3 className="text-sm text-white/60 mb-3">{t('seasonRecap.slides.playmaker.subtitle')}</h3>
+          <div className="relative z-10 flex flex-col items-center justify-center h-full text-center p-4">
+            <div className="bg-black/60 px-6 py-3 rounded-xl mb-3">
+              <Target className="w-12 h-12 text-cyan-400 mb-2 animate-spin-slow mx-auto" />
+              <h2 className="text-lg font-bold text-white">{t('seasonRecap.slides.playmaker.title')}</h2>
+              <h3 className="text-sm text-white/80">{t('seasonRecap.slides.playmaker.subtitle')}</h3>
+            </div>
 
             {renderTieHero(stats.topAssisters, 'assists')}
             {(!Array.isArray(stats.topAssisters) || stats.topAssisters.length <= 1) && (
@@ -1002,12 +1103,12 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
                   />
                 </div>
 
-                <h1 className="text-2xl font-black text-white mb-2">{primaryAssister.name || t('seasonRecap.common.unknown')}</h1>
+                <h1 className="text-2xl font-black text-white mb-2 bg-black/60 px-4 py-2 rounded-xl">{primaryAssister.name || t('seasonRecap.common.unknown')}</h1>
               </>
             )}
-            <div className="bg-cyan-500/20 px-4 py-1.5 rounded-full border border-cyan-500/50">
-              <AnimatedNumber value={primaryAssister.value} className="text-xl font-bold text-cyan-400" />
-              <span className="text-xs text-cyan-200 ml-1.5 uppercase">{t('seasonRecap.metrics.assists')}</span>
+            <div className="bg-cyan-600 px-4 py-1.5 rounded-full border border-cyan-300">
+              <AnimatedNumber value={primaryAssister.value} className="text-xl font-bold text-white" />
+              <span className="text-xs text-white/90 ml-1.5 uppercase">{t('seasonRecap.metrics.assists')}</span>
             </div>
           </div>
         </div>
@@ -1015,16 +1116,21 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     },
     {
       id: 'iron-man',
-      bg: 'bg-gradient-to-tl from-emerald-900 via-green-900 to-black',
       content: (
-        <div className="relative flex flex-col items-center justify-center h-full text-center p-4">
+        <div className="relative h-full w-full overflow-hidden">
+          <VideoBackground
+            src={RECAP_IRONMAN_VIDEO}
+            overlayClass=""
+          />
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
             <div className="ironman-grid" />
           </div>
-          <div className="relative z-10 flex flex-col items-center">
-            <Star className="w-12 h-12 text-emerald-400 mb-2" />
-            <h2 className="text-lg font-bold text-emerald-200">{t('seasonRecap.slides.ironman.title')}</h2>
-            <h3 className="text-sm text-white/60 mb-3">{t('seasonRecap.slides.ironman.subtitle')}</h3>
+          <div className="relative z-10 flex flex-col items-center justify-center h-full text-center p-4">
+            <div className="bg-black/60 px-6 py-3 rounded-xl mb-3">
+              <Star className="w-12 h-12 text-emerald-400 mb-2 mx-auto" />
+              <h2 className="text-lg font-bold text-white">{t('seasonRecap.slides.ironman.title')}</h2>
+              <h3 className="text-sm text-white/80">{t('seasonRecap.slides.ironman.subtitle')}</h3>
+            </div>
 
             {renderTieHero(stats.ironMen, 'matches')}
             {(!Array.isArray(stats.ironMen) || stats.ironMen.length <= 1) && (
@@ -1040,12 +1146,12 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
                   />
                 </div>
 
-                <h1 className="text-2xl font-black text-white mb-2">{primaryIron.name || t('seasonRecap.common.unknown')}</h1>
+                <h1 className="text-2xl font-black text-white mb-2 bg-black/60 px-4 py-2 rounded-xl">{primaryIron.name || t('seasonRecap.common.unknown')}</h1>
               </>
             )}
-            <div className="bg-emerald-500/20 px-4 py-1.5 rounded-full border border-emerald-500/50">
-              <AnimatedNumber value={primaryIron.value} className="text-xl font-bold text-emerald-400" />
-              <span className="text-xs text-emerald-200 ml-1.5 uppercase">{t('seasonRecap.metrics.matches')}</span>
+            <div className="bg-emerald-600 px-4 py-1.5 rounded-full border border-emerald-300">
+              <AnimatedNumber value={primaryIron.value} className="text-xl font-bold text-white" />
+              <span className="text-xs text-white/90 ml-1.5 uppercase">{t('seasonRecap.metrics.matches')}</span>
             </div>
           </div>
         </div>
@@ -1053,17 +1159,22 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     },
     {
       id: 'clean-sheet',
-      bg: 'bg-gradient-to-br from-slate-900 via-slate-950 to-black',
       content: (
-        <div className="relative flex flex-col items-center justify-center h-full text-center p-4">
+        <div className="relative h-full w-full overflow-hidden">
+          <VideoBackground
+            src={RECAP_DEFENDER_VIDEO}
+            overlayClass=""
+          />
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
             <div className="clean-sheet-lines" />
             <div className="clean-sheet-shields" />
           </div>
-          <div className="relative z-10 flex flex-col items-center">
-            <Shield className="w-12 h-12 text-blue-200 mb-2" />
-            <h2 className="text-lg font-bold text-blue-100">{t('seasonRecap.slides.wallKeepers.title')}</h2>
-            <h3 className="text-sm text-white/60 mb-3">{t('seasonRecap.slides.wallKeepers.subtitle')}</h3>
+          <div className="relative z-10 flex flex-col items-center justify-center h-full text-center p-4">
+            <div className="bg-black/60 px-6 py-3 rounded-xl mb-3">
+              <Shield className="w-12 h-12 text-white mb-2 mx-auto" />
+              <h2 className="text-lg font-bold text-white">{t('seasonRecap.slides.wallKeepers.title')}</h2>
+              <h3 className="text-sm text-white/80">{t('seasonRecap.slides.wallKeepers.subtitle')}</h3>
+            </div>
 
             {renderTieHero(stats.cleanSheetMasters, 'cleanSheets')}
             {(!Array.isArray(stats.cleanSheetMasters) || stats.cleanSheetMasters.length <= 1) && (
@@ -1079,12 +1190,12 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
                   />
                 </div>
 
-                <h1 className="text-2xl font-black text-white mb-2">{primaryKeeper.name || t('seasonRecap.common.unknown')}</h1>
+                <h1 className="text-2xl font-black text-white mb-2 bg-black/60 px-4 py-2 rounded-xl">{primaryKeeper.name || t('seasonRecap.common.unknown')}</h1>
               </>
             )}
-            <div className="bg-blue-400/20 px-4 py-1.5 rounded-full border border-blue-300/50">
-              <AnimatedNumber value={primaryKeeper.value} className="text-xl font-bold text-blue-100" />
-              <span className="text-xs text-blue-100/80 ml-1.5 uppercase">{t('seasonRecap.metrics.cleanSheets')}</span>
+            <div className="bg-white px-4 py-1.5 rounded-full border border-gray-200">
+              <AnimatedNumber value={primaryKeeper.value} className="text-xl font-bold text-black" />
+              <span className="text-xs text-black/80 ml-1.5 uppercase">{t('seasonRecap.metrics.cleanSheets')}</span>
             </div>
           </div>
         </div>
@@ -1093,94 +1204,102 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     ...championSlides,
     {
       id: 'stories',
-      bg: 'bg-gradient-to-b from-slate-900 via-slate-950 to-black',
       content: (
-        <div className="relative flex flex-col items-center justify-center h-full text-center p-4">
+        <div className="relative h-full w-full overflow-hidden">
+          <VideoBackground
+            src={RECAP_STORY_VIDEO}
+            overlayClass=""
+          />
           <div className="stories-wave" aria-hidden="true" />
           <div className="stories-particles" aria-hidden="true" />
-          <div className="relative z-10 w-full max-w-xs mx-auto">
-            <h2 className="text-2xl font-bold text-white mb-4">{t('seasonRecap.stories.heading')}</h2>
-            {storyExpanded ? (
-              <div className="w-full space-y-3 text-left text-sm text-white/80">
-                {storyEntries.map((entry) => (
-                  <div key={entry.id} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-3">
-                    <entry.icon className={`mt-0.5 h-5 w-5 ${entry.iconClass}`} />
-                    <div>
-                      <p className="text-[11px] text-white/60">{entry.title}</p>
-                      <p className="text-sm text-white">{renderStoryBody(entry.id, 'animated')}</p>
-                    </div>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setStoryExpanded(false)
-                    setStoryActiveIndex(0)
-                    setPinnedStoryIds([])
-                    previousStoryIdRef.current = storyEntries[0]?.id || null
-                  }}
-                  className="mt-4 w-full rounded-full border border-white/20 py-2 text-xs font-semibold tracking-wide text-white/80"
-                >
-                  {t('seasonRecap.stories.compactButton')}
-                </button>
-              </div>
-            ) : (
-              <div className="w-full space-y-3 text-left text-sm text-white/80">
-                <div className="space-y-2">
-                  {pinnedStories.map((entry, idx) => (
-                    <div
-                      key={entry.id}
-                      className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 opacity-80 transition-all duration-500 ease-out"
-                      style={{ animation: `story-stack-slide 0.45s ease ${idx * 0.04}s both` }}
-                    >
-                      <entry.icon className={`mt-0.5 h-4 w-4 ${entry.iconClass}`} />
+          <div className="relative z-10 flex flex-col items-center justify-center h-full text-center p-4">
+            <div className="w-full max-w-xs mx-auto">
+              <h2 className="text-2xl font-bold text-white mb-4">{t('seasonRecap.stories.heading')}</h2>
+              {storyExpanded ? (
+                <div className="w-full space-y-3 text-left text-sm text-white/80">
+                  {storyEntries.map((entry) => (
+                    <div key={entry.id} className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/60 p-3">
+                      <entry.icon className={`mt-0.5 h-5 w-5 ${entry.iconClass}`} />
                       <div>
                         <p className="text-[11px] text-white/60">{entry.title}</p>
-                        <p className="text-xs text-white">{renderStoryBody(entry.id, 'static')}</p>
+                        <p className="text-sm text-white">{renderStoryBody(entry.id, 'animated')}</p>
                       </div>
                     </div>
                   ))}
+                  <button
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setStoryExpanded(false)
+                      setStoryActiveIndex(0)
+                      setPinnedStoryIds([])
+                      previousStoryIdRef.current = storyEntries[0]?.id || null
+                    }}
+                    className="mt-4 w-full rounded-full border border-white/20 py-2 text-xs font-semibold tracking-wide text-white/80"
+                  >
+                    {t('seasonRecap.stories.compactButton')}
+                  </button>
                 </div>
-                <div
-                  key={activeStory.id}
-                  className="flex items-start gap-3 rounded-2xl border border-white/20 bg-white/10 p-4 shadow-lg"
-                >
-                  <ActiveStoryIcon className={`mt-0.5 h-5 w-5 ${activeStory.iconClass}`} />
-                  <div>
-                    <p className="text-[11px] text-white/70">{activeStory.title}</p>
-                    <p className="text-sm text-white">{renderStoryBody(activeStory.id, 'animated')}</p>
+              ) : (
+                <div className="w-full space-y-3 text-left text-sm text-white/80">
+                  <div className="space-y-2">
+                    {pinnedStories.map((entry, idx) => (
+                      <div
+                        key={entry.id}
+                        className="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/60 p-3 opacity-80 transition-all duration-500 ease-out"
+                        style={{ animation: `story-stack-slide 0.45s ease ${idx * 0.04}s both` }}
+                      >
+                        <entry.icon className={`mt-0.5 h-4 w-4 ${entry.iconClass}`} />
+                        <div>
+                          <p className="text-[11px] text-white/60">{entry.title}</p>
+                          <p className="text-xs text-white">{renderStoryBody(entry.id, 'static')}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div
+                    key={activeStory.id}
+                    className="flex items-start gap-3 rounded-2xl border border-white/20 bg-black/60 p-4 shadow-lg"
+                  >
+                    <ActiveStoryIcon className={`mt-0.5 h-5 w-5 ${activeStory.iconClass}`} />
+                    <div>
+                      <p className="text-[11px] text-white/70">{activeStory.title}</p>
+                      <p className="text-sm text-white">{renderStoryBody(activeStory.id, 'animated')}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )
     },
     {
       id: 'outro',
-      bg: 'bg-gradient-to-br from-slate-900 via-slate-950 to-black',
       content: (
-        <div className="relative h-full w-full">
+        <div className="relative h-full w-full overflow-hidden">
+          <VideoBackground
+            src={RECAP_OUTRO_VIDEO}
+            overlayClass=""
+          />
           <div className="absolute inset-0 champion-aurora" aria-hidden="true" />
           <div className="absolute inset-0 champion-grid" aria-hidden="true" />
           <div className="relative flex flex-col items-center justify-center h-full text-center p-4">
-            <p className="text-[11px] uppercase tracking-[0.4em] text-white/60 mb-2">{t('seasonRecap.finale.label')}</p>
-            <h1 className="text-2xl font-bold text-white mb-6">{t('seasonRecap.finale.title')}</h1>
+            <p className="text-[11px] uppercase tracking-[0.4em] text-black/70 mb-2">{t('seasonRecap.finale.label')}</p>
+            <h1 className="text-2xl font-bold text-black mb-6 drop-shadow">{t('seasonRecap.finale.title')}</h1>
             <div className="w-full max-w-sm space-y-4 text-left">
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
+              <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur-sm">
                 <div className="grid grid-cols-2 gap-4 mb-4 text-center">
                   {finaleStats.map((stat) => (
                     <div key={stat.id} className="flex flex-col items-center justify-center">
-                      <p className="text-[11px] uppercase tracking-wide text-white/60">{stat.label}</p>
-                      <AnimatedNumber value={stat.value} className="text-2xl font-bold text-white" />
+                      <p className="text-[11px] uppercase tracking-wide text-black/70">{stat.label}</p>
+                      <AnimatedNumber value={stat.value} className="text-2xl font-bold text-black drop-shadow" />
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-white/70 leading-relaxed text-center">
+                <p className="text-xs text-black/80 leading-relaxed text-center">
                   {t('seasonRecap.finale.description', { season: nextSeasonLabel })
                     .split('\n')
                     .map((line, idx, arr) => (
@@ -1193,7 +1312,7 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
               </div>
               <button
                 onClick={onClose}
-                className="w-full rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/20"
+                className="w-full rounded-2xl border border-white/15 bg-white/15 px-4 py-3 text-sm font-semibold text-black transition hover:bg-white/25"
               >
                 {t('seasonRecap.finale.cta')}
               </button>

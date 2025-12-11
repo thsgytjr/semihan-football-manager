@@ -18,6 +18,7 @@ import{logger}from"./lib/logger"
 const DEVELOPER_EMAIL = 'sonhyosuck@gmail.com'
 import{runMigrations}from"./lib/dbMigration"
 import ToastHub from"./components/Toast";import Card from"./components/Card"
+import { prefetchSeasonRecapVideos } from './components/SeasonRecap'
 import AdminLoginDialog from"./components/AdminLoginDialog"
 import VisitorStats from"./components/VisitorStats"
 import ProdDataWarning from"./components/ProdDataWarning"
@@ -54,7 +55,7 @@ const withTimeout = (promise, ms, label) => {
   })
 }
 
-export default function App(){
+function App(){
   const { t } = useTranslation()
   const[tab,setTab]=useState("dashboard"),[db,setDb]=useState({players:[],matches:[],visits:0,upcomingMatches:[],tagPresets:[],membershipSettings:[]}),[selectedPlayerId,setSelectedPlayerId]=useState(null)
   const[isAdmin,setIsAdmin]=useState(false),[isAnalyticsAdmin,setIsAnalyticsAdmin]=useState(false),[loginOpen,setLoginOpen]=useState(false)
@@ -76,6 +77,12 @@ export default function App(){
   const[showAuthError,setShowAuthError]=useState(false)
   const[authError,setAuthError]=useState({ error:null, errorCode:null, description:null })
   const[activeMatch,setActiveMatch]=useState(null)
+  // 시즌 리캡 활성화 시점에 미리 비디오 다운로드
+  useEffect(() => {
+    if (seasonRecapEnabled) {
+      prefetchSeasonRecapVideos()
+    }
+  }, [seasonRecapEnabled])
   const isRefModeLink = useMemo(() => {
     try {
       const path = (window.location.pathname || '').toLowerCase()
@@ -2514,3 +2521,5 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,seasonRecapEnable
     </div>
   )
 }
+
+export default App
