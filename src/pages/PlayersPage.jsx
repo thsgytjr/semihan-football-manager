@@ -28,6 +28,7 @@ import { calculateAIPower, aiPowerChipClass } from "../lib/aiPower"
 import { uploadPlayerPhoto, deletePlayerPhoto } from "../lib/photoUpload"
 import { randomAvatarDataUrl } from "../utils/avatar"
 import PositionChips from "../components/PositionChips"
+import { TEAM_CONFIG } from "../lib/teamConfig"
 import MembershipSettings from "../components/MembershipSettings"
 import { DEFAULT_MEMBERSHIPS, getMembershipBadge } from "../lib/membershipConfig"
 import ConfirmDialog from "../components/ConfirmDialog"
@@ -245,10 +246,11 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
   }
   
   const resetToRandom = async () => {
-    // 기존 업로드된 사진이 있으면 버킷에서 삭제
-    if(draft.photoUrl && !draft.photoUrl.startsWith('RANDOM:') && draft.photoUrl.includes('player-photos')){
+    // 기존 업로드된 사진이 R2에 있으면 삭제 (TEAM_PATH 포함 체크)
+    if(draft.photoUrl && !draft.photoUrl.startsWith('RANDOM:') && (draft.photoUrl.includes(TEAM_CONFIG.r2.teamPath) || draft.photoUrl.includes('player-photos'))){
       try {
         await deletePlayerPhoto(draft.photoUrl)
+        logger.info('✅ 이전 사진 삭제 완료:', draft.photoUrl)
       } catch(err) {
         logger.error('Failed to delete old photo:', err)
       }
@@ -478,14 +480,6 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
                             {uploading ? '업로드 중...' : '업로드'}
                             <input hidden type="file" accept="image/*" onChange={(e)=> onPickPhoto(e.target.files?.[0] || null)} disabled={uploading} />
                           </label>
-                          <button 
-                            type="button"
-                            className="text-xs font-medium text-blue-700 rounded-lg border-2 border-blue-200 bg-white px-3 py-1.5 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
-                            onClick={()=>setShowUrlInput(!showUrlInput)}
-                            disabled={uploading}
-                          >
-                            URL
-                          </button>
                           <button 
                             type="button"
                             className="text-xs font-medium text-blue-700 rounded-lg border-2 border-blue-200 bg-white px-3 py-1.5 hover:bg-blue-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" 
