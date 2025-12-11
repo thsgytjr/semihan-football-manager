@@ -130,11 +130,45 @@ export async function deletePlayerPhoto(photoUrl) {
   if (!photoUrl) return
   try {
     const cleanUrl = photoUrl.split('?')[0].split('#')[0]
-    const filePath = cleanUrl.split(`${TEAM_PATH}/`)[1]
-    if (!filePath) return
+    logger.info('🗑️ 삭제 시도:', cleanUrl)
+    
+    // R2 public URL에서 파일 경로 추출
+    let filePath = null
+    
+    // 1. PUBLIC_BASE 기준으로 추출
+    if (cleanUrl.includes(PUBLIC_BASE)) {
+      filePath = cleanUrl.split(PUBLIC_BASE + '/')[1]
+    }
+    // 2. TEAM_PATH 기준으로 추출
+    else if (cleanUrl.includes(`/${TEAM_PATH}/`)) {
+      filePath = cleanUrl.split(`/${TEAM_PATH}/`)[1]
+      filePath = `${TEAM_PATH}/${filePath}`
+    }
+    // 3. 도메인 이후 전체 경로 추출 (fallback)
+    else {
+      const urlObj = new URL(cleanUrl)
+      filePath = urlObj.pathname.slice(1) // 앞의 / 제거
+    }
+    
+    if (!filePath) {
+      logger.warn('⚠️ 파일 경로 추출 실패:', cleanUrl)
+      return
+    }
+    
+    logger.info('📂 추출된 파일 경로:', filePath)
+    
     const { deleteUrl } = await getSignedUrl(filePath, 'application/octet-stream', 'delete')
-    if (!deleteUrl) return
-    await fetch(deleteUrl, { method: 'DELETE' })
+    if (!deleteUrl) {
+      logger.warn('⚠️ deleteUrl 생성 실패')
+      return
+    }
+    
+    const response = await fetch(deleteUrl, { method: 'DELETE' })
+    if (response.ok) {
+      logger.info('✅ R2 파일 삭제 성공:', filePath)
+    } else {
+      logger.error('❌ R2 삭제 응답 실패:', response.status, await response.text().catch(() => ''))
+    }
   } catch (err) {
     logger.error('❌ deletePlayerPhoto 실패:', err)
   }
