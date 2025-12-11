@@ -677,7 +677,6 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
       const teamMap = Array.isArray(gameMeta.teamIndices) && gameMeta.teamIndices.length > 0
         ? gameMeta.teamIndices
         : Array.from({ length: baseTeamCount }, (_, i) => i)
-      const viewTeamCount = teamMap.length
 
       const eventScoreByTeam = {}
       const evs = groupedGameEvents[gi] || []
@@ -686,15 +685,17 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
         eventScoreByTeam[ti] = (eventScoreByTeam[ti] || 0) + 1
       })
 
-      const scores = Array.from({ length: viewTeamCount }, (_, idx) => {
-        const originalIdx = teamMap[idx] ?? idx
+      const scores = Array.from({ length: baseTeamCount }, (_, originalIdx) => {
+        const localIdx = teamMap.indexOf(originalIdx)
+        if (localIdx === -1) return null // did not play this game
         const qScore = Array.isArray(displayedQuarterScores?.[originalIdx]) ? displayedQuarterScores[originalIdx][gi] : undefined
-        if (qScore !== undefined) return Number(qScore) || 0
-        return eventScoreByTeam[idx] || 0
+        if (qScore !== undefined) return Number(qScore)
+        return eventScoreByTeam[localIdx] ?? 0
       })
 
-      const maxScore = scores.length ? Math.max(...scores) : 0
-      const winners = scores.map((score, idx) => score === maxScore ? idx : -1).filter(idx => idx >= 0)
+      const playableScores = scores.filter(s => s !== null && s !== undefined)
+      const maxScore = playableScores.length ? Math.max(...playableScores) : 0
+      const winners = scores.map((score, idx) => (score !== null && score !== undefined && score === maxScore ? idx : -1)).filter(idx => idx >= 0)
       const isDraw = winners.length > 1
 
       return { scores, winners, isDraw, teamMap }
@@ -2256,8 +2257,10 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       const originalIdx = Array.isArray(teamMap) ? teamMap[idx] : idx
                       const color = getTeamColor(originalIdx)
                       const label = color?.label || t('matchHistory.teamN', { n: (originalIdx ?? idx) + 1 })
-                      const isWinner = !isDraw && winners.includes(idx)
-                      return { color, label, score: Number(scores?.[idx] ?? 0), isWinner }
+                      const rawScore = scores?.[idx]
+                      const isWinner = rawScore !== null && rawScore !== undefined && !isDraw && winners.includes(idx)
+                      const displayScore = rawScore === null || rawScore === undefined ? '–' : rawScore
+                      return { color, label, score: displayScore, isWinner }
                     })
 
                     const findCaptainPlayer = (teamIdx) => {
