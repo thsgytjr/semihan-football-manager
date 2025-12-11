@@ -1004,16 +1004,34 @@ export default function App(){
 
       // Draft-only payload (avoid polluting non-draft matches with draft data)
       const isDraft = isDraftMatch(activeMatch || matchData)
-      const teamCount = Array.isArray(teamsForGame) ? teamsForGame.length : 2
-      const quarterScores = Array.from({ length: teamCount }, () => [])
+      // 원본 매치의 전체 팀 수를 사용 (멀티팀 지원)
+      const originalTeamCount = Array.isArray(activeMatch?.teams) ? activeMatch.teams.length : 
+                               Array.isArray(activeMatch?.snapshot) ? activeMatch.snapshot.length :
+                               Number(activeMatch?.teamCount) || 2
+      const quarterScores = Array.from({ length: originalTeamCount }, () => [])
       if (isDraft) {
         mergedStats.__games.forEach(g => {
           if (!Array.isArray(g?.scores)) return
-          g.scores.forEach((val, idx) => {
-            if (quarterScores[idx]) {
-              quarterScores[idx].push(Number(val) || 0)
+          const teamMap = Array.isArray(g.teamIndices) && g.teamIndices.length > 0 ? g.teamIndices : null
+          
+          if (teamMap) {
+            // 팀 인덱스 매핑 사용: 참여한 팀만 점수 추가, 나머지는 null
+            for (let ti = 0; ti < originalTeamCount; ti++) {
+              const participantIdx = teamMap.indexOf(ti)
+              if (participantIdx >= 0 && participantIdx < g.scores.length) {
+                quarterScores[ti].push(Number(g.scores[participantIdx]) || 0)
+              } else {
+                quarterScores[ti].push(null)
+              }
             }
-          })
+          } else {
+            // Legacy: 모든 팀 참여
+            g.scores.forEach((val, idx) => {
+              if (quarterScores[idx]) {
+                quarterScores[idx].push(Number(val) || 0)
+              }
+            })
+          }
         })
       }
 
