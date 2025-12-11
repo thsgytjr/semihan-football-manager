@@ -65,7 +65,7 @@ function checkFieldSeparation(gameMatchups, teamCount) {
  */
 export function computeAttackRows(players = [], matches = []) {
   const index = new Map()
-  const idToPlayer = new Map(players.map(p => [toStr(p.id), p]))
+  const idToPlayer = new Map((players || []).map(p => [toStr(p.id), p]))
   const isDefOrGk = (p) => {
     const pos = (p?.position || p?.pos || '').toString().toUpperCase()
     const positions = Array.isArray(p?.positions) ? p.positions.map(x => String(x).toUpperCase()) : []
@@ -300,8 +300,9 @@ export function extractTimelineEventsFromMatch(m) {
  * Compute duo (assist→goal pairs) leaderboard rows
  */
 export function computeDuoRows(players = [], matches = []) {
-  const idToPlayer = new Map(players.map(p => [toStr(p.id), p]))
-  const nameToId = new Map(players.map(p => [toStr(p.name).trim().toLowerCase(), toStr(p.id)]))
+  const playerArray = players || []
+  const idToPlayer = new Map(playerArray.map(p => [toStr(p.id), p]))
+  const nameToId = new Map(playerArray.map(p => [toStr(p.name).trim().toLowerCase(), toStr(p.id)]))
   
   let evts = []
   for (const m of (matches || [])) {
@@ -783,7 +784,8 @@ export function winnerIndexFromQuarterScores(qs, gameMatchups = null) {
  * Compute draft player stats with wins/draws/losses
  */
 export function computeDraftPlayerStatsRows(players = [], matches = []) {
-  const idToPlayer = new Map(players.map(p => [toStr(p.id), p]))
+  const playerArray = players || []
+  const idToPlayer = new Map(playerArray.map(p => [toStr(p.id), p]))
   const stats = new Map()
   const last5Map = new Map()
   const lastWinTSMap = new Map()
@@ -1050,7 +1052,8 @@ export function hasValidGameData(m) {
  * Compute captain stats with wins/draws/losses
  */
 export function computeCaptainStatsRows(players = [], matches = []) {
-  const idToPlayer = new Map(players.map(p => [toStr(p.id), p]))
+  const playerArray = players || []
+  const idToPlayer = new Map(playerArray.map(p => [toStr(p.id), p]))
   const stats = new Map()
   const last5Map = new Map()
   const lastWinTSMap = new Map()
@@ -1302,7 +1305,8 @@ export function computeCaptainWinsRows(players = [], matches = []) {
  * Compute draft attack points leaderboard rows (골/어시)
  */
 export function computeDraftAttackRows(players = [], matches = []) {
-  const idToPlayer = new Map(players.map(p => [toStr(p.id), p]))
+  const playerArray = players || []
+  const idToPlayer = new Map(playerArray.map(p => [toStr(p.id), p]))
   const stats = new Map()
   
   // 드래프트 매치만 필터링하고, 유효한 게임 데이터가 있는 매치만 포함
@@ -1390,7 +1394,8 @@ export function computeDraftAttackRows(players = [], matches = []) {
  * Compute cards leaderboard rows (yellow/red)
  */
 export function computeCardsRows(players = [], matches = []) {
-  const idToPlayer = new Map(players.map(p => [toStr(p.id), p]))
+  const playerArray = players || []
+  const idToPlayer = new Map(playerArray.map(p => [toStr(p.id), p]))
   const tally = new Map()
 
   for (const m of (matches || [])) {

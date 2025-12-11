@@ -222,7 +222,8 @@ export default function Dashboard({
   // 시즌 옵션 생성 (년도별)
   const seasonOptions = useMemo(() => {
     const seasons = new Set()
-    for (const m of matches) {
+    const matchArray = matches || []
+    for (const m of matchArray) {
       const season = extractSeason(m)
       if (season) seasons.add(season)
     }
@@ -243,20 +244,23 @@ export default function Dashboard({
   
   // 시즌별 필터링 (리더보드용)
   const leaderboardSeasonFilteredMatches = useMemo(() => {
-    if (leaderboardSeason === 'all') return matches
-    return matches.filter(m => extractSeason(m) === leaderboardSeason)
+    const matchArray = matches || []
+    if (leaderboardSeason === 'all') return matchArray
+    return matchArray.filter(m => extractSeason(m) === leaderboardSeason)
   }, [matches, leaderboardSeason])
   const seasonRecapMatches = useMemo(() => {
-    if (leaderboardSeasonFilteredMatches.length === 0 && matches.length > 0) {
-      return matches
+    const matchArray = matches || []
+    if (leaderboardSeasonFilteredMatches.length === 0 && matchArray.length > 0) {
+      return matchArray
     }
     return leaderboardSeasonFilteredMatches
   }, [leaderboardSeasonFilteredMatches, matches])
 
   // 시즌별 필터링 (히스토리용)
   const historySeasonFilteredMatches = useMemo(() => {
-    if (historySeason === 'all') return matches
-    return matches.filter(m => extractSeason(m) === historySeason)
+    const matchArray = matches || []
+    if (historySeason === 'all') return matchArray
+    return matchArray.filter(m => extractSeason(m) === historySeason)
   }, [matches, historySeason])
   
   const [apDateKey, setApDateKey] = useState('all')
@@ -487,7 +491,8 @@ export default function Dashboard({
 
   const playerLookup = useMemo(() => {
     const map = new Map()
-    players.forEach(p => {
+    const playerArray = players || []
+    playerArray.forEach(p => {
       if (p?.id != null) {
         map.set(toStr(p.id), p)
       }
@@ -552,13 +557,14 @@ export default function Dashboard({
       })
     })
 
+    const playerArray = players || []
     const mom = Array.from(momCounts.entries())
       .map(([pid, value]) => {
         const player = playerLookup.get(pid)
         if (player) {
           return { id: pid, name: player.name || '—', value, photoUrl: player.photoUrl || null }
         }
-        const fallback = players.find((p) => toStr(p.id) === pid)
+        const fallback = playerArray.find((p) => toStr(p.id) === pid)
         return { id: pid, name: fallback?.name || '—', value, photoUrl: fallback?.photoUrl || null }
       })
       .sort((a, b) => (b.value - a.value) || a.name.localeCompare(b.name))
@@ -576,7 +582,8 @@ export default function Dashboard({
 
   const playerNameLookup = useMemo(() => {
     const map = new Map()
-    players.forEach((p) => {
+    const playerArray = players || []
+    playerArray.forEach((p) => {
       const name = (p?.name || '').trim().toLowerCase()
       if (name) {
         map.set(name, p)
@@ -723,7 +730,8 @@ export default function Dashboard({
 
   const matchLookup = useMemo(() => {
     const map = new Map()
-    matches.forEach(match => {
+    const matchArray = matches || []
+    matchArray.forEach(match => {
       if (match?.id != null) {
         map.set(toStr(match.id), match)
       }
@@ -878,7 +886,8 @@ export default function Dashboard({
 
   const matchesBySeason = useMemo(() => {
     const map = new Map()
-    matches.forEach((match) => {
+    const matchArray = matches || []
+    matchArray.forEach((match) => {
       const season = extractSeason(match) || 'unknown'
       if (!map.has(season)) {
         map.set(season, [])
@@ -1460,7 +1469,7 @@ export default function Dashboard({
     const attendeeCandidates = (upcomingMatch.attendeeIds || upcomingMatch.participantIds || []).map(String)
     const attendeeCount = attendeeCandidates.length
 
-    const sameDayMatches = matches.filter(m => m?.dateISO?.slice(0,10) === upcomingDate)
+    const sameDayMatches = (matches || []).filter(m => m?.dateISO?.slice(0,10) === upcomingDate)
 
     const bySnapshotScore = (m) => {
       const snap = Array.isArray(m?.snapshot) ? m.snapshot : []

@@ -136,7 +136,8 @@ export default function MatchPlanner({
   // 시즌 옵션 생성
   const seasonOptions = useMemo(() => {
     const seasons = new Set()
-    for (const m of matches) {
+    const matchArray = matches || []
+    for (const m of matchArray) {
       const season = extractSeason(m)
       if (season) seasons.add(season)
     }
@@ -158,14 +159,16 @@ export default function MatchPlanner({
   
   // 시즌별 필터링된 매치
   const seasonFilteredMatches = useMemo(() => {
-    if (!selectedSeason || selectedSeason === 'all') return matches
-    return matches.filter(m => extractSeason(m) === selectedSeason)
+    const matchArray = matches || []
+    if (!selectedSeason || selectedSeason === 'all') return matchArray
+    return matchArray.filter(m => extractSeason(m) === selectedSeason)
   }, [matches, selectedSeason])
   
   // Extract unique locations from saved matches (by name only, no duplicates)
   const locationOptions = useMemo(() => {
     const locMap = new Map()
-    matches.forEach(m => {
+    const matchArray = matches || []
+    matchArray.forEach(m => {
       if (m.location?.name && !locMap.has(m.location.name)) {
         locMap.set(m.location.name, {
           name: m.location.name,
@@ -188,7 +191,7 @@ export default function MatchPlanner({
   }, [upcomingMatches, activeUpcomingMatches, onDeleteUpcomingMatch])
   
   const count=attendeeIds.length,autoSuggestion=decideMode(count),mode=autoSuggestion.mode
-  const attendees=useMemo(()=>players.filter(p=>attendeeIds.includes(p.id)),[players,attendeeIds])
+  const attendees=useMemo(()=>(players || []).filter(p=>attendeeIds.includes(p.id)),[players,attendeeIds])
   
   // Determine team count from teamCount state, adjusting teams when it changes
   const teams = teamCount
@@ -230,13 +233,13 @@ export default function MatchPlanner({
   // 아직 어떤 팀에도 배정되지 않은 선수 목록 (컴팩트 추가용)
   const availablePlayers = useMemo(() => {
     const assigned = new Set(previewTeams.flat().map(p => String(p.id)))
-    return players.filter(p => !assigned.has(String(p.id)))
+    return (players || []).filter(p => !assigned.has(String(p.id)))
   }, [players, previewTeams])
 
   // ✅ 라이브 프리뷰 요금 (팀에 배정된 선수 기준으로 계산)
   const liveFees=useMemo(()=>{
     const assignedPlayers = previewTeams.flat().map(p => p.id)
-    const assigned = players.filter(p => assignedPlayers.includes(p.id))
+    const assigned = (players || []).filter(p => assignedPlayers.includes(p.id))
     const m = assigned.filter(p=>isMember(p.membership)).length
     const g = Math.max(0, assigned.length - m)
     return calcFees({ total: baseCost, memberCount: m, guestCount: g, guestSurcharge })
@@ -290,7 +293,7 @@ export default function MatchPlanner({
     
     const snapshot=baseTeams.map(team=>team.map(p=>p.id))
     const ids=snapshot.flat()
-    const objs=players.filter(p=>ids.includes(p.id))
+    const objs=(players || []).filter(p=>ids.includes(p.id))
   const fees= enablePitchFee ? computeFeesAtSave({baseCostValue:baseCost,attendees:objs,guestSurcharge}) : null
     
     // 드래프트 모드일 때 추가 필드들
@@ -350,7 +353,7 @@ export default function MatchPlanner({
     
     const snapshot=baseTeams.map(team=>team.map(p=>p.id))
     const ids=snapshot.flat()
-    const objs=players.filter(p=>ids.includes(p.id))
+    const objs=(players || []).filter(p=>ids.includes(p.id))
     const fees= enablePitchFee ? computeFeesAtSave({baseCostValue:baseCost,attendees:objs,guestSurcharge}) : null
     
     const draftFields = isDraftMode ? {

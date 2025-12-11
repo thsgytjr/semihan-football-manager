@@ -8,11 +8,12 @@ import { overall, isUnknownPlayer } from './players'
  * @returns {number} AI Overall 점수 (50-100)
  */
 export function calculateAIPower(player, matches) {
+  const matchArray = matches || []
   // 1. 기본 OVR
   const baseOVR = isUnknownPlayer(player) ? 50 : (player.ovr ?? overall(player))
   
   // 2. 매치 기록에서 실적 계산
-  const playerMatches = matches.filter(m => {
+  const playerMatches = matchArray.filter(m => {
     const attendees = m.attendeeIds || m.snapshot?.flat() || []
     return attendees.includes(player.id) || attendees.some(a => String(a) === String(player.id))
   })
@@ -132,14 +133,14 @@ export function calculateAIPower(player, matches) {
     }
     
     const attackScore = goalsPerGame * goalWeight + assistsPerGame * assistWeight
-    power += attackScore * 50
+    power += attackScore * 65 // 공격 기여도 영향 강화
     
     // === 승률 (팀 기여도) ===
     const winRate = stats.wins / stats.gamesPlayed
     const drawRate = stats.draws / stats.gamesPlayed
     
     // 수비 포지션에서 승리가 많으면 가중치 추가 (팀 기여도 높음)
-    let winBonus = winRate * 150 + drawRate * 30
+    let winBonus = winRate * 220 + drawRate * 40 // 승/무 기여도 가중치 상향
     if (/CB|LB|RB|DF|WB|RWB|LWB|GK/i.test(positionsStr)) {
       // 수비수/골키퍼는 승리가 더 중요 (클린시트 기여)
       winBonus += winRate * 50  // 추가 보너스
@@ -147,7 +148,7 @@ export function calculateAIPower(player, matches) {
       // 드래프트전 클린시트 보너스 (쿼터별 무실점)
       if (stats.cleanSheets > 0) {
         const cleanSheetRate = stats.cleanSheets / stats.gamesPlayed
-        winBonus += cleanSheetRate * 100  // 클린시트당 추가 보너스
+        winBonus += cleanSheetRate * 140  // 클린시트당 추가 보너스 상향
       }
     }
     
@@ -163,19 +164,28 @@ export function calculateAIPower(player, matches) {
       const formDiff = recentAttack - overallAttack
       
       // 폼이 상승 중이면 +, 하락 중이면 - (최대 ±50점)
-      power += Math.max(-50, Math.min(50, formDiff * 30))
+      power += Math.max(-70, Math.min(70, formDiff * 40)) // 최근 경기 영향력 강화
+    }
+
+    // === 임팩트 보너스 (최근 5경기 기준 골/어시) ===
+    if (stats.recentGames.length > 0) {
+      const sample = stats.recentGames.slice(0, 5)
+      const recentImpact = sample.reduce((sum, g) => sum + (g.goals * 2.0 + g.assists * 1.5), 0) / sample.length
+      power += recentImpact * 20 // 클러치 퍼포먼스 반영
     }
     
     // === 신뢰도 보정 (경기 수) ===
     let reliabilityFactor = 1.0
-    if (stats.gamesPlayed >= 20) {
+    if (stats.gamesPlayed >= 25) {
       reliabilityFactor = 1.0   // 충분한 샘플
-    } else if (stats.gamesPlayed >= 10) {
-      reliabilityFactor = 0.95
-    } else if (stats.gamesPlayed >= 5) {
-      reliabilityFactor = 0.85
+    } else if (stats.gamesPlayed >= 15) {
+      reliabilityFactor = 0.97
+    } else if (stats.gamesPlayed >= 8) {
+      reliabilityFactor = 0.9
+    } else if (stats.gamesPlayed >= 3) {
+      reliabilityFactor = 0.78
     } else {
-      reliabilityFactor = 0.7   // 적은 샘플은 불확실
+      reliabilityFactor = 0.6   // 적은 샘플은 불확실
     }
     
     const performanceBonus = power - (baseOVR * 10)

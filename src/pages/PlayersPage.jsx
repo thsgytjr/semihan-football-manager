@@ -1269,6 +1269,8 @@ export default function PlayersPage({
   systemAccount = null,
   onEnsureSystemAccount = null,
 }) {
+  const playerArray = players || []
+  const matchArray = matches || []
   const [confirm, setConfirm] = useState({ open: false, id: null, name: "" })
   const [editing, setEditing] = useState({ open: false, player: null })
   const [showMembershipSettings, setShowMembershipSettings] = useState(false)
@@ -1280,7 +1282,7 @@ export default function PlayersPage({
   const [searchQuery, setSearchQuery] = useState('') // 검색어
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false) // 고급 필터 표시 여부
   const systemAccountExists = Boolean(systemAccount)
-  const rosterPlayers = useMemo(() => players.filter(p => !p.isSystemAccount), [players])
+  const rosterPlayers = useMemo(() => playerArray.filter(p => !p.isSystemAccount), [playerArray])
 
   const resetFilters = () => {
     setMembershipFilter('all')
@@ -1300,7 +1302,8 @@ export default function PlayersPage({
   }, [statusFilter, positionFilter, selectedTags])
 
   // 커스텀 멤버십 (없으면 기본값)
-  const customMemberships = membershipSettings.length > 0 ? membershipSettings : DEFAULT_MEMBERSHIPS
+  const membershipArray = membershipSettings || []
+  const customMemberships = membershipArray.length > 0 ? membershipArray : DEFAULT_MEMBERSHIPS
 
   // 멤버십이 삭제되었을 때 필터 초기화
   useEffect(() => {
@@ -1320,12 +1323,12 @@ export default function PlayersPage({
   // players가 업데이트되면 editing.player도 업데이트 (태그 프리셋 변경 등)
   useEffect(() => {
     if (editing.open && editing.player) {
-      const updatedPlayer = players.find(p => p.id === editing.player.id)
+      const updatedPlayer = playerArray.find(p => p.id === editing.player.id)
       if (updatedPlayer) {
         setEditing({ open: true, player: updatedPlayer })
       }
     }
-  }, [players])
+  }, [playerArray])
 
   // ▼ 정렬 상태: 키 & 방향
   const [sortKey, setSortKey] = useState("name") // 'ovr' | 'pos' | 'name' | 'ai'
@@ -1378,8 +1381,8 @@ export default function PlayersPage({
   }
 
   const cmpByAIAsc = (a,b)=>{
-    const aa = calculateAIPower(a, matches)
-    const ab = calculateAIPower(b, matches)
+    const aa = calculateAIPower(a, matchArray)
+    const ab = calculateAIPower(b, matchArray)
     if (aa !== ab) return aa - ab
     // 동점이면 OVR→포지션→이름
     const ovrCmp = cmpByOvrAsc(a,b)
@@ -1513,7 +1516,7 @@ export default function PlayersPage({
     try {
       if (confirm.id) {
         // 선수 정보 찾기
-        const player = players.find(p => p.id === confirm.id)
+        const player = playerArray.find(p => p.id === confirm.id)
         
         // 업로드된 사진이 있으면 먼저 삭제 (R2 또는 Supabase)
         const isUploadedPhoto = player?.photoUrl && 
@@ -2064,7 +2067,7 @@ export default function PlayersPage({
           const badges = badgeInfo ? [badgeInfo.badge] : []
           const pos = posOf(p)
           const ovr = overall(p)
-          const aiOverall = calculateAIPower(p, matches)
+          const aiOverall = calculateAIPower(p, matchArray)
           const aiProgress = Math.max(0, Math.min(100, ((aiOverall - 50) / 50) * 100))
           
           return (
@@ -2214,7 +2217,7 @@ export default function PlayersPage({
             const badges = badgeInfo ? [badgeInfo.badge] : []
             const pos = posOf(p)
             const ovr = overall(p)
-            const aiOverall = calculateAIPower(p, matches)
+            const aiOverall = calculateAIPower(p, matchArray)
             return (
               <li
                 key={p.id}
