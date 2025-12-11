@@ -15,6 +15,12 @@ export const TEAM_CONFIG = {
     anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY
   },
   
+  // Cloudflare R2 설정 (이미지 스토리지)
+  r2: {
+    publicUrl: import.meta.env.VITE_R2_PUBLIC_URL || 'https://pub-cf56cce5ad30432d9a1d3d9ad6f1d1be.r2.dev',
+    teamPath: import.meta.env.VITE_R2_TEAM_PATH || 'semihan'
+  },
+  
   // 기능 토글
   features: {
     analytics: import.meta.env.VITE_FEATURE_ANALYTICS !== 'false', // 기본 true

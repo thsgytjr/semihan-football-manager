@@ -34,8 +34,8 @@ function getBadgeImageUrl(slug, tier) {
   const folderName = BADGE_FOLDER_MAP[slug]
   const fileName = TIER_FILE_MAP[tier]
   if (!folderName || !fileName) return null
-  // 공용 뱃지 CDN (모든 팀 공유)
-  return `https://vupsurqljpuharihvtwf.supabase.co/storage/v1/object/public/challenge-bages/${folderName}/${fileName}`
+  // Cloudflare R2 배지 CDN (모든 팀 공유)
+  return `https://pub-cf56cce5ad30432d9a1d3d9ad6f1d1be.r2.dev/shared/challenge-badges/${folderName}/${fileName}`
 }
 
 const themeByCategory = {

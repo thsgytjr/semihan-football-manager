@@ -1,8 +1,9 @@
 // src/lib/photoUpload.js
 import { supabase } from './supabaseClient'
 import { logger } from './logger'
+import { TEAM_CONFIG } from './teamConfig'
 
-const BUCKET_NAME = 'player-photos' // Supabase Storage 버킷 이름
+const BUCKET_NAME = 'player-photos' // Supabase Storage 버킷 이름 (레거시)
 const MAX_RETRIES = 3 // 최대 재시도 횟수
 const RETRY_DELAY = 1000 // 재시도 간격 (ms)
 
@@ -206,17 +207,10 @@ export async function uploadPlayerPhoto(file, playerId, playerName = null, oldPh
         search: fileName
       })
     
-    // 8. Public URL 생성
-    const { data: { publicUrl } } = supabase.storage
-      .from(BUCKET_NAME)
-      .getPublicUrl(filePath)
-    
-    if (!publicUrl) {
-      throw new Error('Public URL 생성 실패')
-    }
-    
-    // Browser HTTP cache 활용 (Supabase provides ETag/Cache-Control headers)
-    return publicUrl
+    // 8. Public URL 생성 (Cloudflare R2)
+    const r2Url = `${TEAM_CONFIG.r2.publicUrl}/${TEAM_CONFIG.r2.teamPath}/players/${fileName}`
+    logger.info('✅ R2 URL 생성:', r2Url)
+    return r2Url
     
   } catch (error) {
     // 사용자 친화적인 에러 메시지
