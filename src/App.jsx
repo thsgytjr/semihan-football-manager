@@ -93,9 +93,32 @@ export default function App(){
       return null
     }
   }, [])
+
+  const [refModeDateInput, setRefModeDateInput] = useState('')
+
+  const refModeDateCode = useMemo(() => {
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const code = params.get('date') || params.get('day') || params.get('d')
+      if (!code) return null
+      const cleaned = String(code).replace(/[^0-9]/g, '')
+      if (cleaned.length === 4) return cleaned // MMDD
+      if (cleaned.length === 8) return cleaned // YYYYMMDD
+      return null
+    } catch {
+      return null
+    }
+  }, [])
+
+  useEffect(()=>{
+    if(refModeDateCode) setRefModeDateInput(refModeDateCode)
+  },[refModeDateCode])
   const refModeResolvedRef = useRef(false)
   const[refModeError,setRefModeError]=useState(null)
   const[refModeSelectedId,setRefModeSelectedId]=useState(refModeMatchId||'')
+  const[refModeReloadTick,setRefModeReloadTick]=useState(0)
+  const[refModeShowCodeModal,setRefModeShowCodeModal]=useState(false)
+  const[refModeCodeInput,setRefModeCodeInput]=useState('')
 
   // Core-load tracking to avoid race-triggered reloads/timeouts
   const coreLoadedRef = useRef(false)
@@ -505,6 +528,41 @@ export default function App(){
       return isSameLocalDay(d, now) && withinHours(d, 3)
     })
   },[sortedMatchesRefMode,isSameLocalDay,withinHours])
+
+  const refModeDateMatches = useMemo(() => {
+    if (!refModeDateInput) return []
+    const parseCode = (code) => {
+      if (code.length === 6) {
+        // MMDDYY, 2-digit year
+        const currentYear = new Date().getFullYear()
+        const century = Math.floor(currentYear / 100) * 100
+        const m = Number(code.slice(0,2))
+        const d = Number(code.slice(2,4))
+        const yy = Number(code.slice(4,6))
+        const year = century + yy
+        if (m>=1 && m<=12 && d>=1 && d<=31) return `${year}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+      }
+      if (code.length === 8) {
+        const y = code.slice(0,4)
+        const m = code.slice(4,6)
+        const d = code.slice(6,8)
+        return `${y}-${m}-${d}`
+      }
+      return null
+    }
+    const target = parseCode(refModeDateInput)
+    if (!target) return []
+    // Search in ALL matches, not just today's matches
+    const found = matches.filter(m => {
+      const d = (m?.dateISO || m?.date || m?.dateStr || '').slice(0,10)
+      return d === target
+    }).sort((a,b) => {
+      const ta = (a?.dateISO || a?.date || a?.dateStr || '')
+      const tb = (b?.dateISO || b?.date || b?.dateStr || '')
+      return ta.localeCompare(tb)
+    })
+    return found
+  }, [refModeDateInput, matches])
   const hydrateMatchForRefMode=useCallback((match)=>{
     if(!match)return null
     // If teams already hydrated with players, reuse
@@ -541,8 +599,9 @@ export default function App(){
   useEffect(()=>{
     if(isRefModeLink){
       setTab('referee')
+      if(!refModeDateCode) setRefModeShowCodeModal(true)
     }
-  },[isRefModeLink])
+  },[isRefModeLink,refModeDateCode])
 
   useEffect(()=>{
     if(!isRefModeLink)return
@@ -554,29 +613,63 @@ export default function App(){
 
   useEffect(()=>{
     if(!isRefModeLink)return
-    if(!Array.isArray(todayMatchesRefMode)||todayMatchesRefMode.length===0){
+    
+    // Always require date code for refMode entry
+    if(!refModeDateInput){
       setActiveMatch(null)
-      setRefModeError('오늘 진행중인 매치가 없습니다. (No active matches today)')
+      setRefModeError(null)
+      return
+    }
+    
+    const candidateMatches = refModeDateMatches
+    
+    if(!candidateMatches.length){
+      setActiveMatch(null)
+      setRefModeError('해당 날짜의 매치를 찾을 수 없습니다. (No matches for this date code)')
       return
     }
 
-    // Default selection: last referee match if available for today, else today's latest
+    // Default selection: last referee match if available for the candidate set, else latest
     if(!refModeSelectedId){
       let nextId=null
       try {
         const lastId=localStorage.getItem('sfm:lastRefMatchId')
-        if(lastId && todayMatchesRefMode.some(m=>String(m.id)===lastId)){
+        if(lastId && candidateMatches.some(m=>String(m.id)===lastId)){
           nextId=lastId
         }
       } catch {}
       if(!nextId){
-        nextId=String(todayMatchesRefMode[0].id)
+        nextId=String(candidateMatches[0].id)
       }
       setRefModeSelectedId(nextId)
       return
     }
 
-    const targetRaw=todayMatchesRefMode.find(m=>String(m.id)===String(refModeSelectedId))
+    const targetRaw=candidateMatches.find(m=>String(m.id)===String(refModeSelectedId))
+    
+    // Protect past matches with existing records from accidental modification
+    if(targetRaw){
+      const matchDate = new Date(targetRaw.dateISO || targetRaw.date || targetRaw.dateStr)
+      const today = new Date()
+      today.setHours(0,0,0,0)
+      const isPastMatch = matchDate < today
+      
+      const hasRecords = (
+        (targetRaw.stats?.__events && Array.isArray(targetRaw.stats.__events) && targetRaw.stats.__events.length > 0) ||
+        (targetRaw.stats?.__games && Array.isArray(targetRaw.stats.__games) && targetRaw.stats.__games.length > 0) ||
+        (targetRaw.stats?.__scores) ||
+        (targetRaw.quarterScores) ||
+        (targetRaw.draft?.quarterScores)
+      )
+      
+      if(isPastMatch && hasRecords){
+        setActiveMatch(null)
+        setRefModeError('과거 매치는 이미 기록이 있어 수정할 수 없습니다. (Past matches with records cannot be modified)')
+        refModeResolvedRef.current=true
+        return
+      }
+    }
+    
     const target=hydrateMatchForRefMode(targetRaw)
 
     if(target){
@@ -591,7 +684,7 @@ export default function App(){
       setRefModeError('해당 매치를 찾을 수 없습니다. URL을 확인해주세요.')
       refModeResolvedRef.current=true
     }
-  },[isRefModeLink,sortedMatchesRefMode,refModeSelectedId,hydrateMatchForRefMode])
+  },[isRefModeLink,refModeSelectedId,hydrateMatchForRefMode,refModeDateMatches,refModeReloadTick,refModeDateInput])
 
   const handleEnsureSystemAccount=useCallback(async()=>{
     if(systemAccount){
@@ -1439,21 +1532,52 @@ export default function App(){
 
   // Referee Mode Full Screen Override (admin or deep-link bypass)
   if (tab === 'referee' && (isAdmin || isRefModeLink)) {
-    const showSelector = isRefModeLink && Array.isArray(todayMatchesRefMode) && todayMatchesRefMode.length > 0
-    const selector = showSelector ? (
-      <div className="bg-stone-900 text-white px-3 py-2 border-b border-stone-800 flex justify-center">
-        <div className="w-full max-w-4xl flex items-center gap-2">
-          <span className="text-xs font-semibold whitespace-nowrap text-stone-200">매치 선택</span>
-          <select
-            value={refModeSelectedId}
-            onChange={(e)=>setRefModeSelectedId(e.target.value)}
-            className="w-72 bg-stone-800 text-white rounded-md px-3 py-2 text-sm border border-stone-700 focus:outline-none focus:ring-2 focus:ring-emerald-400"
-          >
-            <option value="">매치를 선택하세요</option>
-            {todayMatchesRefMode.map(m=>(
-              <option key={m.id} value={m.id}>{formatMatchLabel(m)}</option>
-            ))}
-          </select>
+    const handleSubmitCode = () => {
+      setRefModeDateInput(refModeCodeInput)
+      setRefModeShowCodeModal(false)
+      refModeResolvedRef.current = false
+      setRefModeSelectedId('')
+      setActiveMatch(null)
+      setRefModeError(null)
+      setRefModeReloadTick(t => t + 1)
+    }
+
+    const codeModal = refModeShowCodeModal ? (
+      <div 
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+        onClick={() => setRefModeShowCodeModal(false)}
+      >
+        <div 
+          className="bg-stone-800 text-white rounded-lg shadow-xl p-6 w-96 max-w-[90vw]"
+          onClick={e => e.stopPropagation()}
+        >
+          <h2 className="text-lg font-bold mb-4">Enter Match Code</h2>
+          <input
+            type="text"
+            value={refModeCodeInput}
+            onChange={(e) => setRefModeCodeInput(e.target.value.replace(/[^0-9]/g, ''))}
+            placeholder="e.g., 121325 (Dec 13, 2025)"
+            className="w-full bg-stone-700 text-white rounded-md px-3 py-2 text-sm border border-stone-600 focus:outline-none focus:ring-2 focus:ring-emerald-400 mb-4"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && refModeCodeInput) handleSubmitCode()
+            }}
+            autoFocus
+          />
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => setRefModeShowCodeModal(false)}
+              className="px-4 py-2 bg-stone-600 hover:bg-stone-500 text-white text-sm font-semibold rounded-md"
+            >
+              취소
+            </button>
+            <button
+              onClick={handleSubmitCode}
+              disabled={!refModeCodeInput}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-stone-600 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-md"
+            >
+              확인
+            </button>
+          </div>
         </div>
       </div>
     ) : null
@@ -1462,9 +1586,18 @@ export default function App(){
       return (
         <>
           <ToastHub />
-          {selector}
-          <div className="flex h-[calc(100vh-56px)] items-center justify-center bg-stone-900 text-white text-sm px-4 text-center">
-            {refModeError || '오늘 진행중인 매치가 없습니다. (No active matches today)'}
+          {codeModal}
+          <div className="flex h-[calc(100vh-56px)] items-center justify-center bg-stone-900 text-white text-sm px-4 text-center flex-col gap-4">
+            <div>{refModeError || '오늘 진행중인 매치가 없습니다. (No active matches today)'}</div>
+            <button
+              onClick={() => {
+                setRefModeCodeInput('')
+                setRefModeShowCodeModal(true)
+              }}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-md"
+            >
+              매치 코드 입력
+            </button>
           </div>
         </>
       )
@@ -1473,7 +1606,7 @@ export default function App(){
     return (
       <>
         <ToastHub />
-        {selector}
+        {codeModal}
         <Suspense fallback={<div className="flex h-screen items-center justify-center bg-stone-900 text-white">Loading Referee Mode...</div>}>
           <RefereeMode 
             activeMatch={activeMatch} 

@@ -13,9 +13,24 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
   const { t } = useTranslation()
 
   const initialGameIndex = useMemo(() => {
-    const prevGames = activeMatch?.stats?.__games
-    if (Array.isArray(prevGames)) return prevGames.length
-    return 0
+    if (!activeMatch) return 0
+    const stats = activeMatch.stats || {}
+    const games = Array.isArray(stats.__games) ? stats.__games.filter(Boolean) : []
+    const explicitCount = games.length
+    const maxMatchNumber = games.reduce((max, game) => {
+      const num = Number(game?.matchNumber) || 0
+      return num > max ? num : max
+    }, 0)
+    const events = Array.isArray(stats.__events) ? stats.__events : []
+    const maxEventIndex = events.reduce((max, ev) => {
+      const idx = typeof ev?.gameIndex === 'number' ? ev.gameIndex : null
+      if (idx === null || idx < 0) return max
+      return Math.max(max, idx + 1)
+    }, 0)
+    const metaNumber = Number(stats.__matchMeta?.matchNumber) || 0
+    const matchLevelNumber = Number(activeMatch.matchNumber) || 0
+    const best = Math.max(explicitCount, maxMatchNumber, maxEventIndex, metaNumber, matchLevelNumber)
+    return best
   }, [activeMatch])
 
   const captains = useMemo(() => getCaptains(activeMatch), [activeMatch])
