@@ -103,7 +103,7 @@ export async function uploadPlayerPhoto(file, playerId, playerName = null, oldPh
   const sanitizedName = (playerName || 'player').replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 20)
   const fileExtension = uploadFile.type === 'image/png' ? 'png' : 'jpg'
   const fileName = sanitizedName ? `${sanitizedName}_${playerId}.${fileExtension}` : `${playerId}.${fileExtension}`
-  const filePath = `players/${fileName}`
+  const filePath = `${TEAM_PATH}/players/${fileName}`
 
   if (oldPhotoUrl && oldPhotoUrl.includes(TEAM_PATH)) {
     try {
