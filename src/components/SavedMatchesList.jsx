@@ -615,7 +615,10 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
     if (refMode && Array.isArray(gameScores) && gameScores.length > 0) {
       const teamCount = gameScores.reduce((max, g) => {
         const len = Array.isArray(g?.scores) ? g.scores.length : 0
-        return Math.max(max, len)
+        const maxIdx = Array.isArray(g?.teamIndices) && g.teamIndices.length > 0 
+          ? Math.max(...g.teamIndices) + 1 
+          : 0
+        return Math.max(max, len, maxIdx)
       }, baseTeamCount)
       if (teamCount > 0) {
         const teamMajor = Array.from({ length: teamCount }, () => [])
