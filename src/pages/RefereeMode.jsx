@@ -60,6 +60,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
   const [showSaveConfirm, setShowSaveConfirm] = useState(false)
   const [showOverrideWarning, setShowOverrideWarning] = useState(false)
   const [pendingMatchNumber, setPendingMatchNumber] = useState(null)
+  const [selectedTeamIndices, setSelectedTeamIndices] = useState([0, 1])
 
   const timerRef = useRef(null)
 
@@ -206,6 +207,12 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
   const canRecord = gameStatus === 'playing' || gameStatus === 'paused' || gameStatus === 'finished'
 
   const handleStartSetup = () => {
+    // Filter teams based on selection
+    if (activeMatch?.teams && activeMatch.teams.length > 2) {
+      const filteredTeams = selectedTeamIndices.map(idx => activeMatch.teams[idx])
+      setTeams(filteredTeams)
+      setScores(new Array(filteredTeams.length).fill(0))
+    }
     setGameStatus('ready')
   }
 
@@ -342,6 +349,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       stats,
       cleanSheetAwardees,
       clearInProgress: true, // Signal to clear __inProgress from stats
+      selectedTeamIndices: activeMatch?.teams && activeMatch.teams.length > 2 ? selectedTeamIndices : undefined,
     }
 
     if (onFinish) onFinish(payload)
@@ -448,6 +456,77 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                 )}
                 <div className="text-xs text-slate-500 mt-1">이 매치의 {initialGameIndex + 1}번째 게임을 기록합니다.</div>
               </div>
+
+              {activeMatch?.teams && activeMatch.teams.length > 2 && (
+                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                  <label className="block text-xs font-semibold text-gray-700 mb-2">경기할 팀 선택 (2팀)</label>
+                  <div className="space-y-2">
+                    {activeMatch.teams.map((team, idx) => {
+                      const isSelected = selectedTeamIndices.includes(idx)
+                      const teamColor = resolveTeamColor(idx)
+                      const captainId = captains?.[idx]
+                      const captain = captainId ? team.find(p => String(p.id) === String(captainId)) : null
+                      
+                      return (
+                        <button
+                          key={idx}
+                          onClick={() => {
+                            setSelectedTeamIndices(prev => {
+                              const current = prev || []
+                              if (current.includes(idx)) {
+                                // Deselect this team
+                                return current.filter(i => i !== idx)
+                              }
+                              // Add or replace to keep at most 2 selections
+                              if (current.length < 2) return [...current, idx]
+                              return [current[1], idx]
+                            })
+                          }}
+                          className={`w-full p-3 rounded-lg border-2 text-left transition ${
+                            isSelected
+                              ? 'border-emerald-500 bg-emerald-50'
+                              : 'border-gray-200 bg-white hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+                              isSelected ? 'border-emerald-500 bg-emerald-500' : 'border-gray-300'
+                            }`}>
+                              {isSelected && <span className="text-white text-xs font-bold">✓</span>}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="text-sm font-bold text-gray-900">팀 {idx + 1}</div>
+                                <div 
+                                  className="w-4 h-4 rounded-full border flex-shrink-0" 
+                                  style={{ 
+                                    backgroundColor: teamColor?.bg || '#f3f4f6',
+                                    borderColor: teamColor?.border || '#d1d5db'
+                                  }}
+                                  title={teamColor?.label || 'No color'}
+                                />
+                                <div className="text-xs text-gray-500">{team.length}명</div>
+                              </div>
+                              {captain && (
+                                <div className="flex items-center gap-1.5">
+                                  <InitialAvatar 
+                                    name={captain.name} 
+                                    photoUrl={captain.photoUrl || captain.avatar} 
+                                    size={20} 
+                                  />
+                                  <div className="text-xs text-gray-600 truncate">
+                                    <span className="font-semibold">주장:</span> {captain.name}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
