@@ -111,6 +111,8 @@ export default defineConfig(({ mode }) => {
             .replace(/id="twitter-description" content=".*?"/, `id="twitter-description" content="${description}"`)
             .replace(/REPLACE_APP_URL/g, appUrl)
             .replace(/REPLACE_IMAGE_URL/g, imageUrl)
+            // Inject per-route manifest/apple meta loader so Add-to-Home behavior can use page-specific manifests
+            .replace(/<link rel="manifest" href="\/manifest.webmanifest">/, `<link rel="manifest" href="/manifest.webmanifest">\n<script>try{(function(){const path=location.pathname.toLowerCase();const map={"/refmode":{m:"/refMode/manifest.webmanifest",t:"RefMode",i:"/GoalifyLogo.png"}};const key=Object.keys(map).find(k=>path.startsWith(k));if(key){const info=map[key];const l=document.createElement('link');l.rel='manifest';l.href=info.m;document.head.appendChild(l);const a=document.createElement('link');a.rel='apple-touch-icon';a.href=info.i;document.head.appendChild(a);const mt=document.createElement('meta');mt.name='apple-mobile-web-app-title';mt.content=info.t;document.head.appendChild(mt);const mc=document.createElement('meta');mc.name='apple-mobile-web-app-capable';mc.content='yes';document.head.appendChild(mc);} })()}catch(e){}<\/script>`)
         }
       }
     ],
