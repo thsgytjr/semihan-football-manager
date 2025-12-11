@@ -1340,7 +1340,9 @@ export default function App(){
   async function adminLogout(){
     await signOut()
     setIsAdmin(false)
+    setIsAnalyticsAdmin(false)
     localStorage.removeItem("isAdmin")
+    localStorage.removeItem("isAnalyticsAdmin")
     notify("Admin 모드 해제")
   }
   
