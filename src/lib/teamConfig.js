@@ -18,7 +18,8 @@ export const TEAM_CONFIG = {
   // Cloudflare R2 설정 (이미지 스토리지)
   r2: {
     publicUrl: import.meta.env.VITE_R2_PUBLIC_URL || 'https://pub-cf56cce5ad30432d9a1d3d9ad6f1d1be.r2.dev',
-    teamPath: import.meta.env.VITE_R2_TEAM_PATH || 'semihan'
+    teamPath: import.meta.env.VITE_R2_TEAM_PATH || 'semihan',
+    signUrl: import.meta.env.VITE_R2_SIGN_URL || '' // 사전 서명 PUT/DELETE 발급 엔드포인트
   },
   
   // 기능 토글

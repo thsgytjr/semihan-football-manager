@@ -1,254 +1,141 @@
 // src/lib/photoUpload.js
-import { supabase } from './supabaseClient'
 import { logger } from './logger'
 import { TEAM_CONFIG } from './teamConfig'
 
-const BUCKET_NAME = 'player-photos' // Supabase Storage 버킷 이름 (레거시)
-const MAX_RETRIES = 3 // 최대 재시도 횟수
-const RETRY_DELAY = 1000 // 재시도 간격 (ms)
+const MAX_RETRIES = 3
+const RETRY_DELAY = 1000
+const SIGN_ENDPOINT = TEAM_CONFIG.r2.signUrl
+const PUBLIC_BASE = TEAM_CONFIG.r2.publicUrl
+const TEAM_PATH = TEAM_CONFIG.r2.teamPath
 
-/**
- * 딜레이 함수
- */
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
-/**
- * HEIC/HEIF/PNG 이미지를 JPEG로 변환
- */
 async function convertToJPEG(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
-    
     reader.onload = (e) => {
       const img = new Image()
-      
       img.onload = () => {
         try {
           const canvas = document.createElement('canvas')
           const ctx = canvas.getContext('2d')
-          
-          // 최대 크기 설정 (1200px)
-          const MAX_WIDTH = 1200
-          const MAX_HEIGHT = 1200
-          let width = img.width
-          let height = img.height
-          
-          if (width > height) {
-            if (width > MAX_WIDTH) {
-              height = Math.round(height * MAX_WIDTH / width)
-              width = MAX_WIDTH
-            }
-          } else {
-            if (height > MAX_HEIGHT) {
-              width = Math.round(width * MAX_HEIGHT / height)
-              height = MAX_HEIGHT
-            }
+          const MAX_W = 1200
+          const MAX_H = 1200
+          let { width, height } = img
+          if (width > height && width > MAX_W) {
+            height = Math.round(height * MAX_W / width)
+            width = MAX_W
+          } else if (height >= width && height > MAX_H) {
+            width = Math.round(width * MAX_H / height)
+            height = MAX_H
           }
-          
           canvas.width = width
           canvas.height = height
           ctx.drawImage(img, 0, 0, width, height)
-          
-          // JPEG로 변환 (품질 0.85)
           canvas.toBlob((blob) => {
-            if (blob) {
-              const newFile = new File([blob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
-                type: 'image/jpeg',
-                lastModified: Date.now()
-              })
-              resolve(newFile)
-            } else {
-              reject(new Error('이미지 변환 실패: Blob 생성 실패'))
-            }
+            if (!blob) return reject(new Error('이미지 변환 실패: Blob 생성 실패'))
+            resolve(new File([blob], file.name.replace(/\.[^/.]+$/, '.jpg'), {
+              type: 'image/jpeg',
+              lastModified: Date.now()
+            }))
           }, 'image/jpeg', 0.85)
         } catch (err) {
           reject(new Error(`이미지 변환 실패: ${err.message}`))
         }
       }
-      
       img.onerror = () => reject(new Error('이미지 로드 실패: 손상되었거나 지원하지 않는 형식입니다'))
       img.src = e.target.result
     }
-    
     reader.onerror = () => reject(new Error('파일 읽기 실패: 파일에 접근할 수 없습니다'))
     reader.readAsDataURL(file)
   })
 }
 
-/**
- * 재시도 로직이 포함된 업로드 함수
- */
-async function uploadWithRetry(filePath, file, options, retries = 0) {
+async function getSignedUrl(key, contentType, action) {
+  if (!SIGN_ENDPOINT) throw new Error('R2 사전 서명 엔드포인트(VITE_R2_SIGN_URL)가 설정되지 않았습니다.')
+  const res = await fetch(SIGN_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key, contentType, action })
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`R2 서명 요청 실패 (${res.status}): ${text}`)
+  }
+  return res.json()
+}
+
+async function putWithRetry(url, file, contentType, retries = 0) {
   try {
-    const { data, error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(filePath, file, options)
-    
-    if (error) {
-      // 특정 에러는 재시도하지 않음
-      if (error.message?.includes('Bucket not found')) {
-        throw new Error('Storage 버킷을 찾을 수 없습니다. Supabase 설정을 확인해주세요.')
-      }
-      if (error.message?.includes('policy')) {
-        throw new Error('업로드 권한이 없습니다. Storage Policy를 확인해주세요.')
-      }
-      if (error.message?.includes('payload')) {
-        throw new Error('파일이 너무 큽니다. 5MB 이하의 이미지를 사용해주세요.')
-      }
-      
-      // 재시도 가능한 에러 (네트워크 등)
-      if (retries < MAX_RETRIES) {
-        await delay(RETRY_DELAY)
-        return uploadWithRetry(filePath, file, options, retries + 1)
-      }
-      
-      throw new Error(`업로드 실패 (${MAX_RETRIES + 1}회 시도): ${error.message}`)
+    const r = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Content-Type': contentType },
+      body: file
+    })
+    if (!r.ok) {
+      const t = await r.text().catch(() => '')
+      throw new Error(`R2 업로드 실패 (${r.status}): ${t}`)
     }
-    
-    return data
+    return true
   } catch (err) {
-    if (retries < MAX_RETRIES && !err.message.includes('Bucket') && !err.message.includes('권한') && !err.message.includes('너무 큽니다')) {
+    if (retries < MAX_RETRIES) {
       await delay(RETRY_DELAY)
-      return uploadWithRetry(filePath, file, options, retries + 1)
+      return putWithRetry(url, file, contentType, retries + 1)
     }
     throw err
   }
 }
 
-/**
- * 선수 사진을 Supabase Storage에 업로드
- * @param {File} file - 업로드할 이미지 파일
- * @param {string} playerId - 선수 ID
- * @param {string} playerName - 선수 이름 (파일명으로 사용)
- * @param {string} oldPhotoUrl - 기존 사진 URL (삭제용, 선택사항)
- * @returns {Promise<string>} - 업로드된 이미지의 Public URL
- */
 export async function uploadPlayerPhoto(file, playerId, playerName = null, oldPhotoUrl = null) {
-  try {
-    // 1. 파일 검증
-    if (!file) {
-      throw new Error('파일이 선택되지 않았습니다.')
+  if (!file) throw new Error('파일이 선택되지 않았습니다.')
+  const MAX_SIZE = 5 * 1024 * 1024
+  if (file.size > MAX_SIZE) throw new Error(`파일이 너무 큽니다 (${(file.size / 1024 / 1024).toFixed(2)}MB). 5MB 이하 이미지를 사용해주세요.`)
+  if (!file.type.startsWith('image/')) throw new Error(`이미지 파일만 업로드 가능합니다. (현재 타입: ${file.type || '알 수 없음'})`)
+
+  let uploadFile = file
+  const needsConversion =
+    file.type === 'image/heic' ||
+    file.type === 'image/heif' ||
+    file.name.toLowerCase().endsWith('.heic') ||
+    file.name.toLowerCase().endsWith('.heif')
+  if (needsConversion) uploadFile = await convertToJPEG(file)
+
+  const sanitizedName = (playerName || 'player').replace(/[^a-zA-Z0-9]/g, '').toLowerCase().slice(0, 20)
+  const fileExtension = uploadFile.type === 'image/png' ? 'png' : 'jpg'
+  const fileName = sanitizedName ? `${sanitizedName}_${playerId}.${fileExtension}` : `${playerId}.${fileExtension}`
+  const filePath = `players/${fileName}`
+
+  if (oldPhotoUrl && oldPhotoUrl.includes(TEAM_PATH)) {
+    try {
+      const cleanOldUrl = oldPhotoUrl.split('?')[0].split('#')[0]
+      const oldFileName = cleanOldUrl.split('/').pop()
+      const isSamePlayer = oldFileName && (
+        oldFileName.includes(`_${playerId}.`) ||
+        oldFileName === `${playerId}.${fileExtension}` ||
+        oldFileName === `${playerId}.png` ||
+        oldFileName === `${playerId}.jpg`
+      )
+      if (isSamePlayer && oldFileName !== fileName) await deletePlayerPhoto(cleanOldUrl)
+    } catch (err) {
+      logger.error('⚠️ 이전 사진 삭제 실패:', err)
     }
-    
-    // 2. 파일 크기 검증 (5MB)
-    const MAX_SIZE = 5 * 1024 * 1024
-    if (file.size > MAX_SIZE) {
-      throw new Error(`파일이 너무 큽니다 (${(file.size / 1024 / 1024).toFixed(2)}MB). 5MB 이하의 이미지를 사용해주세요.`)
-    }
-    
-    // 3. 파일 타입 검증
-    if (!file.type.startsWith('image/')) {
-      throw new Error(`이미지 파일만 업로드 가능합니다. (현재 타입: ${file.type || '알 수 없음'})`)
-    }
-    
-    // 4. HEIC만 변환 (PNG는 투명 배경 유지 위해 그대로 사용)
-    let uploadFile = file
-    const needsConversion = 
-      file.type === 'image/heic' || 
-      file.type === 'image/heif' ||
-      file.name.toLowerCase().endsWith('.heic') || 
-      file.name.toLowerCase().endsWith('.heif')
-    
-    if (needsConversion) {
-      try {
-        uploadFile = await convertToJPEG(file)
-      } catch (conversionError) {
-        throw new Error(`이미지 변환 실패: ${conversionError.message}`)
-      }
-    }
-    
-    // 5. 기존 파일 삭제 (같은 선수의 이전 사진만 삭제)
-    // 먼저 새 파일명 생성
-    const sanitizedName = (playerName || 'player')
-      .replace(/[^a-zA-Z0-9]/g, '')
-      .toLowerCase()
-      .slice(0, 20)
-    
-    const fileExtension = uploadFile.type === 'image/png' ? 'png' : 'jpg'
-    const fileName = sanitizedName 
-      ? `${sanitizedName}_${playerId}.${fileExtension}` 
-      : `${playerId}.${fileExtension}`
-    const filePath = `players/${fileName}`
-    
-    // oldPhotoUrl이 있고, 새 파일과 다른 경우만 삭제 (같은 선수의 이전 사진)
-    if (oldPhotoUrl && oldPhotoUrl.includes('player-photos')) {
-      try {
-        const cleanOldUrl = oldPhotoUrl.split('?')[0].split('#')[0]
-        const oldFileName = cleanOldUrl.split('/').pop()
-        
-        // playerId를 포함하는지 확인 (언더스코어 있거나 UUID만 있는 경우 모두 체크)
-        const isSamePlayer = oldFileName && (
-          oldFileName.includes(`_${playerId}.`) || // name_uuid.ext 형식
-          oldFileName === `${playerId}.${fileExtension}` || // uuid.ext 형식
-          oldFileName === `${playerId}.png` || // 다른 확장자
-          oldFileName === `${playerId}.jpg`
-        )
-        
-        // 같은 선수이고, 다른 파일명인 경우만 삭제
-        if (isSamePlayer && oldFileName !== fileName) {
-          await deletePlayerPhoto(oldPhotoUrl)
-        }
-      } catch (deleteError) {
-        logger.error('⚠️ 삭제 실패:', deleteError)
-      }
-    }
-    
-    // 6. 업로드 (재시도 포함)
-    const uploadResult = await uploadWithRetry(filePath, uploadFile, {
-      contentType: uploadFile.type === 'image/png' ? 'image/png' : 'image/jpeg',
-      cacheControl: '3600',
-      upsert: true // 같은 playerId는 덮어쓰기
-    })
-    
-    // 7. 업로드 확인 (파일이 실제로 존재하는지 체크)
-    const { data: files, error: listError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .list('players', {
-        search: fileName
-      })
-    
-    // 8. Public URL 생성 (Cloudflare R2)
-    const r2Url = `${TEAM_CONFIG.r2.publicUrl}/${TEAM_CONFIG.r2.teamPath}/players/${fileName}`
-    logger.info('✅ R2 URL 생성:', r2Url)
-    return r2Url
-    
-  } catch (error) {
-    // 사용자 친화적인 에러 메시지
-    throw error
   }
+
+  const { uploadUrl, publicUrl } = await getSignedUrl(filePath, uploadFile.type, 'put')
+  await putWithRetry(uploadUrl, uploadFile, uploadFile.type)
+  return publicUrl || `${PUBLIC_BASE}/${TEAM_PATH}/${filePath}`
 }
 
-/**
- * 선수 사진 삭제 (옵션)
- * @param {string} photoUrl - 삭제할 이미지 URL
- */
 export async function deletePlayerPhoto(photoUrl) {
-  if (!photoUrl || !photoUrl.includes(BUCKET_NAME)) {
-    return
-  }
-  
+  if (!photoUrl) return
   try {
-    // URL에서 쿼리 파라미터 제거 (?t=... 등)
-    const cleanUrl = photoUrl.split('?')[0]
-    
-    // URL에서 파일 경로 추출
-    const urlParts = cleanUrl.split(`${BUCKET_NAME}/`)
-    if (urlParts.length < 2) {
-      return
-    }
-    
-    const filePath = urlParts[1]
-    
-    const { error } = await supabase.storage
-      .from(BUCKET_NAME)
-      .remove([filePath])
-    
-    if (error) {
-      logger.error('❌ 삭제 에러:', error)
-      throw error
-    }
+    const cleanUrl = photoUrl.split('?')[0].split('#')[0]
+    const filePath = cleanUrl.split(`${TEAM_PATH}/`)[1]
+    if (!filePath) return
+    const { deleteUrl } = await getSignedUrl(filePath, 'application/octet-stream', 'delete')
+    if (!deleteUrl) return
+    await fetch(deleteUrl, { method: 'DELETE' })
   } catch (err) {
     logger.error('❌ deletePlayerPhoto 실패:', err)
-    throw err
   }
 }
