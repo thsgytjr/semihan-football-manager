@@ -610,7 +610,12 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
 
     if (m?.draft && hasNonEmpty(m.draft.quarterScores)) return m.draft.quarterScores
     if (hasNonEmpty(m.quarterScores)) return m.quarterScores
-    const baseTeamCount = (Array.isArray(draftSnap) ? draftSnap.length : 0) || (Array.isArray(m?.teams) ? m.teams.length : 0) || Number(m?.teamCount) || 0
+    // baseTeamCount: 원본 매치의 팀 수를 정확히 계산
+    // 우선순위: snapshot.length > teams.length > draftSnap.length > teamCount
+    const snapshotTeamCount = Array.isArray(m?.snapshot) ? m.snapshot.length : 0
+    const matchTeamsCount = Array.isArray(m?.teams) ? m.teams.length : 0
+    const draftSnapCount = Array.isArray(draftSnap) ? draftSnap.length : 0
+    const baseTeamCount = snapshotTeamCount || matchTeamsCount || draftSnapCount || Number(m?.teamCount) || 0
     const gameScores = m?.stats?.__games
     if (refMode && Array.isArray(gameScores) && gameScores.length > 0) {
       const teamCount = gameScores.reduce((max, g) => {
@@ -1881,14 +1886,6 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                     const field2Indices = []
                     
                     displayedQuarterScores.forEach((arr, ti) => {
-                      // Check if this team played in any game
-                      const hasPlayedAnyGame = Array.isArray(arr) 
-                        ? arr.some(v => v !== null && v !== undefined)
-                        : arr !== null && arr !== undefined
-                      
-                      // Skip teams that didn't play in any game
-                      if (!hasPlayedAnyGame) return
-                      
                       if (points.fieldNames[ti] === '구장1') field1Indices.push(ti)
                       else if (points.fieldNames[ti] === '구장2') field2Indices.push(ti)
                     })
@@ -2022,16 +2019,6 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                   return (
                     <>
                       {displayedQuarterScores.map((arr,ti)=>{
-                  // Check if this team played in any game (has at least one non-null score)
-                  const hasPlayedAnyGame = Array.isArray(arr) 
-                    ? arr.some(v => v !== null && v !== undefined)
-                    : arr !== null && arr !== undefined
-                  
-                  // Skip teams that didn't play in any game (all nulls)
-                  if (!hasPlayedAnyGame) {
-                    return null
-                  }
-                  
                   const teamTotal = teamTotals[ti]
                   
                   // 승/무/패 결정 - pointWinners 재사용 (모든 타이브레이커 포함)
