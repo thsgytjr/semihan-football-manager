@@ -876,28 +876,31 @@ export default function App(){
   }
 
   async function handleCancelRefereeMode() {
-    if (activeMatch?.id) {
+    // Clear active match first to immediately exit referee mode UI
+    const matchId = activeMatch?.id
+    setActiveMatch(null)
+    setTab(isRefModeLink ? 'dashboard' : 'stats')
+    
+    if (matchId) {
       try {
         // Force reload from DB to get the latest stats with __inProgress
         const freshMatches = await listMatchesFromDB()
-        const matchFromDb = freshMatches.find(m => m.id === activeMatch.id)
-        const cleanedStats = { ...(matchFromDb?.stats || activeMatch?.stats || {}) }
+        const matchFromDb = freshMatches.find(m => m.id === matchId)
+        const cleanedStats = { ...(matchFromDb?.stats || {}) }
         if (cleanedStats.__inProgress) delete cleanedStats.__inProgress
-        await handleUpdateMatch(activeMatch.id, { stats: cleanedStats }, true) // silent=true
+        await handleUpdateMatch(matchId, { stats: cleanedStats }, true) // silent=true
         
         // Update local state to reflect the cleared __inProgress immediately
         setDb(prev => ({
           ...prev,
           matches: (prev.matches || []).map(m => 
-            m.id === activeMatch.id ? { ...m, stats: cleanedStats } : m
+            m.id === matchId ? { ...m, stats: cleanedStats } : m
           )
         }))
       } catch (err) {
         console.warn('Failed to clear in-progress data:', err)
       }
     }
-    setActiveMatch(null)
-    setTab(isRefModeLink ? 'dashboard' : 'stats')
   }
 
   async function handleFinishRefereeMode(matchData) {
