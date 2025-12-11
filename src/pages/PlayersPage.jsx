@@ -246,8 +246,16 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
   }
   
   const resetToRandom = async () => {
-    // 기존 업로드된 사진이 R2에 있으면 삭제 (TEAM_PATH 포함 체크)
-    if(draft.photoUrl && !draft.photoUrl.startsWith('RANDOM:') && (draft.photoUrl.includes(TEAM_CONFIG.r2.teamPath) || draft.photoUrl.includes('player-photos'))){
+    // 기존 업로드된 사진이 R2에 있으면 삭제 (TEAM_PATH, player-photos, 또는 R2 도메인 체크)
+    const isUploadedPhoto = draft.photoUrl && 
+      !draft.photoUrl.startsWith('RANDOM:') && 
+      !draft.photoUrl.startsWith('data:') &&
+      (draft.photoUrl.includes(TEAM_CONFIG.r2.teamPath) || 
+       draft.photoUrl.includes('player-photos') ||
+       draft.photoUrl.includes('.r2.dev') ||
+       draft.photoUrl.includes('r2.cloudflarestorage.com'))
+    
+    if(isUploadedPhoto){
       try {
         await deletePlayerPhoto(draft.photoUrl)
         logger.info('✅ 이전 사진 삭제 완료:', draft.photoUrl)
@@ -1503,7 +1511,30 @@ export default function PlayersPage({
   const requestDelete = (id, name) => setConfirm({ open: true, id, name: name || "" })
   const confirmDelete = async () => {
     try {
-      if (confirm.id) await onDelete(confirm.id)
+      if (confirm.id) {
+        // 선수 정보 찾기
+        const player = players.find(p => p.id === confirm.id)
+        
+        // 업로드된 사진이 있으면 먼저 삭제 (R2 또는 Supabase)
+        const isUploadedPhoto = player?.photoUrl && 
+          !player.photoUrl.startsWith('RANDOM:') && 
+          !player.photoUrl.startsWith('data:') &&
+          (player.photoUrl.includes(TEAM_CONFIG.r2.teamPath) || 
+           player.photoUrl.includes('player-photos') ||
+           player.photoUrl.includes('.r2.dev') ||
+           player.photoUrl.includes('r2.cloudflarestorage.com'))
+        
+        if (isUploadedPhoto) {
+          try {
+            await deletePlayerPhoto(player.photoUrl)
+            logger.info('✅ 선수 사진 삭제 완료:', player.photoUrl)
+          } catch (err) {
+            logger.error('⚠️ 선수 사진 삭제 실패:', err)
+          }
+        }
+        
+        await onDelete(confirm.id)
+      }
       notify("삭제 완료")
     } catch {
       notify("삭제에 실패했습니다. 다시 시도해 주세요.")
