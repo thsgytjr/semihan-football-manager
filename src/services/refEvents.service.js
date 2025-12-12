@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabaseClient'
-import { logger } from '../components/Toast'
+import { logger } from '../lib/logger'
 
 const TABLE = 'ref_events'
 
