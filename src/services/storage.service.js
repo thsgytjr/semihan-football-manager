@@ -128,7 +128,11 @@ export function subscribePlayers(callback) {
         }
       }
     )
-    .subscribe()
+
+  const subscribePromise = channel.subscribe()
+  if (subscribePromise && typeof subscribePromise.catch === 'function') {
+    subscribePromise.catch((err) => logger?.warn?.('[subscribePlayers] subscribe error', err))
+  }
 
   return () => {
     try { supabase.removeChannel?.(channel) } catch {}

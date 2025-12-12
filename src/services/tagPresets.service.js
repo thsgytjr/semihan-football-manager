@@ -110,7 +110,12 @@ export function subscribeTagPresets(callback){
     },payload=>{
       callback(payload)
     })
-    .subscribe()
+  
+  const subscribePromise = channel.subscribe()
+  if (subscribePromise && typeof subscribePromise.catch === 'function') {
+    subscribePromise.catch((err) => logger?.warn?.('[subscribeTagPresets] subscribe error', err))
+  }
+  
   return ()=>{
     try{ supabase.removeChannel?.(channel) }catch{}
   }

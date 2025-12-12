@@ -7,6 +7,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import { notify } from '../components/Toast'
 import { getCaptains } from '../lib/matchHelpers'
 import { fetchRefEvents, saveRefEvent, deleteRefEvent, subscribeRefEvents, safeMatchId } from '../services/refEvents.service'
+import { upsertRefSession, cancelRefSession, completeRefSession, subscribeRefSession, updateLastEventTime } from '../services/refSession.service'
 
 const statShell = () => ({ goals: 0, assists: 0, yellowCards: 0, redCards: 0, fouls: 0, cleanSheet: 0, events: [] })
 
@@ -237,6 +238,8 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
           recomputeScores(next)
           return next.sort((a, b) => new Date(b.created_at || b.timestamp || 0) - new Date(a.created_at || a.timestamp || 0))
         })
+        // 이벤트 발생 시 마지막 이벤트 시간 업데이트
+        updateLastEventTime(matchIdForRef, gameIndexForRef)
       },
       (id) => {
         if (!id) return
@@ -249,6 +252,59 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     )
     return () => sub?.unsubscribe?.()
   }, [matchIdForRef, gameIndexForRef, recomputeScores])
+
+  // 세션 시작 시 세션 생성 및 구독
+  useEffect(() => {
+    if (!matchIdForRef || gameStatus !== 'playing') return undefined
+
+    // 세션 생성
+    upsertRefSession(matchIdForRef, gameIndexForRef, {
+      status: 'active',
+      duration: duration,
+      startedAt: new Date(startTime).toISOString(),
+      lastEventAt: new Date().toISOString()
+    })
+
+    // 세션 상태 변경 구독
+    const sessionSub = subscribeRefSession(
+      matchIdForRef,
+      gameIndexForRef,
+      (session) => {
+        if (session.status === 'cancelled') {
+          notify.warning(t('referee.sessionCancelledByOther') || '다른 디바이스에서 심판모드가 취소되었습니다.')
+          setTimeout(() => {
+            onCancel?.()
+          }, 1500)
+        }
+      }
+    )
+
+    return () => sessionSub?.unsubscribe?.()
+  }, [matchIdForRef, gameIndexForRef, gameStatus, duration, startTime, onCancel, t])
+
+  // 자동 저장: 경기 시간의 150% 경과 시 이벤트 없으면 자동 저장
+  useEffect(() => {
+    if (!matchIdForRef || gameStatus !== 'playing' || !startTime) return undefined
+
+    const checkAutoSave = setInterval(async () => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000)
+      const maxDuration = duration * 60 * 1.5 // 150% of duration
+
+      if (elapsed >= maxDuration && events.length === 0) {
+        notify.info(t('referee.autoSavingNoEvents') || '이벤트가 없어 자동으로 저장합니다.')
+        
+        // 세션 완료 처리
+        await completeRefSession(matchIdForRef, gameIndexForRef)
+        
+        // 자동 저장 콜백 호출
+        setTimeout(() => {
+          onAutoSave?.()
+        }, 1000)
+      }
+    }, 10000) // 10초마다 체크
+
+    return () => clearInterval(checkAutoSave)
+  }, [matchIdForRef, gameIndexForRef, gameStatus, startTime, duration, events.length, onAutoSave, t])
 
   const formatTime = (seconds) => {
     const totalMinutes = Math.floor(seconds / 60)
@@ -1122,8 +1178,10 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
         confirmLabel="Cancel Match"
         cancelLabel="Cancel"
         tone="danger"
-        onConfirm={() => {
+        onConfirm={async () => {
           setShowCancelConfirm(false)
+          // 다른 디바이스에 취소 알림
+          await cancelRefSession(matchIdForRef, gameIndexForRef)
           onCancel()
         }}
         onCancel={() => setShowCancelConfirm(false)}

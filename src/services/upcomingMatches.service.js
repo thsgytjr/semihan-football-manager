@@ -162,7 +162,12 @@ export function subscribeUpcomingMatches(callback){
     },payload=>{
       callback(payload)
     })
-    .subscribe()
+  
+  const subscribePromise = channel.subscribe()
+  if (subscribePromise && typeof subscribePromise.catch === 'function') {
+    subscribePromise.catch((err) => logger?.warn?.('[subscribeUpcomingMatches] subscribe error', err))
+  }
+  
   return ()=>{
     try{ supabase.removeChannel?.(channel) }catch{}
   }

@@ -49,6 +49,11 @@ export function subscribeVisitTotals(callback){
       const total = payload?.new?.total_visits
       if(typeof total === 'number') callback(total)
     })
-    .subscribe()
+  
+  const subscribePromise = channel.subscribe()
+  if (subscribePromise && typeof subscribePromise.catch === 'function') {
+    subscribePromise.catch((err) => logger?.warn?.('[subscribeVisitTotals] subscribe error', err))
+  }
+  
   return ()=>{ try{ supabase.removeChannel?.(channel) }catch{} }
 }

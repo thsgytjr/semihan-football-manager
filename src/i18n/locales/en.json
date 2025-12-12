@@ -753,5 +753,11 @@
         "assists": "Assists"
       }
     }
+  },
+  "referee": {
+    "sessionCancelledByOther": "Referee mode was cancelled from another device.",
+    "autoSavingNoEvents": "Auto-saving since no events were recorded.",
+    "yellowCard": "Yellow Card",
+    "redCard": "Red Card"
   }
 }

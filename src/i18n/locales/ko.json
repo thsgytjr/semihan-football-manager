@@ -749,5 +749,11 @@
         "assists": "어시스트"
       }
     }
+  },
+  "referee": {
+    "sessionCancelledByOther": "다른 디바이스에서 심판모드가 취소되었습니다.",
+    "autoSavingNoEvents": "이벤트가 없어 자동으로 저장합니다.",
+    "yellowCard": "옐로 카드",
+    "redCard": "레드 카드"
   }
 }

@@ -165,7 +165,11 @@ export function subscribeMembershipSettings(callback) {
         callback(payload)
       }
     )
-    .subscribe()
+
+  const subscribePromise = subscription.subscribe()
+  if (subscribePromise && typeof subscribePromise.catch === 'function') {
+    subscribePromise.catch((err) => logger?.warn?.('[subscribeMembershipSettings] subscribe error', err))
+  }
 
   return () => {
     subscription.unsubscribe()
