@@ -231,6 +231,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     const sub = subscribeRefEvents(
       matchIdForRef,
       gameIndexForRef,
+      // onInsert
       (ev) => {
         setEvents(prev => {
           const exists = prev.some(e => e.id === ev.id)
@@ -241,6 +242,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
         // 이벤트 발생 시 마지막 이벤트 시간 업데이트
         updateLastEventTime(matchIdForRef, gameIndexForRef)
       },
+      // onDelete
       (id) => {
         if (!id) return
         setEvents(prev => {
@@ -248,6 +250,16 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
           recomputeScores(next)
           return next
         })
+      },
+      // onUpdate
+      (ev) => {
+        setEvents(prev => {
+          const next = prev.map(e => e.id === ev.id ? ev : e)
+          recomputeScores(next)
+          return next.sort((a, b) => new Date(b.created_at || b.timestamp || 0) - new Date(a.created_at || a.timestamp || 0))
+        })
+        // 이벤트 업데이트 시 마지막 이벤트 시간 업데이트
+        updateLastEventTime(matchIdForRef, gameIndexForRef)
       }
     )
     return () => sub?.unsubscribe?.()

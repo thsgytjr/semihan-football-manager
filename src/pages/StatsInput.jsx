@@ -12,6 +12,7 @@ import { formatMatchLabel } from '../lib/matchLabel'
 import { isRefMatch } from '../lib/matchUtils'
 import { summarizeVotes, buildMoMTieBreakerScores, getMoMPhase } from '../lib/momUtils'
 import { fetchMoMVotes, submitMoMVote, deleteMoMVote, deleteMoMVotesByMatch } from '../services/momVotes.service'
+import { deleteAllRefEvents } from '../services/refEvents.service'
 import RefereeTimelineEditor from '../components/RefereeTimelineEditor'
 
 const toStr = (v) => (v === null || v === undefined) ? '' : String(v)
@@ -258,7 +259,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     setTimeout(() => setShowSaved(false), 1200)
   }
 
-  const resetAllRecords = () => {
+  const resetAllRecords = async () => {
     if (!editingMatch) return
     setDraft({})
     // Wipe per-game timelines/scores so match history also clears
@@ -268,6 +269,17 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       statsMeta: { gameEvents: [] },
       gameEvents: [],
     })
+    
+    // Delete all referee events from database for this match
+    try {
+      const gamesCount = editingMatch.gameMatchups?.length || 1
+      for (let gameIndex = 0; gameIndex < gamesCount; gameIndex++) {
+        await deleteAllRefEvents(editingMatch.id, gameIndex)
+      }
+    } catch (err) {
+      console.error('Failed to delete referee events:', err)
+      // Don't block the reset operation if deletion fails
+    }
   }
 
   const refreshMoMVotes = useCallback(async () => {

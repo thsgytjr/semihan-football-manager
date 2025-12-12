@@ -38,7 +38,14 @@ export async function deleteRefEvent(matchId, gameIndex, eventId) {
   if (error) logger?.warn?.('[refEvents] delete error', error)
 }
 
-export function subscribeRefEvents(matchId, gameIndex, onInsert, onDelete) {
+// 특정 매치/게임의 모든 이벤트 삭제
+export async function deleteAllRefEvents(matchId, gameIndex) {
+  if (!matchId) return
+  const { error } = await supabase.from(TABLE).delete().eq('match_id', matchId).eq('game_index', gameIndex)
+  if (error) logger?.warn?.('[refEvents] delete all error', error)
+}
+
+export function subscribeRefEvents(matchId, gameIndex, onInsert, onDelete, onUpdate) {
   if (!matchId) return { unsubscribe: () => {} }
   const channel = supabase.channel(`ref-events-${matchId}-${gameIndex}`)
 
@@ -48,6 +55,15 @@ export function subscribeRefEvents(matchId, gameIndex, onInsert, onDelete) {
     (payload) => {
       if (payload?.new?.game_index !== gameIndex) return
       onInsert?.(rowToEvent(payload.new))
+    }
+  )
+
+  channel.on(
+    'postgres_changes',
+    { event: 'UPDATE', schema: 'public', table: TABLE, filter: `match_id=eq.${matchId}` },
+    (payload) => {
+      if (payload?.new?.game_index !== gameIndex) return
+      onUpdate?.(rowToEvent(payload.new))
     }
   )
 
