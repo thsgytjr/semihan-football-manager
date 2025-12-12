@@ -432,7 +432,7 @@ function QuickAttendanceEditor({ players, snapshot, onDraftChange, customMembers
 }
 
 /* ------------------------- 매치 카드 ------------------------- */
-const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, onDeleteMatch, onUpdateMatch, onUpdateVideos, showTeamOVRForAdmin, hideOVR, latestDraftId, isHighlighted, customMemberships }, ref){
+const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, enableLoadToPlanner, onLoadToPlanner, onDeleteMatch, onUpdateMatch, onUpdateVideos, showTeamOVRForAdmin, hideOVR, latestDraftId, isHighlighted, customMemberships, isExpanded, onToggleExpand }, ref){
   const { t } = useTranslation()
   const hydrated=useMemo(()=>hydrateMatch(m,players),[m,players])
   const initialSnap=useMemo(()=>normalizeSnapshot(m,hydrated.teams||[]),[m,hydrated.teams])
@@ -489,7 +489,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
   const [showGA, setShowGA] = useState(false)
   
   // ✅ 상태 수동 제어 (Admin 전용)
-  const [statusOverride, setStatusOverride] = useState(m?.statusOverride || null) // 'live', 'updating', null
+  const [statusOverride, setStatusOverride] = useState(m?.statusOverride || null) // 'live', null
   
   // ✅ 2개 경기장 모드 토글
   const [multiFieldMode, setMultiFieldMode] = useState(m?.multiField || false)
@@ -756,9 +756,6 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
     // If match started and within 3 hours after = live
     if (diffHours > -3) return 'live'
     
-    // If match ended (more than 3 hours ago) but no stats = updating
-    if (diffHours <= -3) return 'updating'
-    
     return null
   }, [m?.dateISO, hasStats, currentTime, statusOverride])
 
@@ -803,8 +800,79 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
     return () => clearInterval(interval)
   }, [m?.dateISO])
 
+  // 컴팩트 요약 정보
+  const attendeeCount = draftSnap.flat().length
+  const dateStr = m?.dateISO ? new Date(m.dateISO).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', weekday: 'short' }) : ''
+  const teamCount = draftSnap.length
+
   return (
-  <li ref={ref} className={`relative min-w-0 rounded-2xl border border-gray-100 bg-gradient-to-br from-white via-stone-50 to-stone-100 p-5 shadow-lg ${isHighlighted ? 'match-highlight-pulse' : ''}`} style={isHighlighted ? { borderColor: '#3b82f6', borderWidth: '2px' } : {}}>
+  <li ref={ref} className={`relative min-w-0 rounded-xl border-2 transition-all ${isExpanded ? 'border-gray-200 bg-gradient-to-br from-white via-stone-50 to-stone-100 shadow-lg' : 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-md'} ${isHighlighted ? 'match-highlight-pulse' : ''}`}>
+      
+      {/* 컴팩트 헤더 - 클릭 가능 */}
+      <div 
+        className="flex items-center justify-between p-3 cursor-pointer select-none"
+        onClick={onToggleExpand}
+      >
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          {/* 날짜 */}
+          <div className="flex-shrink-0 text-center min-w-[60px]">
+            <div className="text-xs font-semibold text-gray-700">{dateStr.split(' ')[0]}</div>
+            <div className="text-[10px] text-gray-500">{dateStr.split(' ').slice(1).join(' ')}</div>
+          </div>
+          
+          {/* 구분선 */}
+          <div className="h-8 w-px bg-gray-300"></div>
+          
+          {/* 참석 인원 */}
+          <div className="flex-shrink-0">
+            <span className="text-sm font-semibold text-gray-700">{attendeeCount}명</span>
+          </div>
+          
+          {/* 구분선 */}
+          <div className="h-8 w-px bg-gray-300"></div>
+          
+          {/* 팀 수 */}
+          <div className="flex-shrink-0">
+            <span className="text-sm font-semibold text-gray-700">{teamCount}팀</span>
+          </div>
+          
+          {/* 드래프트/일반 매치 표시 */}
+          {isDraftMode && (
+            <>
+              <div className="h-8 w-px bg-gray-300"></div>
+              <span className="flex-shrink-0 inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-xs font-medium text-amber-800 bg-amber-50 border border-amber-200">
+                <img src={draftIcon} alt="" className="w-3 h-3" loading="lazy" />
+                Draft
+              </span>
+            </>
+          )}
+          
+          {/* LIVE 배지만 헤더에 표시 */}
+          {matchStatus === 'live' && (
+            <span className="ml-2 flex-shrink-0 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white bg-red-500">
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-white"></span>
+              LIVE
+            </span>
+          )}
+        </div>
+        
+        {/* 펼침 표시 */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {dirty && isExpanded && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800 font-semibold">수정됨</span>}
+          <svg 
+            className={`w-5 h-5 text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </div>
+      
+      {/* 펼쳐진 상세 내용 */}
+      {isExpanded && (
+        <div className="border-t border-gray-200 p-5">
       {/* Status indicator based on match time and stats */}
       {matchStatus === 'live' && (
         <div className="absolute -top-3 -right-2 z-10 pointer-events-none">
@@ -819,14 +887,6 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
           <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-300 shadow-sm">
             <span aria-hidden="true">📅</span>
             <span>{countdown || 'UPCOMING'}</span>
-          </span>
-        </div>
-      )}
-      {matchStatus === 'updating' && (
-        <div className="absolute -top-3 -right-2 z-10 pointer-events-none">
-          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white updating-badge-enhanced">
-            <span className="inline-block h-2 w-2 rounded-full bg-white updating-dot"></span>
-            <span>UPDATING SCORES</span>
           </span>
         </div>
       )}
@@ -895,7 +955,6 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
               >
                 <option value="">Auto</option>
                 <option value="live">Live</option>
-                <option value="updating">Update</option>
                 <option value="off">Off</option>
               </select>
             </div>
@@ -3812,6 +3871,8 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
           <VideoAdder onAdd={addVideo}/>
         )}
       </div>
+        </div>
+      )}
     </li>
   )
 })
@@ -3848,42 +3909,61 @@ export default function SavedMatchesList({
     return null
   }, [ordered])
   
-  // ✅ 하이라이트된 매치가 있을 때 스크롤
+  // 🎯 각 매치의 펼침/접힘 상태 관리 (기본적으로 최근 5개만 펼침)
+  const [expandedMatches, setExpandedMatches] = useState(() => {
+    const initial = new Set()
+    ordered.slice(0, 5).forEach(m => initial.add(m.id))
+    return initial
+  })
+  
+  const toggleExpand = (matchId) => {
+    setExpandedMatches(prev => {
+      const next = new Set(prev)
+      if (next.has(matchId)) {
+        next.delete(matchId)
+      } else {
+        next.add(matchId)
+      }
+      return next
+    })
+  }
+  
+  // ✅ 하이라이트된 매치가 있을 때 스크롤 & 자동 펼침
   useEffect(() => {
-    if (highlightedMatchId && highlightedMatchRef.current) {
-      // 약간의 지연을 주어서 DOM이 완전히 업데이트된 후 스크롤
-      setTimeout(() => {
-        highlightedMatchRef.current?.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'center' 
-        })
-      }, 100)
+    if (highlightedMatchId) {
+      setExpandedMatches(prev => new Set(prev).add(highlightedMatchId))
+      if (highlightedMatchRef.current) {
+        setTimeout(() => {
+          highlightedMatchRef.current?.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center' 
+          })
+        }, 100)
+      }
     }
   }, [highlightedMatchId])
   return (
     <>
-      <ul className="grid gap-6">
-        {ordered.map((m, idx) => (
-          <React.Fragment key={m.id}>
-            <MatchCard
-              ref={highlightedMatchId === m.id ? highlightedMatchRef : null}
-              m={m}
-              players={players}
-              isAdmin={isAdmin}
-              enableLoadToPlanner={enableLoadToPlanner}
-              onLoadToPlanner={onLoadToPlanner}
-              onDeleteMatch={onDeleteMatch}
-              onUpdateMatch={onUpdateMatch}
-              showTeamOVRForAdmin={showTeamOVRForAdmin}
-              hideOVR={hideOVR}
-              latestDraftId={latestDraftId}
-              isHighlighted={m.id === highlightedMatchId}
-              customMemberships={customMemberships}
-            />
-            {idx < ordered.length - 1 && (
-              <li aria-hidden="true" className="mx-2 my-0 border-t border-dashed border-gray-200" />
-            )}
-          </React.Fragment>
+      <ul className="grid gap-3">
+        {ordered.map((m) => (
+          <MatchCard
+            key={m.id}
+            ref={highlightedMatchId === m.id ? highlightedMatchRef : null}
+            m={m}
+            players={players}
+            isAdmin={isAdmin}
+            enableLoadToPlanner={enableLoadToPlanner}
+            onLoadToPlanner={onLoadToPlanner}
+            onDeleteMatch={onDeleteMatch}
+            onUpdateMatch={onUpdateMatch}
+            showTeamOVRForAdmin={showTeamOVRForAdmin}
+            hideOVR={hideOVR}
+            latestDraftId={latestDraftId}
+            isHighlighted={m.id === highlightedMatchId}
+            customMemberships={customMemberships}
+            isExpanded={expandedMatches.has(m.id)}
+            onToggleExpand={() => toggleExpand(m.id)}
+          />
         ))}
         {ordered.length===0&&<li className="text-sm text-stone-500">표시할 매치가 없습니다.</li>}
       </ul>
@@ -3927,66 +4007,6 @@ export default function SavedMatchesList({
           will-change: opacity, transform;
         }
         
-        @keyframes updatingPulse {
-          0%, 100% {
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-            box-shadow: 0 0 12px rgba(245, 158, 11, 0.6), 0 0 24px rgba(245, 158, 11, 0.2);
-            transform: scale(1);
-          }
-          50% {
-            background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
-            box-shadow: 0 0 20px rgba(245, 158, 11, 0.8), 0 0 40px rgba(245, 158, 11, 0.3);
-            transform: scale(1.05);
-          }
-        }
-        
-        @keyframes updatingBackgroundShift {
-          0% {
-            background-position: 0% 50%;
-          }
-          50% {
-            background-position: 100% 50%;
-          }
-          100% {
-            background-position: 0% 50%;
-          }
-        }
-        
-        @keyframes updatingDotPulse {
-          0%, 100% {
-            opacity: 1;
-            transform: scale(1);
-          }
-          25% {
-            opacity: 0.7;
-            transform: scale(1.3);
-          }
-          50% {
-            opacity: 0.5;
-            transform: scale(1.1);
-          }
-          75% {
-            opacity: 0.8;
-            transform: scale(1.2);
-          }
-        }
-        
-        .updating-badge-enhanced {
-          background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-          background-size: 200% 100%;
-          border: 1px solid #fbbf24;
-          box-shadow: 0 0 12px rgba(245, 158, 11, 0.6), 0 0 24px rgba(245, 158, 11, 0.2);
-          animation: 
-            updatingPulse 2.5s infinite ease-in-out,
-            updatingBackgroundShift 3s infinite ease-in-out;
-          will-change: transform, box-shadow, background, background-position;
-        }
-        
-        .updating-dot {
-          animation: updatingDotPulse 1.8s infinite ease-in-out;
-          will-change: opacity, transform;
-        }
-        
         /* 접근성 - 애니메이션 감소 선호 사용자 */
         @media (prefers-reduced-motion: reduce) {
           .live-badge-natural {
@@ -3995,15 +4015,6 @@ export default function SavedMatchesList({
           }
           
           .live-dot {
-            animation: none !important;
-          }
-          
-          .updating-badge-enhanced {
-            animation: none !important;
-            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
-          }
-          
-          .updating-dot {
             animation: none !important;
           }
         }
