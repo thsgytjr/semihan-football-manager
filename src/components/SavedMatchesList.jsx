@@ -3910,11 +3910,31 @@ export default function SavedMatchesList({
   }, [ordered])
   
   // 🎯 각 매치의 펼침/접힘 상태 관리 (기본적으로 최근 5개만 펼침)
-  const [expandedMatches, setExpandedMatches] = useState(() => {
-    const initial = new Set()
-    ordered.slice(0, 5).forEach(m => initial.add(m.id))
-    return initial
-  })
+  const [expandedMatches, setExpandedMatches] = useState(new Set())
+  const prevMatchIdsRef = useRef(new Set())
+  
+  // ✅ 새 매치가 추가되면 자동으로 펼침, 기존 매치는 상태 유지
+  useEffect(() => {
+    const currentIds = new Set(ordered.map(m => m.id))
+    const prevIds = prevMatchIdsRef.current
+    
+    // 새로 추가된 매치 찾기
+    const newMatchIds = [...currentIds].filter(id => !prevIds.has(id))
+    
+    if (newMatchIds.length > 0) {
+      // 새 매치들을 펼친 상태로 추가
+      setExpandedMatches(prev => {
+        const next = new Set(prev)
+        newMatchIds.forEach(id => next.add(id))
+        return next
+      })
+    } else if (expandedMatches.size === 0 && ordered.length > 0) {
+      // 초기 로딩: 최근 5개 매치 펼침
+      setExpandedMatches(new Set(ordered.slice(0, 5).map(m => m.id)))
+    }
+    
+    prevMatchIdsRef.current = currentIds
+  }, [ordered])
   
   const toggleExpand = (matchId) => {
     setExpandedMatches(prev => {
