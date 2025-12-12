@@ -6,7 +6,7 @@ import InitialAvatar from '../components/InitialAvatar'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { notify } from '../components/Toast'
 import { getCaptains } from '../lib/matchHelpers'
-import { fetchRefEvents, saveRefEvent, deleteRefEvent, subscribeRefEvents, safeMatchId } from '../services/refEvents.service'
+import { fetchRefEvents, saveRefEvent, deleteRefEvent, subscribeRefEvents, safeMatchId, deleteAllRefEvents } from '../services/refEvents.service'
 import { upsertRefSession, cancelRefSession, completeRefSession, subscribeRefSession, updateLastEventTime } from '../services/refSession.service'
 
 const statShell = () => ({ goals: 0, assists: 0, yellowCards: 0, redCards: 0, fouls: 0, cleanSheet: 0, events: [] })
@@ -466,7 +466,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     return stats
   }
 
-  const finishMatch = (cleanSheetAwardees = cleanSheetSelections) => {
+  const finishMatch = async (cleanSheetAwardees = cleanSheetSelections) => {
     const taggedEvents = events.map(ev => ({ ...ev, gameIndex: ev.gameIndex ?? (matchNumber - 1) }))
     const stats = buildStats(cleanSheetAwardees)
 
@@ -484,6 +484,13 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       cleanSheetAwardees,
       clearInProgress: true, // Signal to clear __inProgress from stats
       selectedTeamIndices: activeMatch?.teams && activeMatch.teams.length > 2 ? selectedTeamIndices : undefined,
+    }
+
+    // Delete all referee events after match is finished
+    try {
+      await deleteAllRefEvents(matchIdForRef, gameIndexForRef)
+    } catch (err) {
+      console.error('Failed to delete referee events:', err)
     }
 
     if (onFinish) onFinish(payload)
@@ -1192,6 +1199,12 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
         tone="danger"
         onConfirm={async () => {
           setShowCancelConfirm(false)
+          // Delete all referee events for this match
+          try {
+            await deleteAllRefEvents(matchIdForRef, gameIndexForRef)
+          } catch (err) {
+            console.error('Failed to delete referee events:', err)
+          }
           // 다른 디바이스에 취소 알림
           await cancelRefSession(matchIdForRef, gameIndexForRef)
           onCancel()
@@ -1227,7 +1240,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
             setShowCleanSheetPicker(true)
           } else {
             setGameStatus('finished')
-            finishMatch()
+            finishMatch().catch(err => console.error('Failed to finish match:', err))
           }
         }}
         onCancel={() => setShowSaveConfirm(false)}
@@ -1285,7 +1298,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                 onClick={() => {
                   setShowCleanSheetPicker(false)
                   setGameStatus('finished')
-                  finishMatch(cleanSheetSelections)
+                  finishMatch(cleanSheetSelections).catch(err => console.error('Failed to finish match:', err))
                 }}
                 className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-bold"
               >
@@ -1295,7 +1308,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                 onClick={() => {
                   setShowCleanSheetPicker(false)
                   setGameStatus('finished')
-                  finishMatch([])
+                  finishMatch([]).catch(err => console.error('Failed to finish match:', err))
                 }}
                 className="px-4 py-3 rounded-xl bg-gray-100 text-gray-700 font-semibold"
               >
