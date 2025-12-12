@@ -33,14 +33,17 @@ export function isDraftMatch(match) {
   if (match.draftMode === true) return true
   
   // 3순위: 실제 드래프트 데이터 존재 여부 (드래프트 필드에 한정)
-  if (match.draft?.quarterScores && match.draft.quarterScores.length > 0) {
-    return true
+  if (match.draft?.quarterScores && Array.isArray(match.draft.quarterScores) && match.draft.quarterScores.length > 0) {
+    // Check if it has actual quarter data, not just empty arrays
+    const hasQuarterData = match.draft.quarterScores.some(q => Array.isArray(q) && q.length > 0)
+    if (hasQuarterData) return true
   }
 
   // 레거시: snapshot(팀 배열) + quarterScores 조합만 드래프트로 인정
   const hasSnapshot = Array.isArray(match?.snapshot) && match.snapshot.every(Array.isArray)
   if (hasSnapshot && match.quarterScores && Array.isArray(match.quarterScores) && match.quarterScores.length > 0) {
-    return true
+    const hasQuarterData = match.quarterScores.some(q => Array.isArray(q) && q.length > 0)
+    if (hasQuarterData) return true
   }
   
   return false
