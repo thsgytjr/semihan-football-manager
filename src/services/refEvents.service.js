@@ -60,7 +60,10 @@ export function subscribeRefEvents(matchId, gameIndex, onInsert, onDelete) {
     }
   )
 
-  channel.subscribe().catch((err) => logger?.warn?.('[refEvents] subscribe error', err))
+  const subscribePromise = channel.subscribe()
+  if (subscribePromise && typeof subscribePromise.catch === 'function') {
+    subscribePromise.catch((err) => logger?.warn?.('[refEvents] subscribe error', err))
+  }
 
   return {
     unsubscribe: () => {
