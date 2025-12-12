@@ -87,7 +87,14 @@ function App(){
     try {
       const path = (window.location.pathname || '').toLowerCase()
       const params = new URLSearchParams(window.location.search)
-      return path.includes('/refmode') || params.get('refMode') === '1'
+      const start = (params.get('start') || '').toLowerCase()
+      return (
+        path.includes('/refmode') ||
+        path.includes('/refapp') ||
+        params.get('refMode') === '1' ||
+        start.includes('/refmode') ||
+        start.includes('/refapp')
+      )
     } catch {
       return false
     }

@@ -48,6 +48,8 @@
   "rewrites": [
     { "source": "/refMode", "destination": "/index.html" },
     { "source": "/refMode/(.*)", "destination": "/index.html" },
+    { "source": "/refApp", "destination": "/index.html" },
+    { "source": "/refApp/(.*)", "destination": "/index.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
