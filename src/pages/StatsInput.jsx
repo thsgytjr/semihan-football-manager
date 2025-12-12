@@ -275,6 +275,9 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     if (editingMatch.selectionMode === 'draft' || editingMatch.draftMode === true) {
       // Draft match: preserve draft.captains and clear draft.quarterScores
       patch.selectionMode = 'draft'
+      if (editingMatch.draftMode === true) {
+        patch.draftMode = true // Preserve legacy draftMode field
+      }
       patch.draft = {
         ...(editingMatch.draft || {}),
         captains: editingMatch.draft?.captains || [],

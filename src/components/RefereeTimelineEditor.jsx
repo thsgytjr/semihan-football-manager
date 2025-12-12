@@ -282,17 +282,35 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
 
   const handleResetAll = () => {
     setTimeline([])
-    // Reset everything including quarterScores to empty arrays
-    const teamCount = Math.max(teams.length || 0, 2)
-    const emptyQuarterScores = Array.from({ length: teamCount }, () => [])
     
-    onSave?.(match.id, {
+    const patch = {
       stats: {},
-      quarterScores: emptyQuarterScores,
-      draft: { ...(match?.draft || {}), quarterScores: emptyQuarterScores },
+      quarterScores: [],
       gameEvents: [],
       statsMeta: { ...(match?.statsMeta || {}), gameEvents: [] },
-    })
+    }
+    
+    // Preserve match type and captains appropriately
+    if (match.selectionMode === 'draft' || match.draftMode === true) {
+      // Draft match: preserve draft.captains and clear draft.quarterScores
+      patch.selectionMode = 'draft'
+      if (match.draftMode === true) {
+        patch.draftMode = true // Preserve legacy draftMode field
+      }
+      patch.draft = {
+        ...(match.draft || {}),
+        captains: match.draft?.captains || [],
+        quarterScores: []
+      }
+    } else {
+      // Regular match: preserve captainIds at top level, don't modify draft
+      patch.selectionMode = match.selectionMode || 'manual'
+      if (match.captainIds) {
+        patch.captainIds = match.captainIds
+      }
+    }
+    
+    onSave?.(match.id, patch)
     setConfirmReset(false)
   }
 
