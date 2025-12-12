@@ -263,11 +263,18 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     if (!editingMatch) return
     setDraft({})
     // Wipe per-game timelines/scores so match history also clears
+    // ✅ Preserve selectionMode and draft.captains to prevent match type from changing
     onUpdateMatch?.(editingMatch.id, {
       stats: {},
       quarterScores: [],
       statsMeta: { gameEvents: [] },
       gameEvents: [],
+      selectionMode: editingMatch.selectionMode, // Preserve match type
+      draft: {
+        ...(editingMatch.draft || {}),
+        captains: editingMatch.draft?.captains || editingMatch.captainIds || [], // Preserve captains
+        quarterScores: [] // Clear quarter scores
+      }
     })
     
     // Delete all referee events from database for this match

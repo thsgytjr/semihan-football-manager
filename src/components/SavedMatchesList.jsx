@@ -528,7 +528,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
     // Reset captains to initial state - ✅ 헬퍼 사용
     const caps = MatchHelpers.getCaptains(m)
     if(caps && caps.length) setCaptainIds(caps)
-    else setCaptainIds(initialSnap.map(team=>team[0]?String(team[0]):null))
+    else setCaptainIds(initialSnap.map(()=>null)) // Don't auto-assign first player
     
     // Reset quarter scores to initial state - ✅ 헬퍼 사용
     const qs = MatchHelpers.getQuarterScores(m)
@@ -576,7 +576,7 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
     // ✅ 헬퍼 사용 - Captain/QuarterScore 초기화
     const caps = MatchHelpers.getCaptains(m)
     if(caps && caps.length) setCaptainIds(caps)
-    else setCaptainIds(initialSnap.map(team=>team[0]?String(team[0]):null))
+    else setCaptainIds(initialSnap.map(()=>null)) // Don't auto-assign first player
     
     const qs = MatchHelpers.getQuarterScores(m)
     setQuarterScores(qs.length > 0 ? qs : (initialSnap.length? initialSnap.map(()=>[]): null))
