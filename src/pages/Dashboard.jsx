@@ -2478,16 +2478,39 @@ function CleanSheetTable({ rows, showAll, onToggle, controls, apDateKey, initial
 
 function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMemberships = [], onPlayerSelect }) {
   const { t } = useTranslation()
-  const data = showAll ? rows : rows.slice(0, 5)
+  const [sortBy, setSortBy] = useState('r')
+
+  const sortedRows = useMemo(() => {
+    const list = Array.isArray(rows) ? [...rows] : []
+    const comparator = (a, b) => {
+      if (sortBy === 'y') return (b.y - a.y) || (b.r - a.r) || (b.b - a.b) || a.name.localeCompare(b.name)
+      if (sortBy === 'b') return (b.b - a.b) || (b.r - a.r) || (b.y - a.y) || a.name.localeCompare(b.name)
+      return (b.r - a.r) || (b.y - a.y) || (b.b - a.b) || a.name.localeCompare(b.name)
+    }
+    const ranked = list.sort(comparator)
+    let lastRank = 0
+    let lastKey = null
+    return ranked.map((r, i) => {
+      const keyVal = sortBy === 'y' ? r.y : sortBy === 'b' ? r.b : r.r
+      const rank = (i === 0) ? 1 : (keyVal === lastKey ? lastRank : i + 1)
+      lastRank = rank
+      lastKey = keyVal
+      return { ...r, rank }
+    })
+  }, [rows, sortBy])
+
+  const data = showAll ? sortedRows : sortedRows.slice(0, 5)
   const columns = [
     { label: t('leaderboard.rank'), px: 1.5, align: 'center', className: 'w-[60px]' },
     { label: t('leaderboard.player'), px: 2 },
     {
       label: (
         <CardColumnHeader
-          label={t('playerStatsModal.labels.yellow')}
-          colorClass="bg-yellow-300"
-          borderClass="border-yellow-500"
+          label={t('playerStatsModal.labels.red')}
+          colorClass="bg-red-500"
+          borderClass="border-red-700"
+          active={sortBy === 'r'}
+          onClick={() => setSortBy('r')}
         />
       ),
       px: 1.5,
@@ -2497,9 +2520,11 @@ function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMember
     {
       label: (
         <CardColumnHeader
-          label={t('playerStatsModal.labels.red')}
-          colorClass="bg-red-500"
-          borderClass="border-red-700"
+          label={t('playerStatsModal.labels.yellow')}
+          colorClass="bg-yellow-300"
+          borderClass="border-yellow-500"
+          active={sortBy === 'y'}
+          onClick={() => setSortBy('y')}
         />
       ),
       px: 1.5,
@@ -2512,6 +2537,8 @@ function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMember
           label={t('playerStatsModal.labels.black')}
           colorClass="bg-stone-900"
           borderClass="border-stone-950"
+          active={sortBy === 'b'}
+          onClick={() => setSortBy('b')}
         />
       ),
       px: 1.5,
@@ -2532,8 +2559,8 @@ function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMember
         customMemberships={customMemberships}
         onSelect={onPlayerSelect ? () => onPlayerSelect(r) : undefined}
       />
-      <StatCell value={r.y || 0} tone={tone} align="center" width={50} />
       <StatCell value={r.r || 0} tone={tone} align="center" width={50} />
+      <StatCell value={r.y || 0} tone={tone} align="center" width={50} />
       <StatCell value={r.b || 0} tone={tone} align="center" width={50} />
     </>
   )
@@ -2557,14 +2584,21 @@ function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMember
   )
 }
 
-function CardColumnHeader({ label, colorClass, borderClass }) {
+function CardColumnHeader({ label, colorClass, borderClass, active, onClick }) {
   return (
-    <div className="flex items-center justify-center" title={label} aria-label={label}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`group flex items-center justify-center rounded-md px-1 py-0.5 transition ${active ? 'bg-white ring-2 ring-amber-400 ring-offset-1' : 'hover:bg-stone-50 hover:ring-1 hover:ring-stone-200 hover:ring-offset-1'}`}
+      title={label}
+      aria-label={label}
+    >
       <span className="sr-only">{label}</span>
       <span
         aria-hidden="true"
         className={`inline-block h-5 w-3.5 rounded-[3px] border shadow-sm ${colorClass} ${borderClass}`}
       />
-    </div>
+    </button>
   )
 }

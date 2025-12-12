@@ -6,6 +6,7 @@ import InitialAvatar from '../components/InitialAvatar'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { notify } from '../components/Toast'
 import { getCaptains } from '../lib/matchHelpers'
+import { fetchRefEvents, saveRefEvent, deleteRefEvent, subscribeRefEvents, safeMatchId } from '../services/refEvents.service'
 
 const statShell = () => ({ goals: 0, assists: 0, yellowCards: 0, redCards: 0, fouls: 0, cleanSheet: 0, events: [] })
 
@@ -57,6 +58,8 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
   const [showCleanSheetPicker, setShowCleanSheetPicker] = useState(false)
   const [cleanSheetCandidates, setCleanSheetCandidates] = useState([])
   const [cleanSheetSelections, setCleanSheetSelections] = useState([])
+  const matchIdForRef = useMemo(() => safeMatchId(activeMatch), [activeMatch])
+  const gameIndexForRef = useMemo(() => matchNumber - 1, [matchNumber])
 
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [showSaveConfirm, setShowSaveConfirm] = useState(false)
@@ -175,6 +178,23 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     setPendingOwnGoal(null)
   }, [activeMatch, initialGameIndex])
 
+  // Recompute scores from events list (e.g., when loading from DB)
+  const recomputeScores = React.useCallback((evts) => {
+    const next = [0, 0]
+    evts.forEach(e => {
+      if (e.type === 'goal') {
+        const t = e.teamIndex ?? e.team_id ?? e.team
+        if (t === 0 || t === 1) next[t] = (next[t] || 0) + 1
+      }
+      if (e.type === 'own_goal') {
+        const t = e.teamIndex ?? e.team_id ?? e.team
+        const opp = t === 0 ? 1 : 0
+        if (opp === 0 || opp === 1) next[opp] = (next[opp] || 0) + 1
+      }
+    })
+    setScores(next)
+  }, [])
+
   useEffect(() => {
     if (gameStatus === 'playing' && startTime) {
       // Sync timer with actual elapsed time from startTime
@@ -187,6 +207,48 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     }
     return () => clearInterval(timerRef.current)
   }, [gameStatus, startTime])
+
+  // Load persisted events when match id changes
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      if (!matchIdForRef) return
+      const rows = await fetchRefEvents(matchIdForRef, gameIndexForRef)
+      if (cancelled) return
+      if (Array.isArray(rows) && rows.length) {
+        setEvents(rows)
+        recomputeScores(rows)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [matchIdForRef, gameIndexForRef, recomputeScores])
+
+  // Subscribe to realtime changes for this match/game
+  useEffect(() => {
+    if (!matchIdForRef) return undefined
+    const sub = subscribeRefEvents(
+      matchIdForRef,
+      gameIndexForRef,
+      (ev) => {
+        setEvents(prev => {
+          const exists = prev.some(e => e.id === ev.id)
+          const next = exists ? prev.map(e => e.id === ev.id ? ev : e) : [ev, ...prev]
+          recomputeScores(next)
+          return next.sort((a, b) => new Date(b.created_at || b.timestamp || 0) - new Date(a.created_at || a.timestamp || 0))
+        })
+      },
+      (id) => {
+        if (!id) return
+        setEvents(prev => {
+          const next = prev.filter(e => e.id !== id)
+          recomputeScores(next)
+          return next
+        })
+      }
+    )
+    return () => sub?.unsubscribe?.()
+  }, [matchIdForRef, gameIndexForRef, recomputeScores])
 
   const formatTime = (seconds) => {
     const totalMinutes = Math.floor(seconds / 60)
@@ -251,6 +313,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     }
 
     setEvents(prev => [newEvent, ...prev])
+    saveRefEvent(matchIdForRef, gameIndexForRef, { ...newEvent, created_at: new Date().toISOString() })
 
     if (type === 'goal') {
       setScores(prev => {
@@ -273,6 +336,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
   const applyRemoveEvent = (target) => {
     if (!target) return
     setEvents(prev => prev.filter(e => e.id !== target.id))
+    deleteRefEvent(matchIdForRef, gameIndexForRef, target.id)
 
     if (target.type === 'goal') {
       setScores(prev => {
