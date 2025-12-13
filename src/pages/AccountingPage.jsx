@@ -3372,7 +3372,7 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
                   <tr
                     key={playerId}
                     onClick={() => !isVoided && togglePlayerSelection(playerId)}
-                    className={`border-b last:border-b-0 ${isPaid ? 'bg-emerald-50' : 'hover:bg-gray-50'} ${isSelected ? 'ring-2 ring-blue-300' : ''} ${!isVoided ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                    className={`border-b last:border-b-0 transition-all ${isPaid ? 'bg-emerald-50' : isSelected ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-100'} ${isSelected ? 'border-l-4 border-l-blue-500' : 'border-l-4 border-l-transparent'} ${!isVoided ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                   >
                     <td className="py-2 px-2">
                       <div className="flex items-center gap-2">

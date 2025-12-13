@@ -936,10 +936,10 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
                   return (
                   <div
                     key={unpaid.playerId}
-                    className={`flex items-center justify-between p-3 rounded-lg border transition-colors cursor-pointer ${
+                    className={`flex items-center justify-between p-3 rounded-lg border transition-all cursor-pointer ${
                       selected.has(unpaid.playerId) 
-                        ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-200' 
-                        : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                        ? 'bg-blue-50 border-blue-400 border-l-4 border-l-blue-500 hover:bg-blue-100' 
+                        : 'bg-white border-gray-200 border-l-4 border-l-transparent hover:bg-gray-50 hover:border-gray-300'
                     }`}
                     onClick={() => toggleSelectOne(unpaid.playerId)}
                   >
