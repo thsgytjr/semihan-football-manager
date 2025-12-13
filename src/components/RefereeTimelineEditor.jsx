@@ -17,6 +17,10 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
   const [confirmReset, setConfirmReset] = useState(false)
   const [confirmDeleteGame, setConfirmDeleteGame] = useState({ open: false, gameIndex: null })
   const [showSaved, setShowSaved] = useState(false)
+  const [wakeLockSupported, setWakeLockSupported] = useState(typeof navigator !== 'undefined' && 'wakeLock' in navigator)
+  const [wakeLockActive, setWakeLockActive] = useState(false)
+  const [wakeLockError, setWakeLockError] = useState('')
+  const wakeLockRef = React.useRef(null)
   
   // Default expanded games
   const [expandedGames, setExpandedGames] = useState(new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]))
@@ -26,6 +30,67 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
     setTimeline(Array.isArray(match?.stats?.__events) ? [...match.stats.__events] : [])
   }, [match?.id, match?.stats?.__events])
 
+  const releaseWakeLock = React.useCallback(async () => {
+    try {
+      if (wakeLockRef.current?.release) {
+        await wakeLockRef.current.release()
+      }
+    } catch (err) {
+      console.warn('wakeLock release error', err)
+    } finally {
+      wakeLockRef.current = null
+      setWakeLockActive(false)
+    }
+  }, [])
+
+  const requestWakeLock = React.useCallback(async () => {
+    if (typeof navigator === 'undefined' || !navigator.wakeLock) {
+      setWakeLockSupported(false)
+      return false
+    }
+    try {
+      const sentinel = await navigator.wakeLock.request('screen')
+      wakeLockRef.current = sentinel
+      setWakeLockActive(true)
+      setWakeLockError('')
+      sentinel.addEventListener('release', () => {
+        setWakeLockActive(false)
+      })
+      return true
+    } catch (err) {
+      console.warn('wakeLock request error', err)
+      setWakeLockActive(false)
+      setWakeLockError(err?.message || '화면 깨우기 잠금 요청에 실패했습니다')
+      return false
+    }
+  }, [])
+
+  // Re-request when returning to tab; release when leaving
+  React.useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        if (wakeLockActive && !wakeLockRef.current) {
+          requestWakeLock()
+        }
+      } else {
+        if (wakeLockRef.current) {
+          releaseWakeLock()
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [wakeLockActive, releaseWakeLock, requestWakeLock])
+
+  // Cleanup on unmount
+  React.useEffect(() => {
+    return () => {
+      releaseWakeLock()
+    }
+  }, [releaseWakeLock])
+
   const toggleGame = (gameIndex) => {
     const newSet = new Set(expandedGames)
     if (newSet.has(gameIndex)) {
@@ -34,6 +99,14 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
       newSet.add(gameIndex)
     }
     setExpandedGames(newSet)
+  }
+
+  const toggleWakeLock = async () => {
+    if (wakeLockRef.current || wakeLockActive) {
+      await releaseWakeLock()
+    } else {
+      await requestWakeLock()
+    }
   }
 
   const playersById = useMemo(() => {
@@ -190,6 +263,8 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
       if (p?.id) ensureStat(p.id)
     })
 
+    const manualCleanSheets = new Set()
+
     timeline.forEach(ev => {
       const entry = ensureStat(ev.playerId)
       if (entry) entry.events.push(ev)
@@ -207,10 +282,44 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
         if (assistEntry) assistEntry.assists += 1
       }
 
+      if (ev.type === 'clean_sheet') {
+        const gi = Math.max(0, Number(ev.gameIndex) || 0)
+        const ti = Math.max(0, Number(ev.teamIndex) || 0)
+        manualCleanSheets.add(`${gi}-${ti}`)
+        const teamPlayers = teams[ti] || []
+        teamPlayers.forEach(p => {
+          const csEntry = ensureStat(p.id)
+          if (csEntry) csEntry.cleanSheet += 1
+        })
+      }
+
       if (ev.type === 'yellow' && entry) entry.yellowCards += 1
       if (ev.type === 'red' && entry) entry.redCards += 1
       if (ev.type === 'foul' && entry) entry.fouls += 1
     })
+
+    // Auto-derive clean sheets per game if not manually set for that team
+    const cleanSheetMatrix = Array.from({ length: gameScores.length }, () => Array.from({ length: teamCount }, () => 0))
+
+    for (let gi = 0; gi < gameScores.length; gi += 1) {
+      const scores = gameScores[gi] || []
+      scores.forEach((_, ti) => {
+        const key = `${gi}-${ti}`
+        const opponentScore = scores.reduce((sum, val, idx) => idx === ti ? sum : sum + (Number(val) || 0), 0)
+        const isClean = opponentScore === 0 || manualCleanSheets.has(key)
+        if (isClean) {
+          cleanSheetMatrix[gi][ti] = 1
+          // If manual event was added we already incremented; auto case increments here
+          if (!manualCleanSheets.has(key)) {
+            const teamPlayers = teams[ti] || []
+            teamPlayers.forEach(p => {
+              const csEntry = ensureStat(p.id)
+              if (csEntry) csEntry.cleanSheet += 1
+            })
+          }
+        }
+      })
+    }
 
     const prevGames = Array.isArray(match?.stats?.__games) ? match.stats.__games : []
     const nextGames = Array.from({ length: gameScores.length }, (_, gi) => {
@@ -221,6 +330,7 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
         id: prev.id || `game-${gi + 1}`,
         matchNumber: gi + 1,
         scores: gameScores[gi] || createBlankScores(),
+        cleanSheets: cleanSheetMatrix[gi] || [],
         events: nextEvents,
       }
     })
@@ -267,6 +377,7 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
     const nextStatsMeta = {
       ...(match?.statsMeta || {}),
       gameEvents: gameEventsPayload,
+      cleanSheets: cleanSheetMatrix,
     }
 
     onSave?.(match.id, {
@@ -324,6 +435,13 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
         </div>
         <div className="flex items-center gap-2">
           <button
+            type="button"
+            onClick={toggleWakeLock}
+            disabled={!wakeLockSupported}
+            className={`rounded-lg border-2 px-3 py-2 text-sm font-semibold transition-all flex items-center gap-1.5 ${wakeLockActive ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'}`}>
+            <span>{wakeLockActive ? '🔒 화면 깨우기 ON' : '🔓 화면 계속 켜기'}</span>
+          </button>
+          <button
             onClick={() => setShowAddEvent(true)}
             className="rounded-lg border-2 border-blue-400 bg-blue-50 hover:bg-blue-100 px-3 py-2 text-sm font-semibold text-blue-700 transition-all flex items-center gap-1.5"
           >
@@ -345,6 +463,17 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
           </button>
         </div>
       </div>
+
+      {!wakeLockSupported && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg px-3 py-2">
+          ⚠️ 이 기기에서는 화면 깨우기 API가 지원되지 않습니다. 화면이 꺼질 수 있어요.
+        </div>
+      )}
+      {wakeLockError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg px-3 py-2">
+          {wakeLockError}
+        </div>
+      )}
 
       {showSaved && (
         <div className="bg-green-50 border-2 border-green-300 rounded-lg px-4 py-2 text-sm text-green-800 font-medium animate-fade-in-down">
@@ -476,7 +605,7 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
 }
 
 function TimelineEventItem({ ev, playersById, onEdit, onDelete }) {
-  const player = playersById.get(toStr(ev.playerId))
+  const player = ev.type === 'clean_sheet' ? null : playersById.get(toStr(ev.playerId))
   const assistPlayer = ev.assistedBy ? playersById.get(toStr(ev.assistedBy)) : null
   
   const getEventTypeLabel = (type) => {
@@ -487,6 +616,7 @@ function TimelineEventItem({ ev, playersById, onEdit, onDelete }) {
       red: { emoji: '🟥', label: '레드카드', color: 'bg-red-100 text-red-700' },
       foul: { emoji: '⚠️', label: '파울', color: 'bg-gray-100 text-gray-700' },
       super_save: { emoji: '🧤', label: '슈퍼세이브', color: 'bg-sky-100 text-sky-700' },
+      clean_sheet: { emoji: '🧱', label: '클린시트', color: 'bg-teal-100 text-teal-700' },
     }
     return map[type] || { emoji: '❓', label: type, color: 'bg-gray-100 text-gray-600' }
   }
@@ -516,7 +646,9 @@ function TimelineEventItem({ ev, playersById, onEdit, onDelete }) {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {player ? (
+          {ev.type === 'clean_sheet' ? (
+            <span className="text-sm font-semibold text-teal-700">팀 클린시트</span>
+          ) : player ? (
             <div className="flex items-center gap-1.5">
               <InitialAvatar name={player.name} photoUrl={player.photoUrl} size={20} />
               <span className="text-sm font-semibold text-gray-800 truncate">{player.name}</span>
@@ -567,25 +699,30 @@ function EventEditModal({ event, players, teams, onSave, onCancel }) {
     assistedBy: toStr(event.assistedBy || ''),
   })
 
+  const needsAssist = ['goal', 'own_goal'].includes(formData.type)
+  const needsPlayer = formData.type !== 'clean_sheet'
+
   const handleSubmit = (e) => {
     e.preventDefault()
+    const parsedGameIndex = Number.isFinite(Number(formData.gameIndex)) ? Number(formData.gameIndex) : 0
     onSave({
       ...event,
       type: formData.type,
-      playerId: formData.playerId,
+      playerId: needsPlayer ? formData.playerId : '',
       teamIndex: Number(formData.teamIndex),
-      gameIndex: Number(formData.gameIndex),
+      gameIndex: parsedGameIndex,
       minute: formData.minute,
-      assistedBy: formData.assistedBy || null,
-      assistedName: formData.assistedBy 
+      assistedBy: needsAssist ? (formData.assistedBy || null) : null,
+      assistedName: needsAssist && formData.assistedBy 
         ? players.find(p => toStr(p.id) === formData.assistedBy)?.name || ''
         : '',
-      playerName: players.find(p => toStr(p.id) === formData.playerId)?.name || '',
+      playerName: needsPlayer
+        ? (players.find(p => toStr(p.id) === formData.playerId)?.name || '')
+        : '',
     })
   }
 
   const selectedTeam = teams[Number(formData.teamIndex)] || []
-  const needsAssist = ['goal', 'own_goal'].includes(formData.type)
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-fade-in">
@@ -610,6 +747,7 @@ function EventEditModal({ event, players, teams, onSave, onCancel }) {
               <option value="red">🟥 레드카드</option>
               <option value="foul">⚠️ 파울</option>
               <option value="super_save">🧤 슈퍼세이브</option>
+              <option value="clean_sheet">🧱 클린시트 (팀)</option>
             </select>
           </div>
 
@@ -621,8 +759,14 @@ function EventEditModal({ event, players, teams, onSave, onCancel }) {
                 <input
                   type="number"
                   min="1"
+                  inputMode="numeric"
+                  step="1"
                   value={Number(formData.gameIndex) + 1}
-                  onChange={(e) => setFormData(prev => ({ ...prev, gameIndex: Math.max(0, Number(e.target.value) - 1) }))}
+                  onChange={(e) => {
+                    const raw = e.target.value
+                    const parsed = Number.parseInt(raw, 10)
+                    setFormData(prev => ({ ...prev, gameIndex: Number.isFinite(parsed) ? Math.max(0, parsed - 1) : 0 }))
+                  }}
                   className="w-full pl-8 pr-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                 />
               </div>
@@ -665,16 +809,17 @@ function EventEditModal({ event, players, teams, onSave, onCancel }) {
               value={formData.playerId}
               onChange={(e) => setFormData(prev => ({ ...prev, playerId: e.target.value }))}
               className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              required
+              required={needsPlayer}
+              disabled={!needsPlayer}
             >
-              <option value="">선택해주세요...</option>
-              {selectedTeam.map(p => (
+              <option value="">{needsPlayer ? '선택해주세요...' : '클린시트는 팀 전체 반영'}</option>
+              {needsPlayer && selectedTeam.map(p => (
                 <option key={p.id} value={toStr(p.id)}>{p.name}</option>
               ))}
             </select>
           </div>
 
-          {needsAssist && (
+          {needsAssist && needsPlayer && (
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1.5">
                 어시스트 (선택)
@@ -724,9 +869,13 @@ function EventAddModal({ players, teams, onAdd, onCancel }) {
     assistedBy: '',
   })
 
+  const needsAssist = ['goal', 'own_goal'].includes(formData.type)
+  const needsPlayer = formData.type !== 'clean_sheet'
+
   const handleSubmit = (e) => {
     e.preventDefault()
-    if (!formData.playerId) return
+    if (needsPlayer && !formData.playerId) return
+    const parsedGameIndex = Number.isFinite(Number(formData.gameIndex)) ? Number(formData.gameIndex) : 0
 
     const player = players.find(p => toStr(p.id) === formData.playerId)
     const assistPlayer = formData.assistedBy 
@@ -735,18 +884,17 @@ function EventAddModal({ players, teams, onAdd, onCancel }) {
 
     onAdd({
       type: formData.type,
-      playerId: formData.playerId,
-      playerName: player?.name || '',
+      playerId: needsPlayer ? formData.playerId : '',
+      playerName: needsPlayer ? (player?.name || '') : '',
       teamIndex: Number(formData.teamIndex),
-      gameIndex: Number(formData.gameIndex),
+      gameIndex: parsedGameIndex,
       minute: formData.minute,
-      assistedBy: formData.assistedBy || null,
-      assistedName: assistPlayer?.name || '',
+      assistedBy: needsAssist ? (formData.assistedBy || null) : null,
+      assistedName: needsAssist ? (assistPlayer?.name || '') : '',
     })
   }
 
   const selectedTeam = teams[Number(formData.teamIndex)] || []
-  const needsAssist = ['goal', 'own_goal'].includes(formData.type)
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-fade-in">
@@ -771,6 +919,7 @@ function EventAddModal({ players, teams, onAdd, onCancel }) {
               <option value="red">🟥 레드카드</option>
               <option value="foul">⚠️ 파울</option>
               <option value="super_save">🧤 슈퍼세이브</option>
+              <option value="clean_sheet">🧱 클린시트 (팀)</option>
             </select>
           </div>
 
@@ -782,8 +931,14 @@ function EventAddModal({ players, teams, onAdd, onCancel }) {
                 <input
                   type="number"
                   min="1"
+                  inputMode="numeric"
+                  step="1"
                   value={Number(formData.gameIndex) + 1}
-                  onChange={(e) => setFormData(prev => ({ ...prev, gameIndex: Math.max(0, Number(e.target.value) - 1) }))}
+                  onChange={(e) => {
+                    const raw = e.target.value
+                    const parsed = Number.parseInt(raw, 10)
+                    setFormData(prev => ({ ...prev, gameIndex: Number.isFinite(parsed) ? Math.max(0, parsed - 1) : 0 }))
+                  }}
                   className="w-full pl-8 pr-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                 />
               </div>
@@ -826,16 +981,17 @@ function EventAddModal({ players, teams, onAdd, onCancel }) {
               value={formData.playerId}
               onChange={(e) => setFormData(prev => ({ ...prev, playerId: e.target.value }))}
               className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              required
+              required={needsPlayer}
+              disabled={!needsPlayer}
             >
-              <option value="">선택해주세요...</option>
-              {selectedTeam.map(p => (
+              <option value="">{needsPlayer ? '선택해주세요...' : '클린시트는 팀 전체 반영'}</option>
+              {needsPlayer && selectedTeam.map(p => (
                 <option key={p.id} value={toStr(p.id)}>{p.name}</option>
               ))}
             </select>
           </div>
 
-          {needsAssist && (
+          {needsAssist && needsPlayer && (
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1.5">
                 어시스트 (선택)

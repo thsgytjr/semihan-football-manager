@@ -2,11 +2,19 @@ import { supabase } from '../lib/supabaseClient'
 import { logger } from '../lib/logger'
 
 const TABLE = 'ref_events'
+const allowLiveRef = import.meta.env.VITE_ALLOW_REF_LIVE === 'true'
+const hostname = typeof window !== 'undefined' ? window.location?.hostname || '' : ''
+const isLocalHostName = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.local')
+const isPrivateRange = /^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)
+const isLocalNetwork = isLocalHostName || isPrivateRange
+const mockDisabled = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('nomock')
+const blockWrites = isLocalNetwork && !allowLiveRef && mockDisabled
 
 const safeMatchId = (match) => match?.id || match?.matchId || match?.uuid || match?.slug || null
 
 export async function fetchRefEvents(matchId, gameIndex) {
   if (!matchId) return []
+  if (blockWrites) return []
   const { data, error } = await supabase
     .from(TABLE)
     .select('*')
@@ -21,7 +29,7 @@ export async function fetchRefEvents(matchId, gameIndex) {
 }
 
 export async function saveRefEvent(matchId, gameIndex, event) {
-  if (!matchId || !event?.id) return
+  if (!matchId || !event?.id || blockWrites) return
   const payload = {
     id: event.id,
     match_id: matchId,
@@ -33,20 +41,20 @@ export async function saveRefEvent(matchId, gameIndex, event) {
 }
 
 export async function deleteRefEvent(matchId, gameIndex, eventId) {
-  if (!matchId || !eventId) return
+  if (!matchId || !eventId || blockWrites) return
   const { error } = await supabase.from(TABLE).delete().eq('match_id', matchId).eq('game_index', gameIndex).eq('id', eventId)
   if (error) logger?.warn?.('[refEvents] delete error', error)
 }
 
 // 특정 매치/게임의 모든 이벤트 삭제
 export async function deleteAllRefEvents(matchId, gameIndex) {
-  if (!matchId) return
+  if (!matchId || blockWrites) return
   const { error } = await supabase.from(TABLE).delete().eq('match_id', matchId).eq('game_index', gameIndex)
   if (error) logger?.warn?.('[refEvents] delete all error', error)
 }
 
 export function subscribeRefEvents(matchId, gameIndex, onInsert, onDelete, onUpdate) {
-  if (!matchId) return { unsubscribe: () => {} }
+  if (!matchId || blockWrites) return { unsubscribe: () => {} }
   const channel = supabase.channel(`ref-events-${matchId}-${gameIndex}`)
 
   channel.on(

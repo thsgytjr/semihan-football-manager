@@ -1000,6 +1000,7 @@ function App(){
         events: matchData.events,
         teamIndices: Array.isArray(matchData.selectedTeamIndices) ? matchData.selectedTeamIndices : undefined,
         teams: Array.isArray(matchData.teams) ? matchData.teams : undefined,
+        cleanSheetAwardees: matchData.cleanSheetAwardeesForGame || [],
       }
 
       // Check if we're overriding an existing game
@@ -1025,7 +1026,9 @@ function App(){
 
       // Pack timeline & game history into stats payload to keep schema compatibility (stats is jsonb)
       const teamsForGame = matchData?.teams || activeMatch?.teams || []
-      const rebuiltStats = rebuildStatsFromEvents(teamsForGame, updatedEvents, matchData?.cleanSheetAwardees || [])
+      // Aggregate cleanSheetAwardees from all games
+      const allCleanSheetAwardees = updatedGames.flatMap(g => Array.isArray(g?.cleanSheetAwardees) ? g.cleanSheetAwardees : [])
+      const rebuiltStats = rebuildStatsFromEvents(teamsForGame, updatedEvents, allCleanSheetAwardees)
       const mergedStats = {
         ...(activeMatch?.stats || {}),
         ...rebuiltStats,

@@ -7,6 +7,14 @@ import { TEAM_CONFIG } from '../lib/teamConfig'
 
 const TABLE = 'ref_sessions'
 const ROOM_ID = `${TEAM_CONFIG.shortName}-lite-room-1`
+const allowLiveRef = import.meta.env.VITE_ALLOW_REF_LIVE === 'true'
+const hostname = typeof window !== 'undefined' ? window.location?.hostname || '' : ''
+const isLocalHostName = hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.local')
+const isPrivateRange = /^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)
+const isLocalNetwork = isLocalHostName || isPrivateRange
+const mockDisabled = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('nomock')
+const blockWrites = isLocalNetwork && !allowLiveRef && mockDisabled
+let sessionTableAvailable = true
 
 /**
  * 심판모드 세션 생성 또는 업데이트
@@ -15,7 +23,7 @@ const ROOM_ID = `${TEAM_CONFIG.shortName}-lite-room-1`
  * @param {object} sessionData - 세션 데이터 (status, duration, lastEventAt 등)
  */
 export async function upsertRefSession(matchId, gameIndex, sessionData) {
-  if (!matchId) return null
+  if (!matchId || !sessionTableAvailable || blockWrites) return null
   
   try {
     const payload = {
@@ -38,6 +46,11 @@ export async function upsertRefSession(matchId, gameIndex, sessionData) {
     if (error) throw error
     return data
   } catch (e) {
+    if (e?.code === 'PGRST205') {
+      sessionTableAvailable = false
+      logger.warn?.('[upsertRefSession] table missing, disabling session sync')
+      return null
+    }
     logger.error('[upsertRefSession] failed', e)
     return null
   }
@@ -49,7 +62,7 @@ export async function upsertRefSession(matchId, gameIndex, sessionData) {
  * @param {number} gameIndex - 게임 인덱스
  */
 export async function cancelRefSession(matchId, gameIndex) {
-  if (!matchId) return false
+  if (!matchId || !sessionTableAvailable || blockWrites) return false
   
   try {
     const { error } = await supabase
@@ -65,6 +78,11 @@ export async function cancelRefSession(matchId, gameIndex) {
     if (error) throw error
     return true
   } catch (e) {
+    if (e?.code === 'PGRST205') {
+      sessionTableAvailable = false
+      logger.warn?.('[cancelRefSession] table missing, disabling session sync')
+      return false
+    }
     logger.error('[cancelRefSession] failed', e)
     return false
   }
@@ -76,7 +94,7 @@ export async function cancelRefSession(matchId, gameIndex) {
  * @param {number} gameIndex - 게임 인덱스
  */
 export async function completeRefSession(matchId, gameIndex) {
-  if (!matchId) return false
+  if (!matchId || !sessionTableAvailable || blockWrites) return false
   
   try {
     const { error } = await supabase
@@ -92,6 +110,11 @@ export async function completeRefSession(matchId, gameIndex) {
     if (error) throw error
     return true
   } catch (e) {
+    if (e?.code === 'PGRST205') {
+      sessionTableAvailable = false
+      logger.warn?.('[completeRefSession] table missing, disabling session sync')
+      return false
+    }
     logger.error('[completeRefSession] failed', e)
     return false
   }
@@ -103,7 +126,7 @@ export async function completeRefSession(matchId, gameIndex) {
  * @param {number} gameIndex - 게임 인덱스
  */
 export async function updateLastEventTime(matchId, gameIndex) {
-  if (!matchId) return false
+  if (!matchId || !sessionTableAvailable || blockWrites) return false
   
   try {
     const { error } = await supabase
@@ -119,6 +142,11 @@ export async function updateLastEventTime(matchId, gameIndex) {
     if (error) throw error
     return true
   } catch (e) {
+    if (e?.code === 'PGRST205') {
+      sessionTableAvailable = false
+      logger.warn?.('[updateLastEventTime] table missing, disabling session sync')
+      return false
+    }
     logger.error('[updateLastEventTime] failed', e)
     return false
   }
@@ -131,7 +159,7 @@ export async function updateLastEventTime(matchId, gameIndex) {
  * @param {function} onUpdate - 업데이트 콜백
  */
 export function subscribeRefSession(matchId, gameIndex, onUpdate) {
-  if (!matchId) return { unsubscribe: () => {} }
+  if (!matchId || !sessionTableAvailable || blockWrites) return { unsubscribe: () => {} }
 
   const channel = supabase
     .channel(`ref-session-${matchId}-${gameIndex}`)
@@ -167,7 +195,7 @@ export function subscribeRefSession(matchId, gameIndex, onUpdate) {
  * @param {number} gameIndex - 게임 인덱스
  */
 export async function getRefSession(matchId, gameIndex) {
-  if (!matchId) return null
+  if (!matchId || !sessionTableAvailable || blockWrites) return null
   
   try {
     const { data, error } = await supabase
@@ -180,6 +208,11 @@ export async function getRefSession(matchId, gameIndex) {
 
     if (error) {
       if (error.code === 'PGRST116') return null // Not found
+      if (error.code === 'PGRST205') {
+        sessionTableAvailable = false
+        logger.warn?.('[getRefSession] table missing, disabling session sync')
+        return null
+      }
       throw error
     }
     return data

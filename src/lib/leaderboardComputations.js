@@ -83,8 +83,8 @@ export function computeAttackRows(players = [], matches = []) {
     }
     const attendedIds = new Set(extractAttendeeIds(m))
     const statsMap = extractStatsByPlayer(m)
-  const teams = extractSnapshotTeams(m)
-  const qs = MatchHelpers.getQuarterScores ? MatchHelpers.getQuarterScores(m) : coerceQuarterScores(m)
+    const teams = extractSnapshotTeams(m)
+    const qs = MatchHelpers.getQuarterScores ? MatchHelpers.getQuarterScores(m) : coerceQuarterScores(m)
     const gameMatchups = m?.gameMatchups || null
     const teamCount = Array.isArray(qs) ? qs.length : 0
     // Track which players have manual cleanSheet for this match to avoid double-counting
@@ -112,7 +112,29 @@ export function computeAttackRows(players = [], matches = []) {
       index.set(pid, row)
     }
     
-    // Track goals, assists, and manual clean sheets
+    // Derive clean sheets per player from cleanSheet matrix (supports multi-game)
+    const derivedCs = (() => {
+      const map = new Map()
+      const matrix = Array.isArray(m?.statsMeta?.cleanSheets) ? m.statsMeta.cleanSheets : null
+      const games = Array.isArray(m?.stats?.__games) ? m.stats.__games : null
+      const source = matrix || (Array.isArray(games) ? games.map(g => g?.cleanSheets || []) : null)
+      if (!source || !Array.isArray(source) || source.length === 0) return map
+      source.forEach((row, gi) => {
+        if (!Array.isArray(row)) return
+        row.forEach((val, ti) => {
+          if (!val) return
+          const teamPlayers = Array.isArray(teams?.[ti]) ? teams[ti] : []
+          teamPlayers.forEach((p) => {
+            const pid = toStr(p?.id ?? p)
+            if (!pid) return
+            map.set(pid, (map.get(pid) || 0) + 1)
+          })
+        })
+      })
+      return map
+    })()
+
+    // Track goals, assists, and clean sheets (manual + derived)
     for (const [pid, rec] of Object.entries(statsMap)) {
       const p = idToPlayer.get(pid)
       if (!p) continue
@@ -128,12 +150,32 @@ export function computeAttackRows(players = [], matches = []) {
       }
       row.g += Number(rec?.goals || 0)
       row.a += Number(rec?.assists || 0)
-      // If manual cleanSheet is provided in stats, respect and add the numeric value
-      if (Number(rec?.cleanSheet || 0) > 0) {
-        row.cs += Number(rec?.cleanSheet || 0)
-      }
+      const csManual = Number(rec?.cleanSheet || 0)
+      const csDerived = derivedCs.get(pid) || 0
+      const csToAdd = Math.max(csManual, csDerived)
+      if (csToAdd > 0) row.cs += csToAdd
       index.set(pid, row)
     }
+
+    // Add derived clean sheets for players not present in statsMap (e.g., matrix-only)
+    derivedCs.forEach((cs, pid) => {
+      if (cs <= 0) return
+      if (statsMap[pid]) return // already handled above
+      const p = idToPlayer.get(pid)
+      if (!p) return
+      const row = index.get(pid) || {
+        id: pid,
+        name: p.name,
+        membership: p.membership || '',
+        photoUrl: p.photoUrl || null,
+        gp: attendedIds.has(pid) ? 1 : 0,
+        g: 0,
+        a: 0,
+        cs: 0,
+      }
+      row.cs += cs
+      index.set(pid, row)
+    })
 
     // 자동 클린시트 제거: 더 이상 실점 0 자동 부여 로직을 수행하지 않음 (순수 수동 입력 기반)
   }

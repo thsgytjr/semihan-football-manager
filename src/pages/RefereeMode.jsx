@@ -67,6 +67,12 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
   const [showOverrideWarning, setShowOverrideWarning] = useState(false)
   const [pendingMatchNumber, setPendingMatchNumber] = useState(null)
   const [selectedTeamIndices, setSelectedTeamIndices] = useState([0, 1])
+  const [wakeLockSupported, setWakeLockSupported] = useState(typeof navigator !== 'undefined' && 'wakeLock' in navigator)
+  const [wakeLockActive, setWakeLockActive] = useState(false)
+  const [wakeLockError, setWakeLockError] = useState('')
+  const wakeLockRef = useRef(null)
+  const wakeLockDesired = useRef(true) // always keep on while in referee mode
+  const finishingRef = useRef(false) // Prevent auto-save race condition after finish
 
   const timerRef = useRef(null)
 
@@ -136,6 +142,64 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
   const matchMeta = useMemo(() => {
     return {}
   }, [activeMatch])
+
+  const releaseWakeLock = React.useCallback(async () => {
+    try {
+      if (wakeLockRef.current?.release) {
+        await wakeLockRef.current.release()
+      }
+    } catch (err) {
+      // no-op
+    } finally {
+      wakeLockRef.current = null
+      setWakeLockActive(false)
+    }
+  }, [])
+
+  const requestWakeLock = React.useCallback(async () => {
+    if (typeof navigator === 'undefined' || !navigator.wakeLock) {
+      setWakeLockSupported(false)
+      return false
+    }
+    try {
+      const sentinel = await navigator.wakeLock.request('screen')
+      wakeLockRef.current = sentinel
+      setWakeLockActive(true)
+      setWakeLockError('')
+      sentinel.addEventListener('release', () => setWakeLockActive(false))
+      return true
+    } catch (err) {
+      setWakeLockActive(false)
+      setWakeLockError(err?.message || '화면을 계속 켤 수 없습니다')
+      return false
+    }
+  }, [])
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        if (wakeLockDesired.current && !wakeLockRef.current) {
+          requestWakeLock()
+        }
+      } else {
+        releaseWakeLock()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [wakeLockActive, releaseWakeLock, requestWakeLock])
+
+  // Always request wake lock when entering referee mode
+  useEffect(() => {
+    wakeLockDesired.current = true
+    requestWakeLock()
+    return () => {
+      wakeLockDesired.current = false
+      releaseWakeLock()
+    }
+  }, [requestWakeLock, releaseWakeLock])
+
+  useEffect(() => () => { releaseWakeLock() }, [releaseWakeLock])
 
   // Reset when activeMatch changes OR restore in-progress game
   useEffect(() => {
@@ -284,6 +348,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       (session) => {
         if (session.status === 'cancelled') {
           notify.warning(t('referee.sessionCancelledByOther') || '다른 디바이스에서 심판모드가 취소되었습니다.')
+          finishingRef.current = true // Prevent auto-save race condition
           setTimeout(() => {
             onCancel?.()
           }, 1500)
@@ -315,6 +380,9 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
         } else {
           // 이벤트가 없으면 자동 취소
           notify.info(t('referee.autoCancellingNoEvents') || '경기 시간 50% 초과 & 이벤트가 없어 자동으로 취소합니다.')
+          
+          // Prevent auto-save race condition
+          finishingRef.current = true
           
           // 이벤트 삭제
           try {
@@ -484,6 +552,9 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
   }
 
   const finishMatch = async (cleanSheetAwardees = cleanSheetSelections) => {
+    // Prevent auto-save race condition
+    finishingRef.current = true
+    
     const taggedEvents = events.map(ev => ({ ...ev, gameIndex: ev.gameIndex ?? (matchNumber - 1) }))
     const stats = buildStats(cleanSheetAwardees)
 
@@ -499,6 +570,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       events: taggedEvents,
       stats,
       cleanSheetAwardees,
+      cleanSheetAwardeesForGame: cleanSheetAwardees, // NEW: store per-game awardees
       clearInProgress: true, // Signal to clear __inProgress from stats
       selectedTeamIndices: activeMatch?.teams && activeMatch.teams.length > 2 ? selectedTeamIndices : undefined,
     }
@@ -515,7 +587,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
 
   // Auto-save in-progress game to DB on every change
   useEffect(() => {
-    if (!onAutoSave || gameStatus === 'setup') return
+    if (!onAutoSave || gameStatus === 'setup' || finishingRef.current) return
     
     const inProgressData = {
       matchNumber,
@@ -531,7 +603,10 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     
     // Debounce to avoid too many DB writes
     const timer = setTimeout(() => {
-      onAutoSave(inProgressData)
+      // Double-check finishing hasn't started while timer was pending
+      if (!finishingRef.current) {
+        onAutoSave(inProgressData)
+      }
     }, 500)
     
     return () => clearTimeout(timer)
@@ -838,6 +913,9 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
           </div>
 
           <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-2">
+            <div className={`px-3 h-8 rounded-full border text-xs font-bold flex items-center gap-1 ${wakeLockActive ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-300 bg-white text-slate-500'}`}>
+              {wakeLockActive ? '🔒 화면 켜짐' : (wakeLockSupported ? '화면 유지 시도중…' : '지원 안 함')}
+            </div>
             <button
               onClick={() => setShowCancelConfirm(true)}
               className="h-8 w-8 rounded-full border border-slate-300 text-slate-700 hover:bg-slate-100 active:scale-[0.98] transition flex items-center justify-center"
@@ -856,6 +934,16 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
             </button>
           </div>
         </div>
+        {!wakeLockSupported && (
+          <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 font-semibold">
+            ⚠️ 이 기기에서는 화면 깨우기 API가 없어 화면이 꺼질 수 있습니다.
+          </div>
+        )}
+        {wakeLockError && (
+          <div className="mt-2 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5 font-semibold">
+            {wakeLockError}
+          </div>
+        )}
 
         {gameStatus === 'ready' && (
           <div className="mt-4">
@@ -1216,6 +1304,8 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
         tone="danger"
         onConfirm={async () => {
           setShowCancelConfirm(false)
+          // Prevent auto-save race condition
+          finishingRef.current = true
           // Delete all referee events for this match
           try {
             await deleteAllRefEvents(matchIdForRef, gameIndexForRef)
