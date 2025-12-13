@@ -6,7 +6,7 @@ import { X, Edit2, Trash2, Plus, ChevronDown, ChevronRight } from 'lucide-react'
 
 const toStr = (v) => (v === null || v === undefined) ? '' : String(v)
 
-export default function RefereeTimelineEditor({ match, players, teams: providedTeams, onSave }) {
+export default function RefereeTimelineEditor({ match, players, teams: providedTeams, onSave, cardsEnabled = true }) {
   const { t } = useTranslation()
   const [timeline, setTimeline] = useState(
     Array.isArray(match?.stats?.__events) ? [...match.stats.__events] : []
@@ -171,10 +171,15 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
     return Array.from({ length: maxGameCount }, (_, i) => i)
   }, [maxGameCount])
 
-  const getGameScore = (gameIndex) => {
+  const getGameScores = (gameIndex) => {
     const evs = eventsByGame[gameIndex] || []
     const t0 = evs.filter(e => (e.type === 'goal' && e.teamIndex === 0) || (e.type === 'own_goal' && e.teamIndex === 1)).length
     const t1 = evs.filter(e => (e.type === 'goal' && e.teamIndex === 1) || (e.type === 'own_goal' && e.teamIndex === 0)).length
+    return [t0, t1]
+  }
+
+  const getGameScore = (gameIndex) => {
+    const [t0, t1] = getGameScores(gameIndex)
     return `${t0} : ${t1}`
   }
 
@@ -208,19 +213,28 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
     setEditingEvent(null)
   }
 
-  const handleAddEvent = (newEvent) => {
-    const id = (typeof crypto !== 'undefined' && crypto.randomUUID) 
-      ? crypto.randomUUID() 
-      : `manual-${Date.now()}-${Math.random().toString(16).slice(2)}`
-    setTimeline(prev => [...prev, { ...newEvent, id, timestamp: Date.now() }])
+  const handleAddEvent = (newEventOrEvents) => {
+    const newEvents = Array.isArray(newEventOrEvents) ? newEventOrEvents : [newEventOrEvents]
+    
+    const eventsWithIds = newEvents.map(evt => ({
+      ...evt,
+      id: (typeof crypto !== 'undefined' && crypto.randomUUID) 
+        ? crypto.randomUUID() 
+        : `manual-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      timestamp: Date.now()
+    }))
+
+    setTimeline(prev => [...prev, ...eventsWithIds])
     setShowAddEvent(false)
     
     // Auto expand the game we just added to
-    setExpandedGames(prev => {
-      const next = new Set(prev)
-      next.add(newEvent.gameIndex)
-      return next
-    })
+    if (eventsWithIds.length > 0) {
+      setExpandedGames(prev => {
+        const next = new Set(prev)
+        next.add(eventsWithIds[0].gameIndex)
+        return next
+      })
+    }
   }
 
   const handleSaveToMatch = () => {
@@ -264,6 +278,7 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
     })
 
     const manualCleanSheets = new Set()
+    const playerGameCleanSheets = new Set()
 
     timeline.forEach(ev => {
       const entry = ensureStat(ev.playerId)
@@ -283,14 +298,21 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
       }
 
       if (ev.type === 'clean_sheet') {
-        const gi = Math.max(0, Number(ev.gameIndex) || 0)
-        const ti = Math.max(0, Number(ev.teamIndex) || 0)
-        manualCleanSheets.add(`${gi}-${ti}`)
-        const teamPlayers = teams[ti] || []
-        teamPlayers.forEach(p => {
-          const csEntry = ensureStat(p.id)
-          if (csEntry) csEntry.cleanSheet += 1
-        })
+        const gi = Number(ev.gameIndex ?? 0)
+        const ti = Number(ev.teamIndex ?? 0)
+        const pid = toStr(ev.playerId)
+        
+        // Mark this team-game as having manual clean sheets
+        const teamKey = `${gi}-${ti}`
+        manualCleanSheets.add(teamKey)
+
+        // Only count once per player per game
+        const pgKey = `${pid}-${gi}`
+        if (!playerGameCleanSheets.has(pgKey)) {
+          const entry = ensureStat(pid)
+          if (entry) entry.cleanSheet += 1
+          playerGameCleanSheets.add(pgKey)
+        }
       }
 
       if (ev.type === 'yellow' && entry) entry.yellowCards += 1
@@ -298,27 +320,16 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
       if (ev.type === 'foul' && entry) entry.fouls += 1
     })
 
-    // Auto-derive clean sheets per game if not manually set for that team
+    // Build clean sheet matrix based only on manual events
     const cleanSheetMatrix = Array.from({ length: gameScores.length }, () => Array.from({ length: teamCount }, () => 0))
 
     for (let gi = 0; gi < gameScores.length; gi += 1) {
-      const scores = gameScores[gi] || []
-      scores.forEach((_, ti) => {
+      for (let ti = 0; ti < teamCount; ti += 1) {
         const key = `${gi}-${ti}`
-        const opponentScore = scores.reduce((sum, val, idx) => idx === ti ? sum : sum + (Number(val) || 0), 0)
-        const isClean = opponentScore === 0 || manualCleanSheets.has(key)
-        if (isClean) {
+        if (manualCleanSheets.has(key)) {
           cleanSheetMatrix[gi][ti] = 1
-          // If manual event was added we already incremented; auto case increments here
-          if (!manualCleanSheets.has(key)) {
-            const teamPlayers = teams[ti] || []
-            teamPlayers.forEach(p => {
-              const csEntry = ensureStat(p.id)
-              if (csEntry) csEntry.cleanSheet += 1
-            })
-          }
         }
-      })
+      }
     }
 
     const prevGames = Array.isArray(match?.stats?.__games) ? match.stats.__games : []
@@ -536,6 +547,8 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
           teams={teams}
           onSave={handleSaveEvent}
           onCancel={() => setEditingEvent(null)}
+          cardsEnabled={cardsEnabled}
+          getGameScores={getGameScores}
         />
       )}
 
@@ -546,6 +559,8 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
           teams={teams}
           onAdd={handleAddEvent}
           onCancel={() => setShowAddEvent(false)}
+          cardsEnabled={cardsEnabled}
+          getGameScores={getGameScores}
         />
       )}
 
@@ -587,7 +602,7 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
 }
 
 function TimelineEventItem({ ev, playersById, onEdit, onDelete }) {
-  const player = ev.type === 'clean_sheet' ? null : playersById.get(toStr(ev.playerId))
+  const player = playersById.get(toStr(ev.playerId))
   const assistPlayer = ev.assistedBy ? playersById.get(toStr(ev.assistedBy)) : null
   
   const getEventTypeLabel = (type) => {
@@ -628,13 +643,13 @@ function TimelineEventItem({ ev, playersById, onEdit, onDelete }) {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {ev.type === 'clean_sheet' ? (
-            <span className="text-sm font-semibold text-teal-700">팀 클린시트</span>
-          ) : player ? (
+          {player ? (
             <div className="flex items-center gap-1.5">
               <InitialAvatar name={player.name} photoUrl={player.photoUrl} size={20} />
               <span className="text-sm font-semibold text-gray-800 truncate">{player.name}</span>
             </div>
+          ) : ev.type === 'clean_sheet' ? (
+            <span className="text-sm font-semibold text-teal-700">팀 클린시트</span>
           ) : (
             <span className="text-sm text-gray-400 italic">선수 미상</span>
           )}
@@ -671,22 +686,23 @@ function TimelineEventItem({ ev, playersById, onEdit, onDelete }) {
 }
 
 /* Event Edit Modal */
-function EventEditModal({ event, players, teams, onSave, onCancel }) {
+/* Event Edit Modal */
+function EventEditModal({ event, players, teams, onSave, onCancel, cardsEnabled = true }) {
   const [formData, setFormData] = useState({
     type: event.type || 'goal',
     playerId: toStr(event.playerId || ''),
     teamIndex: event.teamIndex ?? 0,
-    gameIndex: event.gameIndex ?? 0,
+    gameIndex: String((event.gameIndex ?? 0) + 1),
     minute: event.minute || '',
     assistedBy: toStr(event.assistedBy || ''),
   })
 
   const needsAssist = ['goal', 'own_goal'].includes(formData.type)
-  const needsPlayer = formData.type !== 'clean_sheet'
+  const needsPlayer = true // All events now support player selection
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    const parsedGameIndex = Number.isFinite(Number(formData.gameIndex)) ? Number(formData.gameIndex) : 0
+    const parsedGameIndex = Math.max(0, (parseInt(formData.gameIndex, 10) || 1) - 1)
     onSave({
       ...event,
       type: formData.type,
@@ -725,11 +741,11 @@ function EventEditModal({ event, players, teams, onSave, onCancel }) {
             >
               <option value="goal">⚽ 골</option>
               <option value="own_goal">🥅 자책골</option>
-              <option value="yellow">🟨 옐로카드</option>
-              <option value="red">🟥 레드카드</option>
+              {(cardsEnabled || formData.type === 'yellow') && <option value="yellow">🟨 옐로카드</option>}
+              {(cardsEnabled || formData.type === 'red') && <option value="red">🟥 레드카드</option>}
               <option value="foul">⚠️ 파울</option>
-              <option value="super_save">🧤 슈퍼세이브</option>
-              <option value="clean_sheet">🧱 클린시트 (팀)</option>
+              {(formData.type === 'super_save') && <option value="super_save">🧤 슈퍼세이브</option>}
+              <option value="clean_sheet">🧱 클린시트</option>
             </select>
           </div>
 
@@ -743,12 +759,8 @@ function EventEditModal({ event, players, teams, onSave, onCancel }) {
                   min="1"
                   inputMode="numeric"
                   step="1"
-                  value={Number(formData.gameIndex) + 1}
-                  onChange={(e) => {
-                    const raw = e.target.value
-                    const parsed = Number.parseInt(raw, 10)
-                    setFormData(prev => ({ ...prev, gameIndex: Number.isFinite(parsed) ? Math.max(0, parsed - 1) : 0 }))
-                  }}
+                  value={formData.gameIndex}
+                  onChange={(e) => setFormData(prev => ({ ...prev, gameIndex: e.target.value }))}
                   className="w-full pl-8 pr-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                 />
               </div>
@@ -794,8 +806,8 @@ function EventEditModal({ event, players, teams, onSave, onCancel }) {
               required={needsPlayer}
               disabled={!needsPlayer}
             >
-              <option value="">{needsPlayer ? '선택해주세요...' : '클린시트는 팀 전체 반영'}</option>
-              {needsPlayer && selectedTeam.map(p => (
+              <option value="">선택해주세요...</option>
+              {selectedTeam.map(p => (
                 <option key={p.id} value={toStr(p.id)}>{p.name}</option>
               ))}
             </select>
@@ -841,23 +853,112 @@ function EventEditModal({ event, players, teams, onSave, onCancel }) {
 }
 
 /* Event Add Modal */
-function EventAddModal({ players, teams, onAdd, onCancel }) {
+function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, getGameScores }) {
   const [formData, setFormData] = useState({
     type: 'goal',
     playerId: '',
     teamIndex: 0,
-    gameIndex: 0,
+    gameIndex: '1',
     minute: '',
     assistedBy: '',
   })
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState(new Set())
+  const [cleanSheetError, setCleanSheetError] = useState('')
 
   const needsAssist = ['goal', 'own_goal'].includes(formData.type)
-  const needsPlayer = formData.type !== 'clean_sheet'
+  const isCleanSheet = formData.type === 'clean_sheet'
+  const needsPlayer = true // All events now support player selection
+
+  // Reset selection when team changes
+  React.useEffect(() => {
+    setSelectedPlayerIds(new Set())
+  }, [formData.teamIndex])
+
+  // Auto-select team for clean sheet & Validation
+  React.useEffect(() => {
+    if (formData.type === 'clean_sheet') {
+      const parsedGameIndex = Math.max(0, (parseInt(formData.gameIndex, 10) || 1) - 1)
+      const [s0, s1] = getGameScores ? getGameScores(parsedGameIndex) : [0, 0]
+      
+      // Team 0 clean sheet if s1 (opponent score) is 0
+      const t0Clean = s1 === 0
+      // Team 1 clean sheet if s0 (opponent score) is 0
+      const t1Clean = s0 === 0
+
+      // Only auto-switch if we haven't manually set it yet (or maybe always? user asked "automatically select")
+      // But we also need to validate current selection.
+      // Let's auto-select only when switching TO clean_sheet or changing gameIndex, 
+      // but we are in a single effect.
+      // To avoid fighting user input, maybe we only warn?
+      // User said: "When adding clean sheet, automatically select the team with no goals conceded."
+      
+      // Let's check if current selection is invalid, and if the other one is valid, switch.
+      const currentTeamIdx = Number(formData.teamIndex)
+      const isCurrentClean = currentTeamIdx === 0 ? t0Clean : t1Clean
+      
+      if (!isCurrentClean) {
+        if (currentTeamIdx === 0 && t1Clean) {
+           // Switch to team 1
+           setFormData(prev => ({ ...prev, teamIndex: 1 }))
+        } else if (currentTeamIdx === 1 && t0Clean) {
+           // Switch to team 0
+           setFormData(prev => ({ ...prev, teamIndex: 0 }))
+        }
+      }
+
+      // Re-evaluate error after potential switch (in next render? no, we need immediate feedback)
+      // We can't rely on state update immediately.
+      // Let's just calculate error based on what we *would* have.
+      // Actually, if we switch, the effect will run again? No, setFormData triggers re-render, effect runs again.
+      // So we can just set error based on current state.
+      
+      if (!isCurrentClean) {
+        setCleanSheetError('이 팀은 무실점 경기가 아닙니다.')
+      } else {
+        setCleanSheetError('')
+      }
+    } else {
+      setCleanSheetError('')
+    }
+  }, [formData.type, formData.gameIndex, formData.teamIndex, getGameScores])
+
+  const togglePlayer = (pid) => {
+    const newSet = new Set(selectedPlayerIds)
+    if (newSet.has(pid)) newSet.delete(pid)
+    else newSet.add(pid)
+    setSelectedPlayerIds(newSet)
+  }
 
   const handleSubmit = (e) => {
     e.preventDefault()
+    const parsedGameIndex = Math.max(0, (parseInt(formData.gameIndex, 10) || 1) - 1)
+
+    if (isCleanSheet) {
+      if (cleanSheetError) {
+        // Prevent submit? User said "say it is not a clean sheet match".
+        // Usually this implies blocking or at least strong warning.
+        // I'll block it if it's an error.
+        return
+      }
+      if (selectedPlayerIds.size === 0) return
+      const events = Array.from(selectedPlayerIds).map(pid => {
+        const player = players.find(p => toStr(p.id) === pid)
+        return {
+          type: 'clean_sheet',
+          playerId: pid,
+          playerName: player?.name || '',
+          teamIndex: Number(formData.teamIndex),
+          gameIndex: parsedGameIndex,
+          minute: formData.minute,
+          assistedBy: null,
+          assistedName: '',
+        }
+      })
+      onAdd(events)
+      return
+    }
+
     if (needsPlayer && !formData.playerId) return
-    const parsedGameIndex = Number.isFinite(Number(formData.gameIndex)) ? Number(formData.gameIndex) : 0
 
     const player = players.find(p => toStr(p.id) === formData.playerId)
     const assistPlayer = formData.assistedBy 
@@ -897,11 +998,10 @@ function EventAddModal({ players, teams, onAdd, onCancel }) {
             >
               <option value="goal">⚽ 골</option>
               <option value="own_goal">🥅 자책골</option>
-              <option value="yellow">🟨 옐로카드</option>
-              <option value="red">🟥 레드카드</option>
+              {cardsEnabled && <option value="yellow">🟨 옐로카드</option>}
+              {cardsEnabled && <option value="red">🟥 레드카드</option>}
               <option value="foul">⚠️ 파울</option>
-              <option value="super_save">🧤 슈퍼세이브</option>
-              <option value="clean_sheet">🧱 클린시트 (팀)</option>
+              <option value="clean_sheet">🧱 클린시트</option>
             </select>
           </div>
 
@@ -915,12 +1015,8 @@ function EventAddModal({ players, teams, onAdd, onCancel }) {
                   min="1"
                   inputMode="numeric"
                   step="1"
-                  value={Number(formData.gameIndex) + 1}
-                  onChange={(e) => {
-                    const raw = e.target.value
-                    const parsed = Number.parseInt(raw, 10)
-                    setFormData(prev => ({ ...prev, gameIndex: Number.isFinite(parsed) ? Math.max(0, parsed - 1) : 0 }))
-                  }}
+                  value={formData.gameIndex}
+                  onChange={(e) => setFormData(prev => ({ ...prev, gameIndex: e.target.value }))}
                   className="w-full pl-8 pr-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                 />
               </div>
@@ -955,25 +1051,58 @@ function EventAddModal({ players, teams, onAdd, onCancel }) {
                 </button>
               ))}
             </div>
+            {cleanSheetError && (
+              <div className="mt-2 text-xs font-bold text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                ⚠️ {cleanSheetError}
+              </div>
+            )}
           </div>
 
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1.5">선수 선택</label>
-            <select
-              value={formData.playerId}
-              onChange={(e) => setFormData(prev => ({ ...prev, playerId: e.target.value }))}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              required={needsPlayer}
-              disabled={!needsPlayer}
-            >
-              <option value="">{needsPlayer ? '선택해주세요...' : '클린시트는 팀 전체 반영'}</option>
-              {needsPlayer && selectedTeam.map(p => (
-                <option key={p.id} value={toStr(p.id)}>{p.name}</option>
-              ))}
-            </select>
+            {isCleanSheet ? (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-60 overflow-y-auto p-1">
+                {selectedTeam.map(p => {
+                  const pid = toStr(p.id)
+                  const isSelected = selectedPlayerIds.has(pid)
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => togglePlayer(pid)}
+                      className={`flex flex-col items-center p-2 rounded-xl border-2 transition-all ${
+                        isSelected 
+                          ? 'border-teal-500 bg-teal-50 text-teal-700 ring-2 ring-teal-200 ring-offset-1' 
+                          : 'border-gray-100 bg-white text-gray-600 hover:border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <InitialAvatar name={p.name} photoUrl={p.photoUrl} size={40} className="mb-1.5 shadow-sm" />
+                      <span className="text-xs font-bold truncate w-full text-center leading-tight">{p.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            ) : (
+              <select
+                value={formData.playerId}
+                onChange={(e) => setFormData(prev => ({ ...prev, playerId: e.target.value }))}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                required={needsPlayer}
+              >
+                <option value="">선택해주세요...</option>
+                {selectedTeam.map(p => (
+                  <option key={p.id} value={toStr(p.id)}>{p.name}</option>
+                ))}
+              </select>
+            )}
+            {isCleanSheet && (
+               <div className="text-xs text-gray-500 mt-1.5 text-right">
+                 {selectedPlayerIds.size}명 선택됨
+               </div>
+            )}
           </div>
 
-          {needsAssist && needsPlayer && (
+          {needsAssist && needsPlayer && !isCleanSheet && (
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1.5">
                 어시스트 (선택)

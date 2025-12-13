@@ -1058,6 +1058,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
                     players={players}
                     teams={teams}
                     onSave={onUpdateMatch}
+                    cardsEnabled={cardsFeatureEnabled}
                   />
                 ) : (
                   <QuickStatsEditor
