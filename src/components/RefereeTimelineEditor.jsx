@@ -561,6 +561,7 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
           onCancel={() => setShowAddEvent(false)}
           cardsEnabled={cardsEnabled}
           getGameScores={getGameScores}
+          timeline={timeline}
         />
       )}
 
@@ -853,7 +854,7 @@ function EventEditModal({ event, players, teams, onSave, onCancel, cardsEnabled 
 }
 
 /* Event Add Modal */
-function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, getGameScores }) {
+function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, getGameScores, timeline }) {
   const [formData, setFormData] = useState({
     type: 'goal',
     playerId: '',
@@ -868,6 +869,22 @@ function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, g
   const needsAssist = ['goal', 'own_goal'].includes(formData.type)
   const isCleanSheet = formData.type === 'clean_sheet'
   const needsPlayer = true // All events now support player selection
+
+  // Get existing clean sheet players for current game/team
+  const existingCleanSheetPlayers = React.useMemo(() => {
+    if (!isCleanSheet) return new Set()
+    const gi = Math.max(0, (parseInt(formData.gameIndex, 10) || 1) - 1)
+    const ti = Number(formData.teamIndex)
+    const existing = new Set()
+    if (Array.isArray(timeline)) {
+      timeline.forEach(ev => {
+        if (ev.type === 'clean_sheet' && Number(ev.gameIndex ?? 0) === gi && Number(ev.teamIndex ?? 0) === ti) {
+          existing.add(toStr(ev.playerId))
+        }
+      })
+    }
+    return existing
+  }, [isCleanSheet, formData.gameIndex, formData.teamIndex, timeline])
 
   // Reset selection when team changes
   React.useEffect(() => {
@@ -1065,19 +1082,27 @@ function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, g
                 {selectedTeam.map(p => {
                   const pid = toStr(p.id)
                   const isSelected = selectedPlayerIds.has(pid)
+                  const alreadyHasCleanSheet = existingCleanSheetPlayers.has(pid)
+                  const isDisabled = alreadyHasCleanSheet
                   return (
                     <button
                       key={p.id}
                       type="button"
-                      onClick={() => togglePlayer(pid)}
+                      onClick={() => !isDisabled && togglePlayer(pid)}
+                      disabled={isDisabled}
                       className={`flex flex-col items-center p-2 rounded-xl border-2 transition-all ${
-                        isSelected 
-                          ? 'border-teal-500 bg-teal-50 text-teal-700 ring-2 ring-teal-200 ring-offset-1' 
-                          : 'border-gray-100 bg-white text-gray-600 hover:border-gray-200 hover:bg-gray-50'
+                        isDisabled
+                          ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed opacity-60'
+                          : isSelected 
+                            ? 'border-teal-500 bg-teal-50 text-teal-700 ring-2 ring-teal-200 ring-offset-1' 
+                            : 'border-gray-100 bg-white text-gray-600 hover:border-gray-200 hover:bg-gray-50'
                       }`}
                     >
                       <InitialAvatar name={p.name} photoUrl={p.photoUrl} size={40} className="mb-1.5 shadow-sm" />
                       <span className="text-xs font-bold truncate w-full text-center leading-tight">{p.name}</span>
+                      {alreadyHasCleanSheet && (
+                        <span className="text-[9px] text-gray-500 mt-0.5">✓ 추가됨</span>
+                      )}
                     </button>
                   )
                 })}
