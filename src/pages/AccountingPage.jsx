@@ -3353,21 +3353,6 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-xs text-gray-600">
-                    <th className="text-left py-2 px-2 w-8">
-                      <input
-                        type="checkbox"
-                        checked={selectedPlayers.size === sortedParticipantIds.length && sortedParticipantIds.length > 0}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedPlayers(new Set(sortedParticipantIds))
-                          } else {
-                            setSelectedPlayers(new Set())
-                          }
-                        }}
-                        disabled={isVoided}
-                        className="cursor-pointer"
-                      />
-                    </th>
                     <th className="text-left py-2 px-2">선수</th>
                     <th className="text-left py-2 px-2">구분</th>
                     <th className="text-right py-2 px-2">금액</th>
@@ -3386,17 +3371,9 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
                 return (
                   <tr
                     key={playerId}
-                    className={`border-b last:border-b-0 ${isPaid ? 'bg-emerald-50' : 'hover:bg-gray-50'} ${isSelected ? 'ring-2 ring-blue-300' : ''}`}
+                    onClick={() => !isVoided && togglePlayerSelection(playerId)}
+                    className={`border-b last:border-b-0 ${isPaid ? 'bg-emerald-50' : 'hover:bg-gray-50'} ${isSelected ? 'ring-2 ring-blue-300' : ''} ${!isVoided ? 'cursor-pointer' : 'cursor-not-allowed'}`}
                   >
-                    <td className="py-2 px-2">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => togglePlayerSelection(playerId)}
-                        disabled={isVoided}
-                        className="cursor-pointer"
-                      />
-                    </td>
                     <td className="py-2 px-2">
                       <div className="flex items-center gap-2">
                         <InitialAvatar id={player?.id} name={player?.name||'?'} size={24} photoUrl={player?.photoUrl} />

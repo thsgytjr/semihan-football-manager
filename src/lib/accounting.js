@@ -707,11 +707,23 @@ export async function confirmMatchPayment(matchId, playerId, amount, paymentMeth
 
     if (mpError) throw mpError
 
-    // 2. payments 테이블에 기록
-    // 2. payments 테이블에 기록 (중복 방지: match_id + player_id + payment_type)
+    // 2. payments 테이블에 기록 (중복 방지: 기존 레코드 삭제 후 insert)
+    // 먼저 기존 레코드 삭제
+    const { error: deleteError } = await supabase
+      .from('payments')
+      .delete()
+      .eq('match_id', matchId)
+      .eq('player_id', playerId)
+      .eq('payment_type', 'match_fee')
+
+    if (deleteError && deleteError.code !== 'PGRST116') { // PGRST116 = no rows found (무시 가능)
+      console.warn('Failed to delete existing payment:', deleteError)
+    }
+
+    // 새 레코드 insert
     const { data: payment, error: pError } = await supabase
       .from('payments')
-      .upsert({
+      .insert({
         player_id: playerId,
         payment_type: 'match_fee',
         amount: amount,
@@ -720,8 +732,6 @@ export async function confirmMatchPayment(matchId, playerId, amount, paymentMeth
         verified_by: verifiedBy,
         verified_at: new Date().toISOString(),
         payment_date: new Date().toISOString()
-      }, {
-        onConflict: 'match_id,player_id,payment_type'
       })
       .select()
       .single()

@@ -664,23 +664,46 @@ function App(){
     // Protect past matches with existing records from accidental modification
     if(targetRaw){
       const matchDate = new Date(targetRaw.dateISO || targetRaw.date || targetRaw.dateStr)
+      matchDate.setHours(0,0,0,0)
       const today = new Date()
       today.setHours(0,0,0,0)
-      const isPastMatch = matchDate < today
+      const isPastMatch = matchDate < today // 오늘은 제외, 어제부터만 과거
       
-      const hasRecords = (
-        (targetRaw.stats?.__events && Array.isArray(targetRaw.stats.__events) && targetRaw.stats.__events.length > 0) ||
-        (targetRaw.stats?.__games && Array.isArray(targetRaw.stats.__games) && targetRaw.stats.__games.length > 0) ||
-        (targetRaw.stats?.__scores) ||
-        (targetRaw.quarterScores) ||
-        (targetRaw.draft?.quarterScores)
-      )
-      
-      if(isPastMatch && hasRecords){
-        setActiveMatch(null)
-        setRefModeError('과거 매치는 이미 기록이 있어 수정할 수 없습니다. (Past matches with records cannot be modified)')
-        refModeResolvedRef.current=true
-        return
+      if(!isPastMatch){
+        // 오늘/미래 경기는 항상 허용
+      } else {
+        // 과거 경기: __inProgress가 최근(24시간 이내)인지 확인
+        const inProgressIsRecent = targetRaw.stats?.__inProgress?.lastUpdated
+          ? (Date.now() - targetRaw.stats.__inProgress.lastUpdated) < 24 * 60 * 60 * 1000
+          : false
+        
+        // 최근 진행중 상태면 허용
+        if(inProgressIsRecent){
+          // Recent in-progress, allow entry
+        } else {
+          // Check if match has any player stats (excluding special keys)
+          const hasStats = targetRaw.stats && Object.keys(targetRaw.stats).some(key => 
+            key !== '__inProgress' && 
+            key !== '__events' && 
+            key !== '__games' &&
+            key !== 'gameEvents'
+          )
+          
+          // Check if match has any scores recorded
+          const hasScores = targetRaw.quarterScores && 
+            Array.isArray(targetRaw.quarterScores) && 
+            targetRaw.quarterScores.length > 0 &&
+            targetRaw.quarterScores.some(q => Array.isArray(q) && q.length > 0)
+          
+          const hasRecords = hasStats || hasScores
+          
+          if(hasRecords){
+            setActiveMatch(null)
+            setRefModeError('과거 매치는 이미 기록이 있어 수정할 수 없습니다. (Past matches with records cannot be modified)')
+            refModeResolvedRef.current=true
+            return
+          }
+        }
       }
     }
     

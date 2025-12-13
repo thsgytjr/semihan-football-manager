@@ -294,29 +294,46 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     return () => sessionSub?.unsubscribe?.()
   }, [matchIdForRef, gameIndexForRef, gameStatus, duration, startTime, onCancel, t])
 
-  // 자동 저장: 경기 시간의 150% 경과 시 이벤트 없으면 자동 저장
+  // 자동 저장/취소: 경기 시간의 50% 초과 시
   useEffect(() => {
     if (!matchIdForRef || gameStatus !== 'playing' || !startTime) return undefined
 
     const checkAutoSave = setInterval(async () => {
       const elapsed = Math.floor((Date.now() - startTime) / 1000)
-      const maxDuration = duration * 60 * 1.5 // 150% of duration
+      const minDuration = duration * 60 * 0.5 // 50% of duration
 
-      if (elapsed >= maxDuration && events.length === 0) {
-        notify.info(t('referee.autoSavingNoEvents') || '이벤트가 없어 자동으로 저장합니다.')
-        
-        // 세션 완료 처리
-        await completeRefSession(matchIdForRef, gameIndexForRef)
-        
-        // 자동 저장 콜백 호출
-        setTimeout(() => {
-          onAutoSave?.()
-        }, 1000)
+      if (elapsed >= minDuration) {
+        if (events.length > 0) {
+          // 이벤트가 있으면 자동 저장
+          notify.info(t('referee.autoSavingWithEvents') || '경기 시간 50% 초과 & 이벤트가 있어 자동으로 저장합니다.')
+          
+          // 세션 완료 처리
+          await completeRefSession(matchIdForRef, gameIndexForRef)
+          
+          // 자동 저장: finishMatch 호출
+          finishMatch().catch(err => console.error('Auto-save failed:', err))
+        } else {
+          // 이벤트가 없으면 자동 취소
+          notify.info(t('referee.autoCancellingNoEvents') || '경기 시간 50% 초과 & 이벤트가 없어 자동으로 취소합니다.')
+          
+          // 이벤트 삭제
+          try {
+            await deleteAllRefEvents(matchIdForRef, gameIndexForRef)
+          } catch (err) {
+            console.error('Failed to delete referee events:', err)
+          }
+          
+          // 세션 취소 처리
+          await cancelRefSession(matchIdForRef, gameIndexForRef)
+          
+          // 취소 콜백 호출
+          onCancel?.()
+        }
       }
     }, 10000) // 10초마다 체크
 
     return () => clearInterval(checkAutoSave)
-  }, [matchIdForRef, gameIndexForRef, gameStatus, startTime, duration, events.length, onAutoSave, t])
+  }, [matchIdForRef, gameIndexForRef, gameStatus, startTime, duration, events.length, onCancel, t])
 
   const formatTime = (seconds) => {
     const totalMinutes = Math.floor(seconds / 60)

@@ -910,15 +910,15 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
               </div>
               {/* 일괄 선택/확인 툴바 */}
               <div className="mb-2 flex items-center justify-between gap-3">
-                <label className="inline-flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4"
-                    checked={allSelected}
-                    onChange={toggleSelectAll}
-                  />
-                  모두 선택 ({selectedCount}/{unpaidIds.length})
-                </label>
+                <div className="text-sm text-gray-600">
+                  <button
+                    onClick={toggleSelectAll}
+                    className="text-blue-600 hover:text-blue-700 underline"
+                  >
+                    {allSelected ? '모두 해제' : '모두 선택'}
+                  </button>
+                  {' '}({selectedCount}/{unpaidIds.length})
+                </div>
                 <button
                   onClick={handleBulkConfirm}
                   disabled={selectedCount === 0 || bulkUpdating}
@@ -936,19 +936,14 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
                   return (
                   <div
                     key={unpaid.playerId}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:bg-gray-100 transition-colors cursor-pointer"
+                    className={`flex items-center justify-between p-3 rounded-lg border transition-colors cursor-pointer ${
+                      selected.has(unpaid.playerId) 
+                        ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-200' 
+                        : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                    }`}
                     onClick={() => toggleSelectOne(unpaid.playerId)}
                   >
                     <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 flex-shrink-0"
-                        checked={selected.has(unpaid.playerId)}
-                        onChange={(e) => {
-                          e.stopPropagation()
-                          toggleSelectOne(unpaid.playerId)
-                        }}
-                      />
                       <InitialAvatar
                         id={unpaid.playerId}
                         name={unpaid.playerName}

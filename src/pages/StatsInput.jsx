@@ -676,6 +676,43 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     return Array.isArray(editingMatch?.stats?.__events) && editingMatch.stats.__events.length > 0
   }, [editingMatch])
 
+  // 지난 경기이면서 기록이 있는지 확인 (오늘 진행중인 경기는 제외)
+  const isPastMatchWithRecords = useMemo(() => {
+    if (!editingMatch) return false
+    
+    // 오늘 날짜 기준으로 어제부터는 지난 경기
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    const matchDate = new Date(editingMatch.dateISO || editingMatch.date || editingMatch.created_at)
+    matchDate.setHours(0, 0, 0, 0)
+    
+    const isPast = matchDate < today
+    if (!isPast) return false // 오늘 또는 미래 경기는 허용
+    
+    // 진행중 상태가 최근(24시간 이내)인지 확인
+    const inProgressIsRecent = editingMatch.stats?.__inProgress?.lastUpdated
+      ? (Date.now() - editingMatch.stats.__inProgress.lastUpdated) < 24 * 60 * 60 * 1000
+      : false
+    
+    // 과거 경기인데 최근 진행중 상태면 허용 (이어서 할 수 있도록)
+    if (inProgressIsRecent) return false
+    
+    // 기록이 있는지 확인 (stats 객체에 플레이어 기록이 있거나 quarterScores가 있으면 기록이 있는 것)
+    const hasStats = editingMatch.stats && Object.keys(editingMatch.stats).some(key => 
+      key !== '__inProgress' && 
+      key !== '__events' && 
+      key !== '__games' &&
+      key !== 'gameEvents'
+    )
+    
+    const hasScores = editingMatch.quarterScores && 
+      Array.isArray(editingMatch.quarterScores) && 
+      editingMatch.quarterScores.length > 0 &&
+      editingMatch.quarterScores.some(q => Array.isArray(q) && q.length > 0)
+    
+    return hasStats || hasScores
+  }, [editingMatch])
 
   const momMatchOptions = useMemo(() => {
     return (sortedMatches || []).filter(m => !isRefMatch(m)).map(m => {
@@ -887,7 +924,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
                     )
                   })}
                 </select>
-                {editingMatch && onStartRefereeMode && (
+                {editingMatch && onStartRefereeMode && !isPastMatchWithRecords && (
                   <>
                     {editingMatch.stats?.__inProgress ? (
                       <button
@@ -916,6 +953,11 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
                       </button>
                     )}
                   </>
+                )}
+                {isPastMatchWithRecords && (
+                  <div className="shrink-0 text-xs text-gray-500 italic px-2">
+                    기록이 있는 지난 경기는 심판모드 불가
+                  </div>
                 )}
               </div>
             </div>
