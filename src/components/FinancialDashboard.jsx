@@ -909,22 +909,22 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
                 </div>
               </div>
               {/* 일괄 선택/확인 툴바 */}
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <div className="text-sm text-gray-600">
+              <div className="mb-3 flex items-center justify-between gap-3 p-2 bg-gray-100 rounded-lg">
+                <div className="flex items-center gap-2">
                   <button
                     onClick={toggleSelectAll}
-                    className="text-blue-600 hover:text-blue-700 underline"
+                    className="px-3 py-1.5 text-xs font-medium rounded-md bg-white border border-gray-300 hover:bg-gray-50 transition-colors"
                   >
                     {allSelected ? '모두 해제' : '모두 선택'}
                   </button>
-                  {' '}({selectedCount}/{unpaidIds.length})
+                  <span className="text-xs text-gray-600">선택: {selectedCount}/{unpaidIds.length}명</span>
                 </div>
                 <button
                   onClick={handleBulkConfirm}
                   disabled={selectedCount === 0 || bulkUpdating}
-                  className={`px-3 py-1.5 text-xs rounded ${selectedCount === 0 || bulkUpdating ? 'bg-gray-200 text-gray-500' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${selectedCount === 0 || bulkUpdating ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
                 >
-                  {bulkUpdating ? '처리 중…' : `선택 납부 확인 (${selectedCount}명)`}
+                  {bulkUpdating ? '처리 중…' : `납부 확인 (${selectedCount})`}
                 </button>
               </div>
 
@@ -961,11 +961,12 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
                       </div>
                     </div>
                     <button
-                      onClick={() => handleTogglePayment(unpaid.playerId, false, unpaid.expectedFee)}
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClickCapture={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleTogglePayment(unpaid.playerId, false, unpaid.expectedFee)
+                      }}
                       disabled={updating[unpaid.playerId] || bulkUpdating}
-                      className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium whitespace-nowrap flex-shrink-0 ml-2"
+                      className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium whitespace-nowrap flex-shrink-0 ml-2 transition-colors"
                     >
                       {updating[unpaid.playerId] ? '처리 중...' : '확인'}
                     </button>
