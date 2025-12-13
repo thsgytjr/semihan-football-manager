@@ -186,6 +186,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
 
   const [bulkText, setBulkText] = useState('')
   const [bulkMsg, setBulkMsg] = useState('')
+  const [sectionTab, setSectionTab] = useState('manual') // bulk | manual | mom
   const [showSaved, setShowSaved] = useState(false)
   const [confirmState, setConfirmState] = useState({ open: false, kind: null })
   const [alertState, setAlertState] = useState({ open: false, title: '안내', message: '' })
@@ -716,8 +717,9 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
 
   const momMatchOptions = useMemo(() => {
     return (sortedMatches || []).filter(m => !isRefMatch(m)).map(m => {
+      const count = extractAttendeeIds(m).length
       const label = typeof formatMatchLabel === 'function'
-        ? formatMatchLabel(m, { withDate: true, withCount: true, t })
+        ? formatMatchLabel(m, { withDate: true, withCount: true, count, t })
         : (m.label || m.title || m.name || `Match ${toStr(m.id)}`)
       return { value: toStr(m.id), label }
     })
@@ -924,159 +926,194 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
                     )
                   })}
                 </select>
-                {editingMatch && onStartRefereeMode && !isPastMatchWithRecords && (
-                  <>
-                    {editingMatch.stats?.__inProgress ? (
-                      <button
-                        onClick={() => {
-                          const hydrated = hydrateMatch(editingMatch, players)
-                          onStartRefereeMode(hydrated)
-                        }}
-                        className="shrink-0 rounded-lg bg-orange-500 hover:bg-orange-600 px-4 py-2 text-white font-semibold shadow-sm flex items-center gap-1"
-                        title="진행 중인 심판 모드로 돌아가기"
-                      >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        <span className="hidden sm:inline">진행중 ⏱️</span>
-                        <span className="sm:hidden">⏱️</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          const hydrated = hydrateMatch(editingMatch, players)
-                          onStartRefereeMode(hydrated)
-                        }}
-                        className="shrink-0 rounded-lg bg-blue-500 hover:bg-blue-600 px-4 py-2 text-white font-semibold shadow-sm flex items-center gap-1"
-                        title="심판 모드 시작"
-                      >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        <span className="hidden sm:inline">심판 모드</span>
-                      </button>
-                    )}
-                  </>
-                )}
-                {isPastMatchWithRecords && (
-                  <div className="shrink-0 text-xs text-gray-500 italic px-2">
-                    기록이 있는 지난 경기는 심판모드 불가
-                  </div>
-                )}
               </div>
+            </div>
+
+            {/* Section Tabs */}
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { key: 'manual', label: '수동 입력' },
+                  { key: 'bulk', label: '벌크 입력' },
+                  { key: 'mom', label: '관리자 MoM' }
+                ].map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setSectionTab(tab.key)}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition-all border-2 ${
+                      sectionTab === tab.key
+                        ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                        : 'bg-white border-gray-300 text-gray-700 hover:border-blue-300 hover:text-blue-700'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {editingMatch && onStartRefereeMode && (
+                <div className="ml-auto flex items-center gap-2">
+                  {isPastMatchWithRecords ? (
+                    <div className="text-xs text-gray-500 italic px-2">지난 경기 기록이 있어 심판모드 불가</div>
+                  ) : editingMatch.stats?.__inProgress ? (
+                    <button
+                      onClick={() => {
+                        const hydrated = hydrateMatch(editingMatch, players)
+                        onStartRefereeMode(hydrated)
+                      }}
+                      className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition-all"
+                      title="진행 중인 심판 모드로 돌아가기"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                      <span>심판 모드 이어하기</span>
+                      <span className="hidden sm:inline text-[11px] bg-white/20 rounded-full px-2 py-0.5">⏱️ 진행중</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        const hydrated = hydrateMatch(editingMatch, players)
+                        onStartRefereeMode(hydrated)
+                      }}
+                      className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-md transition-all"
+                      title="심판 모드로 바로 이동"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                      <span>심판 모드</span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Bulk Input Section */}
-            <div className="mb-4 p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg border-2 border-amber-200">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-lg">📋</span>
-                <label className="text-sm font-bold text-gray-800">Bulk 입력 (빠른 입력)</label>
-              </div>
-              <textarea
-                value={bulkText}
-                onChange={e => setBulkText(e.target.value)}
-                placeholder={bulkPlaceholder}
-                className="w-full h-32 rounded-lg border-2 border-amber-300 bg-white px-3 py-2 text-sm resize-vertical font-mono focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all"
-              />
-              <div className="mt-2 space-y-2">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={applyBulkToDraft}
-                    className="rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-md hover:shadow-lg transition-all"
-                  >
-                    ✨ 초안에 적용하기
-                  </button>
-                  <button
-                    onClick={() => { setBulkText(''); setBulkMsg('') }}
-                    className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-3 py-2 text-sm font-medium transition-colors"
-                  >
-                    지우기
-                  </button>
+            {sectionTab === 'bulk' && (
+              <div className="mb-4 p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg border-2 border-amber-200 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">📋</span>
+                    <label className="text-sm font-bold text-gray-800">Bulk 입력 (빠른 입력)</label>
+                  </div>
+                  <div className="text-[11px] text-gray-500">붙여넣고 적용 → 수동 입력 탭에서 저장</div>
                 </div>
-                {bulkMsg && (
-                  <div className={`text-sm px-3 py-2 rounded-lg border-2 ${
-                    bulkMsg.includes('✅') 
-                      ? 'bg-green-50 border-green-300 text-green-800' 
-                      : 'bg-red-50 border-red-300 text-red-800'
-                  }`}>
-                    {bulkMsg}
+                <textarea
+                  value={bulkText}
+                  onChange={e => setBulkText(e.target.value)}
+                  placeholder={bulkPlaceholder}
+                  className="w-full h-32 rounded-lg border-2 border-amber-300 bg-white px-3 py-2 text-sm resize-vertical font-mono focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all"
+                />
+                <div className="mt-2 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={applyBulkToDraft}
+                      className="rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-md hover:shadow-lg transition-all"
+                    >
+                      ✨ 초안에 적용하기
+                    </button>
+                    <button
+                      onClick={() => { setBulkText(''); setBulkMsg('') }}
+                      className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-3 py-2 text-sm font-medium transition-colors"
+                    >
+                      지우기
+                    </button>
+                    <span className="text-[11px] text-gray-500">적용 후 수동 입력 탭에서 💾 저장하기</span>
                   </div>
-                )}
-                <div className="space-y-1 text-xs text-gray-600 bg-white/60 rounded px-2 py-1">
-                  <div>
-                    💡 <strong>[날짜]goal:assist[득점자 도움자]</strong> 형식으로 입력하면 듀오가 자동 연결됩니다<br />
-                    💡 적용 후 아래 <strong>수동 입력</strong> 섹션에서 확인하고 <strong className="text-green-700">💾 저장하기</strong> 버튼을 눌러주세요
-                  </div>
-                  <div className="pt-1 border-t border-amber-200">
-                    ⌚ <strong>Apple Watch 음성 Bulk 입력</strong>
-                    <div className="mt-0.5 leading-relaxed">
-                      1) 워치에서 <a href="https://www.icloud.com/shortcuts/085247e70699496cac2959a8ae377615" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline font-medium">쇼컷 설치</a> 후 실행<br />
-                      2) 이름 <strong>한 명만 말하면 골</strong> / <strong>두 명 말하면 첫 번째 골, 두 번째 어시스트</strong><br />
-                      3) iPhone 동기화되면 미리알림 앱에 자동 생성:<br />
-                      <code className="block bg-white/80 border border-gray-300 rounded px-2 py-1 mt-0.5 text-[11px] text-gray-700">[11/13/2025 9:16AM]goal:assist[김철수]<br />[11/13/2025 9:16AM]goal:assist[김철수 김영희]</code>
-                      4) 해당 줄을 복사해서 Bulk 입력 창에 붙여넣고 <strong className="text-amber-700">✨ 초안에 적용하기</strong> → <strong className="text-green-700">💾 저장하기</strong>
+                  {bulkMsg && (
+                    <div className={`text-sm px-3 py-2 rounded-lg border-2 ${
+                      bulkMsg.includes('✅') 
+                        ? 'bg-green-50 border-green-300 text-green-800' 
+                        : 'bg-red-50 border-red-300 text-red-800'
+                    }`}>
+                      {bulkMsg}
                     </div>
-                    <div className="mt-0.5 text-[10px] text-gray-500">
-                      음성 인식으로 이름이 다르게 들어갈 수 있으니 <strong>앱 선수명과 정확히 일치</strong>하도록 미리알림에서 수정 후 붙여넣으세요.
+                  )}
+                  <div className="space-y-1 text-xs text-gray-600 bg-white/60 rounded px-2 py-1">
+                    <div>
+                      💡 <strong>[날짜]goal:assist[득점자 도움자]</strong> 형식으로 입력하면 듀오가 자동 연결됩니다<br />
+                      💡 적용 후 <strong className="text-blue-700">수동 입력</strong> 탭에서 확인하고 <strong className="text-green-700">💾 저장하기</strong>
+                    </div>
+                    <div className="pt-1 border-t border-amber-200">
+                      ⌚ <strong>Apple Watch 음성 Bulk 입력</strong>
+                      <div className="mt-0.5 leading-relaxed">
+                        1) 워치에서 <a href="https://www.icloud.com/shortcuts/085247e70699496cac2959a8ae377615" target="_blank" rel="noopener noreferrer" className="text-blue-600 underline font-medium">쇼컷 설치</a> 후 실행<br />
+                        2) 이름 <strong>한 명만 말하면 골</strong> / <strong>두 명 말하면 첫 번째 골, 두 번째 어시스트</strong><br />
+                        3) iPhone 동기화되면 미리알림 앱에 자동 생성:<br />
+                        <code className="block bg-white/80 border border-gray-300 rounded px-2 py-1 mt-0.5 text-[11px] text-gray-700">[11/13/2025 9:16AM]goal:assist[김철수]<br />[11/13/2025 9:16AM]goal:assist[김철수 김영희]</code>
+                        4) 복사 → Bulk 입력 → ✨ 적용 → 수동 입력 탭에서 💾 저장
+                      </div>
+                      <div className="mt-0.5 text-[10px] text-gray-500">
+                        음성 인식으로 이름이 다르게 들어갈 수 있으니 <strong>앱 선수명과 일치</strong>하도록 수정 후 붙여넣으세요.
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Quick Stats Editor */}
-            {hasRefereeTimeline ? (
-              <RefereeTimelineEditor
-                match={editingMatch}
-                players={players}
-                teams={teams}
-                onSave={onUpdateMatch}
-              />
-            ) : (
-              <QuickStatsEditor
-                key={editingMatchId}
-                players={players}
-                editingMatch={editingMatch}
-                teams={teams}
-                draft={draft}
-                setDraft={setDraft}
-                resetAllRecords={resetAllRecords}
-                onSave={save}
-                showSaved={showSaved}
-                cardsEnabled={cardsEnabled}
-              />
+            {sectionTab === 'manual' && (
+              <div className="rounded-2xl border-2 border-gray-200 bg-white shadow-sm p-3">
+                {hasRefereeTimeline ? (
+                  <RefereeTimelineEditor
+                    match={editingMatch}
+                    players={players}
+                    teams={teams}
+                    onSave={onUpdateMatch}
+                  />
+                ) : (
+                  <QuickStatsEditor
+                    key={editingMatchId}
+                    players={players}
+                    editingMatch={editingMatch}
+                    teams={teams}
+                    draft={draft}
+                    setDraft={setDraft}
+                    resetAllRecords={resetAllRecords}
+                    onSave={save}
+                    showSaved={showSaved}
+                    cardsEnabled={cardsEnabled}
+                  />
+                )}
+              </div>
             )}
           </>
         )}
       </Card>
-      {/* MoM admin panel is always visible when editingMatch is set (no extra button needed) */}
-      {momMatch && (
-        <MoMAdminPanel
-          match={momMatch}
-          matchOptions={momMatchOptions}
-          selectedMatchId={toStr(momMatchId) || toStr(momMatch?.id || '')}
-          onSelectMatch={(val) => {
-            if (!val) return
-            setMomMatchId(toStr(val))
-          }}
-          roster={momRoster}
-          votes={momVotes}
-          tally={momSummary.tally}
-          totalVotes={momSummary.total}
-          loading={momLoadingVotes}
-          onAddVote={handleMomAdminAddVote}
-          onOverrideVote={handleMomAdminOverrideVote}
-          onDeleteVote={handleMomAdminDeleteVote}
-          onResetVotes={handleMomAdminResetVotes}
-          momOverride={momOverride}
-          onClearOverride={handleMomAdminClearOverride}
-          overrideLocked={momOverrideLocked}
-          isRefMatch={isRefMatch(momMatch)}
-          momManualOpen={momMatch?.stats?.momManualOpen === true}
-          onToggleManualOpen={handleMomManualToggle}
-          tieBreakMeta={{
-            applied: momSummary.tieBreakApplied,
-            category: momSummary.tieBreakCategory,
-            requiresManual: momSummary.tieBreakRequiresManual,
-            pendingCandidates: momSummary.tieBreakRequiresManual ? momSummary.winners : [],
-          }}
-        />
+      {/* MoM admin panel: moved to its own 탭 */}
+      {sectionTab === 'mom' && (
+        momMatch ? (
+          <MoMAdminPanel
+            match={momMatch}
+            matchOptions={momMatchOptions}
+            selectedMatchId={toStr(momMatchId) || toStr(momMatch?.id || '')}
+            onSelectMatch={(val) => {
+              if (!val) return
+              setMomMatchId(toStr(val))
+            }}
+            roster={momRoster}
+            votes={momVotes}
+            tally={momSummary.tally}
+            totalVotes={momSummary.total}
+            loading={momLoadingVotes}
+            onAddVote={handleMomAdminAddVote}
+            onOverrideVote={handleMomAdminOverrideVote}
+            onDeleteVote={handleMomAdminDeleteVote}
+            onResetVotes={handleMomAdminResetVotes}
+            momOverride={momOverride}
+            onClearOverride={handleMomAdminClearOverride}
+            overrideLocked={momOverrideLocked}
+            isRefMatch={isRefMatch(momMatch)}
+            momManualOpen={momMatch?.stats?.momManualOpen === true}
+            onToggleManualOpen={handleMomManualToggle}
+            tieBreakMeta={{
+              applied: momSummary.tieBreakApplied,
+              category: momSummary.tieBreakCategory,
+              requiresManual: momSummary.tieBreakRequiresManual,
+              pendingCandidates: momSummary.tieBreakRequiresManual ? momSummary.winners : [],
+            }}
+          />
+        ) : (
+          <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-600">MOM을 표시할 매치를 선택하세요.</div>
+        )
       )}
     </div>
   )
@@ -1283,163 +1320,27 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
     })
   }
 
-  const autoCalculateCS = () => {
-  // 각 게임(쿼터)별로 실점 0인 팀의 비-공격수 전원에게 CS +1 (공격수만 제외)
-    const qs = MatchHelpers.getQuarterScores(editingMatch)
-    
-    // 실제 팀 수는 teams 배열 길이로 결정
-    const teamCount = Array.isArray(teams) ? teams.length : 2
-    
-    // 점수 구조 해석 및 게임별로 분해
-    // 형태 A (팀 기준): qs.length === teamCount, 각 원소는 해당 팀의 게임별 점수 배열
-    //   예) [[0,1,0,1], [1,3,0,4]] -> G1:[0,1], G2:[1,3], G3:[0,0], G4:[1,4]
-    // 형태 B (게임 기준): qs.length === gameCount, 각 원소는 길이 teamCount의 배열
-    //   예) [[0,1],[1,3],[0,0],[1,4]]
-    const allGames = []
-    const isTeamMajor = Array.isArray(qs) && qs.length === teamCount && qs.every(Array.isArray)
-    const isGameMajor = Array.isArray(qs) && Array.isArray(qs[0]) && qs[0].length === teamCount
-
-    if (isTeamMajor) {
-      const games = Math.min(...qs.map(arr => (Array.isArray(arr) ? arr.length : 0)))
-      for (let gi = 0; gi < games; gi++) {
-        const pair = qs.map(arr => Number(arr[gi]))
-        if (!pair.every(n => Number.isFinite(n))) {
-          continue
-        }
-        allGames.push({ quarter: Math.floor(gi / 2) + 1, game: gi + 1, scores: pair })
-      }
-    } else if (isGameMajor) {
-      for (let gi = 0; gi < qs.length; gi++) {
-        const row = qs[gi]
-        const pair = Array.from({ length: teamCount }, (_, ti) => Number(row[ti]))
-        if (!pair.every(n => Number.isFinite(n))) {
-          continue
-        }
-        allGames.push({ quarter: Math.floor(gi / 2) + 1, game: gi + 1, scores: pair })
-      }
-    } else {
-      for (let qi = 0; qi < qs.length; qi++) {
-        const arr = qs[qi]
-        if (!Array.isArray(arr)) continue
-        const gamesInEntry = Math.floor(arr.length / teamCount)
-        for (let gi = 0; gi < gamesInEntry; gi++) {
-          const pair = []
-          for (let ti = 0; ti < teamCount; ti++) {
-            const val = Number(arr[gi * teamCount + ti])
-            if (!Number.isFinite(val)) { pair.length = 0; break }
-            pair.push(val)
-          }
-          if (pair.length === teamCount) {
-            allGames.push({ quarter: qi + 1, game: gi + 1, scores: pair })
-          }
-        }
-      }
-    }
-
-
-    const shouldReceiveCS = (p) => {
-      const pos = (p?.position || p?.pos || '').toString().toUpperCase()
-      const positions = Array.isArray(p?.positions) ? p.positions.map(x => String(x).toUpperCase()) : []
-      const all = [pos, ...positions].filter(Boolean)
-
-      // 공격수(Forward/Striker/Winger 계열)만 제외
-      const isAttacker = all.some(s => (
-        s === 'ST' || s === 'CF' || s === 'SS' || s === 'FW' ||
-        s === 'LW' || s === 'RW' || s === 'LWF' || s === 'RWF' ||
-        s.includes('STRIKER') || s.includes('FORWARD') || s.includes('ATTACK')
-      ))
-      return !isAttacker
-    }
-
-  // 각 팀/게임별 클린시트 카운트
-  const csCount = new Map()
-  let csGamesTeam0 = 0
-  let csGamesTeam1 = 0
-
-    // 모든 게임을 순회하며 클린시트 체크
-    for (const gameInfo of allGames) {
-  const { scores } = gameInfo
-      
-      // Team0 무실점 체크
-      if (scores[1] === 0) {
-        const roster = Array.isArray(teams?.[0]) ? teams[0] : (teams?.[0]?.players || [])
-        csGamesTeam0 += 1
-        
-        roster.forEach(p => {
-          if (!shouldReceiveCS(p)) return
-          const pid = toStr(p.id)
-          const current = csCount.get(pid) || 0
-          csCount.set(pid, current + 1)
-        })
-      }
-      
-      // Team1 무실점 체크
-      if (scores[0] === 0) {
-        const roster = Array.isArray(teams?.[1]) ? teams[1] : (teams?.[1]?.players || [])
-        csGamesTeam1 += 1
-        
-        roster.forEach(p => {
-          if (!shouldReceiveCS(p)) return
-          const pid = toStr(p.id)
-          const current = csCount.get(pid) || 0
-          csCount.set(pid, current + 1)
-        })
-      }
-    }
-
-
-    setDraft(prev => {
-      const next = JSON.parse(JSON.stringify(prev || {}))
-      csCount.forEach((count, pid) => {
-        const rec = next[pid] || { goals: 0, assists: 0, events: [], cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
-        rec.cleanSheet = count
-        next[pid] = rec
-      })
-      return next
-    })
-
-    setAlertState({
-      open: true,
-      title: '자동 계산 완료',
-  message: `게임별 실점 0 기준으로 공격수를 제외한 ${csCount.size}명의 선수에게 클린시트를 부여했습니다.`
-    })
-  }
-
   return (
     <div className="space-y-4">
       {/* Header with Save Button */}
       <div className="flex items-center justify-between">
-        <div className="text-base font-bold text-gray-800">⚽ 수동 입력</div>
+        <div className="text-lg font-semibold text-gray-900">수동 입력</div>
         <div className="flex items-center gap-2">
           <button
-            onClick={autoCalculateCS}
-            className="rounded-lg border-2 border-emerald-400 bg-emerald-50 hover:bg-emerald-100 px-3 py-2 text-sm font-semibold text-emerald-700 transition-all"
-            title="각 게임(G1,G2,G3...)별로 실점 0인 팀의 공격수를 제외한 모든 선수에게 자동으로 클린시트 부여"
-          >
-            🧮 CS 자동 계산
-          </button>
-          <button
-            onClick={resetAllCS}
-            className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-700 transition-all"
-            title="모든 선수의 클린시트 수를 0으로 초기화"
-          >
-            CS 초기화
-          </button>
-          <button
             onClick={() => setConfirmState({ open: true, kind: 'reset-all' })}
-            className="rounded-lg border-2 border-red-300 bg-red-50 hover:bg-red-100 px-3 py-2 text-sm font-semibold text-red-700 transition-all"
+            className="rounded-lg border border-gray-200 bg-white hover:bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 transition-colors"
           >
-            🗑️ 모두 초기화
+            모두 초기화
           </button>
           <button
             onClick={() => setShowLinkPanel(!showLinkPanel)}
-            className="rounded-lg border-2 border-blue-400 bg-blue-50 hover:bg-blue-100 px-3 py-2 text-sm font-semibold text-blue-700 transition-all"
+            className="rounded-lg border border-gray-200 bg-white hover:bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700 transition-colors"
           >
-            {showLinkPanel ? '🔗 연결 관리 닫기' : '🔗 연결 수정'}
+            {showLinkPanel ? '연결 닫기' : '연결 수정'}
           </button>
           <button
             onClick={onSave}
-            className="rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 px-5 py-2 text-sm font-bold text-white shadow-md hover:shadow-lg transition-all"
+            className="rounded-lg bg-blue-600 hover:bg-blue-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all"
           >
             💾 저장하기
           </button>
@@ -1462,7 +1363,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
         />
       )}
 
-      {/* Goal/Assist Adding Modal */}
+      {/* Goal/Assist Adding Panel (inline, non-modal) */}
       {addingGoalFor && (
         <div className="border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 to-green-50 rounded-lg px-4 py-3">
           <div className="mb-2 text-sm font-semibold text-gray-800">
@@ -1473,14 +1374,13 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
             {teamRosters.map((team, teamIdx) => {
               const teamPlayers = team.players.filter(p => toStr(p.id) !== toStr(addingGoalFor.playerId))
               if (teamPlayers.length === 0) return null
-              
+
               const isSameTeam = teamIdx === addingGoalFor.teamIdx
-              
+              if (!isSameTeam) return null
+
               return (
                 <div key={teamIdx} className={isSameTeam ? 'order-first' : ''}>
-                  <div className={`text-[10px] font-bold mb-1.5 flex items-center gap-1.5 ${
-                    isSameTeam ? 'text-blue-700' : 'text-gray-500'
-                  }`}>
+                  <div className={`text-[10px] font-bold mb-1.5 flex items-center gap-1.5 ${isSameTeam ? 'text-blue-700' : 'text-gray-500'}`}>
                     {team.name}
                     {isSameTeam && (
                       <span className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[9px] font-bold">
@@ -1537,14 +1437,13 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
             {teamRosters.map((team, teamIdx) => {
               const teamPlayers = team.players.filter(p => toStr(p.id) !== toStr(addingAssistFor.playerId))
               if (teamPlayers.length === 0) return null
-              
+
               const isSameTeam = teamIdx === addingAssistFor.teamIdx
-              
+              if (!isSameTeam) return null
+
               return (
                 <div key={teamIdx} className={isSameTeam ? 'order-first' : ''}>
-                  <div className={`text-[10px] font-bold mb-1.5 flex items-center gap-1.5 ${
-                    isSameTeam ? 'text-blue-700' : 'text-gray-500'
-                  }`}>
+                  <div className={`text-[10px] font-bold mb-1.5 flex items-center gap-1.5 ${isSameTeam ? 'text-blue-700' : 'text-gray-500'}`}>
                     {team.name}
                     {isSameTeam && (
                       <span className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[9px] font-bold">
@@ -1593,25 +1492,56 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
 
       {/* Stats Grid - Compact Table Layout */}
       <div className="grid gap-4 lg:grid-cols-2">
-        {teamRosters.map(team => (
-          <div key={team.idx} className="bg-white rounded-lg border-2 border-gray-200 shadow-sm overflow-hidden">
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-3 py-2 text-white font-bold text-sm flex items-center justify-between">
-              <span>{team.name}</span>
-              <span className="text-xs opacity-90">{team.players.length}명</span>
+        {teamRosters.map(team => {
+          // Resolve team color from editingMatch.teamColors or default palette
+          const kitPalette = [
+            { bg: '#f8fafc', text: '#0f172a', border: '#cbd5e1', label: 'White' },
+            { bg: '#0f172a', text: '#ffffff', border: '#1e293b', label: 'Black' },
+            { bg: '#3b82f6', text: '#ffffff', border: '#2563eb', label: 'Blue' },
+            { bg: '#dc2626', text: '#ffffff', border: '#b91c1c', label: 'Red' },
+            { bg: '#6dff2e', text: '#0f172a', border: '#5ce625', label: 'Green' },
+            { bg: '#7c3aed', text: '#ffffff', border: '#6d28d9', label: 'Purple' },
+            { bg: '#ea580c', text: '#ffffff', border: '#c2410c', label: 'Orange' },
+            { bg: '#0d9488', text: '#ffffff', border: '#0f766e', label: 'Teal' },
+            { bg: '#ec4899', text: '#ffffff', border: '#db2777', label: 'Pink' },
+            { bg: '#facc15', text: '#0f172a', border: '#eab308', label: 'Yellow' }
+          ]
+          const teamColor = (Array.isArray(editingMatch?.teamColors) && editingMatch.teamColors[team.idx] && typeof editingMatch.teamColors[team.idx] === 'object')
+            ? editingMatch.teamColors[team.idx]
+            : kitPalette[team.idx % kitPalette.length]
+          
+          const headerStyle = {
+            backgroundColor: teamColor.bg,
+            color: teamColor.text,
+            borderColor: teamColor.border
+          }
+          
+          return (
+          <div key={team.idx} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div 
+              className="px-4 py-3 font-semibold text-sm flex items-center justify-between"
+              style={headerStyle}
+            >
+              <span className="flex items-center gap-2">
+                <span>{teamColor.label}</span>
+                <span className="opacity-75">·</span>
+                <span className="font-normal opacity-90">{team.name}</span>
+              </span>
+              <span className="text-xs font-normal opacity-80">{team.players.length}명</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr className="text-[10px] text-gray-600 uppercase tracking-wide">
-                    <th className="px-2 py-1.5 text-left font-semibold w-[140px] sm:w-[180px]">선수</th>
-                    <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="골">G</th>
-                    <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="어시스트">A</th>
-                    <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="클린시트">CS</th>
+                <thead className="bg-gray-50/50 border-b border-gray-100">
+                  <tr className="text-[11px] text-gray-500 font-medium">
+                    <th className="px-3 py-2.5 text-left">선수</th>
+                    <th className="px-2 py-2.5 text-center min-w-[64px]">Goals</th>
+                    <th className="px-2 py-2.5 text-center min-w-[64px]">Assists</th>
+                    <th className="px-2 py-2.5 text-center min-w-[80px]">Clean Sheet</th>
                     {cardsEnabled && (
                       <>
-                        <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="옐로우카드">YC</th>
-                        <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="레드카드">RC</th>
-                        <th className="px-1 py-1.5 text-center font-semibold w-[52px]" title="블랙카드">BC</th>
+                        <th className="px-2 py-2.5 text-center min-w-[64px]">Yellow</th>
+                        <th className="px-2 py-2.5 text-center min-w-[64px]">Red</th>
+                        <th className="px-2 py-2.5 text-center min-w-[64px]">Black</th>
                       </>
                     )}
                   </tr>
@@ -1623,9 +1553,9 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
                     const hasStats = (rec.goals > 0 || rec.assists > 0 || rec.cleanSheet > 0 || hasCardStats)
 
                     return (
-                      <tr key={toStr(p.id)} className={`transition-colors ${hasStats ? 'bg-blue-50/50' : 'hover:bg-gray-50'}`}>
+                      <tr key={toStr(p.id)} className={`transition-colors ${hasStats ? 'bg-blue-50/30' : 'hover:bg-gray-50/50'}`}>
                         {/* Player Info - Fixed Width */}
-                        <td className="px-2 py-2">
+                        <td className="px-3 py-3">
                           <div className="flex items-center gap-1.5 min-w-0">
                             <InitialAvatar
                               id={p.id}
@@ -1690,7 +1620,8 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
               </table>
             </div>
           </div>
-        ))}
+        )
+        })}
 
         {teamRosters.length === 0 && (
           <div className="col-span-2 text-center py-8 text-gray-500 text-sm">
@@ -1724,38 +1655,32 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
 
 /* ======== Compact Counter Components ======== */
 
-// Generic compact counter (vertical layout, minimal spacing)
+// Generic compact counter (horizontal layout)
 function CompactCounter({ value, onInc, onDec, color = 'emerald' }) {
   const hasValue = value > 0
-  const colorMap = {
-    emerald: {
-      bg: 'bg-emerald-500 hover:bg-emerald-600 border-emerald-600',
-      text: 'text-emerald-700'
-    },
-    amber: {
-      bg: 'bg-amber-500 hover:bg-amber-600 border-amber-600',
-      text: 'text-amber-700'
-    }
-  }
-  const colors = colorMap[color] || colorMap.emerald
+  const isGoal = color === 'emerald'
+
+  const colorClasses = isGoal
+    ? 'bg-gradient-to-r from-emerald-400 to-emerald-500 hover:from-emerald-500 hover:to-emerald-600 border-emerald-500 hover:border-emerald-600 text-white shadow-md hover:shadow-emerald-300'
+    : 'bg-gradient-to-r from-blue-400 to-blue-500 hover:from-blue-500 hover:to-blue-600 border-blue-500 hover:border-blue-600 text-white shadow-md hover:shadow-blue-300'
 
   return (
-    <div className="flex flex-col items-center gap-0.5">
-      <button
-        onClick={onInc}
-        className={`w-10 h-5 rounded-t ${colors.bg} border flex items-center justify-center text-white font-bold text-[10px] transition-all active:scale-95`}
-      >
-        +
-      </button>
-      <div className={`w-10 h-6 flex items-center justify-center font-bold text-[13px] tabular-nums ${hasValue ? colors.text : 'text-gray-400'}`}>
-        {value}
-      </div>
+    <div className="flex items-center gap-1.5 justify-center">
       <button
         onClick={onDec}
         disabled={value <= 0}
-        className={`w-10 h-5 rounded-b bg-white border hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-[10px] transition-all active:scale-95`}
+        className="w-6 h-6 rounded-md border border-gray-300 bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-800 text-base font-bold transition-all hover:scale-110 active:scale-95"
       >
         −
+      </button>
+      <div className={`min-w-[28px] h-7 px-1.5 flex items-center justify-center font-bold text-base tabular-nums ${hasValue ? (isGoal ? 'text-emerald-600' : 'text-blue-600') : 'text-gray-400'}`}>
+        {value}
+      </div>
+      <button
+        onClick={onInc}
+        className={`w-6 h-6 rounded-md border flex items-center justify-center text-base font-bold transition-all hover:scale-110 active:scale-95 ${colorClasses}`}
+      >
+        +
       </button>
     </div>
   )
@@ -1788,22 +1713,22 @@ function CompactCounterCS({ player, draft, setDraft }) {
   }
 
   return (
-    <div className="flex flex-col items-center gap-0.5">
-      <button
-        onClick={inc}
-        className="w-10 h-5 rounded-t bg-green-500 hover:bg-green-600 border border-green-600 flex items-center justify-center text-white font-bold text-[10px] transition-all active:scale-95"
-      >
-        +
-      </button>
-      <div className={`w-10 h-6 flex items-center justify-center font-bold text-[13px] tabular-nums ${hasValue ? 'text-green-700' : 'text-gray-400'}`}>
-        {value}
-      </div>
+    <div className="flex items-center gap-1.5 justify-center">
       <button
         onClick={dec}
         disabled={value <= 0}
-        className="w-10 h-5 rounded-b bg-white border hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-[10px] transition-all active:scale-95"
+        className="w-6 h-6 rounded-md border border-gray-300 bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-800 text-base font-bold transition-all hover:scale-110 active:scale-95"
       >
         −
+      </button>
+      <div className={`min-w-[28px] h-7 px-1.5 flex items-center justify-center font-bold text-base tabular-nums ${hasValue ? 'text-sky-600' : 'text-gray-400'}`}>
+        {value}
+      </div>
+      <button
+        onClick={inc}
+        className="w-6 h-6 rounded-md border bg-gradient-to-r from-sky-400 to-sky-500 hover:from-sky-500 hover:to-sky-600 border-sky-500 hover:border-sky-600 text-white shadow-md hover:shadow-sky-300 flex items-center justify-center text-base font-bold transition-all hover:scale-110 active:scale-95"
+      >
+        +
       </button>
     </div>
   )
@@ -1836,22 +1761,22 @@ function CompactCounterYC({ player, draft, setDraft }) {
   }
 
   return (
-    <div className="flex flex-col items-center gap-0.5">
-      <button
-        onClick={inc}
-        className="w-10 h-5 rounded-t bg-yellow-500 hover:bg-yellow-600 border border-yellow-600 flex items-center justify-center text-white font-bold text-[10px] transition-all active:scale-95"
-      >
-        +
-      </button>
-      <div className={`w-10 h-6 flex items-center justify-center font-bold text-[13px] tabular-nums ${hasValue ? 'text-yellow-700' : 'text-gray-400'}`}>
-        {value}
-      </div>
+    <div className="flex items-center gap-1.5 justify-center">
       <button
         onClick={dec}
         disabled={value <= 0}
-        className="w-10 h-5 rounded-b bg-white border hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-[10px] transition-all active:scale-95"
+        className="w-6 h-6 rounded-md border border-gray-300 bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-800 text-base font-bold transition-all hover:scale-110 active:scale-95"
       >
         −
+      </button>
+      <div className={`min-w-[28px] h-7 px-1.5 flex items-center justify-center font-bold text-base tabular-nums ${hasValue ? 'text-yellow-600' : 'text-gray-400'}`}>
+        {value}
+      </div>
+      <button
+        onClick={inc}
+        className="w-6 h-6 rounded-md border bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 border-yellow-500 hover:border-yellow-600 text-white shadow-md hover:shadow-yellow-300 flex items-center justify-center text-base font-bold transition-all hover:scale-110 active:scale-95"
+      >
+        +
       </button>
     </div>
   )
@@ -1884,22 +1809,22 @@ function CompactCounterRC({ player, draft, setDraft }) {
   }
 
   return (
-    <div className="flex flex-col items-center gap-0.5">
-      <button
-        onClick={inc}
-        className="w-10 h-5 rounded-t bg-rose-500 hover:bg-rose-600 border border-rose-600 flex items-center justify-center text-white font-bold text-[10px] transition-all active:scale-95"
-      >
-        +
-      </button>
-      <div className={`w-10 h-6 flex items-center justify-center font-bold text-[13px] tabular-nums ${hasValue ? 'text-rose-700' : 'text-gray-400'}`}>
-        {value}
-      </div>
+    <div className="flex items-center gap-1.5 justify-center">
       <button
         onClick={dec}
         disabled={value <= 0}
-        className="w-10 h-5 rounded-b bg-white border hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-[10px] transition-all active:scale-95"
+        className="w-6 h-6 rounded-md border border-gray-300 bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-800 text-base font-bold transition-all hover:scale-110 active:scale-95"
       >
         −
+      </button>
+      <div className={`min-w-[28px] h-7 px-1.5 flex items-center justify-center font-bold text-base tabular-nums ${hasValue ? 'text-red-600' : 'text-gray-400'}`}>
+        {value}
+      </div>
+      <button
+        onClick={inc}
+        className="w-6 h-6 rounded-md border bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 border-red-600 hover:border-red-700 text-white shadow-md hover:shadow-red-300 flex items-center justify-center text-base font-bold transition-all hover:scale-110 active:scale-95"
+      >
+        +
       </button>
     </div>
   )
@@ -1932,22 +1857,22 @@ function CompactCounterBC({ player, draft, setDraft }) {
   }
 
   return (
-    <div className="flex flex-col items-center gap-0.5">
-      <button
-        onClick={inc}
-        className="w-10 h-5 rounded-t bg-stone-800 hover:bg-stone-900 border border-stone-900 flex items-center justify-center text-white font-bold text-[10px] transition-all active:scale-95"
-      >
-        +
-      </button>
-      <div className={`w-10 h-6 flex items-center justify-center font-bold text-[13px] tabular-nums ${hasValue ? 'text-stone-800' : 'text-gray-400'}`}>
-        {value}
-      </div>
+    <div className="flex items-center gap-1.5 justify-center">
       <button
         onClick={dec}
         disabled={value <= 0}
-        className="w-10 h-5 rounded-b bg-white border hover:border-red-400 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 flex items-center justify-center text-gray-600 hover:text-red-600 font-bold text-[10px] transition-all active:scale-95"
+        className="w-6 h-6 rounded-md border border-gray-300 bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-800 text-base font-bold transition-all hover:scale-110 active:scale-95"
       >
         −
+      </button>
+      <div className={`min-w-[28px] h-7 px-1.5 flex items-center justify-center font-bold text-base tabular-nums ${hasValue ? 'text-gray-800' : 'text-gray-400'}`}>
+        {value}
+      </div>
+      <button
+        onClick={inc}
+        className="w-6 h-6 rounded-md border bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 border-gray-700 hover:border-gray-900 text-white shadow-md hover:shadow-gray-400 flex items-center justify-center text-base font-bold transition-all hover:scale-110 active:scale-95"
+      >
+        +
       </button>
     </div>
   )
