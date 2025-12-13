@@ -257,7 +257,11 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
         if (opp === 0 || opp === 1) next[opp] = (next[opp] || 0) + 1
       }
     })
-    setScores(next)
+    setScores(prev => {
+      // Only update if scores actually changed to avoid unnecessary rerenders
+      if (prev[0] === next[0] && prev[1] === next[1]) return prev
+      return next
+    })
   }, [])
 
   useEffect(() => {
@@ -287,7 +291,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     }
     load()
     return () => { cancelled = true }
-  }, [matchIdForRef, gameIndexForRef, recomputeScores])
+  }, [matchIdForRef, gameIndexForRef])
 
   // Subscribe to realtime changes for this match/game
   useEffect(() => {
@@ -327,7 +331,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       }
     )
     return () => sub?.unsubscribe?.()
-  }, [matchIdForRef, gameIndexForRef, recomputeScores])
+  }, [matchIdForRef, gameIndexForRef])
 
   // 세션 시작 시 세션 생성 및 구독
   useEffect(() => {
@@ -913,9 +917,6 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
           </div>
 
           <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-2">
-            <div className={`px-3 h-8 rounded-full border text-xs font-bold flex items-center gap-1 ${wakeLockActive ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-slate-300 bg-white text-slate-500'}`}>
-              {wakeLockActive ? '🔒 화면 켜짐' : (wakeLockSupported ? '화면 유지 시도중…' : '지원 안 함')}
-            </div>
             <button
               onClick={() => setShowCancelConfirm(true)}
               className="h-8 w-8 rounded-full border border-slate-300 text-slate-700 hover:bg-slate-100 active:scale-[0.98] transition flex items-center justify-center"
@@ -934,16 +935,6 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
             </button>
           </div>
         </div>
-        {!wakeLockSupported && (
-          <div className="mt-2 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 font-semibold">
-            ⚠️ 이 기기에서는 화면 깨우기 API가 없어 화면이 꺼질 수 있습니다.
-          </div>
-        )}
-        {wakeLockError && (
-          <div className="mt-2 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5 font-semibold">
-            {wakeLockError}
-          </div>
-        )}
 
         {gameStatus === 'ready' && (
           <div className="mt-4">

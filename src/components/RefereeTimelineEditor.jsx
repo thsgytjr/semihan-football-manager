@@ -435,13 +435,6 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
         </div>
         <div className="flex items-center gap-2">
           <button
-            type="button"
-            onClick={toggleWakeLock}
-            disabled={!wakeLockSupported}
-            className={`rounded-lg border-2 px-3 py-2 text-sm font-semibold transition-all flex items-center gap-1.5 ${wakeLockActive ? 'border-amber-500 bg-amber-50 text-amber-700' : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'}`}>
-            <span>{wakeLockActive ? '🔒 화면 깨우기 ON' : '🔓 화면 계속 켜기'}</span>
-          </button>
-          <button
             onClick={() => setShowAddEvent(true)}
             className="rounded-lg border-2 border-blue-400 bg-blue-50 hover:bg-blue-100 px-3 py-2 text-sm font-semibold text-blue-700 transition-all flex items-center gap-1.5"
           >
@@ -463,17 +456,6 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
           </button>
         </div>
       </div>
-
-      {!wakeLockSupported && (
-        <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg px-3 py-2">
-          ⚠️ 이 기기에서는 화면 깨우기 API가 지원되지 않습니다. 화면이 꺼질 수 있어요.
-        </div>
-      )}
-      {wakeLockError && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg px-3 py-2">
-          {wakeLockError}
-        </div>
-      )}
 
       {showSaved && (
         <div className="bg-green-50 border-2 border-green-300 rounded-lg px-4 py-2 text-sm text-green-800 font-medium animate-fade-in-down">
