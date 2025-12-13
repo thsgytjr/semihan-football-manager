@@ -1327,14 +1327,8 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
           if (s0 === 0) zeroConcededTeams.push({ teamIndex: 1, players: teams?.[1] || [] })
 
           if (zeroConcededTeams.length > 0) {
-            const defaults = zeroConcededTeams.flatMap(group =>
-              (group.players || []).filter(p => {
-                const pos = (p?.position || p?.pos || '').toString().toUpperCase()
-                return pos.includes('GK') || pos.includes('DF') || pos.includes('DEF') || pos.includes('수비') || pos.includes('골키퍼')
-              }).map(p => p.id)
-            )
             setCleanSheetCandidates(zeroConcededTeams)
-            setCleanSheetSelections(Array.from(new Set(defaults)))
+            setCleanSheetSelections([]) // Start with no selection, let user choose
             setShowCleanSheetPicker(true)
           } else {
             setGameStatus('finished')
@@ -1351,7 +1345,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
               <div>
                 <div className="text-xs uppercase text-slate-500 font-semibold">클린시트 지정</div>
                 <div className="text-lg font-bold text-slate-900">Select players from the clean-sheet team</div>
-                <p className="text-sm text-slate-600 mt-1">Choose defenders/goalkeeper from the team that conceded zero.</p>
+                <p className="text-sm text-slate-600 mt-1">무실점 팀에서 클린시트를 받을 선수들을 선택하세요 (여러 명 가능)</p>
               </div>
               <button onClick={() => { setShowCleanSheetPicker(false); setCleanSheetSelections([]); }} className="text-slate-400 hover:text-slate-600"><X size={22} /></button>
             </div>
