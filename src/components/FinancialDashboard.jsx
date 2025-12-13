@@ -651,7 +651,7 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
       } else {
         // 확인
         await confirmMatchPayment(match.matchId, playerId, amount, 'venmo')
-        notify('납부 확인되었습니다 ✅')
+        notify('납부가 확인되었습니다', 'success')
       }
       
       if (onRefresh) onRefresh()
@@ -736,7 +736,7 @@ function UnpaidMatchModal({ match, players, customMemberships = [], onClose, onR
       const results = await Promise.allSettled(tasks)
       const success = results.filter(r => r.status === 'fulfilled').length
       const failed = results.length - success
-      if (success > 0) notify(`${success}명 납부 확인되었습니다 ✅`)
+      if (success > 0) notify(`${success}명의 납부가 확인되었습니다`, 'success')
       if (failed > 0) notify(`${failed}명 처리 실패`)
       if (onRefresh) await onRefresh()
       onClose()

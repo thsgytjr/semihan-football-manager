@@ -2920,7 +2920,7 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
     if (abortIfVoided()) return
     try {
       await confirmMatchPayment(match.id, playerId, amount, 'venmo')
-      notify('납부 확인되었습니다 ✅')
+      notify('납부가 확인되었습니다', 'success')
       await loadMatchPayments()
       await onSync()
     } catch (error) {

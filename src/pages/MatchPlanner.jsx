@@ -271,7 +271,7 @@ export default function MatchPlanner({
 
   useEffect(()=>{ setDateError(isPastDate ? '과거 시점은 저장할 수 없습니다.' : null) },[isPastDate])
 
-  function save(){
+  async function save(){
     if(!isAdmin){notify('Admin만 가능합니다.');return}
     let baseTeams=(latestTeamsRef.current&&latestTeamsRef.current.length)?latestTeamsRef.current:previewTeams
     
@@ -329,7 +329,7 @@ export default function MatchPlanner({
       // Only include teamColors if at least one team has a custom color
       ...(teamColors && teamColors.length > 0 && teamColors.some(c => c !== null && c !== undefined) ? { teamColors } : {})
     }
-    onSaveMatch(payload);notify(`${isDraftMode ? '드래프트 ' : ''}매치가 저장되었습니다 ✅`)
+    await onSaveMatch(payload)
   }
 
   function startReferee(){
@@ -390,7 +390,7 @@ export default function MatchPlanner({
     }
   }
 
-  function saveAsUpcomingMatch(){
+  async function saveAsUpcomingMatch(){
     if(!isAdmin){notify('Admin만 가능합니다.');return}
     if(!onSaveUpcomingMatch){notify('예정 매치 저장 기능이 없습니다.');return}
     if(isPastDate){ return }
@@ -433,10 +433,10 @@ export default function MatchPlanner({
       ...(teamColors && teamColors.length > 0 && teamColors.some(c => c !== null && c !== undefined) ? { teamColors } : {})
     })
 
-    onSaveUpcomingMatch(upcomingMatch)
+    await onSaveUpcomingMatch(upcomingMatch)
     setLinkedUpcomingMatchId(upcomingMatch.id) // 저장 후 자동 연결
   // live-sync 기능 제거: 수동 저장만 허용하여 자동 변형 방지
-    notify(`${isDraftMode ? '드래프트 ' : ''}예정 매치로 저장되었습니다 ✅`)
+    
 
     // 매치별 구장비 예상 금액을 match_payments에 반영 (멤버/게스트 구분)
     if (enablePitchFee && fees) {
@@ -1488,11 +1488,11 @@ export default function MatchPlanner({
       cancelLabel="취소"
       tone="danger"
       onCancel={()=>setConfirmDelete({open:false,id:null,kind:null})}
-      onConfirm={()=>{
+      onConfirm={async ()=>{
         if(confirmDelete.kind==='reset-teams'){
           resetTeams()
         }else if(confirmDelete.id){
-          onDeleteUpcomingMatch(confirmDelete.id);notify('예정된 매치가 삭제되었습니다 ✅')
+          await onDeleteUpcomingMatch(confirmDelete.id)
         }
         setConfirmDelete({open:false,id:null,kind:null})
       }}
