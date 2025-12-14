@@ -120,18 +120,32 @@ function normalizeTieRecord(raw) {
 function resolveTieWithCriteria(winnerIds = [], tieRecords = {}) {
   let remaining = winnerIds.map(pid => ({ pid, ...normalizeTieRecord(tieRecords[pid]) }))
   let lastCategory = null
+  
   for (const category of TIE_BREAKER_ORDER) {
     const maxVal = Math.max(...remaining.map(item => item[category] ?? 0))
+    
+    // 최댓값이 0이면 이 기준으로는 구분 불가 (다음 기준으로)
+    if (maxVal === 0) {
+      lastCategory = category
+      continue
+    }
+    
     const filtered = remaining.filter(item => (item[category] ?? 0) === maxVal)
+    
+    // 한 명만 남으면 승자 결정
     if (filtered.length === 1) {
       return {
         winners: filtered.map(item => item.pid),
         info: { applied: true, category, requiresManual: false }
       }
     }
+    
+    // 여러 명이 같은 값이면 다음 기준으로
     remaining = filtered
     lastCategory = category
   }
+  
+  // 모든 기준을 적용했는데도 여러 명이 남으면 수동 결정 필요
   return {
     winners: remaining.map(item => item.pid),
     info: { applied: true, category: lastCategory ?? 'manual', requiresManual: true }
