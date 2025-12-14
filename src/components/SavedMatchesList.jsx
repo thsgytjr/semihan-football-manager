@@ -3855,46 +3855,6 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
       })()}
 
       {isAdmin&&<QuickAttendanceEditor players={players} snapshot={draftSnap} onDraftChange={setSnap} customMemberships={customMemberships}/>}
-      
-      {/* 관리자 전용: 드래프트 ↔ 일반 매치 전환 버튼 */}
-      {isAdmin && (
-        <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-          <div className="text-xs font-semibold text-amber-900 mb-2">🛠️ 매치 타입 변환</div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-600">
-              현재: <span className="font-bold">{isDraftMode ? '드래프트 매치' : '일반 매치'}</span>
-            </span>
-            <button
-              className="ml-auto rounded border border-amber-400 bg-amber-100 text-amber-900 px-3 py-1.5 text-xs hover:bg-amber-200 font-semibold transition-colors"
-              onClick={() => {
-                const newMode = !isDraftMode
-                setLocalDraftMode(newMode)
-                
-                // 일반→드래프트 변환 시 필수 데이터 초기화
-                if (newMode) {
-                  // 주장 정보가 없으면 초기화
-                  if (!captainIds || captainIds.length !== draftSnap.length) {
-                    setCaptainIds(draftSnap.map(() => null))
-                  }
-                  // quarterScores가 없으면 초기화
-                  if (!quarterScores || quarterScores.length !== draftSnap.length) {
-                    setQuarterScores(draftSnap.map(() => []))
-                  }
-                }
-                
-                setDirty(true)
-              }}
-            >
-              {isDraftMode ? '→ 일반 매치로 전환' : '→ 드래프트 매치로 전환'}
-            </button>
-          </div>
-          <div className="text-[10px] text-gray-500 mt-1">
-            {isDraftMode 
-              ? '일반 매치로 전환하면 주장 승점 계산이 비활성화됩니다.'
-              : '드래프트 매치로 전환하면 주장 정보와 게임별 점수가 필요합니다.'}
-          </div>
-        </div>
-      )}
 
       {isAdmin&&dirty&&(
         <div className="mt-3 flex items-center justify-end gap-2">
