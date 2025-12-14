@@ -380,24 +380,28 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
       __scores: aggregateScores,
     }
 
-    const nextDraft = {
-      ...(match?.draft || {}),
-      quarterScores,
-    }
-
     const nextStatsMeta = {
       ...(match?.statsMeta || {}),
       gameEvents: gameEventsPayload,
       cleanSheets: cleanSheetMatrix,
     }
 
-    onSave?.(match.id, {
+    const savePayload = {
       stats: mergedStats,
       quarterScores,
-      draft: nextDraft,
       gameEvents: gameEventsPayload,
       statsMeta: nextStatsMeta,
-    })
+    }
+
+    // Only update draft object if this is actually a draft match
+    if (match.selectionMode === 'draft' || match.draftMode === true) {
+      savePayload.draft = {
+        ...(match?.draft || {}),
+        quarterScores,
+      }
+    }
+
+    onSave?.(match.id, savePayload)
     setShowSaved(true)
     setTimeout(() => setShowSaved(false), 1200)
   }
