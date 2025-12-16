@@ -104,11 +104,27 @@ export default function MatchPlanner({
   onStartRefereeMode
 }){
   const customMemberships = membershipSettings.length > 0 ? membershipSettings : []
+  
+  // Get default values from most recent match
+  const mostRecentMatch = useMemo(() => {
+    if (!matches || matches.length === 0) return null
+    const sorted = [...matches].sort((a, b) => {
+      const dateA = a.dateISO || a.date || ''
+      const dateB = b.dateISO || b.date || ''
+      return dateB.localeCompare(dateA)
+    })
+    return sorted[0]
+  }, [matches])
+
+  const defaultGuestSurcharge = mostRecentMatch?.fees?.guestSurcharge || 2
+  const recentMatchHadFees = mostRecentMatch && (mostRecentMatch.feesDisabled !== true) && ((mostRecentMatch.fees?.total || mostRecentMatch.totalCost || 0) > 0)
+  const defaultEnablePitchFee = recentMatchHadFees ? true : false
+  
   const[dateISO,setDateISO]=useState(()=>getCurrentLocalDateTime()),[attendeeIds,setAttendeeIds]=useState([]),[criterion,setCriterion]=useState('overall'),[shuffleSeed,setShuffleSeed]=useState(0)
-  const[enablePitchFee,setEnablePitchFee]=useState(true) // 구장비 사용 여부 토글
+  const[enablePitchFee,setEnablePitchFee]=useState(defaultEnablePitchFee) // 구장비 사용 여부 토글
   const[dateError,setDateError]=useState(null) // 과거 날짜 오류 메시지
   const[locationPreset,setLocationPreset]=useState(''),[locationName,setLocationName]=useState(''),[locationAddress,setLocationAddress]=useState('')
-  const[customBaseCost,setCustomBaseCost]=useState(0),[guestSurcharge,setGuestSurcharge]=useState(2),[teamCount,setTeamCount]=useState(2)
+  const[customBaseCost,setCustomBaseCost]=useState(''),[guestSurcharge,setGuestSurcharge]=useState(defaultGuestSurcharge),[teamCount,setTeamCount]=useState(2)
   const[manualTeams,setManualTeams]=useState(null),[activePlayerId,setActivePlayerId]=useState(null),[activeFromTeam,setActiveFromTeam]=useState(null)
   const[formations,setFormations]=useState([]),[placedByTeam,setPlacedByTeam]=useState([]),latestTeamsRef=useRef([])
   const[editorOpen,setEditorOpen]=useState(false),[editingTeamIdx,setEditingTeamIdx]=useState(0),[editingMatchId,setEditingMatchId]=useState(null),[editorPlayers,setEditorPlayers]=useState([])
@@ -1005,7 +1021,6 @@ export default function MatchPlanner({
                       type="number" 
                       min="0" 
                       step="0.5" 
-                      placeholder="220" 
                       value={customBaseCost} 
                       onChange={e=>setCustomBaseCost(e.target.value)} 
                       className="rounded border border-gray-300 bg-white px-2 py-1 text-sm w-20"
@@ -1017,7 +1032,6 @@ export default function MatchPlanner({
                       type="number" 
                       min="0" 
                       step="0.5" 
-                      placeholder="2" 
                       value={guestSurcharge} 
                       onChange={e=>setGuestSurcharge(e.target.value)} 
                       className="rounded border border-gray-300 bg-white px-2 py-1 text-sm w-16"
@@ -1026,10 +1040,22 @@ export default function MatchPlanner({
                 </div>
 
                 {/* 비용 요약 */}
-                <div className="flex items-center gap-2 text-xs text-amber-700 ml-auto">
-                  <span className="font-medium">예상: ${baseCost}</span>
+                <div className="flex items-center gap-3 text-xs ml-auto">
+                  <span className="font-medium text-amber-700">예상: ${baseCost}</span>
                   {previewTeams.flat().length > 0 && (
                     <span className="text-gray-600">· {previewTeams.flat().length}명</span>
+                  )}
+                  {enablePitchFee && previewTeams.flat().length > 0 && (
+                    <>
+                      {(!guestSurcharge || parseFloat(guestSurcharge) === 0) ? (
+                        <span className="text-blue-700">개인당 ${liveFees.memberFee?.toLocaleString() || 0}</span>
+                      ) : (
+                        <>
+                          <span className="text-emerald-700">정회원 ${liveFees.memberFee?.toLocaleString() || 0} ({previewTeams.flat().filter(p => isMember(p.membership)).length}명)</span>
+                          <span className="text-blue-700">게스트 ${liveFees.guestFee?.toLocaleString() || 0} ({previewTeams.flat().filter(p => !isMember(p.membership)).length}명)</span>
+                        </>
+                      )}
+                    </>
                   )}
                 </div>
               </>
@@ -1222,20 +1248,23 @@ export default function MatchPlanner({
               )}
             </div>
           </div>
-          
+
           <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragStart={onDragStartHandler} onDragCancel={onDragCancel} onDragOver={onDragOverHandler} onDragEnd={onDragEndHandler}>
             <div className="relative">
-              {/* AI 로딩 오버레이 */}
+              {/* AI 로딩 오버레이 - Above team columns */}
               {isAILoading && (
-                <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/95 backdrop-blur-sm rounded-lg">
-                  <div className="text-center">
-                    <div className="mb-4 animate-spin text-6xl">✨</div>
-                    <div className="text-lg font-semibold text-purple-600 mb-2">AI가 팀을 구성 중...</div>
-                    <div className="text-sm text-stone-600">모든 데이터를 분석하고 있습니다</div>
+                <div className="absolute inset-0 z-50 bg-white/90 backdrop-blur-sm rounded-lg flex items-start justify-center pt-8">
+                  <div className="px-8 py-6 bg-white rounded-2xl shadow-2xl border-2 border-purple-500">
+                    <div className="flex items-center gap-4">
+                      <div className="animate-spin text-4xl">✨</div>
+                      <div>
+                        <div className="text-xl font-bold text-purple-600">AI가 팀을 구성 중...</div>
+                        <div className="text-sm text-gray-600 mt-1">모든 데이터를 분석하고 있습니다</div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
-              
               <div className="grid gap-3" style={{gridTemplateColumns:'repeat(auto-fit, minmax(220px, 1fr))'}}>
                 {previewTeams.map((list,i)=>(
                   <div key={i} className="space-y-2">
