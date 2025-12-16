@@ -1619,7 +1619,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
                               })()}
                               photoUrl={p.photoUrl}
                             />
-                            <div className="min-w-0 max-w-[80px] overflow-x-auto scrollbar-hide">
+                            <div className="min-w-0 max-w-[68px] overflow-x-auto scrollbar-hide">
                               <div className="font-semibold text-sm text-gray-800 whitespace-nowrap" title={p.name}>{p.name}</div>
                               {(p.position || p.pos) && (
                                 <div className="text-[11px] text-gray-500 whitespace-nowrap">{p.position || p.pos}</div>
@@ -1640,16 +1640,6 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
                               {rec.cleanSheet > 0 && (
                                 <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-cyan-100 text-cyan-700 text-[10px] font-bold">
                                   CS
-                                </span>
-                              )}
-                              {rec.yellowCards > 0 && (
-                                <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-yellow-400 text-white text-[10px] font-bold">
-                                  Y
-                                </span>
-                              )}
-                              {rec.redCards > 0 && (
-                                <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-red-500 text-white text-[10px] font-bold">
-                                  R
                                 </span>
                               )}
                             </div>
