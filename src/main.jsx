@@ -27,15 +27,23 @@ async function enableMocking() {
     logger.log('📦 MSW 모듈 로드 중...')
     const { worker } = await import('./mocks/browser')
     logger.log('✅ MSW 모듈 로드 완료')
+    logger.log('   Worker:', worker)
     
     logger.log('🚀 Service Worker 시작 중...')
-    await worker.start({
-      onUnhandledRequest: 'bypass',
-      quiet: false // 디버그를 위해 true에서 false로 변경
+    const result = await worker.start({
+      onUnhandledRequest: 'warn', // bypass에서 warn으로 변경하여 누락된 요청 확인
+      quiet: false,
+      serviceWorker: {
+        url: '/mockServiceWorker.js'
+      }
     })
+    logger.log('✅ Service Worker 시작 결과:', result)
     logger.log('✅ Mock Service Worker 활성화됨 (localhost)')
     logger.log('✨ 모든 API 요청이 Mock 데이터로 처리됩니다!')
     logger.log('💡 팁: ?nomock 파라미터로 실제 DB 테스트 가능')
+    
+    // 핸들러 목록 출력
+    logger.log('📋 등록된 핸들러:', worker.listHandlers().length, '개')
   } catch (error) {
     logger.error('❌ MSW 초기화 실패:', error)
     logger.error('   에러 스택:', error.stack)

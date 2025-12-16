@@ -42,8 +42,15 @@ export function MoMLeaderboard({
         if (b.count !== a.count) return b.count - a.count
         return a.name.localeCompare(b.name)
       })
-      .map((item, index) => ({ ...item, rank: index + 1 }))
-    return mapped
+    
+    // 동률일 때 같은 등수 부여
+    let currentRank = 1
+    return mapped.map((item, index) => {
+      if (index > 0 && mapped[index - 1].count !== item.count) {
+        currentRank = index + 1
+      }
+      return { ...item, rank: currentRank }
+    })
   }, [countsByPlayer, playerMap])
 
   const displayRows = showAll ? rows : rows.slice(0, 5)

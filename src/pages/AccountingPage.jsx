@@ -606,7 +606,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       const results = await Promise.allSettled(tasks)
       const ok = results.filter(r=>r.status==='fulfilled').length
       const fail = results.length - ok
-      if (ok>0) notify(`${ok}건 결제가 추가되었습니다 ✅`)
+      if (ok>0) notify(`${ok}건 결제가 추가되었습니다 `)
       if (fail>0) notify(`${fail}건 실패`)    
       if (ok>0) {
         setShowAddPayment(false)
@@ -653,7 +653,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     try {
       await updateAccountingOverrides({ renewalPreferences: next })
       setFeeOverrides(prev => ({ ...prev, renewalPreferences: next }))
-      notify('납부 방식이 업데이트되었습니다 ✅')
+      notify('납부 방식이 업데이트되었습니다 ')
     } catch (error) {
       console.error('Failed to update renewal preference', error)
       notify('납부 방식 저장 실패')
@@ -678,7 +678,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       await updateAccountingOverrides({ renewalResets: nextResets })
       setRenewalResets(nextResets)
       setFeeOverrides(prev => ({ ...prev, renewalResets: nextResets }))
-      notify('수동 정상 처리가 완료되었습니다 ✅')
+      notify('수동 정상 처리가 완료되었습니다 ')
       await loadData({ background: true })
     } catch (error) {
       console.error('Failed to manually reset renewal status', error)
@@ -754,7 +754,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
         paymentDate: normalizedDate,
         notes: '[renewals-tab]'
       })
-      notify('회비 납부가 기록되었습니다 ✅')
+      notify('회비 납부가 기록되었습니다 ')
       await loadData({ background: true })
     } catch (error) {
       console.error('Failed to add quick renewal payment', error)
@@ -872,7 +872,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     
     const fileName = `결제내역_${new Date().toLocaleDateString('ko-KR').replace(/\. /g, '-').replace(/\./g, '')}.xlsx`
     XLSX.writeFile(wb, fileName)
-    notify('Excel 파일이 다운로드되었습니다 ✅')
+    notify('Excel 파일이 다운로드되었습니다 ')
   }
 
   // 선수별 납부 정렬 핸들러
@@ -980,7 +980,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   async function handleUpdateDues(settingType, amount, description) {
     try {
       await updateDuesSetting(settingType, amount, description)
-      notify('회비 설정이 업데이트되었습니다 ✅')
+      notify('회비 설정이 업데이트되었습니다 ')
       loadData({ background: true })
     } catch (error) {
       notify('회비 설정 업데이트 실패')
@@ -1109,7 +1109,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   }, [matchesLocal, matches])
 
   const activeMatches = useMemo(() => sortedMatches.filter(m => !m.isVoided), [sortedMatches])
-  const voidMatches = useMemo(() => sortedMatches.filter(m => m.isVoided), [sortedMatches])
+  const voidMatches = useMemo(() => sortedMatches.filter(m => m.isVoided && !m.hiddenFromAccounting), [sortedMatches])
 
   const paginatedMatches = useMemo(() => {
     const startIdx = (matchFeesPage - 1) * matchFeesPerPage
@@ -2118,7 +2118,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                         onChange={async (e) => {
                           try {
                             await updatePayment(payment.id, { payment_method: e.target.value })
-                            notify('결제 방법이 업데이트되었습니다 ✅')
+                            notify('결제 방법이 업데이트되었습니다 ')
                             loadData({ background: true })
                           } catch (err) {
                             notify('결제 방법 업데이트 실패')
@@ -2185,7 +2185,12 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                       players={players}
                       isVoided={Boolean(match.isVoided)}
                       isRecent={globalIdx === 0}
-                      onSync={() => loadData({ background: true })}
+                      onSync={(matchId) => {
+                        if (matchId) {
+                          setMatchesLocal(prev => prev.map(m => m.id === matchId ? { ...m, hiddenFromAccounting: true } : m))
+                        }
+                        loadData({ background: false })
+                      }}
                     />
                   )
                 })}
@@ -2254,7 +2259,12 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
                         players={players}
                         isVoided={true}
                         isRecent={false}
-                        onSync={() => loadData({ background: true })}
+                        onSync={(matchId) => {
+                          if (matchId) {
+                            setMatchesLocal(prev => prev.map(m => m.id === matchId ? { ...m, hiddenFromAccounting: true } : m))
+                          }
+                          loadData({ background: false })
+                        }}
                       />
                     ))}
                   </div>
@@ -2430,7 +2440,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
             const results = await Promise.allSettled(deletePromises)
             const successCount = results.filter(r => r.status === 'fulfilled').length
             const failCount = results.filter(r => r.status === 'rejected').length
-            if (failCount === 0) notify(`${successCount}개의 결제 내역이 삭제되었습니다 ✅`)
+            if (failCount === 0) notify(`${successCount}개의 결제 내역이 삭제되었습니다 `)
             else notify(`${successCount}개 삭제 성공, ${failCount}개 실패`)
             setSelectedPayments(new Set())
             loadData({ background: true })
@@ -2979,7 +2989,7 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
   const handleRestoreMatch = async () => {
     try {
       await updateMatchInDB(match.id, { isVoided: false, voidReason: null, voidedAt: null, voidedBy: null })
-      notify('매치가 복구되었습니다 ✅')
+      notify('매치가 복구되었습니다 ')
       if (onSync) await onSync()
     } catch {
       notify('복구 실패')
@@ -2990,11 +3000,12 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
     if (deleteDialogState.processing) return
     setDeleteDialogState(prev => ({ ...prev, processing: true }))
     try {
-      await deleteMatchFromDB(match.id)
-      notify('매치가 완전히 삭제되었습니다 ✅')
-      if (onSync) await onSync()
+      await updateMatchInDB(match.id, { hiddenFromAccounting: true })
+      notify('회계 페이지에서 숨김 처리되었습니다 ')
+      // 매치 리스트 즉시 새로고침 (matchId 전달)
+      if (onSync) await onSync(match.id)
     } catch {
-      notify('삭제 실패')
+      notify('숨김 처리 실패')
     } finally {
       setDeleteDialogState({ open: false, processing: false })
     }
@@ -3029,7 +3040,7 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
         })
       )
       
-      notify(`${unpaidSelected.length}명의 납부를 확인했습니다 ✅`)
+      notify(`${unpaidSelected.length}명의 납부를 확인했습니다`)
       setSelectedPlayers(new Set())
       await loadMatchPayments()
       await onSync()
@@ -3180,7 +3191,7 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
                   try {
                     const nextFees = { ...(match.fees || {}), total: num }
                     await updateMatchInDB(match.id, { fees: nextFees })
-                    notify('예정 구장비가 저장되었습니다 ✅')
+                    notify('예정 구장비가 저장되었습니다')
                     if (onSync) await onSync()
                   } catch (e) {
                     notify('예정 구장비 저장 실패')
@@ -3266,7 +3277,7 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
                   const results = await Promise.allSettled(ids.map(playerId => cancelMatchPayment(match.id, playerId)))
                   const successCount = results.filter(r => r.status === 'fulfilled').length
                   const failCount = results.length - successCount
-                  if (successCount > 0) notify(`${successCount}건의 납부를 취소했습니다 ✅`)
+                  if (successCount > 0) notify(`${successCount}건의 납부를 취소했습니다 `)
                   if (failCount > 0) notify(`${failCount}건 취소 실패`)
                   await loadMatchPayments()
                   await onSync()
@@ -3279,7 +3290,7 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
                     paymentDate: new Date().toISOString(),
                     notes: `${match.location?.name || '매치'} 구장비 대신 결제`
                   })
-                  notify('상환 처리되었습니다 ✅')
+                  notify('상환 처리되었습니다 ')
                   setShowReimbursement(false)
                   await onSync()
                 }
@@ -3487,12 +3498,13 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
         </div>
       </ConfirmDialog>
 
-      {/* 매치 삭제 확인 다이얼로그 */}
+      {/* 매치 숨김 확인 다이얼로그 */}
       <ConfirmDialog
         open={deleteDialogState.open}
-        title="VOID 매치 삭제"
-        message="이 매치를 완전히 삭제하시겠습니까?\n삭제하면 데이터베이스에서 영구적으로 제거되며 복구할 수 없습니다."
-        confirmLabel={deleteDialogState.processing ? '삭제 중...' : '삭제하기'}
+        title="회계에서 매치 숨기기"
+        message="이 매치를 회계 페이지에서 숨기시겠습니까?
+        매치 데이터는 유지되며, 다른 페이지에서는 계속 표시됩니다."
+        confirmLabel={deleteDialogState.processing ? '처리 중...' : '숨기기'}
         cancelLabel="취소"
         tone="danger"
         onCancel={() => setDeleteDialogState({ open: false, processing: false })}
