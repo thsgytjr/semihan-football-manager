@@ -72,7 +72,7 @@ export default function BadgeIcon({ badge, size = 'md', onSelect }) {
 
   const cardStyle = {
     ...(cardGlowShadow ? { boxShadow: cardGlowShadow } : {}),
-    ...(normalizedTier === 5 ? { overflow: 'hidden' } : {})
+    ...(normalizedTier >= 4 ? { overflow: 'hidden' } : {})
   }
 
   return (
@@ -93,7 +93,137 @@ export default function BadgeIcon({ badge, size = 'md', onSelect }) {
           </div>
           {normalizedTier === 5 && (
             <div className="absolute inset-0 rounded-2xl overflow-hidden">
-              <div className="absolute left-0 top-0 h-full w-1/3 -skew-x-12 animate-shimmer-glow" style={{background:'linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.9) 50%, rgba(255,255,255,0) 100%)', mixBlendMode:'screen'}} />
+              {/* Stadium floodlight pulse */}
+              <div className="absolute inset-0" style={{
+                background: 'radial-gradient(circle at 50% 50%, rgba(255,215,0,0.12), rgba(0,200,80,0.08), transparent 65%)',
+                animation: 'stadiumPulse 3s ease-in-out infinite'
+              }} />
+              
+              {/* Championship glow sweep */}
+              <div className="absolute left-0 top-0 h-full w-1/3 -skew-x-12 animate-shimmer-glow" style={{background:'linear-gradient(90deg, rgba(255,215,0,0) 0%, rgba(255,215,0,0.95) 50%, rgba(255,215,0,0) 100%)', mixBlendMode:'screen'}} />
+              
+              {/* Goal net pattern waves */}
+              {[0, 1, 2].map((i) => (
+                <div
+                  key={`net-${i}`}
+                  className="absolute inset-0 rounded-2xl"
+                  style={{
+                    backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 6px, rgba(255,215,0,0.15) 6px, rgba(255,215,0,0.15) 7px), repeating-linear-gradient(-45deg, transparent, transparent 6px, rgba(255,215,0,0.15) 6px, rgba(255,215,0,0.15) 7px)',
+                    animation: `goalNetWave ${3 + i * 0.5}s ease-out infinite`,
+                    animationDelay: `${i * 1}s`,
+                    opacity: 0
+                  }}
+                />
+              ))}
+              
+              {/* Stadium corner spotlights */}
+              {[0, 1, 2, 3].map((corner) => {
+                const positions = [
+                  { top: '-5%', left: '-5%', background: 'radial-gradient(circle, rgba(255,215,0,0.5) 0%, rgba(255,255,255,0.3) 30%, transparent 60%)' },
+                  { top: '-5%', right: '-5%', background: 'radial-gradient(circle, rgba(255,215,0,0.5) 0%, rgba(255,255,255,0.3) 30%, transparent 60%)' },
+                  { bottom: '-5%', left: '-5%', background: 'radial-gradient(circle, rgba(0,200,80,0.4) 0%, rgba(255,215,0,0.2) 30%, transparent 60%)' },
+                  { bottom: '-5%', right: '-5%', background: 'radial-gradient(circle, rgba(0,200,80,0.4) 0%, rgba(255,215,0,0.2) 30%, transparent 60%)' }
+                ]
+                return (
+                  <div
+                    key={`spotlight-${corner}`}
+                    className="absolute"
+                    style={{
+                      ...positions[corner],
+                      width: '35%',
+                      height: '35%',
+                      animation: `spotlightPulse ${2.5 + corner * 0.3}s ease-in-out infinite`,
+                      animationDelay: `${corner * 0.5}s`,
+                      filter: 'blur(10px)',
+                      mixBlendMode: 'screen'
+                    }}
+                  />
+                )
+              })}
+              
+              {/* Golden football sparkles */}
+              <div className="absolute inset-0">
+                {[...Array(10)].map((_, i) => (
+                  <div
+                    key={`sparkle-${i}`}
+                    className="absolute"
+                    style={{
+                      width: i % 3 === 0 ? '6px' : '4px',
+                      height: i % 3 === 0 ? '6px' : '4px',
+                      left: `${15 + (i * 8)}%`,
+                      top: `${10 + (i % 4) * 23}%`,
+                      animation: `trophyStar ${1.3 + i * 0.2}s ease-in-out infinite`,
+                      animationDelay: `${i * 0.15}s`,
+                      filter: 'blur(0.5px)'
+                    }}
+                  >
+                    {/* Trophy star shape */}
+                    <svg width="100%" height="100%" viewBox="0 0 24 24" style={{ filter: 'drop-shadow(0 0 3px rgba(255,215,0,0.8))' }}>
+                      <path d="M12 2L15 9L22 10L17 15L18 22L12 18L6 22L7 15L2 10L9 9Z" fill="#FFD700" opacity="0.9" />
+                    </svg>
+                  </div>
+                ))}
+              </div>
+
+              
+              {/* Championship trophy rays */}
+              {[0, 1, 2, 3].map((i) => (
+                <div
+                  key={`ray-${i}`}
+                  className="absolute"
+                  style={{
+                    width: '3px',
+                    height: '45%',
+                    left: `${20 + i * 20}%`,
+                    top: i % 2 === 0 ? '-12%' : 'auto',
+                    bottom: i % 2 === 1 ? '-12%' : 'auto',
+                    background: 'linear-gradient(to bottom, rgba(255,215,0,0) 0%, rgba(255,215,0,0.9) 50%, rgba(255,215,0,0) 100%)',
+                    animation: `trophyRay ${2.5 + i * 0.3}s ease-in-out infinite`,
+                    animationDelay: `${i * 0.5}s`,
+                    transform: `rotate(${-25 + i * 17}deg)`,
+                    filter: 'blur(1.5px)',
+                    boxShadow: '0 0 10px rgba(255,215,0,0.9), 0 0 20px rgba(255,255,255,0.5)',
+                    opacity: 0,
+                    mixBlendMode: 'screen'
+                  }}
+                />
+              ))}
+              
+              {/* Championship gold border glow */}
+              <div className="absolute inset-0 rounded-2xl" style={{
+                background: 'linear-gradient(45deg, rgba(255,215,0,0.5), rgba(255,255,255,0.4), rgba(0,200,80,0.3), rgba(255,215,0,0.5))',
+                backgroundSize: '200% 200%',
+                animation: 'championGlow 4s ease-in-out infinite',
+                mixBlendMode: 'screen',
+                opacity: 0.7
+              }} />
+            </div>
+          )}
+          {normalizedTier === 4 && (
+            <div className="absolute inset-0 rounded-2xl overflow-hidden">
+              {/* Gentle platinum shimmer */}
+              <div className="absolute left-0 top-0 h-full w-1/4 -skew-x-12 animate-shimmer-glow" style={{background:'linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(200,230,255,0.6) 50%, rgba(255,255,255,0) 100%)', mixBlendMode:'screen', animationDuration: '4s'}} />
+              
+              {/* Subtle silver sparkles */}
+              <div className="absolute inset-0">
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <div
+                    key={`plat-sparkle-${i}`}
+                    className="absolute rounded-full"
+                    style={{
+                      width: '3px',
+                      height: '3px',
+                      background: 'radial-gradient(circle, rgba(255,255,255,0.9), rgba(200,230,255,0.6))',
+                      left: `${20 + i * 15}%`,
+                      top: `${15 + (i % 3) * 25}%`,
+                      animation: `platinumSparkle ${2 + i * 0.3}s ease-in-out infinite`,
+                      animationDelay: `${i * 0.4}s`,
+                      boxShadow: '0 0 4px rgba(200,230,255,0.6)',
+                      opacity: 0
+                    }}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -110,9 +240,43 @@ export default function BadgeIcon({ badge, size = 'md', onSelect }) {
               )}
               {normalizedTier === 5 && (
                 <>
+                  {/* Base radial glow */}
                   <div className="absolute inset-[2px] rounded-full" style={{background:'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.9), rgba(0,240,255,0.55), rgba(124,77,255,0.45), rgba(255,77,219,0.4), transparent 70%)', mixBlendMode:'screen', opacity: 0.9}} />
+                  
+                  {/* Rotating prismatic halo */}
                   <div className="absolute inset-[6px] rounded-full animate-spin-slow" style={{background:'conic-gradient(from 0deg, rgba(255,255,255,0.75), rgba(0,240,255,0.45), rgba(124,77,255,0.45), rgba(255,77,219,0.5), rgba(255,255,255,0.75))', filter:'blur(4px)', mixBlendMode:'overlay'}} />
+                  
+                  {/* Counter-rotating outer ring (LoL style) */}
+                  <div className="absolute -inset-[8px] rounded-full" style={{
+                    background: 'conic-gradient(from 180deg, transparent 0%, rgba(0,240,255,0.4) 25%, transparent 50%, rgba(255,77,219,0.4) 75%, transparent 100%)',
+                    animation: 'spin 6s linear infinite reverse',
+                    filter: 'blur(6px)',
+                    mixBlendMode: 'screen',
+                    opacity: 0.6
+                  }} />
+                  
+                  {/* Star sparkles */}
                   <div className="pointer-events-none absolute inset-[14%]" style={{background:'radial-gradient(circle at 30% 30%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0) 45%), radial-gradient(circle at 70% 65%, rgba(255,255,255,0.45) 0%, rgba(255,255,255,0) 35%), radial-gradient(circle at 45% 80%, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 30%)', mixBlendMode:'screen'}} />
+                  
+                  {/* Animated sparkle points */}
+                  {[...Array(4)].map((_, i) => (
+                    <div
+                      key={i}
+                      className="absolute"
+                      style={{
+                        width: '2px',
+                        height: '2px',
+                        background: 'white',
+                        boxShadow: '0 0 4px rgba(255,255,255,1), 0 0 8px rgba(0,240,255,0.8)',
+                        left: ['20%', '80%', '50%', '50%'][i],
+                        top: ['50%', '50%', '20%', '80%'][i],
+                        animation: `starPulse ${1 + i * 0.3}s ease-in-out infinite`,
+                        animationDelay: `${i * 0.25}s`,
+                        borderRadius: '50%',
+                        filter: 'blur(0.5px)'
+                      }}
+                    />
+                  ))}
                 </>
               )}
             </div>
