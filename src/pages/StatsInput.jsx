@@ -1612,35 +1612,17 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
                             <InitialAvatar
                               id={p.id}
                               name={p.name}
-                              size={32}
+                              size={28}
                               badges={(() => {
                                 const s = toStr(p.membership).toLowerCase();
                                 return (s === 'member' || s.includes('정회원')) ? [] : ['G']
                               })()}
                               photoUrl={p.photoUrl}
                             />
-                            <div className="min-w-0 max-w-[68px] overflow-x-auto scrollbar-hide">
+                            <div className="min-w-0 flex-1 overflow-x-auto scrollbar-hide">
                               <div className="font-semibold text-sm text-gray-800 whitespace-nowrap" title={p.name}>{p.name}</div>
                               {(p.position || p.pos) && (
                                 <div className="text-[11px] text-gray-500 whitespace-nowrap">{p.position || p.pos}</div>
-                              )}
-                            </div>
-                            {/* Stats badge indicators */}
-                            <div className="flex gap-1">
-                              {rec.goals > 0 && (
-                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold">
-                                  {rec.goals}
-                                </span>
-                              )}
-                              {rec.assists > 0 && (
-                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">
-                                  {rec.assists}
-                                </span>
-                              )}
-                              {rec.cleanSheet > 0 && (
-                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-cyan-100 text-cyan-700 text-[10px] font-bold">
-                                  CS
-                                </span>
                               )}
                             </div>
                           </div>
