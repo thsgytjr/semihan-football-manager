@@ -1494,7 +1494,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
       )}
 
       {/* Stats Grid - Compact Table Layout */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className={`grid gap-4 ${teamRosters.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
         {teamRosters.map(team => {
           // Resolve team color from editingMatch.teamColors or default palette
           const kitPalette = [
@@ -1799,20 +1799,20 @@ function CompactCounterCS({ player, draft, setDraft }) {
   }
 
   return (
-    <div className="flex items-center gap-1.5 justify-center">
+    <div className="flex items-center gap-0.5 justify-center">
       <button
         onClick={dec}
         disabled={value <= 0}
-        className="w-6 h-6 rounded-md border border-gray-300 bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-800 text-base font-bold transition-all hover:scale-110 active:scale-95"
+        className="w-5 h-5 rounded border border-gray-300 bg-gray-100 hover:bg-gray-200 disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-800 text-sm font-bold transition-all active:scale-90"
       >
         −
       </button>
-      <div className={`min-w-[28px] h-7 px-1.5 flex items-center justify-center font-bold text-base tabular-nums ${hasValue ? 'text-sky-600' : 'text-gray-400'}`}>
+      <div className={`min-w-[24px] px-1 flex items-center justify-center font-bold text-sm tabular-nums ${hasValue ? 'text-sky-600' : 'text-gray-400'}`}>
         {value}
       </div>
       <button
         onClick={inc}
-        className="w-6 h-6 rounded-md border bg-gradient-to-r from-sky-400 to-sky-500 hover:from-sky-500 hover:to-sky-600 border-sky-500 hover:border-sky-600 text-white shadow-md hover:shadow-sky-300 flex items-center justify-center text-base font-bold transition-all hover:scale-110 active:scale-95"
+        className="w-5 h-5 rounded border bg-gradient-to-r from-sky-400 to-sky-500 hover:from-sky-500 hover:to-sky-600 border-sky-500 hover:border-sky-600 text-white shadow-md hover:shadow-sky-300 flex items-center justify-center text-sm font-bold transition-all active:scale-90"
       >
         +
       </button>
@@ -1847,20 +1847,20 @@ function CompactCounterYC({ player, draft, setDraft }) {
   }
 
   return (
-    <div className="flex items-center gap-1.5 justify-center">
+    <div className="flex items-center gap-0.5 justify-center">
       <button
         onClick={dec}
         disabled={value <= 0}
-        className="w-6 h-6 rounded-md border border-gray-300 bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-800 text-base font-bold transition-all hover:scale-110 active:scale-95"
+        className="w-5 h-5 rounded border border-gray-300 bg-gray-100 hover:bg-gray-200 disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-800 text-sm font-bold transition-all active:scale-90"
       >
         −
       </button>
-      <div className={`min-w-[28px] h-7 px-1.5 flex items-center justify-center font-bold text-base tabular-nums ${hasValue ? 'text-yellow-600' : 'text-gray-400'}`}>
+      <div className={`min-w-[24px] px-1 flex items-center justify-center font-bold text-sm tabular-nums ${hasValue ? 'text-yellow-600' : 'text-gray-400'}`}>
         {value}
       </div>
       <button
         onClick={inc}
-        className="w-6 h-6 rounded-md border bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 border-yellow-500 hover:border-yellow-600 text-white shadow-md hover:shadow-yellow-300 flex items-center justify-center text-base font-bold transition-all hover:scale-110 active:scale-95"
+        className="w-5 h-5 rounded border bg-gradient-to-r from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 border-yellow-500 hover:border-yellow-600 text-white shadow-md hover:shadow-yellow-300 flex items-center justify-center text-sm font-bold transition-all active:scale-90"
       >
         +
       </button>
@@ -1895,20 +1895,20 @@ function CompactCounterRC({ player, draft, setDraft }) {
   }
 
   return (
-    <div className="flex items-center gap-1.5 justify-center">
+    <div className="flex items-center gap-0.5 justify-center">
       <button
         onClick={dec}
         disabled={value <= 0}
-        className="w-6 h-6 rounded-md border border-gray-300 bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-800 text-base font-bold transition-all hover:scale-110 active:scale-95"
+        className="w-5 h-5 rounded border border-gray-300 bg-gray-100 hover:bg-gray-200 disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-800 text-sm font-bold transition-all active:scale-90"
       >
         −
       </button>
-      <div className={`min-w-[28px] h-7 px-1.5 flex items-center justify-center font-bold text-base tabular-nums ${hasValue ? 'text-red-600' : 'text-gray-400'}`}>
+      <div className={`min-w-[24px] px-1 flex items-center justify-center font-bold text-sm tabular-nums ${hasValue ? 'text-red-600' : 'text-gray-400'}`}>
         {value}
       </div>
       <button
         onClick={inc}
-        className="w-6 h-6 rounded-md border bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 border-red-600 hover:border-red-700 text-white shadow-md hover:shadow-red-300 flex items-center justify-center text-base font-bold transition-all hover:scale-110 active:scale-95"
+        className="w-5 h-5 rounded border bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 border-red-600 hover:border-red-700 text-white shadow-md hover:shadow-red-300 flex items-center justify-center text-sm font-bold transition-all active:scale-90"
       >
         +
       </button>
@@ -1943,20 +1943,20 @@ function CompactCounterBC({ player, draft, setDraft }) {
   }
 
   return (
-    <div className="flex items-center gap-1.5 justify-center">
+    <div className="flex items-center gap-0.5 justify-center">
       <button
         onClick={dec}
         disabled={value <= 0}
-        className="w-6 h-6 rounded-md border border-gray-300 bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-800 text-base font-bold transition-all hover:scale-110 active:scale-95"
+        className="w-5 h-5 rounded border border-gray-300 bg-gray-100 hover:bg-gray-200 disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-800 text-sm font-bold transition-all active:scale-90"
       >
         −
       </button>
-      <div className={`min-w-[28px] h-7 px-1.5 flex items-center justify-center font-bold text-base tabular-nums ${hasValue ? 'text-gray-800' : 'text-gray-400'}`}>
+      <div className={`min-w-[24px] px-1 flex items-center justify-center font-bold text-sm tabular-nums ${hasValue ? 'text-gray-800' : 'text-gray-400'}`}>
         {value}
       </div>
       <button
         onClick={inc}
-        className="w-6 h-6 rounded-md border bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 border-gray-700 hover:border-gray-900 text-white shadow-md hover:shadow-gray-400 flex items-center justify-center text-base font-bold transition-all hover:scale-110 active:scale-95"
+        className="w-5 h-5 rounded border bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 border-gray-700 hover:border-gray-900 text-white shadow-md hover:shadow-gray-400 flex items-center justify-center text-sm font-bold transition-all active:scale-90"
       >
         +
       </button>
