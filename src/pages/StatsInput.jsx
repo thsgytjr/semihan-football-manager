@@ -187,6 +187,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
   const [bulkText, setBulkText] = useState('')
   const [bulkMsg, setBulkMsg] = useState('')
   const [sectionTab, setSectionTab] = useState('manual') // bulk | manual | mom
+  const [statsTab, setStatsTab] = useState('attack') // attack | defense | discipline
   const [showSaved, setShowSaved] = useState(false)
   const [confirmState, setConfirmState] = useState({ open: false, kind: null })
   const [alertState, setAlertState] = useState({ open: false, title: '안내', message: '' })
@@ -1125,6 +1126,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
   const [showLinkPanel, setShowLinkPanel] = useState(false)
   const [addingGoalFor, setAddingGoalFor] = useState(null) // { playerId, teamIdx }
   const [addingAssistFor, setAddingAssistFor] = useState(null) // { playerId, teamIdx }
+  const [statsTab, setStatsTab] = useState('attack') // attack | defense | discipline
   const [confirmState, setConfirmState] = useState({ open: false, kind: null })
   const [alertState, setAlertState] = useState({ open: false, title: '안내', message: '' })
 
@@ -1530,19 +1532,61 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
               </span>
               <span className="text-xs font-normal opacity-80">{team.players.length}명</span>
             </div>
+            {/* Tab Navigation */}
+            <div className="flex gap-1 mb-3 border-b border-gray-200">
+              <button
+                onClick={() => setStatsTab('attack')}
+                className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                  statsTab === 'attack'
+                    ? 'border-emerald-500 text-emerald-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                ⚽ 공격
+              </button>
+              <button
+                onClick={() => setStatsTab('defense')}
+                className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                  statsTab === 'defense'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                🛡️ 수비
+              </button>
+              {cardsEnabled && (
+                <button
+                  onClick={() => setStatsTab('discipline')}
+                  className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 ${
+                    statsTab === 'discipline'
+                      ? 'border-yellow-500 text-yellow-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  🟨 경고
+                </button>
+              )}
+            </div>
+
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50/50 border-b border-gray-100">
                   <tr className="text-[11px] text-gray-500 font-medium">
                     <th className="px-3 py-2.5 text-left">선수</th>
-                    <th className="px-2 py-2.5 text-center min-w-[64px]">Goals</th>
-                    <th className="px-2 py-2.5 text-center min-w-[64px]">Assists</th>
-                    <th className="px-2 py-2.5 text-center min-w-[80px]">Clean Sheet</th>
-                    {cardsEnabled && (
+                    {statsTab === 'attack' && (
                       <>
-                        <th className="px-2 py-2.5 text-center min-w-[64px]">Yellow</th>
-                        <th className="px-2 py-2.5 text-center min-w-[64px]">Red</th>
-                        <th className="px-2 py-2.5 text-center min-w-[64px]">Black</th>
+                        <th className="px-2 py-2.5 text-center min-w-[80px]">⚽ Goals</th>
+                        <th className="px-2 py-2.5 text-center min-w-[80px]">🅰️ Assists</th>
+                      </>
+                    )}
+                    {statsTab === 'defense' && (
+                      <th className="px-2 py-2.5 text-center min-w-[100px]">🧤 Clean Sheet</th>
+                    )}
+                    {statsTab === 'discipline' && cardsEnabled && (
+                      <>
+                        <th className="px-2 py-2.5 text-center min-w-[80px]">🟨 Yellow</th>
+                        <th className="px-2 py-2.5 text-center min-w-[80px]">🟥 Red</th>
+                        <th className="px-2 py-2.5 text-center min-w-[80px]">⬛ Black</th>
                       </>
                     )}
                   </tr>
@@ -1551,65 +1595,106 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
                   {team.players.map(p => {
                     const rec = draft[toStr(p.id)] || { goals: 0, assists: 0, cleanSheet: 0, yellowCards: 0, redCards: 0, blackCards: 0 }
                     const hasCardStats = cardsEnabled && (rec.yellowCards > 0 || rec.redCards > 0 || rec.blackCards > 0)
-                    const hasStats = (rec.goals > 0 || rec.assists > 0 || rec.cleanSheet > 0 || hasCardStats)
+                    const hasAttackStats = (rec.goals > 0 || rec.assists > 0)
+                    const hasDefenseStats = rec.cleanSheet > 0
+                    const hasDisciplineStats = hasCardStats
+                    
+                    let hasCurrentTabStats = false
+                    if (statsTab === 'attack') hasCurrentTabStats = hasAttackStats
+                    if (statsTab === 'defense') hasCurrentTabStats = hasDefenseStats
+                    if (statsTab === 'discipline') hasCurrentTabStats = hasDisciplineStats
 
                     return (
-                      <tr key={toStr(p.id)} className={`transition-colors ${hasStats ? 'bg-blue-50/30' : 'hover:bg-gray-50/50'}`}>
-                        {/* Player Info - Fixed Width */}
+                      <tr key={toStr(p.id)} className={`transition-colors ${hasCurrentTabStats ? 'bg-blue-50/30' : 'hover:bg-gray-50/50'}`}>
+                        {/* Player Info - Responsive Width */}
                         <td className="px-3 py-3">
-                          <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="flex items-center gap-2 min-w-0">
                             <InitialAvatar
                               id={p.id}
                               name={p.name}
-                              size={28}
+                              size={32}
                               badges={(() => {
                                 const s = toStr(p.membership).toLowerCase();
                                 return (s === 'member' || s.includes('정회원')) ? [] : ['G']
                               })()}
                               photoUrl={p.photoUrl}
                             />
-                            <div className="min-w-0 flex-1">
-                              <div className="font-medium text-[13px] text-gray-800 truncate" title={p.name}>{p.name}</div>
+                            <div className="min-w-0 max-w-[80px] overflow-x-auto scrollbar-hide">
+                              <div className="font-semibold text-sm text-gray-800 whitespace-nowrap" title={p.name}>{p.name}</div>
                               {(p.position || p.pos) && (
-                                <div className="text-[10px] text-gray-500 truncate">{p.position || p.pos}</div>
+                                <div className="text-[11px] text-gray-500 whitespace-nowrap">{p.position || p.pos}</div>
+                              )}
+                            </div>
+                            {/* Stats badge indicators */}
+                            <div className="flex gap-1">
+                              {rec.goals > 0 && (
+                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-bold">
+                                  {rec.goals}
+                                </span>
+                              )}
+                              {rec.assists > 0 && (
+                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold">
+                                  {rec.assists}
+                                </span>
+                              )}
+                              {rec.cleanSheet > 0 && (
+                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-cyan-100 text-cyan-700 text-[10px] font-bold">
+                                  CS
+                                </span>
+                              )}
+                              {rec.yellowCards > 0 && (
+                                <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-yellow-400 text-white text-[10px] font-bold">
+                                  Y
+                                </span>
+                              )}
+                              {rec.redCards > 0 && (
+                                <span className="inline-flex items-center justify-center w-5 h-5 rounded bg-red-500 text-white text-[10px] font-bold">
+                                  R
+                                </span>
                               )}
                             </div>
                           </div>
                         </td>
-                        {/* Goal Counter - Compact */}
-                        <td className="px-1 py-2">
-                          <CompactCounter
-                            value={rec.goals || 0}
-                            onInc={() => addGoal(p.id, team.idx)}
-                            onDec={() => removeGoal(p.id)}
-                            color="emerald"
-                          />
-                        </td>
-                        {/* Assist Counter - Compact */}
-                        <td className="px-1 py-2">
-                          <CompactCounter
-                            value={rec.assists || 0}
-                            onInc={() => addAssist(p.id, team.idx)}
-                            onDec={() => removeAssist(p.id)}
-                            color="amber"
-                          />
-                        </td>
-                        {/* CS Counter - Compact */}
-                        <td className="px-1 py-2">
-                          <CompactCounterCS player={p} draft={draft} setDraft={setDraft} />
-                        </td>
-                        {cardsEnabled && (
+                        
+                        {/* Attack Tab */}
+                        {statsTab === 'attack' && (
                           <>
-                            {/* YC Counter - Compact */}
-                            <td className="px-1 py-2">
+                            <td className="px-2 py-2">
+                              <CompactCounter
+                                value={rec.goals || 0}
+                                onInc={() => addGoal(p.id, team.idx)}
+                                onDec={() => removeGoal(p.id)}
+                                color="emerald"
+                              />
+                            </td>
+                            <td className="px-2 py-2">
+                              <CompactCounter
+                                value={rec.assists || 0}
+                                onInc={() => addAssist(p.id, team.idx)}
+                                onDec={() => removeAssist(p.id)}
+                                color="amber"
+                              />
+                            </td>
+                          </>
+                        )}
+                        
+                        {/* Defense Tab */}
+                        {statsTab === 'defense' && (
+                          <td className="px-2 py-2">
+                            <CompactCounterCS player={p} draft={draft} setDraft={setDraft} />
+                          </td>
+                        )}
+                        
+                        {/* Discipline Tab */}
+                        {statsTab === 'discipline' && cardsEnabled && (
+                          <>
+                            <td className="px-2 py-2">
                               <CompactCounterYC player={p} draft={draft} setDraft={setDraft} />
                             </td>
-                            {/* RC Counter - Compact */}
-                            <td className="px-1 py-2">
+                            <td className="px-2 py-2">
                               <CompactCounterRC player={p} draft={draft} setDraft={setDraft} />
                             </td>
-                            {/* BC Counter - Compact */}
-                            <td className="px-1 py-2">
+                            <td className="px-2 py-2">
                               <CompactCounterBC player={p} draft={draft} setDraft={setDraft} />
                             </td>
                           </>
@@ -1666,20 +1751,20 @@ function CompactCounter({ value, onInc, onDec, color = 'emerald' }) {
     : 'bg-gradient-to-r from-blue-400 to-blue-500 hover:from-blue-500 hover:to-blue-600 border-blue-500 hover:border-blue-600 text-white shadow-md hover:shadow-blue-300'
 
   return (
-    <div className="flex items-center gap-1.5 justify-center">
+    <div className="flex items-center gap-0.5 justify-center">
       <button
         onClick={onDec}
         disabled={value <= 0}
-        className="w-6 h-6 rounded-md border border-gray-300 bg-gray-100 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-800 text-base font-bold transition-all hover:scale-110 active:scale-95"
+        className="w-5 h-5 rounded border border-gray-300 bg-gray-100 hover:bg-gray-200 disabled:opacity-20 disabled:cursor-not-allowed disabled:hover:bg-gray-100 flex items-center justify-center text-gray-600 hover:text-gray-800 text-sm font-bold transition-all active:scale-90"
       >
         −
       </button>
-      <div className={`min-w-[28px] h-7 px-1.5 flex items-center justify-center font-bold text-base tabular-nums ${hasValue ? (isGoal ? 'text-emerald-600' : 'text-blue-600') : 'text-gray-400'}`}>
+      <div className={`min-w-[24px] px-1 flex items-center justify-center font-bold text-sm tabular-nums ${hasValue ? (isGoal ? 'text-emerald-600' : 'text-blue-600') : 'text-gray-400'}`}>
         {value}
       </div>
       <button
         onClick={onInc}
-        className={`w-6 h-6 rounded-md border flex items-center justify-center text-base font-bold transition-all hover:scale-110 active:scale-95 ${colorClasses}`}
+        className={`w-5 h-5 rounded border flex items-center justify-center text-sm font-bold transition-all active:scale-90 ${colorClasses}`}
       >
         +
       </button>
