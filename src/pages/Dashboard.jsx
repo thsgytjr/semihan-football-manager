@@ -39,6 +39,7 @@ import MobileCategoryCarousel from '../components/MobileCategoryCarousel'
 import { buildPlayerBadgeFactsMap, generateBadgesFromFacts } from '../lib/playerBadgeEngine'
 import { fetchPlayerBadges } from '../services/badgeService'
 import SeasonRecap, { prefetchSeasonRecapVideos } from '../components/SeasonRecap'
+import NewSeasonBanner from '../components/NewSeasonBanner'
 
 // 멤버십 helper 함수
 const S = (v) => v == null ? '' : String(v)
@@ -209,6 +210,7 @@ export default function Dashboard({
   
   // Season Recap 모달 상태
   const [showSeasonRecap, setShowSeasonRecap] = useState(() => seasonRecapEnabled && seasonRecapReady) // 기능 토글 반영
+  const [hasSeenRecap, setHasSeenRecap] = useState(false)
 
   // 시즌 리캡 토글이 켜질 때 미리 비디오 프리페치
   useEffect(() => {
@@ -220,6 +222,22 @@ export default function Dashboard({
   // seasonRecapEnabled/Ready 상태 변화 시 모달 표시 여부 업데이트
   useEffect(() => {
     if (seasonRecapReady) {
+      // Check if user chose to hide recap for today
+      try {
+        const hideUntil = localStorage.getItem('seasonRecap_hideUntil')
+        if (hideUntil) {
+          const today = new Date().toDateString()
+          if (hideUntil === today) {
+            setShowSeasonRecap(false)
+            return
+          } else {
+            // Clear expired hide setting
+            localStorage.removeItem('seasonRecap_hideUntil')
+          }
+        }
+      } catch {
+        // ignore
+      }
       setShowSeasonRecap(seasonRecapEnabled)
     } else {
       setShowSeasonRecap(false)
@@ -248,6 +266,17 @@ export default function Dashboard({
     const firstSeason = seasonOptions.find((option) => option !== 'all')
     return firstSeason || 'all'
   }, [seasonOptions])
+
+  // 시즌이 변경될 때 hasSeenRecap 상태 업데이트
+  useEffect(() => {
+    try {
+      const currentSeason = leaderboardSeason !== 'all' ? leaderboardSeason : leaderboardDefaultSeason
+      const seen = localStorage.getItem(`hasSeenRecap_${currentSeason}`) === 'true'
+      setHasSeenRecap(seen)
+    } catch {
+      setHasSeenRecap(false)
+    }
+  }, [leaderboardSeason, leaderboardDefaultSeason])
   
   // 시즌별 필터링 (리더보드용)
   const leaderboardSeasonFilteredMatches = useMemo(() => {
@@ -1524,7 +1553,16 @@ export default function Dashboard({
             players={players}
             seasonName={leaderboardSeason !== 'all' ? leaderboardSeason : leaderboardDefaultSeason}
             leaders={seasonRecapLeaders}
-            onClose={() => setShowSeasonRecap(false)}
+            onClose={() => {
+              setShowSeasonRecap(false)
+              setHasSeenRecap(true)
+              try {
+                const currentSeason = leaderboardSeason !== 'all' ? leaderboardSeason : leaderboardDefaultSeason
+                localStorage.setItem(`hasSeenRecap_${currentSeason}`, 'true')
+              } catch {
+                // ignore
+              }
+            }}
           />
         )}
 
@@ -1535,6 +1573,12 @@ export default function Dashboard({
             onAlreadyVoted={handleMoMNoticeAlreadyVoted}
           />
         )}
+
+        <NewSeasonBanner
+          currentSeason={leaderboardSeason !== 'all' ? leaderboardSeason : leaderboardDefaultSeason}
+          seasonRecapEnabled={seasonRecapEnabled}
+          hasSeenRecap={hasSeenRecap}
+        />
 
         <UpcomingMatchesWidget
           upcomingMatches={upcomingMatches}

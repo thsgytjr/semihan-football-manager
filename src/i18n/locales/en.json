@@ -768,7 +768,23 @@
         "goals": "Goals",
         "assists": "Assists"
       }
-    }
+    },
+    "hideForToday": "Hide for today"
+  },
+  "newSeasonBanner": {
+    "title": "{{season}} Season Starting Soon!",
+    "subtitle": "Let's begin a new chapter together",
+    "description": "Thank you for all the passion and memories from last season. A new season begins now!",
+    "dataRetained": {
+      "title": "Data Preserved",
+      "description": "All data from previous seasons is safely stored and accessible."
+    },
+    "accessPrevious": {
+      "title": "Access Past Data",
+      "description": "Select any year from the dropdown to view previous season data anytime."
+    },
+    "cta": "Excited for the new season! ⚽",
+    "hideForToday": "Hide for today"
   },
   "referee": {
     "sessionCancelledByOther": "Referee mode was cancelled from another device.",

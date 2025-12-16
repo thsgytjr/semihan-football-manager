@@ -764,7 +764,23 @@
         "goals": "골",
         "assists": "어시스트"
       }
-    }
+    },
+    "hideForToday": "오늘 하루 보지 않기"
+  },
+  "newSeasonBanner": {
+    "title": "{{season}} 시즌이 곧 시작됩니다!",
+    "subtitle": "새로운 챕터를 함께 시작해요",
+    "description": "지난 시즌의 모든 열정과 추억에 감사드립니다. 이제 새로운 시즌이 시작됩니다!",
+    "dataRetained": {
+      "title": "데이터 보존",
+      "description": "이전 시즌의 모든 데이터는 안전하게 보관되어 있습니다."
+    },
+    "accessPrevious": {
+      "title": "과거 데이터 접근",
+      "description": "드롭다운에서 해당 년도를 선택하면 언제든지 이전 시즌 데이터를 확인할 수 있습니다."
+    },
+    "cta": "새로운 시즌이 정말 기대됩니다! ⚽",
+    "hideForToday": "오늘 하루 보지 않기"
   },
   "referee": {
     "sessionCancelledByOther": "다른 디바이스에서 심판모드가 취소되었습니다.",

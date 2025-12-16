@@ -1556,8 +1556,49 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     }
   ]
 
-  const slideCount = slides.length
-  const currentSlideId = slides[activeSlide]?.id
+  // Filter out slides with no award winners
+  const filteredSlides = slides.filter(slide => {
+    const slideId = slide.id
+    
+    // Always keep these slides
+    if (['intro', 'overview', 'stories', 'outro'].includes(slideId)) {
+      return true
+    }
+    
+    // Check if award slides have winners
+    if (slideId === 'attack-leader') {
+      return stats.attackLeaders && stats.attackLeaders.length > 0 && stats.attackLeaders[0].id !== 'attack-none'
+    }
+    if (slideId === 'golden-boot') {
+      return stats.topScorers && stats.topScorers.length > 0 && stats.topScorers[0].id !== 'scorer-none'
+    }
+    if (slideId === 'top-assister') {
+      return stats.topAssisters && stats.topAssisters.length > 0 && stats.topAssisters[0].id !== 'assist-none'
+    }
+    if (slideId === 'iron-man') {
+      return stats.ironMen && stats.ironMen.length > 0 && stats.ironMen[0].id !== 'apps-none'
+    }
+    if (slideId === 'clean-sheet') {
+      return stats.cleanSheetMasters && stats.cleanSheetMasters.length > 0 && stats.cleanSheetMasters[0].id !== 'cs-none'
+    }
+    if (slideId === 'mom-award') {
+      return topMomLeaders && topMomLeaders.length > 0 && topMomLeaders[0].id !== 'na'
+    }
+    if (slideId === 'duo-award') {
+      return topDuoLeaders && topDuoLeaders.length > 0
+    }
+    if (slideId === 'draft-player-award') {
+      return topDraftPlayerLeaders && topDraftPlayerLeaders.length > 0 && topDraftPlayerLeaders[0].id !== 'na'
+    }
+    if (slideId === 'captain-award') {
+      return topDraftCaptainLeaders && topDraftCaptainLeaders.length > 0 && topDraftCaptainLeaders[0].id !== 'na'
+    }
+    
+    return true
+  })
+
+  const slideCount = filteredSlides.length
+  const currentSlideId = filteredSlides[activeSlide]?.id
   const isStorySlideActive = currentSlideId === 'stories'
   useEffect(() => {
     if (!isStorySlideActive) {
@@ -1675,7 +1716,7 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     <ActiveSlideContext.Provider value={activeSlideContextValue}>
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black">
         <div 
-          className={`w-full h-full max-h-[100dvh] md:max-w-sm md:max-h-[600px] md:rounded-3xl overflow-hidden relative shadow-2xl transition-colors duration-700 ease-in-out ${slides[activeSlide].bg}`}
+          className={`w-full h-full max-h-[100dvh] md:max-w-sm md:max-h-[600px] md:rounded-3xl overflow-hidden relative shadow-2xl transition-colors duration-700 ease-in-out ${filteredSlides[activeSlide].bg}`}
           onClick={handleContainerClick}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
@@ -1683,7 +1724,7 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
         >
         {/* Progress Bar */}
         <div className="absolute top-0 left-0 right-0 p-4 flex gap-1 z-20">
-          {slides.map((_, idx) => (
+          {filteredSlides.map((_, idx) => (
             <div key={idx} className="h-1 flex-1 bg-white/20 rounded-full overflow-hidden">
               <div 
                 className={`h-full bg-white transition-all duration-300 ${
@@ -1745,17 +1786,38 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
           </div>
         </div>
 
-        {/* Close Button */}
+        {/* Close Button - Top Right */}
         <button 
           onClick={(e) => { e.stopPropagation(); onClose(); }}
           className="absolute top-6 right-4 z-20 text-white/50 hover:text-white p-2"
+          aria-label={t('common.close')}
         >
           <X size={24} />
         </button>
 
+        {/* Hide for Today Button - Bottom Center */}
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20">
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              try {
+                const today = new Date().toDateString()
+                localStorage.setItem('seasonRecap_hideUntil', today)
+              } catch {
+                // ignore
+              }
+              onClose()
+            }}
+            className="rounded-full bg-black/50 px-4 py-2 text-xs font-medium text-white/90 backdrop-blur-md transition hover:bg-black/70 hover:text-white shadow-lg"
+            aria-label={t('seasonRecap.hideForToday')}
+          >
+            {t('seasonRecap.hideForToday')}
+          </button>
+        </div>
+
           {/* Content */}
           <div className="h-full w-full">
-            {slides[activeSlide].content}
+            {filteredSlides[activeSlide].content}
           </div>
 
         </div>
