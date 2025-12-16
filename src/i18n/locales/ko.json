@@ -697,6 +697,22 @@
       "wallKeepers": {
         "title": "철벽 수문장",
         "subtitle": "클린시트 리더"
+      },
+      "mom": {
+        "title": "MOM King",
+        "subtitle": "누적 수상 최다"
+      },
+      "duo": {
+        "title": "듀오 탑",
+        "subtitle": "최고의 Assist → Goal 케미"
+      },
+      "draftPlayer": {
+        "title": "드래프트 승점왕",
+        "subtitle": "선수 승점 리더"
+      },
+      "captain": {
+        "title": "캡틴 승점왕",
+        "subtitle": "라커룸 리더십"
       }
     },
     "metrics": {

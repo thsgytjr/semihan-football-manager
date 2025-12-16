@@ -701,6 +701,22 @@
       "wallKeepers": {
         "title": "WALL DEFENDERS",
         "subtitle": "Clean Sheet Leaders"
+      },
+      "mom": {
+        "title": "MOM KING",
+        "subtitle": "Most Cumulative Awards"
+      },
+      "duo": {
+        "title": "DUO TOP",
+        "subtitle": "Best Assist → Goal Chemistry"
+      },
+      "draftPlayer": {
+        "title": "DRAFT PLAYER KING",
+        "subtitle": "Player Points Leader"
+      },
+      "captain": {
+        "title": "CAPTAIN KING",
+        "subtitle": "Locker Room Leadership"
       }
     },
     "metrics": {

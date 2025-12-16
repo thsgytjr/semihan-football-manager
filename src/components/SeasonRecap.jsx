@@ -50,6 +50,10 @@ const RECAP_GOLDEN_BOOT_VIDEO = `${R2_SHARED_MEDIA_BASE}/golden-boot.mp4`
 const RECAP_PLAYMAKER_VIDEO = `${R2_SHARED_MEDIA_BASE}/top-assist.mp4`
 const RECAP_DEFENDER_VIDEO = `${R2_SHARED_MEDIA_BASE}/best-defender.mp4`
 const RECAP_IRONMAN_VIDEO = `${R2_SHARED_MEDIA_BASE}/most-game-played.mp4`
+const RECAP_MOM_VIDEO = `${R2_SHARED_MEDIA_BASE}/mom.mp4`
+const RECAP_DUO_VIDEO = `${R2_SHARED_MEDIA_BASE}/duo.mp4`
+const RECAP_DRAFT_PLAYER_VIDEO = `${R2_SHARED_MEDIA_BASE}/draft-player.mp4`
+const RECAP_CAPTAIN_VIDEO = `${R2_SHARED_MEDIA_BASE}/best-captain.mp4`
 const RECAP_VIDEO_SOURCES = [
   RECAP_INTRO_VIDEO,
   RECAP_STORY_VIDEO,
@@ -58,7 +62,11 @@ const RECAP_VIDEO_SOURCES = [
   RECAP_GOLDEN_BOOT_VIDEO,
   RECAP_PLAYMAKER_VIDEO,
   RECAP_DEFENDER_VIDEO,
-  RECAP_IRONMAN_VIDEO
+  RECAP_IRONMAN_VIDEO,
+  RECAP_MOM_VIDEO,
+  RECAP_DUO_VIDEO,
+  RECAP_DRAFT_PLAYER_VIDEO,
+  RECAP_CAPTAIN_VIDEO
 ]
 
 const prefetchVideo = (src) => {
@@ -370,6 +378,34 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
 
   const safePrimary = (list) => (Array.isArray(list) && list.length > 0 ? list[0] : { id: 'na', name: '—', value: 0 })
 
+  // Filter momLeaders to only include players with max awards (handle ties)
+  const topMomLeaders = (() => {
+    if (!Array.isArray(momLeaders) || momLeaders.length === 0) return []
+    const maxAwards = Math.max(...momLeaders.map(p => p.value || 0))
+    return momLeaders.filter(p => p.value === maxAwards)
+  })()
+
+  // Filter duo leaders to only include top duos
+  const topDuoLeaders = (() => {
+    if (!Array.isArray(duoLeaders) || duoLeaders.length === 0) return []
+    const maxCount = Math.max(...duoLeaders.map(d => d.count || 0))
+    return duoLeaders.filter(d => d.count === maxCount)
+  })()
+
+  // Filter draft player leaders to only include top players
+  const topDraftPlayerLeaders = (() => {
+    if (!Array.isArray(draftPlayerLeaders) || draftPlayerLeaders.length === 0) return []
+    const maxValue = Math.max(...draftPlayerLeaders.map(p => p.value || 0))
+    return draftPlayerLeaders.filter(p => p.value === maxValue)
+  })()
+
+  // Filter draft captain leaders to only include top captains
+  const topDraftCaptainLeaders = (() => {
+    if (!Array.isArray(draftCaptainLeaders) || draftCaptainLeaders.length === 0) return []
+    const maxValue = Math.max(...draftCaptainLeaders.map(p => p.value || 0))
+    return draftCaptainLeaders.filter(p => p.value === maxValue)
+  })()
+
   const primaryScorer = safePrimary(stats.topScorers)
   const primaryAssister = safePrimary(stats.topAssisters)
   const primaryIron = safePrimary(stats.ironMen)
@@ -470,17 +506,6 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
   }
 
   const championSections = [
-    {
-      id: 'mom',
-      group: 'total',
-      title: t('seasonRecap.champions.sections.mom.title'),
-      subtitle: t('seasonRecap.champions.sections.mom.subtitle'),
-      icon: Crown,
-      colorClass: 'text-amber-300',
-      entries: momLeaders,
-      unit: t('seasonRecap.metrics.awards'),
-      valueKey: 'value'
-    },
     {
       id: 'duo',
       group: 'total',
@@ -766,7 +791,7 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
                 className="border border-white/30"
               />
               <p className={`mt-2 ${compact ? 'text-[11px]' : 'text-sm'} font-semibold text-center leading-tight break-words line-clamp-2`}>
-                {(p.name || t('seasonRecap.common.unknown')) ? `(${p.name || t('seasonRecap.common.unknown')})` : t('seasonRecap.common.unknown')}
+                {p.name || t('seasonRecap.common.unknown')}
               </p>
               {showAttackGA && (
                 <p className="mt-0.5 text-[11px] text-white/75">
@@ -1201,7 +1226,215 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
         </div>
       )
     },
-    ...championSlides,
+    {
+      id: 'mom-award',
+      content: (
+        <div className="relative h-full w-full overflow-hidden">
+          <VideoBackground
+            src={RECAP_MOM_VIDEO}
+            overlayClass=""
+          />
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+            <div className="mom-glow" />
+          </div>
+          <div className="relative z-10 flex flex-col items-center justify-center h-full text-center p-4">
+            <div className="bg-black/60 px-6 py-3 rounded-xl mb-3">
+              <Crown className="w-14 h-14 text-amber-300 mb-2 mx-auto drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]" />
+              <h2 className="text-lg font-bold text-white">{t('seasonRecap.slides.mom.title')}</h2>
+              <h3 className="text-sm text-white/80">{t('seasonRecap.slides.mom.subtitle')}</h3>
+            </div>
+
+            {renderTieHero(topMomLeaders, 'awards')}
+            {(!Array.isArray(topMomLeaders) || topMomLeaders.length <= 1) && (
+              <>
+                <div className="relative mb-3">
+                  <div className="absolute -inset-2 bg-amber-400/20 rounded-full blur-xl" />
+                  <InitialAvatar
+                    id={safePrimary(topMomLeaders).id}
+                    name={safePrimary(topMomLeaders).name || t('seasonRecap.common.unknown')}
+                    photoUrl={safePrimary(topMomLeaders).photoUrl}
+                    size={80}
+                    className="border-2 border-amber-300 shadow-xl"
+                  />
+                </div>
+
+                <h1 className="text-2xl font-black text-white mb-2 bg-black/60 px-4 py-2 rounded-xl">{safePrimary(topMomLeaders).name || t('seasonRecap.common.unknown')}</h1>
+              </>
+            )}
+            <div className="bg-amber-500 px-4 py-1.5 rounded-full border border-amber-300">
+              <AnimatedNumber value={safePrimary(topMomLeaders).value} className="text-xl font-bold text-white" />
+              <span className="text-xs text-white/90 ml-1.5 uppercase">{t('seasonRecap.metrics.awards')}</span>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'duo-award',
+      content: (
+        <div className="relative h-full w-full overflow-hidden">
+          <VideoBackground
+            src={RECAP_DUO_VIDEO}
+            overlayClass=""
+          />
+          <div className="relative z-10 flex flex-col items-center justify-center h-full text-center p-4">
+            <div className="bg-black/60 px-6 py-3 rounded-xl mb-3">
+              <Handshake className="w-14 h-14 text-rose-300 mb-2 mx-auto drop-shadow-[0_0_15px_rgba(253,164,175,0.5)]" />
+              <h2 className="text-lg font-bold text-white">{t('seasonRecap.slides.duo.title')}</h2>
+              <h3 className="text-sm text-white/80">{t('seasonRecap.slides.duo.subtitle')}</h3>
+            </div>
+
+            {topDuoLeaders.length > 1 ? (
+              <div className="w-full max-w-md space-y-3">
+                {topDuoLeaders.map((duo) => (
+                  <div key={duo.id} className="bg-white/10 backdrop-blur rounded-2xl p-4 border border-white/20">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex -space-x-3">
+                          <InitialAvatar
+                            id={duo.assist?.id}
+                            name={duo.assist?.name || t('seasonRecap.common.unknown')}
+                            photoUrl={duo.assist?.photoUrl}
+                            size={48}
+                            className="ring-2 ring-rose-300 shadow-xl"
+                          />
+                          <InitialAvatar
+                            id={duo.scorer?.id}
+                            name={duo.scorer?.name || t('seasonRecap.common.unknown')}
+                            photoUrl={duo.scorer?.photoUrl}
+                            size={48}
+                            className="ring-2 ring-rose-300 shadow-xl"
+                          />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-sm font-semibold text-white">{duo.assist?.name || t('seasonRecap.common.unknown')}</p>
+                          <p className="text-xs text-white/60">{t('seasonRecap.champions.duoTo', { name: duo.scorer?.name || t('seasonRecap.common.unknown') })}</p>
+                        </div>
+                      </div>
+                      <div className="bg-rose-500 px-3 py-1.5 rounded-full border border-rose-300">
+                        <AnimatedNumber value={duo.count || 0} className="text-lg font-bold text-white" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <>
+                <div className="flex -space-x-4 mb-4">
+                  <div className="relative">
+                    <div className="absolute -inset-2 bg-rose-400/20 rounded-full blur-xl" />
+                    <InitialAvatar
+                      id={topDuoLeaders[0]?.assist?.id}
+                      name={topDuoLeaders[0]?.assist?.name || t('seasonRecap.common.unknown')}
+                      photoUrl={topDuoLeaders[0]?.assist?.photoUrl}
+                      size={80}
+                      className="border-2 border-rose-300 shadow-xl relative"
+                    />
+                  </div>
+                  <div className="relative">
+                    <div className="absolute -inset-2 bg-rose-400/20 rounded-full blur-xl" />
+                    <InitialAvatar
+                      id={topDuoLeaders[0]?.scorer?.id}
+                      name={topDuoLeaders[0]?.scorer?.name || t('seasonRecap.common.unknown')}
+                      photoUrl={topDuoLeaders[0]?.scorer?.photoUrl}
+                      size={80}
+                      className="border-2 border-rose-300 shadow-xl relative"
+                    />
+                  </div>
+                </div>
+                <div className="bg-black/60 px-4 py-2 rounded-xl mb-2">
+                  <h1 className="text-xl font-black text-white">
+                    {topDuoLeaders[0]?.assist?.name || t('seasonRecap.common.unknown')} {t('seasonRecap.champions.duoTo', { name: topDuoLeaders[0]?.scorer?.name || t('seasonRecap.common.unknown') })}
+                  </h1>
+                </div>
+                <div className="bg-rose-500 px-4 py-1.5 rounded-full border border-rose-300">
+                  <AnimatedNumber value={topDuoLeaders[0]?.count || 0} className="text-xl font-bold text-white" />
+                  <span className="text-xs text-white/90 ml-1.5 uppercase">{t('seasonRecap.metrics.goals')}</span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'draft-player-award',
+      content: (
+        <div className="relative h-full w-full overflow-hidden">
+          <VideoBackground
+            src={RECAP_DRAFT_PLAYER_VIDEO}
+            overlayClass=""
+          />
+          <div className="relative z-10 flex flex-col items-center justify-center h-full text-center p-4">
+            <div className="bg-black/60 px-6 py-3 rounded-xl mb-3">
+              <Gamepad2 className="w-14 h-14 text-sky-300 mb-2 mx-auto drop-shadow-[0_0_15px_rgba(125,211,252,0.5)]" />
+              <h2 className="text-lg font-bold text-white">{t('seasonRecap.slides.draftPlayer.title')}</h2>
+              <h3 className="text-sm text-white/80">{t('seasonRecap.slides.draftPlayer.subtitle')}</h3>
+            </div>
+
+            {renderTieHero(topDraftPlayerLeaders, 'value')}
+            {(!Array.isArray(topDraftPlayerLeaders) || topDraftPlayerLeaders.length <= 1) && (
+              <>
+                <div className="relative mb-3">
+                  <div className="absolute -inset-2 bg-sky-400/20 rounded-full blur-xl" />
+                  <InitialAvatar
+                    id={safePrimary(topDraftPlayerLeaders).id}
+                    name={safePrimary(topDraftPlayerLeaders).name || t('seasonRecap.common.unknown')}
+                    photoUrl={safePrimary(topDraftPlayerLeaders).photoUrl}
+                    size={80}
+                    className="border-2 border-sky-300 shadow-xl"
+                  />
+                </div>
+                <h1 className="text-2xl font-black text-white mb-2 bg-black/60 px-4 py-2 rounded-xl">{safePrimary(topDraftPlayerLeaders).name || t('seasonRecap.common.unknown')}</h1>
+              </>
+            )}
+            <div className="bg-sky-500 px-4 py-1.5 rounded-full border border-sky-300">
+              <AnimatedNumber value={safePrimary(topDraftPlayerLeaders).value} className="text-xl font-bold text-white" />
+              <span className="text-xs text-white/90 ml-1.5 uppercase">{t('seasonRecap.metrics.points')}</span>
+            </div>
+          </div>
+        </div>
+      )
+    },
+    {
+      id: 'captain-award',
+      content: (
+        <div className="relative h-full w-full overflow-hidden">
+          <VideoBackground
+            src={RECAP_CAPTAIN_VIDEO}
+            overlayClass=""
+          />
+          <div className="relative z-10 flex flex-col items-center justify-center h-full text-center p-4">
+            <div className="bg-black/60 px-6 py-3 rounded-xl mb-3">
+              <Shield className="w-14 h-14 text-emerald-300 mb-2 mx-auto drop-shadow-[0_0_15px_rgba(110,231,183,0.5)]" />
+              <h2 className="text-lg font-bold text-white">{t('seasonRecap.slides.captain.title')}</h2>
+              <h3 className="text-sm text-white/80">{t('seasonRecap.slides.captain.subtitle')}</h3>
+            </div>
+
+            {renderTieHero(topDraftCaptainLeaders, 'value')}
+            {(!Array.isArray(topDraftCaptainLeaders) || topDraftCaptainLeaders.length <= 1) && (
+              <>
+                <div className="relative mb-3">
+                  <div className="absolute -inset-2 bg-emerald-400/20 rounded-full blur-xl" />
+                  <InitialAvatar
+                    id={safePrimary(topDraftCaptainLeaders).id}
+                    name={safePrimary(topDraftCaptainLeaders).name || t('seasonRecap.common.unknown')}
+                    photoUrl={safePrimary(topDraftCaptainLeaders).photoUrl}
+                    size={80}
+                    className="border-2 border-emerald-300 shadow-xl"
+                  />
+                </div>
+                <h1 className="text-2xl font-black text-white mb-2 bg-black/60 px-4 py-2 rounded-xl">{safePrimary(topDraftCaptainLeaders).name || t('seasonRecap.common.unknown')}</h1>
+              </>
+            )}
+            <div className="bg-emerald-500 px-4 py-1.5 rounded-full border border-emerald-300">
+              <AnimatedNumber value={safePrimary(topDraftCaptainLeaders).value} className="text-xl font-bold text-white" />
+              <span className="text-xs text-white/90 ml-1.5 uppercase">{t('seasonRecap.metrics.points')}</span>
+            </div>
+          </div>
+        </div>
+      )
+    },
     {
       id: 'stories',
       content: (
