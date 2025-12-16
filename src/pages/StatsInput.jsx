@@ -1619,7 +1619,7 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
                               })()}
                               photoUrl={p.photoUrl}
                             />
-                            <div className="min-w-0 flex-1 overflow-x-auto scrollbar-hide">
+                            <div className="min-w-0 max-w-[70px] overflow-x-auto scrollbar-hide">
                               <div className="font-semibold text-sm text-gray-800 whitespace-nowrap" title={p.name}>{p.name}</div>
                               {(p.position || p.pos) && (
                                 <div className="text-[11px] text-gray-500 whitespace-nowrap">{p.position || p.pos}</div>
