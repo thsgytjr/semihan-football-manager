@@ -24,7 +24,7 @@ import { updateMatchInDB } from '../services/matches.service'
 import { isMember } from '../lib/fees'
 import { DollarSign, Users, Calendar, TrendingUp, Plus, X, Check, AlertCircle, RefreshCw, Trash2, ArrowUpDown, Download, Search, ChevronDown, ChevronUp } from 'lucide-react'
 import InitialAvatar from '../components/InitialAvatar'
-import { listMatchesFromDB } from '../services/matches.service'
+import { listMatchesFromDB, deleteMatchFromDB } from '../services/matches.service'
 import { getAccountingOverrides, updateAccountingOverrides } from '../lib/appSettings'
 import { calculateMatchFees, calculatePlayerMatchFee } from '../lib/matchFeeCalculator'
 import * as XLSX from 'xlsx'
@@ -2888,6 +2888,7 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
   const [savingOverride, setSavingOverride] = useState(false)
   const [isCollapsed, setIsCollapsed] = useState(true)
   const [voidDialogState, setVoidDialogState] = useState({ open: false, reason: '', processing: false })
+  const [deleteDialogState, setDeleteDialogState] = useState({ open: false, processing: false })
   const [selectedPlayers, setSelectedPlayers] = useState(new Set())
   const [bulkProcessing, setBulkProcessing] = useState(false)
   const VOID_ACTION_MESSAGE = 'VOID 처리된 매치는 개요 탭에서 복구하기 전까지 조정할 수 없습니다'
@@ -2982,6 +2983,20 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
       if (onSync) await onSync()
     } catch {
       notify('복구 실패')
+    }
+  }
+
+  const handleDeleteMatch = async () => {
+    if (deleteDialogState.processing) return
+    setDeleteDialogState(prev => ({ ...prev, processing: true }))
+    try {
+      await deleteMatchFromDB(match.id)
+      notify('매치가 완전히 삭제되었습니다 ✅')
+      if (onSync) await onSync()
+    } catch {
+      notify('삭제 실패')
+    } finally {
+      setDeleteDialogState({ open: false, processing: false })
     }
   }
 
@@ -3096,20 +3111,32 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
 
   return (
     <div className={`border rounded-lg p-4 relative ${isVoided ? 'border-red-200 bg-red-50/40' : ''}`}>
-      <button
-        onClick={() => {
-          if (isVoided) {
-            handleRestoreMatch()
-          } else {
-            setVoidDialogState({ open: true, reason: match.voidReason || '', processing: false })
-          }
-        }}
-        className={`absolute -top-4 -right-4 inline-flex items-center gap-1 px-3 py-1 rounded-full border shadow-sm text-[11px] font-medium transition-colors ${isVoided ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'}`}
-        title={isVoided ? 'VOID 복구' : 'VOID 처리'}
-      >
-        {isVoided ? <RefreshCw size={14} /> : <AlertCircle size={14} />}
-        <span>{isVoided ? 'VOID 복구' : 'VOID 처리'}</span>
-      </button>
+      <div className="absolute -top-4 -right-4 flex items-center gap-2">
+        {isVoided && (
+          <button
+            onClick={() => setDeleteDialogState({ open: true, processing: false })}
+            className="inline-flex items-center gap-1 px-3 py-1 rounded-full border shadow-sm text-[11px] font-medium transition-colors bg-red-600 text-white border-red-700 hover:bg-red-700"
+            title="매치 삭제"
+          >
+            <Trash2 size={14} />
+            <span>삭제</span>
+          </button>
+        )}
+        <button
+          onClick={() => {
+            if (isVoided) {
+              handleRestoreMatch()
+            } else {
+              setVoidDialogState({ open: true, reason: match.voidReason || '', processing: false })
+            }
+          }}
+          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full border shadow-sm text-[11px] font-medium transition-colors ${isVoided ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' : 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'}`}
+          title={isVoided ? 'VOID 복구' : 'VOID 처리'}
+        >
+          {isVoided ? <RefreshCw size={14} /> : <AlertCircle size={14} />}
+          <span>{isVoided ? 'VOID 복구' : 'VOID 처리'}</span>
+        </button>
+      </div>
 
       <div className="flex items-center justify-between mb-3">
         <div className="flex-1">
@@ -3459,6 +3486,18 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
           </p>
         </div>
       </ConfirmDialog>
+
+      {/* 매치 삭제 확인 다이얼로그 */}
+      <ConfirmDialog
+        open={deleteDialogState.open}
+        title="VOID 매치 삭제"
+        message="이 매치를 완전히 삭제하시겠습니까?\n삭제하면 데이터베이스에서 영구적으로 제거되며 복구할 수 없습니다."
+        confirmLabel={deleteDialogState.processing ? '삭제 중...' : '삭제하기'}
+        cancelLabel="취소"
+        tone="danger"
+        onCancel={() => setDeleteDialogState({ open: false, processing: false })}
+        onConfirm={handleDeleteMatch}
+      />
     </div>
   )
 }
