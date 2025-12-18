@@ -175,6 +175,9 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   const [sheetData, setSheetData] = useState([])
   const [sheetInfo, setSheetInfo] = useState(null)
   const [loadingSheet, setLoadingSheet] = useState(false)
+  const [editingCell, setEditingCell] = useState(null) // {row, col}
+  const [editValue, setEditValue] = useState('')
+  const [savingCell, setSavingCell] = useState(false)
   const [showExpenseHistory, setShowExpenseHistory] = useState(false)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const [playerStats, setPlayerStats] = useState(null)
@@ -1988,16 +1991,17 @@ VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
                       </div>
                     </div>
 
-                    {/* 스프레드시트 테이블 */}
+                    {/* 스프레드시트 테이블 (편집 가능) */}
                     <div className="overflow-x-auto border border-gray-200 rounded-lg">
                       <div className="max-h-[600px] overflow-y-auto">
                         <table className="w-full text-sm">
                           <thead className="bg-gray-50 sticky top-0 z-10">
                             <tr>
+                              <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 border-b border-gray-200 w-12">#</th>
                               {sheetData[0]?.map((header, colIndex) => (
                                 <th
                                   key={colIndex}
-                                  className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-b border-gray-200 whitespace-nowrap"
+                                  className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-b border-gray-200 whitespace-nowrap min-w-[120px]"
                                 >
                                   {header || `열 ${colIndex + 1}`}
                                 </th>
@@ -2007,14 +2011,71 @@ VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
                           <tbody className="bg-white divide-y divide-gray-200">
                             {sheetData.slice(1).map((row, rowIndex) => (
                               <tr key={rowIndex} className="hover:bg-gray-50">
-                                {row.map((cell, colIndex) => (
-                                  <td
-                                    key={colIndex}
-                                    className="px-3 py-2 text-gray-700 border-b border-gray-100 whitespace-nowrap"
-                                  >
-                                    {cell}
-                                  </td>
-                                ))}
+                                <td className="px-3 py-2 text-center text-xs text-gray-500 border-b border-gray-100 bg-gray-50">
+                                  {rowIndex + 2}
+                                </td>
+                                {row.map((cell, colIndex) => {
+                                  const isEditing = editingCell?.row === rowIndex + 1 && editingCell?.col === colIndex
+                                  return (
+                                    <td
+                                      key={colIndex}
+                                      className="px-0 py-0 border-b border-gray-100"
+                                      onClick={() => {
+                                        if (!isEditing) {
+                                          setEditingCell({ row: rowIndex + 1, col: colIndex })
+                                          setEditValue(cell || '')
+                                        }
+                                      }}
+                                    >
+                                      {isEditing ? (
+                                        <input
+                                          type="text"
+                                          value={editValue}
+                                          onChange={(e) => setEditValue(e.target.value)}
+                                          onBlur={async () => {
+                                            if (editValue !== cell) {
+                                              setSavingCell(true)
+                                              try {
+                                                const spreadsheetId = extractSpreadsheetId(spreadsheetUrl)
+                                                const columnLetter = String.fromCharCode(65 + colIndex)
+                                                const range = `Sheet1!${columnLetter}${rowIndex + 2}`
+                                                
+                                                await saveSheetData(spreadsheetId, range, [[editValue]])
+                                                
+                                                // 로컬 데이터 업데이트
+                                                const newData = [...sheetData]
+                                                newData[rowIndex + 1][colIndex] = editValue
+                                                setSheetData(newData)
+                                                
+                                                notify('저장 완료', 'success')
+                                              } catch (err) {
+                                                console.error('[AccountingPage] 셀 저장 실패:', err)
+                                                notify('저장 실패: ' + err.message, 'error')
+                                              } finally {
+                                                setSavingCell(false)
+                                              }
+                                            }
+                                            setEditingCell(null)
+                                          }}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                              e.target.blur()
+                                            } else if (e.key === 'Escape') {
+                                              setEditValue(cell || '')
+                                              setEditingCell(null)
+                                            }
+                                          }}
+                                          autoFocus
+                                          className="w-full px-3 py-2 border-2 border-blue-500 focus:outline-none"
+                                        />
+                                      ) : (
+                                        <div className="px-3 py-2 text-gray-700 cursor-pointer hover:bg-blue-50 min-h-[36px]">
+                                          {cell}
+                                        </div>
+                                      )}
+                                    </td>
+                                  )
+                                })}
                               </tr>
                             ))}
                           </tbody>
@@ -2023,15 +2084,15 @@ VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
                     </div>
 
                     {/* 하단 안내 */}
-                    <div className="text-xs text-gray-500 bg-blue-50 p-3 rounded-lg border border-blue-200">
+                    <div className="text-xs text-gray-500 bg-green-50 p-3 rounded-lg border border-green-200">
                       <div className="flex items-start gap-2">
-                        <AlertCircle size={14} className="mt-0.5 flex-shrink-0 text-blue-600" />
+                        <Check size={14} className="mt-0.5 flex-shrink-0 text-green-600" />
                         <div>
-                          <p className="font-semibold text-blue-900 mb-1">스프레드시트 편집 방법</p>
-                          <ul className="space-y-1 text-blue-800">
-                            <li>• <strong>읽기 전용</strong>: 이 화면에서는 데이터를 확인만 할 수 있습니다</li>
-                            <li>• <strong>편집/저장</strong>: "Google Sheets에서 열기" 버튼을 눌러 원본 시트에서 수정하세요</li>
-                            <li>• <strong>동기화</strong>: 수정 후 "새로고침" 버튼을 눌러 최신 데이터를 가져오세요</li>
+                          <p className="font-semibold text-green-900 mb-1">앱 내 편집 가능</p>
+                          <ul className="space-y-1 text-green-800">
+                            <li>• <strong>셀 클릭</strong>: 셀을 클릭하여 즉시 편집</li>
+                            <li>• <strong>Enter</strong>: 저장 / <strong>Esc</strong>: 취소</li>
+                            <li>• <strong>자동 저장</strong>: 포커스를 벗어나면 Google Sheets에 즉시 반영됩니다</li>
                           </ul>
                         </div>
                       </div>
