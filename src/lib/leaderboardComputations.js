@@ -796,7 +796,8 @@ export function computeDraftPlayerStatsRows(players = [], matches = []) {
     .sort((a, b) => extractMatchTS(a) - extractMatchTS(b))
   
   for (const m of validMatches) {
-    const qs = coerceQuarterScores(m)
+    const qs = coerceQuarterScores(m) || []
+    if (!Array.isArray(qs) || qs.length === 0) continue
     const gameMatchups = m?.gameMatchups || null
     const teamCount = qs.length
     const teams = extractSnapshotTeams(m)
@@ -1064,7 +1065,8 @@ export function computeCaptainStatsRows(players = [], matches = []) {
     .sort((a, b) => extractMatchTS(a) - extractMatchTS(b))
   
   for (const m of validMatches) {
-    const qs = coerceQuarterScores(m)
+    const qs = coerceQuarterScores(m) || []
+    if (!Array.isArray(qs) || qs.length === 0) continue
     const gameMatchups = m?.gameMatchups || null
     const teamCount = qs.length
     const caps = extractCaptainsByTeam(m)

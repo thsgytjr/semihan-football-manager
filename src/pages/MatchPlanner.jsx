@@ -382,8 +382,8 @@ export default function MatchPlanner({
     }
     
     const dateISOFormatted = dateISO && dateISO.length >= 16 
-      ? dateISO.slice(0,16)
-      : getCurrentLocalDateTime()
+      ? localDateTimeToISO(dateISO.slice(0,16))
+      : localDateTimeToISO(getCurrentLocalDateTime())
     
     const payload={
       ...mkMatch({
@@ -411,15 +411,20 @@ export default function MatchPlanner({
     if(!onSaveUpcomingMatch){notify('예정 매치 저장 기능이 없습니다.');return}
     if(isPastDate){ return }
     
+    // 가장 최신 팀 상태 사용: 수동 배정(latestTeamsRef/ manualTeams) 우선, 없으면 previewTeams
+    const currentTeams = (latestTeamsRef.current && latestTeamsRef.current.length)
+      ? latestTeamsRef.current
+      : (manualTeams ?? previewTeams)
+    
     // 실제로 팀에 배정된 선수들의 ID 목록 가져오기
-    const assignedPlayerIds = previewTeams.flat().map(p => p.id)
+    const assignedPlayerIds = currentTeams.flat().map(p => p.id)
     
     if (assignedPlayerIds.length === 0) {
       notify('참가자를 먼저 선택해주세요.');return
     }
 
     // 팀 구성 스냅샷 저장 (선수 ID 배열)
-    const teamsSnapshot = previewTeams.map(team => team.map(p => p.id))
+    const teamsSnapshot = currentTeams.map(team => team.map(p => p.id))
 
     // 날짜 문자열을 타임존 정보와 함께 ISO 형식으로 변환
   const dateISOFormatted = dateISO && dateISO.length >= 16 

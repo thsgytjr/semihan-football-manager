@@ -8,30 +8,19 @@
  */
 export function localDateTimeToISO(localDateTimeString) {
   if (!localDateTimeString) return null
-  
-  // 이미 초와 타임존 정보가 있으면 그대로 반환
+
+  // 이미 초/타임존 정보가 있으면 그대로 사용
   if (localDateTimeString.includes('+') || localDateTimeString.includes('Z')) {
     return localDateTimeString
   }
-  
-  // YYYY-MM-DDTHH:mm 형식을 Date 객체로 변환 (로컬 시간으로 해석)
-  const date = new Date(localDateTimeString)
-  
-  // 타임존 오프셋 계산 (분 단위)
-  const offset = -date.getTimezoneOffset()
-  const offsetHours = Math.floor(Math.abs(offset) / 60).toString().padStart(2, '0')
-  const offsetMinutes = (Math.abs(offset) % 60).toString().padStart(2, '0')
-  const offsetSign = offset >= 0 ? '+' : '-'
-  
-  // ISO 형식으로 변환 (타임존 정보 포함)
-  const year = date.getFullYear()
-  const month = (date.getMonth() + 1).toString().padStart(2, '0')
-  const day = date.getDate().toString().padStart(2, '0')
-  const hours = date.getHours().toString().padStart(2, '0')
-  const minutes = date.getMinutes().toString().padStart(2, '0')
-  const seconds = date.getSeconds().toString().padStart(2, '0')
-  
-  return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offsetSign}${offsetHours}:${offsetMinutes}`
+
+  // 순수 로컬 문자열을 그대로 보존하되, TZ 오프셋을 환경에 의존하지 않도록 UTC(Z)로 표기
+  // 예: "2025-12-18T19:00" -> "2025-12-18T19:00:00Z"
+  const parts = localDateTimeString.split('T')
+  if (parts.length !== 2) return null
+  const [datePart, timePartRaw] = parts
+  const timePart = timePartRaw.length === 5 ? `${timePartRaw}:00` : timePartRaw
+  return `${datePart}T${timePart}Z`
 }
 
 /**

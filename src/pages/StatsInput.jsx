@@ -186,6 +186,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
 
   const [bulkText, setBulkText] = useState('')
   const [bulkMsg, setBulkMsg] = useState('')
+  const [bulkAppliedPlayers, setBulkAppliedPlayers] = useState([]) // 벌크 적용된 선수 목록
   const [sectionTab, setSectionTab] = useState('manual') // bulk | manual | mom
   const [statsTab, setStatsTab] = useState('attack') // attack | defense | discipline
   const [showSaved, setShowSaved] = useState(false)
@@ -394,7 +395,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
 
   function isStrictLine(line) {
     if (!line) return false
-    return /^\s*\[[^\]]+\]\s*(?:goal|assist|goal\s*:\s*assist)\s*\[[^\]]+\]\s*$/i.test(line)
+    return /^\s*\[[^\]]+\]\s*(?:goal|assist|goal\s*:\s*assist|cleansheet)\s*\[[^\]]+\]\s*$/i.test(line)
   }
 
   // Smart name normalization: removes content in parentheses
@@ -410,13 +411,16 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     const attendeeIds = new Set(extractAttendeeIds(editingMatch))
     const roster = players.filter(p => attendeeIds.has(toStr(p.id)))
     
-    // Build name mapping with normalized names
+    // Build name mapping with normalized names and store the actual name to use
     const nameMap = new Map()
     roster.forEach(p => {
       const fullName = String((p.name || '').trim())
       const normalized = normalizePlayerName(fullName)
-      nameMap.set(fullName, p) // exact match
-      nameMap.set(normalized, p) // normalized match
+      // Store multiple keys pointing to the normalized name
+      nameMap.set(fullName, normalized) // exact match
+      nameMap.set(normalized, normalized) // normalized match
+      nameMap.set(fullName.toLowerCase(), normalized) // case-insensitive exact
+      nameMap.set(normalized.toLowerCase(), normalized) // case-insensitive normalized
     })
 
     for (const line of lines) {
@@ -433,15 +437,13 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
         const raw = String(namesField || '').trim()
         
         // Try exact match first
-        if (nameMap.has(raw)) {
-          out.push({ date: dt, type: 'goals', name: raw })
-          continue
-        }
-
-        // Try normalized match
-        const normalizedRaw = normalizePlayerName(raw)
-        if (nameMap.has(normalizedRaw)) {
-          out.push({ date: dt, type: 'goals', name: normalizedRaw })
+        const singleMatch = nameMap.get(raw) 
+          || nameMap.get(normalizePlayerName(raw))
+          || nameMap.get(raw.toLowerCase())
+          || nameMap.get(normalizePlayerName(raw).toLowerCase())
+        
+        if (singleMatch) {
+          out.push({ date: dt, type: 'goals', name: singleMatch })
           continue
         }
 
@@ -454,12 +456,17 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
           const leftNorm = normalizePlayerName(left)
           const rightNorm = normalizePlayerName(right)
           
-          const leftMatch = nameMap.has(left) || nameMap.has(leftNorm)
-          const rightMatch = nameMap.has(right) || nameMap.has(rightNorm)
+          const leftName = nameMap.get(left)
+            || nameMap.get(leftNorm)
+            || nameMap.get(left.toLowerCase())
+            || nameMap.get(leftNorm.toLowerCase())
           
-          if (leftMatch && rightMatch) {
-            const leftName = nameMap.has(left) ? left : leftNorm
-            const rightName = nameMap.has(right) ? right : rightNorm
+          const rightName = nameMap.get(right)
+            || nameMap.get(rightNorm)
+            || nameMap.get(right.toLowerCase())
+            || nameMap.get(rightNorm.toLowerCase())
+          
+          if (leftName && rightName) {
             foundSplits.push([leftName, rightName])
           }
         }
@@ -473,13 +480,68 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
         let type = null
         if (/\bgoal\b/i.test(betweenMatch)) type = 'goals'
         else if (/\bassist\b/i.test(betweenMatch)) type = 'assists'
+        else if (/\bcleansheet\b/i.test(betweenMatch)) type = 'cleansheet'
         if (!type || !namesField) return []
         
-        const inputName = String(namesField).trim()
-        const normalized = normalizePlayerName(inputName)
-        const finalName = nameMap.has(inputName) ? inputName : (nameMap.has(normalized) ? normalized : inputName)
-        
-        out.push({ date: dt, type, name: finalName })
+        // cleansheet의 경우 여러 선수 이름을 공백으로 구분하여 처리
+        // goal:assist와 동일한 로직 사용: 재귀적으로 모든 조합 시도
+        if (type === 'cleansheet') {
+          const raw = String(namesField || '').trim()
+          const tokens = raw.split(/\s+/).filter(Boolean)
+          
+          // Helper function to find best split for multiple names
+          function findPlayerSplits(tokens, startIdx = 0) {
+            if (startIdx >= tokens.length) return { success: true, players: [], unmatched: [] }
+            
+            // Try matching from 1 to remaining length
+            for (let len = Math.min(4, tokens.length - startIdx); len >= 1; len--) {
+              const candidate = tokens.slice(startIdx, startIdx + len).join(' ')
+              const normalized = normalizePlayerName(candidate)
+              
+              const matchedName = nameMap.get(candidate)
+                || nameMap.get(normalized)
+                || nameMap.get(candidate.toLowerCase())
+                || nameMap.get(normalized.toLowerCase())
+              
+              if (matchedName) {
+                // Found a match, try to match the rest
+                const rest = findPlayerSplits(tokens, startIdx + len)
+                if (rest.success) {
+                  return { success: true, players: [matchedName, ...rest.players], unmatched: [] }
+                }
+              }
+            }
+            
+            // No valid split found from this position
+            return { success: false, players: [], unmatched: tokens.slice(startIdx) }
+          }
+          
+          const result = findPlayerSplits(tokens)
+          
+          if (result.success && result.players.length > 0) {
+            // All names matched successfully
+            result.players.forEach(name => {
+              out.push({ date: dt, type: 'cleansheet', name })
+            })
+          } else {
+            // Error: some names couldn't be matched
+            out.push({ date: dt, type: 'cleansheet_error', raw, unmatchedTokens: result.unmatched })
+          }
+        } else {
+          const inputName = String(namesField).trim()
+          const normalized = normalizePlayerName(inputName)
+          const inputLower = inputName.toLowerCase()
+          const normalizedLower = normalized.toLowerCase()
+          
+          // Try all variations to get the normalized name
+          const finalName = nameMap.get(inputName)
+            || nameMap.get(normalized)
+            || nameMap.get(inputLower)
+            || nameMap.get(normalizedLower)
+            || inputName // fallback to original if no match
+          
+          out.push({ date: dt, type, name: finalName })
+        }
       }
     }
     return out
@@ -487,17 +549,34 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
 
   async function applyBulkToDraft() {
     setBulkMsg('')
+    
+    // Check if this is a referee mode match
+    if (hasRefereeTimeline) {
+      setBulkMsg('❌ 심판 모드로 기록된 경기는 벌크 입력을 사용할 수 없습니다. 수동 입력 탭에서 직접 수정하거나 심판 모드를 다시 실행해주세요.')
+      return
+    }
+    
     if (!bulkText.trim()) { setBulkMsg('붙여넣을 데이터가 비어 있습니다.'); return }
     
     const rawLines = String(bulkText || '').split(/\r?\n/).map(l => l.trim()).filter(Boolean)
     const bad = rawLines.filter(l => !isStrictLine(l))
     if (bad.length > 0) {
-      setBulkMsg('모든 줄이 [date]goal[name] 또는 [date]assist[name] 형식이어야 합니다. 오류 예시: ' + (bad.slice(0, 3).join('; ')))
+      setBulkMsg('모든 줄이 [date]goal[name], [date]assist[name], 또는 [date]cleansheet[name1 name2] 형식이어야 합니다. 오류 예시: ' + (bad.slice(0, 3).join('; ')))
       return
     }
 
     const parsed = parseBulkLines(bulkText)
     if (parsed.length === 0) { setBulkMsg('파싱된 항목이 없습니다. 형식을 확인해 주세요.'); return }
+
+    const cleansheetErrors = parsed.filter(p => p.type === 'cleansheet_error')
+    if (cleansheetErrors.length > 0) {
+      const errorDetails = cleansheetErrors.map(e => {
+        const unmatched = (e.unmatchedTokens || []).join(', ')
+        return `"${e.raw}" 중 매칭 안됨: [${unmatched}]`
+      }).join(' | ')
+      setBulkMsg(`❌ 클린시트 입력에 일치하지 않는 선수명이 있습니다: ${errorDetails}`)
+      return
+    }
 
     const ambiguous = parsed.filter(p => p.type === 'ambiguous')
     if (ambiguous.length > 0) {
@@ -599,13 +678,15 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       const player = nameMap.get(key)
       if (!player) { unmatched.push(item.name); continue }
       const pid = player.id
-      const cur = deltas.get(pid) || { goals: 0, assists: 0, events: [] }
+      const cur = deltas.get(pid) || { goals: 0, assists: 0, events: [], cleanSheet: 0 }
       if (item.type === 'goals' || item.type === 'goal') {
         cur.goals = (cur.goals || 0) + 1
         cur.events.push({ type: 'goal', date: item.date.toISOString() })
       } else if (item.type === 'assists' || item.type === 'assist') {
         cur.assists = (cur.assists || 0) + 1
         cur.events.push({ type: 'assist', date: item.date.toISOString() })
+      } else if (item.type === 'cleansheet') {
+        cur.cleanSheet = (cur.cleanSheet || 0) + 1
       }
       deltas.set(pid, cur)
     }
@@ -622,9 +703,11 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
 
     setDraft(prev => {
       const next = { ...(prev || {}) }
+      let skippedDuplicates = 0
+      
       for (const [pid, delta] of deltas.entries()) {
         const k = toStr(pid)
-        const now = next[k] || { goals: 0, assists: 0, events: [] }
+        const now = next[k] || { goals: 0, assists: 0, events: [], cleanSheet: 0 }
         const events = Array.isArray(now.events) ? now.events.slice() : []
 
         const eventKey = (e) => {
@@ -635,6 +718,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
         }
         const existingEventKeys = new Set(events.map(eventKey))
 
+        let addedEvents = 0
         for (const e of (delta.events || [])) {
           const key = eventKey(e)
           if (!existingEventKeys.has(key)) {
@@ -643,22 +727,43 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
             if (e.linkedToGoal) toPush.linkedToGoal = toStr(e.linkedToGoal)
             events.push(toPush)
             existingEventKeys.add(key)
+            addedEvents++
+          } else {
+            skippedDuplicates++
           }
         }
 
         const goalCount = events.filter(e => e.type === 'goal').length
         const assistCount = events.filter(e => e.type === 'assist').length
+        
+        // cleanSheet는 중복 방지: 기존 값 유지하고 delta가 있을 때만 증가
+        const cleanSheetCount = delta.cleanSheet > 0 ? (now.cleanSheet || 0) + delta.cleanSheet : (now.cleanSheet || 0)
 
-        next[k] = { goals: goalCount, assists: assistCount, events }
+        next[k] = { goals: goalCount, assists: assistCount, events, cleanSheet: cleanSheetCount }
       }
+      
+      if (skippedDuplicates > 0) {
+        setBulkMsg(`⚠️ ${skippedDuplicates}개의 중복 기록은 건너뛰었습니다. 나머지는 초안에 적용되었습니다.`)
+      }
+      
       return next
     })
 
-    const playerNames = Array.from(deltas.keys()).map(pid => {
+    const appliedPlayers = Array.from(deltas.keys()).map(pid => {
       const p = players.find(x => toStr(x.id) === toStr(pid))
-      return p ? p.name : ''
-    }).filter(Boolean).slice(0, 5)
+      if (!p) return null
+      const deltaStats = deltas.get(pid)
+      return {
+        ...p,
+        appliedGoals: deltaStats.goals || 0,
+        appliedAssists: deltaStats.assists || 0,
+        appliedCleanSheet: deltaStats.cleanSheet || 0
+      }
+    }).filter(Boolean)
+    
+    setBulkAppliedPlayers(appliedPlayers)
 
+    const playerNames = appliedPlayers.map(p => p.name).slice(0, 5)
     const switchSuffix = willSwitchMatch ? ' (붙여넣은 날짜에 맞춰 경기 탭을 자동으로 전환했습니다)' : ''
     setBulkMsg(`✅ 초안에 적용 완료: ${deltas.size}명 (${playerNames.join(', ')}${deltas.size > 5 ? ' 외' : ''})${switchSuffix} - 아래 "💾 저장하기" 버튼을 눌러주세요!`)
   }
@@ -859,11 +964,11 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
 
   // Generate dynamic placeholder examples based on roster
   const bulkPlaceholder = useMemo(() => {
-    if (!editingMatch) return "예시:\n[11/08/2025 9:07AM]goal:assist[득점자 도움자]\n[11/08/2025 9:16AM]goal[득점자]\n[11/08/2025 8:05AM]assist[도움자]"
+    if (!editingMatch) return "예시:\n[11/08/2025 9:07AM]goal:assist[득점자 도움자]\n[11/08/2025 9:16AM]goal[득점자]\n[11/08/2025 8:05AM]assist[도움자]\n[11/13/2025 9:16AM]cleansheet[김철수 김영희]"
     
     const attendeeIds = new Set(extractAttendeeIds(editingMatch))
     const roster = players.filter(p => attendeeIds.has(toStr(p.id)))
-    if (roster.length === 0) return "예시:\n[11/08/2025 9:07AM]goal:assist[득점자 도움자]\n[11/08/2025 9:16AM]goal[득점자]\n[11/08/2025 8:05AM]assist[도움자]"
+    if (roster.length === 0) return "예시:\n[11/08/2025 9:07AM]goal:assist[득점자 도움자]\n[11/08/2025 9:16AM]goal[득점자]\n[11/08/2025 8:05AM]assist[도움자]\n[11/13/2025 9:16AM]cleansheet[김철수 김영희]"
 
     // Find examples: one with parentheses (complex), one without (simple)
     const withParens = roster.find(p => /\([^)]+\)/.test(p.name))
@@ -885,8 +990,12 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
       const third = roster[2] || anyPlayer
       examples.push(`[${dateStr} 8:05AM]assist[${third.name}]`)
     }
+    if (roster.length >= 2) {
+      const defenders = roster.slice(0, 2)
+      examples.push(`[${dateStr} 9:16AM]cleansheet[${defenders.map(p => p.name).join(' ')}]`)
+    }
 
-    return examples.length > 0 ? `예시:\n${examples.join('\n')}` : "예시:\n[11/08/2025 9:07AM]goal:assist[득점자 도움자]"
+    return examples.length > 0 ? `예시:\n${examples.join('\n')}` : "예시:\n[11/08/2025 9:07AM]goal:assist[득점자 도움자]\n[11/13/2025 9:16AM]cleansheet[김철수 김영희]"
   }, [editingMatch, players])
 
   if (!isAdmin) {
@@ -988,11 +1097,30 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
 
             {/* Bulk Input Section */}
             {sectionTab === 'bulk' && (
-              <div className="mb-4 p-4 bg-gradient-to-br from-amber-50 to-orange-50 rounded-lg border-2 border-amber-200 shadow-sm">
+              <div className={`mb-4 p-4 bg-gradient-to-br rounded-lg border-2 shadow-sm ${
+                hasRefereeTimeline 
+                  ? 'from-gray-100 to-gray-200 border-gray-300' 
+                  : 'from-amber-50 to-orange-50 border-amber-200'
+              }`}>
+                {hasRefereeTimeline && (
+                  <div className="mb-3 p-3 bg-red-50 border-2 border-red-200 rounded-lg">
+                    <div className="flex items-center gap-2 text-red-800">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      <span className="text-sm font-bold">심판 모드 경기는 벌크 입력을 사용할 수 없습니다</span>
+                    </div>
+                    <p className="text-xs text-red-700 mt-1 ml-7">
+                      심판 모드로 기록된 경기는 타임라인 데이터와 충돌할 수 있습니다. 수동 입력 탭에서 직접 수정하거나 심판 모드를 다시 실행해주세요.
+                    </p>
+                  </div>
+                )}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">📋</span>
-                    <label className="text-sm font-bold text-gray-800">Bulk 입력 (빠른 입력)</label>
+                    <label className={`text-sm font-bold ${hasRefereeTimeline ? 'text-gray-500' : 'text-gray-800'}`}>
+                      Bulk 입력 (빠른 입력)
+                    </label>
                   </div>
                   <div className="text-[11px] text-gray-500">붙여넣고 적용 → 수동 입력 탭에서 저장</div>
                 </div>
@@ -1000,36 +1128,130 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
                   value={bulkText}
                   onChange={e => setBulkText(e.target.value)}
                   placeholder={bulkPlaceholder}
-                  className="w-full h-32 rounded-lg border-2 border-amber-300 bg-white px-3 py-2 text-sm resize-vertical font-mono focus:border-amber-500 focus:ring-2 focus:ring-amber-200 transition-all"
+                  disabled={hasRefereeTimeline}
+                  className={`w-full h-32 rounded-lg border-2 px-3 py-2 text-sm resize-vertical font-mono transition-all ${
+                    hasRefereeTimeline
+                      ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'border-amber-300 bg-white focus:border-amber-500 focus:ring-2 focus:ring-amber-200'
+                  }`}
                 />
                 <div className="mt-2 space-y-2">
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={applyBulkToDraft}
-                      className="rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-md hover:shadow-lg transition-all"
+                      disabled={hasRefereeTimeline}
+                      className={`rounded-lg px-4 py-2 text-sm font-semibold shadow-md transition-all ${
+                        hasRefereeTimeline
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white hover:shadow-lg'
+                      }`}
                     >
                       ✨ 초안에 적용하기
                     </button>
-                    <button
-                      onClick={() => { setBulkText(''); setBulkMsg('') }}
-                      className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-3 py-2 text-sm font-medium transition-colors"
-                    >
-                      지우기
-                    </button>
+                    {bulkAppliedPlayers.length > 0 && (
+                      <button
+                        onClick={() => {
+                          // Remove applied records from draft
+                          setDraft(prev => {
+                            const next = { ...prev }
+                            bulkAppliedPlayers.forEach(player => {
+                              const pid = toStr(player.id)
+                              if (next[pid]) {
+                                const current = next[pid]
+                                // Remove the applied counts
+                                const newGoals = Math.max(0, (current.goals || 0) - (player.appliedGoals || 0))
+                                const newAssists = Math.max(0, (current.assists || 0) - (player.appliedAssists || 0))
+                                const newCleanSheet = Math.max(0, (current.cleanSheet || 0) - (player.appliedCleanSheet || 0))
+                                
+                                // Filter out events that were added by bulk (remove last N events)
+                                const events = Array.isArray(current.events) ? current.events.slice() : []
+                                const goalEventsToRemove = player.appliedGoals || 0
+                                const assistEventsToRemove = player.appliedAssists || 0
+                                
+                                // Remove last N goal events
+                                let removedGoals = 0
+                                for (let i = events.length - 1; i >= 0 && removedGoals < goalEventsToRemove; i--) {
+                                  if (events[i].type === 'goal') {
+                                    events.splice(i, 1)
+                                    removedGoals++
+                                  }
+                                }
+                                
+                                // Remove last N assist events
+                                let removedAssists = 0
+                                for (let i = events.length - 1; i >= 0 && removedAssists < assistEventsToRemove; i--) {
+                                  if (events[i].type === 'assist') {
+                                    events.splice(i, 1)
+                                    removedAssists++
+                                  }
+                                }
+                                
+                                next[pid] = {
+                                  goals: newGoals,
+                                  assists: newAssists,
+                                  events,
+                                  cleanSheet: newCleanSheet,
+                                  yellowCards: current.yellowCards || 0,
+                                  redCards: current.redCards || 0,
+                                  blackCards: current.blackCards || 0
+                                }
+                              }
+                            })
+                            return next
+                          })
+                          setBulkAppliedPlayers([])
+                          setBulkMsg('✅ 적용된 기록을 초안에서 제거했습니다.')
+                        }}
+                        className="rounded-lg border-2 border-red-300 bg-red-50 hover:bg-red-100 px-3 py-2 text-sm font-medium text-red-700 transition-colors"
+                      >
+                        초안 적용 취소
+                      </button>
+                    )}
                     <span className="text-[11px] text-gray-500">적용 후 수동 입력 탭에서 💾 저장하기</span>
                   </div>
                   {bulkMsg && (
                     <div className={`text-sm px-3 py-2 rounded-lg border-2 ${
                       bulkMsg.includes('✅') 
                         ? 'bg-green-50 border-green-300 text-green-800' 
+                        : bulkMsg.includes('⚠️')
+                        ? 'bg-yellow-50 border-yellow-300 text-yellow-800'
                         : 'bg-red-50 border-red-300 text-red-800'
                     }`}>
                       {bulkMsg}
                     </div>
                   )}
+                  
+                  {/* 벌크 적용된 선수 목록 표시 */}
+                  {bulkAppliedPlayers.length > 0 && (
+                    <div className="mt-3 p-3 bg-blue-50 border-2 border-blue-200 rounded-lg">
+                      <div className="text-xs font-bold text-blue-900 mb-2">적용된 선수 ({bulkAppliedPlayers.length}명)</div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                        {bulkAppliedPlayers.map(player => (
+                          <div key={player.id} className="flex items-center gap-2 bg-white rounded-lg p-2 border border-blue-100">
+                            <InitialAvatar 
+                              id={player.id} 
+                              name={player.name} 
+                              size={32} 
+                              photoUrl={player.photoUrl}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-semibold text-gray-900 truncate">{player.name}</div>
+                              <div className="text-[10px] text-gray-600 flex gap-2">
+                                {player.appliedGoals > 0 && <span>⚽ {player.appliedGoals}</span>}
+                                {player.appliedAssists > 0 && <span>🅰️ {player.appliedAssists}</span>}
+                                {player.appliedCleanSheet > 0 && <span>🧤 {player.appliedCleanSheet}</span>}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
                   <div className="space-y-1 text-xs text-gray-600 bg-white/60 rounded px-2 py-1">
                     <div>
                       💡 <strong>[날짜]goal:assist[득점자 도움자]</strong> 형식으로 입력하면 듀오가 자동 연결됩니다<br />
+                      💡 <strong>[날짜]cleansheet[선수1 선수2 선수3]</strong> 형식으로 여러 선수에게 클린시트 추가 가능<br />
                       💡 적용 후 <strong className="text-blue-700">수동 입력</strong> 탭에서 확인하고 <strong className="text-green-700">💾 저장하기</strong>
                     </div>
                     <div className="pt-1 border-t border-amber-200">
@@ -2354,6 +2576,8 @@ function GoalAssistLinkingPanel({ players, draft, setDraft, teams }) {
 
       <div className="mt-2 text-[10px] text-gray-600 bg-white rounded px-2 py-1">
         💡 <strong>Bulk 입력 시 자동 연결:</strong> [날짜]goal:assist[득점자 도움자] 형식은 자동으로 듀오 연결됩니다.
+        <br />
+        💡 <strong>클린시트 입력:</strong> [날짜]cleansheet[선수1 선수2 선수3] 형식으로 여러 선수에게 클린시트를 추가할 수 있습니다.
         <br />
         💡 <strong>수동 연결:</strong> 골과 어시스트를 각각 클릭하여 선택 후 "듀오 연결하기" 버튼을 누르세요.
         <br />
