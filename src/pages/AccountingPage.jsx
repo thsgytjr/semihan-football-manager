@@ -22,7 +22,7 @@ import {
 } from '../lib/accounting'
 import { updateMatchInDB } from '../services/matches.service'
 import { isMember } from '../lib/fees'
-import { DollarSign, Users, Calendar, TrendingUp, Plus, X, Check, AlertCircle, RefreshCw, Trash2, ArrowUpDown, Download, Search, ChevronDown, ChevronUp } from 'lucide-react'
+import { DollarSign, Users, Calendar, TrendingUp, Plus, X, Check, AlertCircle, RefreshCw, Trash2, ArrowUpDown, Download, Search, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 import InitialAvatar from '../components/InitialAvatar'
 import { initializeGapi, signIn, signOut, isSignedIn, getCurrentUser, onAuthChange, extractSpreadsheetId, loadSheetData, saveSheetData, getSpreadsheetInfo, isGapiInitialized } from '../services/googleSheets'
 import { listMatchesFromDB, deleteMatchFromDB } from '../services/matches.service'
@@ -1936,44 +1936,105 @@ VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
                     <p className="text-sm text-gray-600">스프레드시트를 불러오는 중...</p>
                   </div>
                 ) : sheetData && sheetInfo ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold text-gray-800">{sheetInfo.title}</h3>
-                      <button
-                        onClick={async () => {
-                          if (!spreadsheetUrl) {
-                            notify('스프레드시트 URL을 설정해주세요', 'warning')
-                            return
-                          }
-                          const spreadsheetId = extractSpreadsheetId(spreadsheetUrl)
-                          if (!spreadsheetId) {
-                            notify('유효하지 않은 스프레드시트 URL입니다', 'error')
-                            return
-                          }
-                          setLoadingSheet(true)
-                          try {
-                            const [info, data] = await Promise.all([
-                              getSpreadsheetInfo(spreadsheetId),
-                              loadSheetData(spreadsheetId, 'Sheet1!A1:Z1000')
-                            ])
-                            setSheetInfo(info)
-                            setSheetData(data)
-                            notify('새로고침 완료', 'success')
-                          } catch (err) {
-                            console.error('[AccountingPage] 새로고침 실패:', err)
-                            notify('새로고침 실패: ' + err.message, 'error')
-                          } finally {
-                            setLoadingSheet(false)
-                          }
-                        }}
-                        className="px-3 py-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
-                      >
-                        <RefreshCw size={14} />
-                        새로고침
-                      </button>
+                  <div className="space-y-4">
+                    {/* 헤더 */}
+                    <div className="flex items-center justify-between pb-3 border-b">
+                      <div>
+                        <h3 className="font-semibold text-gray-800">{sheetInfo.title}</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">{sheetData?.length || 0}개 행</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={async () => {
+                            if (!spreadsheetUrl) {
+                              notify('스프레드시트 URL을 설정해주세요', 'warning')
+                              return
+                            }
+                            const spreadsheetId = extractSpreadsheetId(spreadsheetUrl)
+                            if (!spreadsheetId) {
+                              notify('유효하지 않은 스프레드시트 URL입니다', 'error')
+                              return
+                            }
+                            setLoadingSheet(true)
+                            try {
+                              const [info, data] = await Promise.all([
+                                getSpreadsheetInfo(spreadsheetId),
+                                loadSheetData(spreadsheetId, 'Sheet1!A1:Z1000')
+                              ])
+                              setSheetInfo(info)
+                              setSheetData(data)
+                              notify('새로고침 완료', 'success')
+                            } catch (err) {
+                              console.error('[AccountingPage] 새로고침 실패:', err)
+                              notify('새로고침 실패: ' + err.message, 'error')
+                            } finally {
+                              setLoadingSheet(false)
+                            }
+                          }}
+                          className="px-3 py-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 border border-blue-300 rounded-lg hover:bg-blue-50"
+                        >
+                          <RefreshCw size={14} />
+                          새로고침
+                        </button>
+                        <a
+                          href={spreadsheetUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1.5 text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1 border border-green-300 rounded-lg hover:bg-green-50"
+                        >
+                          <ExternalLink size={14} />
+                          Google Sheets에서 열기
+                        </a>
+                      </div>
                     </div>
-                    <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
-                      스프레드시트가 로드되었습니다. ({sheetData?.length || 0}개 행)
+
+                    {/* 스프레드시트 테이블 */}
+                    <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                      <div className="max-h-[600px] overflow-y-auto">
+                        <table className="w-full text-sm">
+                          <thead className="bg-gray-50 sticky top-0 z-10">
+                            <tr>
+                              {sheetData[0]?.map((header, colIndex) => (
+                                <th
+                                  key={colIndex}
+                                  className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-b border-gray-200 whitespace-nowrap"
+                                >
+                                  {header || `열 ${colIndex + 1}`}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                            {sheetData.slice(1).map((row, rowIndex) => (
+                              <tr key={rowIndex} className="hover:bg-gray-50">
+                                {row.map((cell, colIndex) => (
+                                  <td
+                                    key={colIndex}
+                                    className="px-3 py-2 text-gray-700 border-b border-gray-100 whitespace-nowrap"
+                                  >
+                                    {cell}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* 하단 안내 */}
+                    <div className="text-xs text-gray-500 bg-blue-50 p-3 rounded-lg border border-blue-200">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle size={14} className="mt-0.5 flex-shrink-0 text-blue-600" />
+                        <div>
+                          <p className="font-semibold text-blue-900 mb-1">스프레드시트 편집 방법</p>
+                          <ul className="space-y-1 text-blue-800">
+                            <li>• <strong>읽기 전용</strong>: 이 화면에서는 데이터를 확인만 할 수 있습니다</li>
+                            <li>• <strong>편집/저장</strong>: "Google Sheets에서 열기" 버튼을 눌러 원본 시트에서 수정하세요</li>
+                            <li>• <strong>동기화</strong>: 수정 후 "새로고침" 버튼을 눌러 최신 데이터를 가져오세요</li>
+                          </ul>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ) : (
