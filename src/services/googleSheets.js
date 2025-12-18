@@ -1,45 +1,94 @@
 // src/services/googleSheets.js
-import { gapi } from 'gapi-script'
+// Google Identity Services (GIS) 사용 - gapi-script는 deprecated됨
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
-const DISCOVERY_DOCS = ['https://sheets.googleapis.com/$discovery/rest?version=v4']
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.readonly'
 
+let tokenClient = null
+let accessToken = null
 let gapiInitialized = false
-let authInitialized = false
+let gisInitialized = false
 
 /**
  * Check if Google API is initialized
  */
-export const isGapiInitialized = () => gapiInitialized
+export const isGapiInitialized = () => gapiInitialized && gisInitialized
 
 /**
- * Initialize Google API client
- * API 키 없이 OAuth만 사용 - 관리자의 Google 계정으로 인증
+ * Load Google API client library
  */
-export const initializeGapi = () => {
+const loadGapiClient = () => {
   return new Promise((resolve, reject) => {
-    if (gapiInitialized) {
+    if (window.gapi) {
       resolve()
       return
     }
-
-    gapi.load('client:auth2', async () => {
-      try {
-        await gapi.client.init({
-          clientId: CLIENT_ID,
-          discoveryDocs: DISCOVERY_DOCS,
-          scope: SCOPES,
-        })
-        gapiInitialized = true
-        authInitialized = true
-        resolve()
-      } catch (error) {
-        console.error('Error initializing GAPI:', error)
-        reject(error)
-      }
-    })
+    
+    const script = document.createElement('script')
+    script.src = 'https://apis.google.com/js/api.js'
+    script.onload = resolve
+    script.onerror = reject
+    document.head.appendChild(script)
   })
+}
+
+/**
+ * Load Google Identity Services library
+ */
+const loadGisClient = () => {
+  return new Promise((resolve, reject) => {
+    if (window.google?.accounts?.oauth2) {
+      resolve()
+      return
+    }
+    
+    const script = document.createElement('script')
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.onload = resolve
+    script.onerror = reject
+    document.head.appendChild(script)
+  })
+}
+
+/**
+ * Initialize Google API client
+ */
+export const initializeGapi = async () => {
+  if (gapiInitialized && gisInitialized) {
+    return
+  }
+
+  try {
+    // Load both libraries
+    await Promise.all([loadGapiClient(), loadGisClient()])
+    
+    // Initialize gapi client
+    await new Promise((resolve, reject) => {
+      window.gapi.load('client', async () => {
+        try {
+          await window.gapi.client.init({
+            discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
+          })
+          gapiInitialized = true
+          resolve()
+        } catch (error) {
+          reject(error)
+        }
+      })
+    })
+
+    // Initialize GIS token client
+    tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPES,
+      callback: '', // Will be set in signIn
+    })
+    
+    gisInitialized = true
+  } catch (error) {
+    console.error('Error initializing Google APIs:', error)
+    throw error
+  }
 }
 
 /**
@@ -47,40 +96,35 @@ export const initializeGapi = () => {
  */
 export const signIn = async () => {
   try {
-    if (!gapiInitialized) {
+    if (!gapiInitialized || !gisInitialized) {
       await initializeGapi()
     }
-    const authInstance = gapi.auth2.getAuthInstance()
-    if (!authInstance) {
-      throw new Error('Google Auth instance not available. Google API may not be properly initialized.')
-    }
-    
+
     console.log('[GoogleSheets] Attempting sign in...')
-    const result = await authInstance.signIn({
-      prompt: 'select_account'
+    
+    return new Promise((resolve, reject) => {
+      tokenClient.callback = (response) => {
+        if (response.error) {
+          console.error('[GoogleSheets] Token error:', response)
+          reject(new Error(response.error_description || response.error))
+          return
+        }
+        
+        accessToken = response.access_token
+        window.gapi.client.setToken({ access_token: accessToken })
+        console.log('[GoogleSheets] Sign in successful')
+        resolve(true)
+      }
+
+      // Request access token
+      tokenClient.requestAccessToken({ prompt: 'select_account' })
     })
-    console.log('[GoogleSheets] Sign in successful')
-    return true
   } catch (error) {
     console.error('[GoogleSheets] Error signing in:', error)
-    console.error('[GoogleSheets] Error type:', typeof error)
-    console.error('[GoogleSheets] Error keys:', Object.keys(error || {}))
     console.error('[GoogleSheets] Error details:', {
-      error: error.error,
-      details: error.details,
       message: error.message,
       stack: error.stack
     })
-    
-    // Google OAuth 특정 에러 처리
-    if (error.error === 'popup_closed_by_user') {
-      throw new Error('로그인 창이 닫혔습니다. 다시 시도해주세요.')
-    } else if (error.error === 'access_denied') {
-      throw new Error('접근이 거부되었습니다. Google 계정 권한을 확인해주세요.')
-    } else if (error.error === 'immediate_failed') {
-      throw new Error('자동 로그인 실패. 수동으로 로그인해주세요.')
-    }
-    
     throw error
   }
 }
@@ -90,8 +134,13 @@ export const signIn = async () => {
  */
 export const signOut = async () => {
   try {
-    const authInstance = gapi.auth2.getAuthInstance()
-    await authInstance.signOut()
+    if (accessToken) {
+      window.google.accounts.oauth2.revoke(accessToken, () => {
+        console.log('[GoogleSheets] Token revoked')
+      })
+      accessToken = null
+      window.gapi.client.setToken(null)
+    }
     return true
   } catch (error) {
     console.error('Error signing out:', error)
@@ -103,37 +152,33 @@ export const signOut = async () => {
  * Check if user is signed in
  */
 export const isSignedIn = () => {
-  if (!authInitialized) return false
-  const authInstance = gapi.auth2.getAuthInstance()
-  return authInstance.isSignedIn.get()
+  return accessToken !== null
 }
 
 /**
- * Get current user info
+ * Get current user info (GIS doesn't provide profile easily, return minimal info)
  */
 export const getCurrentUser = () => {
   if (!isSignedIn()) return null
-  const authInstance = gapi.auth2.getAuthInstance()
-  const user = authInstance.currentUser.get()
-  const profile = user.getBasicProfile()
+  // GIS doesn't provide user profile in the token response
+  // You'd need to call a separate API for user info
   return {
-    id: profile.getId(),
-    name: profile.getName(),
-    email: profile.getEmail(),
-    imageUrl: profile.getImageUrl(),
+    id: null,
+    name: 'User',
+    email: null,
+    imageUrl: null,
   }
 }
 
 /**
  * Listen to sign-in state changes
+ * Note: GIS doesn't have built-in state listener like gapi.auth2
  */
 export const onAuthChange = (callback) => {
-  if (!authInitialized) {
-    console.warn('Auth not initialized yet')
-    return () => {}
-  }
-  const authInstance = gapi.auth2.getAuthInstance()
-  return authInstance.isSignedIn.listen(callback)
+  // GIS doesn't provide state change listener
+  // Return no-op function for compatibility
+  console.warn('[GoogleSheets] GIS does not support auth state listener')
+  return () => {}
 }
 
 /**
@@ -156,7 +201,7 @@ export const loadSheetData = async (spreadsheetId, range = 'Sheet1') => {
       throw new Error('Not signed in')
     }
 
-    const response = await gapi.client.sheets.spreadsheets.values.get({
+    const response = await window.gapi.client.sheets.spreadsheets.values.get({
       spreadsheetId,
       range,
     })
@@ -180,7 +225,7 @@ export const saveSheetData = async (spreadsheetId, range, values) => {
       throw new Error('Not signed in')
     }
 
-    const response = await gapi.client.sheets.spreadsheets.values.update({
+    const response = await window.gapi.client.sheets.spreadsheets.values.update({
       spreadsheetId,
       range,
       valueInputOption: 'USER_ENTERED',
@@ -208,7 +253,7 @@ export const appendSheetData = async (spreadsheetId, range, values) => {
       throw new Error('Not signed in')
     }
 
-    const response = await gapi.client.sheets.spreadsheets.values.append({
+    const response = await window.gapi.client.sheets.spreadsheets.values.append({
       spreadsheetId,
       range,
       valueInputOption: 'USER_ENTERED',
@@ -235,7 +280,7 @@ export const getSpreadsheetInfo = async (spreadsheetId) => {
       throw new Error('Not signed in')
     }
 
-    const response = await gapi.client.sheets.spreadsheets.get({
+    const response = await window.gapi.client.sheets.spreadsheets.get({
       spreadsheetId,
     })
 
