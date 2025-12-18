@@ -659,6 +659,27 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       setGoogleUser(user)
       
       notify('Google에 로그인되었습니다.')
+      
+      // 로그인 후 기존 스프레드시트 URL이 있으면 자동 로드
+      if (spreadsheetUrl) {
+        const spreadsheetId = extractSpreadsheetId(spreadsheetUrl)
+        if (spreadsheetId) {
+          setLoadingSheet(true)
+          try {
+            const [info, data] = await Promise.all([
+              getSpreadsheetInfo(spreadsheetId),
+              loadSheetData(spreadsheetId, 'Sheet1!A1:Z1000')
+            ])
+            setSheetInfo(info)
+            setSheetData(data)
+            console.log('[AccountingPage] 스프레드시트 자동 로드 완료')
+          } catch (err) {
+            console.error('[AccountingPage] 스프레드시트 자동 로드 실패:', err)
+          } finally {
+            setLoadingSheet(false)
+          }
+        }
+      }
     } catch (error) {
       console.error('[AccountingPage] Sign in error:', error)
       console.error('[AccountingPage] Error details:', {
@@ -1874,12 +1895,19 @@ VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
                       })
                       notify('스프레드시트 URL이 저장되었습니다', 'success')
                       if (spreadsheetUrl && isGoogleSignedIn) {
+                        const spreadsheetId = extractSpreadsheetId(spreadsheetUrl)
+                        if (!spreadsheetId) {
+                          notify('유효하지 않은 스프레드시트 URL입니다', 'error')
+                          return
+                        }
                         setLoadingSheet(true)
                         try {
-                          const data = await loadSheetData(spreadsheetUrl)
-                          setSheetData(data)
-                          const info = await getSpreadsheetInfo(spreadsheetUrl)
+                          const [info, data] = await Promise.all([
+                            getSpreadsheetInfo(spreadsheetId),
+                            loadSheetData(spreadsheetId, 'Sheet1!A1:Z1000')
+                          ])
                           setSheetInfo(info)
+                          setSheetData(data)
                           notify('스프레드시트를 불러왔습니다', 'success')
                         } catch (err) {
                           console.error('[AccountingPage] Failed to load sheet:', err)
@@ -1917,13 +1945,23 @@ VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
                             notify('스프레드시트 URL을 설정해주세요', 'warning')
                             return
                           }
+                          const spreadsheetId = extractSpreadsheetId(spreadsheetUrl)
+                          if (!spreadsheetId) {
+                            notify('유효하지 않은 스프레드시트 URL입니다', 'error')
+                            return
+                          }
                           setLoadingSheet(true)
                           try {
-                            const data = await loadSheetData(spreadsheetUrl)
+                            const [info, data] = await Promise.all([
+                              getSpreadsheetInfo(spreadsheetId),
+                              loadSheetData(spreadsheetId, 'Sheet1!A1:Z1000')
+                            ])
+                            setSheetInfo(info)
                             setSheetData(data)
                             notify('새로고침 완료', 'success')
                           } catch (err) {
-                            notify('새로고침 실패', 'error')
+                            console.error('[AccountingPage] 새로고침 실패:', err)
+                            notify('새로고침 실패: ' + err.message, 'error')
                           } finally {
                             setLoadingSheet(false)
                           }
