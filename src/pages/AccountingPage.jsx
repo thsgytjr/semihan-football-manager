@@ -175,9 +175,6 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   const [sheetData, setSheetData] = useState([])
   const [sheetInfo, setSheetInfo] = useState(null)
   const [loadingSheet, setLoadingSheet] = useState(false)
-  const [editingCell, setEditingCell] = useState(null) // {row, col}
-  const [editValue, setEditValue] = useState('')
-  const [savingCell, setSavingCell] = useState(false)
   const [showExpenseHistory, setShowExpenseHistory] = useState(false)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const [playerStats, setPlayerStats] = useState(null)
@@ -1933,52 +1930,15 @@ VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
             {/* 스프레드시트 내용 표시 */}
             {isGoogleSignedIn ? (
               <>
-                {loadingSheet ? (
-                  <div className="p-12 text-center">
-                    <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
-                    <p className="text-sm text-gray-600">스프레드시트를 불러오는 중...</p>
-                  </div>
-                ) : sheetData && sheetInfo ? (
+                {spreadsheetUrl ? (
                   <div className="space-y-4">
                     {/* 헤더 */}
                     <div className="flex items-center justify-between pb-3 border-b">
                       <div>
-                        <h3 className="font-semibold text-gray-800">{sheetInfo.title}</h3>
-                        <p className="text-xs text-gray-500 mt-0.5">{sheetData?.length || 0}개 행</p>
+                        <h3 className="font-semibold text-gray-800">Google Sheets (전체 기능)</h3>
+                        <p className="text-xs text-gray-500 mt-0.5">편집, 필터, 정렬 등 모든 기능 사용 가능</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={async () => {
-                            if (!spreadsheetUrl) {
-                              notify('스프레드시트 URL을 설정해주세요', 'warning')
-                              return
-                            }
-                            const spreadsheetId = extractSpreadsheetId(spreadsheetUrl)
-                            if (!spreadsheetId) {
-                              notify('유효하지 않은 스프레드시트 URL입니다', 'error')
-                              return
-                            }
-                            setLoadingSheet(true)
-                            try {
-                              const [info, data] = await Promise.all([
-                                getSpreadsheetInfo(spreadsheetId),
-                                loadSheetData(spreadsheetId, 'Sheet1!A1:Z1000')
-                              ])
-                              setSheetInfo(info)
-                              setSheetData(data)
-                              notify('새로고침 완료', 'success')
-                            } catch (err) {
-                              console.error('[AccountingPage] 새로고침 실패:', err)
-                              notify('새로고침 실패: ' + err.message, 'error')
-                            } finally {
-                              setLoadingSheet(false)
-                            }
-                          }}
-                          className="px-3 py-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 border border-blue-300 rounded-lg hover:bg-blue-50"
-                        >
-                          <RefreshCw size={14} />
-                          새로고침
-                        </button>
                         <a
                           href={spreadsheetUrl}
                           target="_blank"
@@ -1986,101 +1946,19 @@ VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
                           className="px-3 py-1.5 text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1 border border-green-300 rounded-lg hover:bg-green-50"
                         >
                           <ExternalLink size={14} />
-                          Google Sheets에서 열기
+                          새 탭에서 열기
                         </a>
                       </div>
                     </div>
 
-                    {/* 스프레드시트 테이블 (편집 가능) */}
-                    <div className="overflow-x-auto border border-gray-200 rounded-lg">
-                      <div className="max-h-[600px] overflow-y-auto">
-                        <table className="w-full text-sm">
-                          <thead className="bg-gray-50 sticky top-0 z-10">
-                            <tr>
-                              <th className="px-3 py-2 text-center text-xs font-semibold text-gray-500 border-b border-gray-200 w-12">#</th>
-                              {sheetData[0]?.map((header, colIndex) => (
-                                <th
-                                  key={colIndex}
-                                  className="px-3 py-2 text-left text-xs font-semibold text-gray-700 border-b border-gray-200 whitespace-nowrap min-w-[120px]"
-                                >
-                                  {header || `열 ${colIndex + 1}`}
-                                </th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {sheetData.slice(1).map((row, rowIndex) => (
-                              <tr key={rowIndex} className="hover:bg-gray-50">
-                                <td className="px-3 py-2 text-center text-xs text-gray-500 border-b border-gray-100 bg-gray-50">
-                                  {rowIndex + 2}
-                                </td>
-                                {row.map((cell, colIndex) => {
-                                  const isEditing = editingCell?.row === rowIndex + 1 && editingCell?.col === colIndex
-                                  return (
-                                    <td
-                                      key={colIndex}
-                                      className="px-0 py-0 border-b border-gray-100"
-                                      onClick={() => {
-                                        if (!isEditing) {
-                                          setEditingCell({ row: rowIndex + 1, col: colIndex })
-                                          setEditValue(cell || '')
-                                        }
-                                      }}
-                                    >
-                                      {isEditing ? (
-                                        <input
-                                          type="text"
-                                          value={editValue}
-                                          onChange={(e) => setEditValue(e.target.value)}
-                                          onBlur={async () => {
-                                            if (editValue !== cell) {
-                                              setSavingCell(true)
-                                              try {
-                                                const spreadsheetId = extractSpreadsheetId(spreadsheetUrl)
-                                                const columnLetter = String.fromCharCode(65 + colIndex)
-                                                const range = `Sheet1!${columnLetter}${rowIndex + 2}`
-                                                
-                                                await saveSheetData(spreadsheetId, range, [[editValue]])
-                                                
-                                                // 로컬 데이터 업데이트
-                                                const newData = [...sheetData]
-                                                newData[rowIndex + 1][colIndex] = editValue
-                                                setSheetData(newData)
-                                                
-                                                notify('저장 완료', 'success')
-                                              } catch (err) {
-                                                console.error('[AccountingPage] 셀 저장 실패:', err)
-                                                notify('저장 실패: ' + err.message, 'error')
-                                              } finally {
-                                                setSavingCell(false)
-                                              }
-                                            }
-                                            setEditingCell(null)
-                                          }}
-                                          onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                              e.target.blur()
-                                            } else if (e.key === 'Escape') {
-                                              setEditValue(cell || '')
-                                              setEditingCell(null)
-                                            }
-                                          }}
-                                          autoFocus
-                                          className="w-full px-3 py-2 border-2 border-blue-500 focus:outline-none"
-                                        />
-                                      ) : (
-                                        <div className="px-3 py-2 text-gray-700 cursor-pointer hover:bg-blue-50 min-h-[36px]">
-                                          {cell}
-                                        </div>
-                                      )}
-                                    </td>
-                                  )
-                                })}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
+                    {/* Google Sheets iframe 임베드 */}
+                    <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                      <iframe
+                        src={spreadsheetUrl.replace('/edit', '/edit?embedded=true')}
+                        className="w-full h-[800px] border-0"
+                        title="Google Sheets"
+                        allow="clipboard-read; clipboard-write"
+                      />
                     </div>
 
                     {/* 하단 안내 */}
@@ -2088,11 +1966,11 @@ VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
                       <div className="flex items-start gap-2">
                         <Check size={14} className="mt-0.5 flex-shrink-0 text-green-600" />
                         <div>
-                          <p className="font-semibold text-green-900 mb-1">앱 내 편집 가능</p>
+                          <p className="font-semibold text-green-900 mb-1">Google Sheets 전체 기능 사용 가능</p>
                           <ul className="space-y-1 text-green-800">
-                            <li>• <strong>셀 클릭</strong>: 셀을 클릭하여 즉시 편집</li>
-                            <li>• <strong>Enter</strong>: 저장 / <strong>Esc</strong>: 취소</li>
-                            <li>• <strong>자동 저장</strong>: 포커스를 벗어나면 Google Sheets에 즉시 반영됩니다</li>
+                            <li>• 위 화면에서 직접 편집, 필터, 정렬, 수식 등 모든 Google Sheets 기능을 사용할 수 있습니다</li>
+                            <li>• 변경사항은 즉시 Google Sheets 원본에 자동 저장됩니다</li>
+                            <li>• 전체 화면이 필요하면 "새 탭에서 열기" 버튼을 클릭하세요</li>
                           </ul>
                         </div>
                       </div>
