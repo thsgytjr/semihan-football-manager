@@ -652,6 +652,12 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       console.log('[AccountingPage] signIn 함수 호출')
       await signIn()
       console.log('[AccountingPage] 로그인 성공')
+      
+      // GIS는 auth state listener가 없으므로 수동으로 상태 업데이트
+      setIsGoogleSignedIn(true)
+      const user = getCurrentUser()
+      setGoogleUser(user)
+      
       notify('Google에 로그인되었습니다.')
     } catch (error) {
       console.error('[AccountingPage] Sign in error:', error)
@@ -679,6 +685,13 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   const handleGoogleSignOut = async () => {
     try {
       await signOut()
+      
+      // GIS는 auth state listener가 없으므로 수동으로 상태 업데이트
+      setIsGoogleSignedIn(false)
+      setGoogleUser(null)
+      setSheetData([])
+      setSheetInfo(null)
+      
       notify('로그아웃되었습니다.')
     } catch (error) {
       console.error('Sign out error:', error)

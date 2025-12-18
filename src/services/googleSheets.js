@@ -173,11 +173,11 @@ export const getCurrentUser = () => {
 /**
  * Listen to sign-in state changes
  * Note: GIS doesn't have built-in state listener like gapi.auth2
+ * Apps should manually update state after signIn/signOut
  */
 export const onAuthChange = (callback) => {
   // GIS doesn't provide state change listener
   // Return no-op function for compatibility
-  console.warn('[GoogleSheets] GIS does not support auth state listener')
   return () => {}
 }
 
