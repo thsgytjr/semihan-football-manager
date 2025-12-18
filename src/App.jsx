@@ -1852,7 +1852,7 @@ function App(){
                   leaderboardToggles={featuresEnabled?.leaderboards || {}}
                   badgesEnabled={badgesFeatureEnabled}
                   playerStatsEnabled={playerStatsModalEnabled}
-                  seasonRecapEnabled={!maintenanceActive && (seasonRecapEnabled ?? true)}
+                  seasonRecapEnabled={!maintenanceActive && (seasonRecapEnabled ?? false)}
                   seasonRecapReady={appSettingsLoaded}
                 />
               )}

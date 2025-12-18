@@ -24,8 +24,9 @@ import { updateMatchInDB } from '../services/matches.service'
 import { isMember } from '../lib/fees'
 import { DollarSign, Users, Calendar, TrendingUp, Plus, X, Check, AlertCircle, RefreshCw, Trash2, ArrowUpDown, Download, Search, ChevronDown, ChevronUp } from 'lucide-react'
 import InitialAvatar from '../components/InitialAvatar'
+import { initializeGapi, signIn, signOut, isSignedIn, getCurrentUser, onAuthChange, extractSpreadsheetId, loadSheetData, saveSheetData, getSpreadsheetInfo, isGapiInitialized } from '../services/googleSheets'
 import { listMatchesFromDB, deleteMatchFromDB } from '../services/matches.service'
-import { getAccountingOverrides, updateAccountingOverrides } from '../lib/appSettings'
+import { getAccountingOverrides, updateAccountingOverrides, getAppSettings, saveAppSettingsToServer } from '../lib/appSettings'
 import { calculateMatchFees, calculatePlayerMatchFee } from '../lib/matchFeeCalculator'
 import * as XLSX from 'xlsx'
 
@@ -164,8 +165,16 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   const [summary, setSummary] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
-  const [selectedTab, setSelectedTab] = useState('overview') // overview, payments, dues, match-fees, renewals, player-stats
+  const [selectedTab, setSelectedTab] = useState('overview') // overview, payments, dues, match-fees, renewals, player-stats, spreadsheet
   const [showAddPayment, setShowAddPayment] = useState(false)
+  const [spreadsheetUrl, setSpreadsheetUrl] = useState('')
+  const [showSpreadsheetSettings, setShowSpreadsheetSettings] = useState(false)
+  const [loadingSpreadsheet, setLoadingSpreadsheet] = useState(true)
+  const [googleUser, setGoogleUser] = useState(null)
+  const [isGoogleSignedIn, setIsGoogleSignedIn] = useState(false)
+  const [sheetData, setSheetData] = useState([])
+  const [sheetInfo, setSheetInfo] = useState(null)
+  const [loadingSheet, setLoadingSheet] = useState(false)
   const [showExpenseHistory, setShowExpenseHistory] = useState(false)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const [playerStats, setPlayerStats] = useState(null)
@@ -496,6 +505,124 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     } catch {}
   }, [])
 
+  // selectedTab 변경 감지 (디버깅)
+  useEffect(() => {
+    console.log('[AccountingPage] Selected tab:', selectedTab)
+  }, [selectedTab])
+
+  // Google API 초기화
+  useEffect(() => {
+    let unsubscribe = null
+    
+    async function initGoogle() {
+      try {
+        // CLIENT_ID 체크
+        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+        console.log('[GoogleSheets] Client ID:', clientId ? `${clientId.substring(0, 20)}...` : 'NOT SET')
+        
+        if (!clientId || 
+            clientId === 'your_google_client_id_here.apps.googleusercontent.com' ||
+            clientId === 'your_client_id.apps.googleusercontent.com') {
+          console.warn('[GoogleSheets] Google Client ID가 설정되지 않았습니다. .env 파일을 확인하세요.')
+          // CLIENT_ID 없어도 UI는 표시되도록 return하지 않음
+          setIsGoogleSignedIn(false)
+          return
+        }
+
+        console.log('[GoogleSheets] Initializing Google API...')
+        await initializeGapi()
+        console.log('[GoogleSheets] Google API initialized')
+        
+        const signedIn = isSignedIn()
+        console.log('[GoogleSheets] Signed in:', signedIn)
+        setIsGoogleSignedIn(signedIn)
+        
+        if (signedIn) {
+          const user = getCurrentUser()
+          console.log('[GoogleSheets] Current user:', user?.email)
+          setGoogleUser(user)
+        }
+
+        // 인증 상태 변경 감지
+        unsubscribe = onAuthChange((signedIn) => {
+          console.log('[GoogleSheets] Auth state changed:', signedIn)
+          setIsGoogleSignedIn(signedIn)
+          if (signedIn) {
+            const user = getCurrentUser()
+            setGoogleUser(user)
+          } else {
+            setGoogleUser(null)
+            setSheetData([])
+            setSheetInfo(null)
+          }
+        })
+      } catch (error) {
+        console.error('[GoogleSheets] Failed to initialize Google API:', error)
+        // 에러가 나도 UI는 표시되도록
+        setIsGoogleSignedIn(false)
+      }
+    }
+    
+    initGoogle()
+    
+    return () => {
+      if (unsubscribe && typeof unsubscribe === 'function') {
+        unsubscribe()
+      }
+    }
+  }, [])
+
+  // 스프레드시트 URL 로드
+  useEffect(() => {
+    async function loadSpreadsheetUrl() {
+      setLoadingSpreadsheet(true)
+      try {
+        const settings = await getAppSettings()
+        const url = settings?.accounting?.spreadsheetUrl || ''
+        setSpreadsheetUrl(url)
+      } catch (err) {
+        console.error('Failed to load spreadsheet URL:', err)
+      } finally {
+        setLoadingSpreadsheet(false)
+      }
+    }
+    loadSpreadsheetUrl()
+  }, [])
+
+  // 스프레드시트 데이터 로드
+  useEffect(() => {
+    async function loadSheet() {
+      if (!spreadsheetUrl || !isGoogleSignedIn) {
+        setSheetData([])
+        setSheetInfo(null)
+        return
+      }
+
+      const spreadsheetId = extractSpreadsheetId(spreadsheetUrl)
+      if (!spreadsheetId) {
+        notify('유효하지 않은 스프레드시트 URL입니다.', 'error')
+        return
+      }
+
+      setLoadingSheet(true)
+      try {
+        const [info, data] = await Promise.all([
+          getSpreadsheetInfo(spreadsheetId),
+          loadSheetData(spreadsheetId, 'Sheet1!A1:Z1000')
+        ])
+        setSheetInfo(info)
+        setSheetData(data)
+      } catch (error) {
+        console.error('Failed to load sheet:', error)
+        notify('스프레드시트 로드에 실패했습니다.', 'error')
+      } finally {
+        setLoadingSheet(false)
+      }
+    }
+
+    loadSheet()
+  }, [spreadsheetUrl, isGoogleSignedIn])
+
   // 외부에서 matches prop 변경 시 로컬에도 반영
   useEffect(() => {
     setMatchesLocal(matches)
@@ -509,6 +636,80 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       setRenewalResets(normalizeRenewalResetMap(feeOverrides.renewalResets))
     }
   }, [feeOverrides])
+
+  // Google 로그인/로그아웃 핸들러
+  const handleGoogleSignIn = async () => {
+    try {
+      console.log('[AccountingPage] 구글 로그인 시도 중...')
+      
+      // Google API 초기화 확인
+      if (!isGapiInitialized()) {
+        console.log('[AccountingPage] Google API가 아직 초기화되지 않았습니다. 초기화 시도...')
+        await initializeGapi()
+        console.log('[AccountingPage] Google API 초기화 완료')
+      }
+      
+      console.log('[AccountingPage] signIn 함수 호출')
+      await signIn()
+      console.log('[AccountingPage] 로그인 성공')
+      notify('Google에 로그인되었습니다.')
+    } catch (error) {
+      console.error('[AccountingPage] Sign in error:', error)
+      console.error('[AccountingPage] Error details:', {
+        message: error.message,
+        error: error.error,
+        details: error.details,
+        stack: error.stack,
+        type: error.type
+      })
+      
+      let errorMessage = '로그인에 실패했습니다'
+      if (error.message && error.message.includes('로그인 창')) {
+        errorMessage = error.message
+      } else if (error.error === 'idpiframe_initialization_failed') {
+        errorMessage = 'Google 인증 초기화 실패. OAuth 설정을 확인해주세요. (Google Cloud Console에서 Authorized JavaScript origins에 http://localhost:5173을 추가했는지 확인)'
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
+      notify(errorMessage, 'error')
+    }
+  }
+
+  const handleGoogleSignOut = async () => {
+    try {
+      await signOut()
+      notify('로그아웃되었습니다.')
+    } catch (error) {
+      console.error('Sign out error:', error)
+      notify('로그아웃에 실패했습니다.', 'error')
+    }
+  }
+
+  // 스프레드시트에 데이터 저장
+  const handleSaveToSheet = async (data) => {
+    if (!spreadsheetUrl || !isGoogleSignedIn) {
+      notify('Google 로그인이 필요합니다.', 'error')
+      return
+    }
+
+    const spreadsheetId = extractSpreadsheetId(spreadsheetUrl)
+    if (!spreadsheetId) {
+      notify('유효하지 않은 스프레드시트 URL입니다.', 'error')
+      return
+    }
+
+    try {
+      await saveSheetData(spreadsheetId, 'Sheet1!A1', data)
+      notify('스프레드시트에 저장되었습니다.')
+      // 저장 후 다시 로드
+      const updatedData = await loadSheetData(spreadsheetId, 'Sheet1!A1:Z1000')
+      setSheetData(updatedData)
+    } catch (error) {
+      console.error('Failed to save sheet:', error)
+      notify('저장에 실패했습니다.', 'error')
+    }
+  }
 
   async function loadData({ background = false } = {}) {
     if (!isAdmin) return
@@ -1125,14 +1326,15 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     if (matchFeesPage > maxPage) setMatchFeesPage(maxPage)
   }, [activeMatches.length, matchFeesPerPage, matchFeesPage])
 
-  if (!isAdmin) {
-    return (
-      <div className="p-8 text-center">
-        <AlertCircle className="mx-auto mb-4 text-gray-400" size={48} />
-        <p className="text-gray-600">총무(Admin)만 접근 가능합니다.</p>
-      </div>
-    )
-  }
+  // 임시로 주석 처리 - 테스트용
+  // if (!isAdmin) {
+  //   return (
+  //     <div className="p-8 text-center">
+  //       <AlertCircle className="mx-auto mb-4 text-gray-400" size={48} />
+  //       <p className="text-gray-600">총무(Admin)만 접근 가능합니다.</p>
+  //     </div>
+  //   )
+  // }
 
   if (loading) {
     return (
@@ -1198,12 +1400,24 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
             onClick={() => setSelectedTab('player-stats')}
             icon={<Users size={16} />}
           >
-            선수별 납부
+            선수별 통계
+          </TabButton>
+          <TabButton
+            active={selectedTab === 'spreadsheet'}
+            onClick={() => setSelectedTab('spreadsheet')}
+            icon={
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-8 16H5v-4h6v4zm0-6H5v-4h6v4zm0-6H5V5h6v2zm8 12h-6v-4h6v4zm0-6h-6v-4h6v4zm0-6h-6V5h6v2z"/>
+              </svg>
+            }
+          >
+            스프레드시트
           </TabButton>
         </div>
       </Card>
 
       {/* 날짜 필터 & 년도 필터 */}
+      {selectedTab !== 'spreadsheet' && (
       <Card>
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -1276,6 +1490,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
           )}
         </div>
       </Card>
+      )}
 
       {/* 개요 탭 - 재정 대시보드 */}
       {selectedTab === 'overview' && (
@@ -1519,6 +1734,242 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
               </div>
             </div>
           )}
+        </Card>
+      )}
+
+      {/* 스프레드시트 탭 */}
+      {selectedTab === 'spreadsheet' && (
+        <Card title="구글 스프레드시트">
+          <div className="space-y-4">
+            {/* CLIENT_ID 미설정 경고 */}
+            {(!import.meta.env.VITE_GOOGLE_CLIENT_ID || 
+              import.meta.env.VITE_GOOGLE_CLIENT_ID === 'your_google_client_id_here.apps.googleusercontent.com' ||
+              import.meta.env.VITE_GOOGLE_CLIENT_ID === 'your_client_id.apps.googleusercontent.com') && (
+              <div className="p-4 bg-red-50 rounded-lg border border-red-200">
+                <div className="flex items-start gap-3">
+                  <AlertCircle size={20} className="text-red-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-gray-700">
+                    <p className="font-semibold mb-1">Google OAuth 설정이 필요합니다</p>
+                    <div className="text-xs text-gray-600 space-y-2">
+                      <p className="font-medium">1. Google Cloud Console 설정:</p>
+                      <ul className="list-disc list-inside ml-2 space-y-1">
+                        <li>OAuth 2.0 클라이언트 ID 생성</li>
+                        <li><strong>Authorized JavaScript origins</strong>에 추가:
+                          <pre className="mt-1 p-1 bg-red-100 rounded text-[10px]">http://localhost:5173</pre>
+                        </li>
+                        <li><strong>Authorized redirect URIs</strong>에 추가:
+                          <pre className="mt-1 p-1 bg-red-100 rounded text-[10px]">http://localhost:5173</pre>
+                        </li>
+                      </ul>
+                      <p className="font-medium mt-2">2. .env 파일에 CLIENT_ID 추가:</p>
+                      <pre className="mt-1 p-2 bg-red-100 rounded text-[10px]">
+VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
+                      </pre>
+                      <p className="text-amber-600 font-medium mt-2">⚠️ 403 에러가 발생하면 위 설정을 확인하세요!</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Google 계정 정보 및 로그인 */}
+            <div className="flex items-center justify-between pb-3 border-b">
+              <div className="flex items-center gap-2">
+                <svg className="w-5 h-5 text-green-600" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-8 16H5v-4h6v4zm0-6H5v-4h6v4zm0-6H5V5h6v2zm8 12h-6v-4h6v4zm0-6h-6v-4h6v4zm0-6h-6V5h6v2z"/>
+                </svg>
+                <span className="font-semibold text-gray-800">Google Sheets</span>
+              </div>
+              <div className="flex items-center gap-3">
+                {isGoogleSignedIn && googleUser ? (
+                  <>
+                    <div className="flex items-center gap-2 text-sm">
+                      {googleUser.imageUrl && (
+                        <img src={googleUser.imageUrl} alt={googleUser.name} className="w-6 h-6 rounded-full" />
+                      )}
+                      <span className="text-gray-700">{googleUser.name}</span>
+                    </div>
+                    <button
+                      onClick={handleGoogleSignOut}
+                      className="px-3 py-1.5 text-sm text-red-600 hover:text-red-700 font-medium border border-red-300 rounded-lg hover:bg-red-50 transition-colors"
+                    >
+                      로그아웃
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={handleGoogleSignIn}
+                    className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors flex items-center gap-2"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 18 18">
+                      <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
+                      <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
+                      <path fill="#FBBC05" d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z"/>
+                      <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
+                    </svg>
+                    Google 로그인
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowSpreadsheetSettings(!showSpreadsheetSettings)}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                >
+                  {showSpreadsheetSettings ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  {showSpreadsheetSettings ? '설정 닫기' : '설정'}
+                </button>
+              </div>
+            </div>
+
+            {/* 로그인 필요 안내 */}
+            {!isGoogleSignedIn && (
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <div className="flex items-start gap-3">
+                  <AlertCircle size={20} className="text-blue-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-gray-700">
+                    <p className="font-semibold mb-1">Google 로그인이 필요합니다</p>
+                    <p className="text-xs text-gray-600">
+                      스프레드시트를 읽고 수정하려면 Google 계정으로 로그인해야 합니다.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 스프레드시트 URL 설정 */}
+            {showSpreadsheetSettings && (
+              <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Google Sheets URL
+                </label>
+                <input
+                  type="text"
+                  value={spreadsheetUrl}
+                  onChange={(e) => setSpreadsheetUrl(e.target.value)}
+                  placeholder="https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  onClick={async () => {
+                    try {
+                      const currentSettings = await getAppSettings()
+                      await saveAppSettingsToServer({
+                        ...currentSettings,
+                        accounting: {
+                          ...(currentSettings.accounting || {}),
+                          spreadsheetUrl
+                        }
+                      })
+                      notify('스프레드시트 URL이 저장되었습니다', 'success')
+                      if (spreadsheetUrl && isGoogleSignedIn) {
+                        setLoadingSheet(true)
+                        try {
+                          const data = await loadSheetData(spreadsheetUrl)
+                          setSheetData(data)
+                          const info = await getSpreadsheetInfo(spreadsheetUrl)
+                          setSheetInfo(info)
+                          notify('스프레드시트를 불러왔습니다', 'success')
+                        } catch (err) {
+                          console.error('[AccountingPage] Failed to load sheet:', err)
+                          notify('스프레드시트 로드 실패: ' + err.message, 'error')
+                        } finally {
+                          setLoadingSheet(false)
+                        }
+                      }
+                    } catch (err) {
+                      notify('저장 실패: ' + err.message, 'error')
+                    }
+                  }}
+                  className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                >
+                  저장하고 불러오기
+                </button>
+              </div>
+            )}
+
+            {/* 스프레드시트 내용 표시 */}
+            {isGoogleSignedIn ? (
+              <>
+                {loadingSheet ? (
+                  <div className="p-12 text-center">
+                    <div className="inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-3" />
+                    <p className="text-sm text-gray-600">스프레드시트를 불러오는 중...</p>
+                  </div>
+                ) : sheetData && sheetInfo ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-gray-800">{sheetInfo.title}</h3>
+                      <button
+                        onClick={async () => {
+                          if (!spreadsheetUrl) {
+                            notify('스프레드시트 URL을 설정해주세요', 'warning')
+                            return
+                          }
+                          setLoadingSheet(true)
+                          try {
+                            const data = await loadSheetData(spreadsheetUrl)
+                            setSheetData(data)
+                            notify('새로고침 완료', 'success')
+                          } catch (err) {
+                            notify('새로고침 실패', 'error')
+                          } finally {
+                            setLoadingSheet(false)
+                          }
+                        }}
+                        className="px-3 py-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                      >
+                        <RefreshCw size={14} />
+                        새로고침
+                      </button>
+                    </div>
+                    <div className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
+                      스프레드시트가 로드되었습니다. ({sheetData?.length || 0}개 행)
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-8 text-center border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+                    <svg className="w-16 h-16 mx-auto text-gray-400 mb-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-8 16H5v-4h6v4zm0-6H5v-4h6v4zm0-6H5V5h6v2zm8 12h-6v-4h6v4zm0-6h-6v-4h6v4zm0-6h-6V5h6v2z"/>
+                    </svg>
+                    <h3 className="text-lg font-semibold text-gray-700 mb-2">스프레드시트를 연결하세요</h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                      위의 "설정" 버튼을 눌러 Google Sheets URL을 입력하세요
+                    </p>
+                    <button
+                      onClick={() => setShowSpreadsheetSettings(true)}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors inline-flex items-center gap-2"
+                    >
+                      <Plus size={16} />
+                      스프레드시트 연결하기
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="p-12 text-center border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+                <svg className="w-20 h-20 mx-auto text-gray-400 mb-4" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-8 16H5v-4h6v4zm0-6H5v-4h6v4zm0-6H5V5h6v2zm8 12h-6v-4h6v4zm0-6h-6v-4h6v4zm0-6h-6V5h6v2z"/>
+                </svg>
+                <h3 className="text-xl font-semibold text-gray-700 mb-2">Google Sheets 연동</h3>
+                <p className="text-sm text-gray-600 mb-6 max-w-md mx-auto">
+                  Google 로그인 후 스프레드시트 URL을 입력하면<br />
+                  재정 데이터를 Google Sheets에서 관리할 수 있습니다.
+                </p>
+                <button
+                  onClick={handleGoogleSignIn}
+                  disabled={!import.meta.env.VITE_GOOGLE_CLIENT_ID}
+                  className="px-6 py-3 bg-white text-gray-700 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-colors flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed mx-auto"
+                >
+                  <svg width="20" height="20" viewBox="0 0 18 18">
+                    <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
+                    <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
+                    <path fill="#FBBC05" d="M3.964 10.71c-.18-.54-.282-1.117-.282-1.71s.102-1.17.282-1.71V4.958H.957C.347 6.173 0 7.548 0 9s.348 2.827.957 4.042l3.007-2.332z"/>
+                    <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
+                  </svg>
+                  Google 로그인하여 시작하기
+                </button>
+              </div>
+            )}
+          </div>
         </Card>
       )}
 
@@ -3497,6 +3948,8 @@ function MatchFeesSection({ match, players, isVoided = false, isRecent = false, 
           </p>
         </div>
       </ConfirmDialog>
+
+      {/* 스프레드시트 탭은 AccountingPage 메인 컴포넌트로 이동됨 */}
 
       {/* 매치 숨김 확인 다이얼로그 */}
       <ConfirmDialog

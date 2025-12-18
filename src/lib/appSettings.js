@@ -10,7 +10,7 @@ const SUPABASE_SETTINGS_KEY = 'app_settings'
 const DEFAULT_SETTINGS = {
   appTitle: 'Semihan-FM',
   appName: 'Semihan Football Manager',
-  seasonRecapEnabled: true,  // 시즌 리캡 슬라이드쇼 표시
+  seasonRecapEnabled: false,  // 시즌 리캡 슬라이드쇼 표시 (기본값: 꺼짐)
   maintenanceMode: false, // 유지보수 모드 (개발자만 접근 가능)
   // 선택: 관리자 이메일 화이트리스트(있으면 이 목록만 Admin 허용)
   adminEmails: [],
@@ -42,7 +42,8 @@ const DEFAULT_SETTINGS = {
     guestSurchargeOverride: null,   // 숫자 또는 null
     venueTotalOverride: null,        // 매치 전체 구장비 강제 설정 (멤버/게스트 계산에 사용)
     renewalPreferences: {},          // 선수별 회비 납부 방식 수동 설정
-    renewalResets: {}               // 선수별 수동 정상 처리 기록
+    renewalResets: {},               // 선수별 수동 정상 처리 기록
+    spreadsheetUrl: ''              // 회계 스프레드시트 URL
   },
   badgeTierOverrides: {}
 }

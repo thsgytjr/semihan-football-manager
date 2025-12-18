@@ -638,5 +638,58 @@ export const handlers = [
       mockVisitTotals.push(newTotal)
       return HttpResponse.json(1)
     }
+  }),
+
+  // ============ Settings API (for Google Sheets URL storage) ============
+  http.get('*/rest/v1/settings', async ({ request }) => {
+    await delay(200)
+    const url = new URL(request.url)
+    const keyParam = url.searchParams.get('key')
+    
+    // Return empty array for now - users can set spreadsheet URL in UI
+    // In real app, this would fetch from actual settings table
+    if (keyParam === 'eq.app_settings') {
+      // No spreadsheet URL configured in mock mode
+      return HttpResponse.json([])
+    }
+    return HttpResponse.json([])
+  }),
+
+  http.post('*/rest/v1/settings', async ({ request }) => {
+    await delay(200)
+    const body = await request.json()
+    logger.info('[MSW] Settings saved (mock mode - not persisted):', body)
+    // In mock mode, just acknowledge the save
+    return HttpResponse.json({ success: true })
+  }),
+
+  http.patch('*/rest/v1/settings*', async ({ request }) => {
+    await delay(200)
+    const body = await request.json()
+    logger.info('[MSW] Settings updated (mock mode - not persisted):', body)
+    // In mock mode, just acknowledge the update
+    return HttpResponse.json({ success: true })
+  }),
+
+  // ============ Passthrough for external APIs ============
+  // Let Google APIs and other external services through
+  http.get('https://apis.google.com/*', async ({ request }) => {
+    // Passthrough - let the actual request happen
+    return fetch(request)
+  }),
+
+  http.post('https://accounts.google.com/*', async ({ request }) => {
+    // Passthrough - let the actual request happen
+    return fetch(request)
+  }),
+
+  http.get('https://www.gstatic.com/*', async ({ request }) => {
+    // Passthrough - let the actual request happen
+    return fetch(request)
+  }),
+
+  http.get('https://api.ipify.org/*', async ({ request }) => {
+    // Passthrough - let the actual request happen
+    return fetch(request)
   })
 ]
