@@ -3399,8 +3399,8 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
         })}
       </div>
 
-      {/* Admin: Draft editors (simplified UI) */}
-      {isAdmin && isDraftMode && (() => {
+      {/* Admin: Game Score Input (Draft & Regular matches) */}
+      {isAdmin && (() => {
         // Normalize quarter scores to match current team count
         const teamLen = draftTeams.length
         const qs = (quarterScores && Array.isArray(quarterScores))
@@ -3411,7 +3411,14 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
         const maxQ = Math.max(0, ...qs.map(a => a.length))
 
         // Hide score editing for referee mode with recorded games
-        const hasRefereeGames = hasTimeline && Array.isArray(m?.stats?.__games) && m.stats.__games.length > 0
+        // Only hide if there are actual recorded events (goals/assists/cards) in __games
+        const hasRefereeGames = hasTimeline && Array.isArray(m?.stats?.__games) && m.stats.__games.length > 0 && 
+          m.stats.__games.some(game => {
+            if (!game || typeof game !== 'object') return false
+            const hasScores = game.scores && (game.scores[0] > 0 || game.scores[1] > 0)
+            const hasEvents = game.events && Array.isArray(game.events) && game.events.length > 0
+            return hasScores || hasEvents
+          })
 
         return (
 
