@@ -144,6 +144,7 @@ export default function MatchPlanner({
   const[aiDistributedTeams,setAiDistributedTeams]=useState(null) // AI 배정 이전 상태 (Revert용)
   const[teamColors,setTeamColors]=useState([]) // Team colors: [{bg, text, border, label}, ...] - empty array means use default kit colors
   const[confirmDelete,setConfirmDelete]=useState({open:false,id:null,kind:null})
+  const[isSaving,setIsSaving]=useState(false) // 매치 저장 중 상태
   
   // 시즌 필터 상태
   const [selectedSeason, setSelectedSeason] = useState('all')
@@ -289,63 +290,70 @@ export default function MatchPlanner({
 
   async function save(){
     if(!isAdmin){notify('Admin만 가능합니다.');return}
-    let baseTeams=(latestTeamsRef.current&&latestTeamsRef.current.length)?latestTeamsRef.current:previewTeams
+    if(isSaving){notify('저장 중입니다. 잠시만 기다려주세요.');return}
     
-    // 주장을 각 팀의 맨 앞으로 정렬
-    baseTeams = baseTeams.map((team, teamIdx) => {
-      const capId = captainIds[teamIdx]
-      if (!capId || !team || team.length === 0) return team
+    setIsSaving(true)
+    try {
+      let baseTeams=(latestTeamsRef.current&&latestTeamsRef.current.length)?latestTeamsRef.current:previewTeams
       
-      // 주장을 찾아서 맨 앞으로 이동
-      const capIdStr = String(capId)
-      const captainIndex = team.findIndex(p => String(p.id) === capIdStr)
-      if (captainIndex <= 0) return team // 이미 첫번째거나 없으면 그대로
+      // 주장을 각 팀의 맨 앞으로 정렬
+      baseTeams = baseTeams.map((team, teamIdx) => {
+        const capId = captainIds[teamIdx]
+        if (!capId || !team || team.length === 0) return team
+        
+        // 주장을 찾아서 맨 앞으로 이동
+        const capIdStr = String(capId)
+        const captainIndex = team.findIndex(p => String(p.id) === capIdStr)
+        if (captainIndex <= 0) return team // 이미 첫번째거나 없으면 그대로
+        
+        const newTeam = [...team]
+        const captain = newTeam.splice(captainIndex, 1)[0]
+        newTeam.unshift(captain)
+        return newTeam
+      })
       
-      const newTeam = [...team]
-      const captain = newTeam.splice(captainIndex, 1)[0]
-      newTeam.unshift(captain)
-      return newTeam
-    })
-    
-    const snapshot=baseTeams.map(team=>team.map(p=>p.id))
-    const ids=snapshot.flat()
-    const objs=(players || []).filter(p=>ids.includes(p.id))
-  const fees= enablePitchFee ? computeFeesAtSave({baseCostValue:baseCost,attendees:objs,guestSurcharge}) : null
-    
-    // 드래프트 모드일 때 추가 필드들
-    const draftFields = isDraftMode ? {
-      selectionMode: 'draft',
-      draftMode: true,
-      draft: {
-        captains: captainIds.slice() // 주장 정보는 draft 객체에 저장
+      const snapshot=baseTeams.map(team=>team.map(p=>p.id))
+      const ids=snapshot.flat()
+      const objs=(players || []).filter(p=>ids.includes(p.id))
+    const fees= enablePitchFee ? computeFeesAtSave({baseCostValue:baseCost,attendees:objs,guestSurcharge}) : null
+      
+      // 드래프트 모드일 때 추가 필드들
+      const draftFields = isDraftMode ? {
+        selectionMode: 'draft',
+        draftMode: true,
+        draft: {
+          captains: captainIds.slice() // 주장 정보는 draft 객체에 저장
+        }
+      } : {
+        selectionMode: 'manual',
+        // 일반 모드에서도 주장 정보 저장
+        draft: {  
+          captains: captainIds.slice()
+        }
       }
-    } : {
-      selectionMode: 'manual',
-      // 일반 모드에서도 주장 정보 저장
-      draft: {  
-        captains: captainIds.slice()
+      
+      // UI에서 입력한 그대로 저장 (YYYY-MM-DDTHH:mm)
+      const dateISOFormatted = dateISO && dateISO.length >= 16 
+        ? localDateTimeToISO(dateISO.slice(0,16))
+        : localDateTimeToISO(getCurrentLocalDateTime())
+      
+      const payload={
+        ...mkMatch({
+          id:crypto.randomUUID?.()||String(Date.now()),
+          dateISO: dateISOFormatted,attendeeIds:ids,criterion:posAware?'pos-aware':criterion,players,
+          teamCount:baseTeams.length,
+          location:{preset:locationPreset,name:locationName,address:locationAddress},
+          mode,snapshot,board:placedByTeam,formations,locked:true,videos:[],
+          ...draftFields
+        }),
+        ...(enablePitchFee && fees ? { fees } : { feesDisabled:true }),
+        // Only include teamColors if at least one team has a custom color
+        ...(teamColors && teamColors.length > 0 && teamColors.some(c => c !== null && c !== undefined) ? { teamColors } : {})
       }
+      await onSaveMatch(payload)
+    } finally {
+      setIsSaving(false)
     }
-    
-    // UI에서 입력한 그대로 저장 (YYYY-MM-DDTHH:mm)
-    const dateISOFormatted = dateISO && dateISO.length >= 16 
-      ? localDateTimeToISO(dateISO.slice(0,16))
-      : localDateTimeToISO(getCurrentLocalDateTime())
-    
-    const payload={
-      ...mkMatch({
-        id:crypto.randomUUID?.()||String(Date.now()),
-        dateISO: dateISOFormatted,attendeeIds:ids,criterion:posAware?'pos-aware':criterion,players,
-        teamCount:baseTeams.length,
-        location:{preset:locationPreset,name:locationName,address:locationAddress},
-        mode,snapshot,board:placedByTeam,formations,locked:true,videos:[],
-        ...draftFields
-      }),
-      ...(enablePitchFee && fees ? { fees } : { feesDisabled:true }),
-      // Only include teamColors if at least one team has a custom color
-      ...(teamColors && teamColors.length > 0 && teamColors.some(c => c !== null && c !== undefined) ? { teamColors } : {})
-    }
-    await onSaveMatch(payload)
   }
 
   function startReferee(){
@@ -1366,14 +1374,30 @@ export default function MatchPlanner({
                               paymentStatus: 'pending'
                             })
                           })
-                        ).catch(()=>{})
+                        )
                       }
                     }}
                     className="rounded px-4 py-2 text-white font-semibold bg-indigo-500 hover:bg-indigo-600"
                     title="변경사항 저장"
                   >불러온 예정 매치 저장</button>
                 )}
-                <button onClick={save} className="rounded px-4 py-2 text-white font-semibold bg-emerald-500 hover:bg-emerald-600">매치 저장</button>
+                <button 
+                  onClick={save} 
+                  disabled={isSaving}
+                  className={`rounded px-4 py-2 text-white font-semibold flex items-center gap-2 ${
+                    isSaving 
+                      ? 'bg-gray-400 cursor-not-allowed' 
+                      : 'bg-emerald-500 hover:bg-emerald-600'
+                  }`}
+                >
+                  {isSaving && (
+                    <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                  )}
+                  {isSaving ? '저장 중...' : '매치 저장'}
+                </button>
               </div>
               {isPastDate && (
                 <span className="text-xs text-amber-600 ml-1">⚠️ 과거 시점은 예정 매치로 저장 불가 (매치 저장만 가능)</span>
