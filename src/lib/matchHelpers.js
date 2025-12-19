@@ -28,9 +28,11 @@ export function isDraftMatch(match) {
   
   // 1순위: selectionMode (가장 명확한 기준)
   if (match.selectionMode === 'draft') return true
+  if (match.selectionMode === 'manual') return false // 명시적으로 일반 매치
   
   // 2순위: 레거시 draftMode 필드
   if (match.draftMode === true) return true
+  if (match.draftMode === false) return false // 명시적으로 일반 매치
   
   // 3순위: 실제 드래프트 데이터 존재 여부 (드래프트 필드에 한정)
   if (match.draft?.quarterScores && Array.isArray(match.draft.quarterScores) && match.draft.quarterScores.length > 0) {
@@ -40,6 +42,7 @@ export function isDraftMatch(match) {
   }
 
   // 레거시: snapshot(팀 배열) + quarterScores 조합만 드래프트로 인정
+  // (selectionMode가 없는 오래된 매치만 해당)
   const hasSnapshot = Array.isArray(match?.snapshot) && match.snapshot.every(Array.isArray)
   if (hasSnapshot && match.quarterScores && Array.isArray(match.quarterScores) && match.quarterScores.length > 0) {
     const hasQuarterData = match.quarterScores.some(q => Array.isArray(q) && q.length > 0)

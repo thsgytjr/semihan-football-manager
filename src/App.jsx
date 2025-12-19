@@ -863,7 +863,7 @@ function App(){
       }
     } catch(e) {
       logger.error('[handleSaveMatch] failed', e)
-      notify("매치 저장에 실패했습니다.")
+      notify("매치 저장에 실패했습니다.", 'error')
     }
   }
   

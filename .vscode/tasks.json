@@ -192,6 +192,59 @@
 			"isBackground": false,
 			"problemMatcher": [],
 			"group": "build"
+		},
+		{
+			"label": "Build after fixing draft mode bug",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"-s",
+				"build"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Build after blocking prod writes in localhost",
+			"type": "shell",
+			"command": "npm run -s build",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Build after fixing MSW write blocking logic",
+			"type": "shell",
+			"command": "npm run -s build",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Build after completely removing draft fields in regular match",
+			"type": "shell",
+			"command": "npm run -s build",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Build after fixing own goal issue with snapshot preservation",
+			"type": "shell",
+			"command": "npm run -s build",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Build after fixing isDraftMatch to respect selectionMode",
+			"type": "shell",
+			"command": "npm run -s build",
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
 		}
 	]
 }

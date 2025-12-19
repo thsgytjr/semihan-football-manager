@@ -3842,16 +3842,13 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                     quarterScores: quarterScores
                   }
                 } else {
-                  // 일반 모드: draft 필드 제거하지 않고 quarterScores만 최상위로
-                  patch.selectionMode = null
+                  // 일반 모드: quarterScores는 최상위에만 저장
+                  // ⚠️ snapshot은 유지 (골 이벤트의 팀 매핑에 필요)
+                  patch.selectionMode = 'manual'
                   patch.quarterScores = quarterScores
-                  // 기존 draft 데이터는 유지 (captains 등)
-                  if (m.draft) {
-                    patch.draft = {
-                      ...m.draft,
-                      quarterScores: quarterScores
-                    }
-                  }
+                  // draft 관련 필드만 제거
+                  patch.draftMode = false
+                  patch.draft = null
                 }
                 
                 onUpdateMatch?.(m.id, patch); setDirty(false)

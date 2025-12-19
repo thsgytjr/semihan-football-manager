@@ -83,14 +83,19 @@ export const handlers = [
   }),
 
   http.patch('*/rest/v1/players*', async ({ request }) => {
+    logger.log('🔵 [MSW] PATCH /players - 선수 업데이트 intercept')
     await delay(300)
     const body = await request.json()
+    logger.log('   - playerId:', body.id)
+    logger.log('   - 업데이트 데이터:', Object.keys(body))
     const index = mockPlayers.findIndex(p => p.id === body.id)
     if (index !== -1) {
       mockPlayers[index] = { ...mockPlayers[index], ...body, lastUpdated: new Date().toISOString() }
       saveMockData()
+      logger.log('✅ [MSW] 선수 업데이트 완료:', body.id)
       return HttpResponse.json(mockPlayers[index])
     }
+    logger.error('❌ [MSW] 선수를 찾을 수 없음:', body.id)
     return HttpResponse.json({ error: 'Player not found' }, { status: 404 })
   }),
 
@@ -114,6 +119,7 @@ export const handlers = [
   }),
 
   http.post('*/rest/v1/matches', async ({ request }) => {
+    logger.log('🔵 [MSW] POST /matches - 매치 생성 intercept')
     await delay(300)
     const body = await request.json()
     const newMatch = {
@@ -123,10 +129,12 @@ export const handlers = [
     }
     mockMatches.push(newMatch)
     saveMockData()
+    logger.log('✅ [MSW] 매치 생성 완료:', newMatch.id)
     return HttpResponse.json(newMatch, { status: 201 })
   }),
 
   http.patch('*/rest/v1/matches*', async ({ request }) => {
+    logger.log('🔵 [MSW] PATCH /matches - 매치 업데이트 intercept')
     await delay(300)
     const url = new URL(request.url)
     const body = await request.json()
@@ -143,15 +151,20 @@ export const handlers = [
       matchId = body.id
     }
     
+    logger.log('   - matchId:', matchId)
+    logger.log('   - 업데이트 데이터:', Object.keys(body))
+    
     if (matchId) {
       const index = mockMatches.findIndex(m => m.id === matchId)
       if (index !== -1) {
         mockMatches[index] = { ...mockMatches[index], ...body }
         saveMockData()
+        logger.log('✅ [MSW] 매치 업데이트 완료:', matchId)
         return HttpResponse.json(mockMatches[index])
       }
     }
     
+    logger.error('❌ [MSW] 매치를 찾을 수 없음:', matchId)
     return HttpResponse.json({ error: 'Match not found' }, { status: 404 })
   }),
 

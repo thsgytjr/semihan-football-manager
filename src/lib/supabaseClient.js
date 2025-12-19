@@ -11,11 +11,13 @@ const isPrivateRange = /^10\.|^192\.168\.|^172\.(1[6-9]|2\d|3[0-1])\./.test(host
 const isLocalNetwork = isLocalHostName || isPrivateRange
 const allowProdWrite = import.meta.env.VITE_ALLOW_PROD_WRITE === 'true'
 
-// If MSW is active (default on local network/localhost), allow writes to flow so MSW can intercept.
-// If ?nomock is present, block writes unless explicitly overridden.
+// ⚠️ CRITICAL: localhost 쓰기 보호 로직
+// - MSW 모드 (기본): 요청을 MSW로 보내야 하므로 차단하지 않음
+// - ?nomock 모드: production 쓰기 차단 (VITE_ALLOW_PROD_WRITE=true로만 허용)
 const mockDisabled = typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('nomock')
-const allowWritesViaMock = isLocalNetwork && !mockDisabled
-const blockWrites = isLocalNetwork && !allowProdWrite && !allowWritesViaMock
+
+// ?nomock일 때만 차단 (MSW 모드에서는 요청이 MSW로 가야 함)
+const blockWrites = isLocalNetwork && mockDisabled && !allowProdWrite
 
 function createMockSupabase(){
   const chain = {
@@ -79,7 +81,22 @@ const baseClient = (url && anon)
   ? createClient(url, anon)
   : (logger.error('Supabase env missing: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY'), createMockSupabase())
 
+// 로깅 강화
+if (typeof window !== 'undefined') {
+  logger.log('🔒 [supabaseClient] 초기화 상태:')
+  logger.log('   - isLocalNetwork:', isLocalNetwork)
+  logger.log('   - mockDisabled:', mockDisabled)
+  logger.log('   - allowProdWrite:', allowProdWrite)
+  logger.log('   - blockWrites:', blockWrites)
+  if (blockWrites) {
+    logger.warn('✅ [supabaseClient] PRODUCTION 쓰기 차단됨 - MSW 모드')
+    logger.warn('💡 실제 DB 테스트: ?nomock&VITE_ALLOW_PROD_WRITE=true 사용')
+  } else {
+    logger.warn('⚠️ [supabaseClient] PRODUCTION 쓰기 허용됨!')
+  }
+}
+
 export const supabase = blockWrites
-  ? (logger.warn('[supabase] Writes blocked on localhost; set VITE_ALLOW_PROD_WRITE=true to enable'), createWriteBlockedClient(baseClient))
+  ? createWriteBlockedClient(baseClient)
   : baseClient
 
