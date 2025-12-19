@@ -2,9 +2,9 @@
 // 날짜/시간 관련 유틸리티 함수
 
 /**
- * 로컬 datetime-local 값을 ISO 문자열로 변환 (타임존 정보 포함)
+ * 로컬 datetime-local 값을 ISO 문자열로 변환 (로컬 타임존 오프셋 포함)
  * @param {string} localDateTimeString - YYYY-MM-DDTHH:mm 형식
- * @returns {string} ISO 8601 형식 (YYYY-MM-DDTHH:mm:ss+09:00)
+ * @returns {string} ISO 8601 형식 with local timezone offset
  */
 export function localDateTimeToISO(localDateTimeString) {
   if (!localDateTimeString) return null
@@ -14,13 +14,27 @@ export function localDateTimeToISO(localDateTimeString) {
     return localDateTimeString
   }
 
-  // 순수 로컬 문자열을 그대로 보존하되, TZ 오프셋을 환경에 의존하지 않도록 UTC(Z)로 표기
-  // 예: "2025-12-18T19:00" -> "2025-12-18T19:00:00Z"
+  // 로컬 시간 문자열을 Date 객체로 파싱 (로컬 시간대 기준)
   const parts = localDateTimeString.split('T')
   if (parts.length !== 2) return null
-  const [datePart, timePartRaw] = parts
-  const timePart = timePartRaw.length === 5 ? `${timePartRaw}:00` : timePartRaw
-  return `${datePart}T${timePart}Z`
+  const [datePart, timePart] = parts
+  
+  // Date 생성자에 문자열을 넘기면 타임존 해석 문제가 있으므로, 
+  // 연/월/일/시/분을 직접 파싱하여 로컬 시간대 기준 Date 객체 생성
+  const [year, month, day] = datePart.split('-').map(Number)
+  const [hours, minutes] = timePart.split(':').map(Number)
+  
+  const localDate = new Date(year, month - 1, day, hours, minutes, 0, 0)
+  
+  // Date 객체의 toISOString()은 UTC로 변환하므로 사용하지 않고,
+  // 로컬 타임존 오프셋을 직접 계산하여 ISO 8601 형식으로 변환
+  const tzOffsetMinutes = localDate.getTimezoneOffset()
+  const tzOffsetHours = Math.abs(Math.floor(tzOffsetMinutes / 60))
+  const tzOffsetMins = Math.abs(tzOffsetMinutes % 60)
+  const tzSign = tzOffsetMinutes <= 0 ? '+' : '-'
+  const tzString = `${tzSign}${String(tzOffsetHours).padStart(2, '0')}:${String(tzOffsetMins).padStart(2, '0')}`
+  
+  return `${datePart}T${timePart.length === 5 ? timePart + ':00' : timePart}${tzString}`
 }
 
 /**

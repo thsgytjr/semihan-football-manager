@@ -69,8 +69,7 @@ export function normalizeDateISO(v){
   const localPattern=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
   if(localPattern.test(v)) return v.slice(0,16)
   
-  // ISO 8601 형태 (타임존 포함): YYYY-MM-DDTHH:mm:ss+09:00 또는 Z
-  // Date 객체로 변환 후 로컬 시간대로 표시
+  // ISO 8601 형태 (타임존 포함) → Date 객체로 변환 후 로컬 시간대로 표시
   try{
     const d=new Date(v)
     if(!isNaN(d.getTime())){

@@ -1324,7 +1324,7 @@ export default function MatchPlanner({
                       // UI에서 입력한 그대로 저장 (YYYY-MM-DDTHH:mm)
                       const dateISOFormatted = dateISO && dateISO.length >= 16 
                         ? dateISO.slice(0,16)
-                        : getNextSaturday630().slice(0,16)
+                        : getCurrentLocalDateTime().slice(0,16)
                       
                       const attendeeObjs = previewTeams.flat().map(p => p)
                       const fees = enablePitchFee ? computeFeesAtSave({ baseCostValue: baseCost, attendees: attendeeObjs, guestSurcharge }) : null
