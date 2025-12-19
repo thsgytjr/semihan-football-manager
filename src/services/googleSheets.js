@@ -3,11 +3,64 @@
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.readonly'
+const TOKEN_STORAGE_KEY = 'google_sheets_token'
+const TOKEN_EXPIRY_KEY = 'google_sheets_token_expiry'
 
 let tokenClient = null
 let accessToken = null
 let gapiInitialized = false
 let gisInitialized = false
+
+/**
+ * Load token from localStorage
+ */
+const loadStoredToken = () => {
+  try {
+    const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY)
+    const expiry = localStorage.getItem(TOKEN_EXPIRY_KEY)
+    
+    if (storedToken && expiry) {
+      const expiryTime = parseInt(expiry, 10)
+      if (Date.now() < expiryTime) {
+        accessToken = storedToken
+        window.gapi?.client?.setToken({ access_token: accessToken })
+        return true
+      } else {
+        // Token expired, clear storage
+        localStorage.removeItem(TOKEN_STORAGE_KEY)
+        localStorage.removeItem(TOKEN_EXPIRY_KEY)
+      }
+    }
+  } catch (error) {
+    console.error('[GoogleSheets] Error loading stored token:', error)
+  }
+  return false
+}
+
+/**
+ * Save token to localStorage
+ */
+const saveToken = (token, expiresIn = 3600) => {
+  try {
+    const expiryTime = Date.now() + (expiresIn * 1000) // Convert seconds to milliseconds
+    localStorage.setItem(TOKEN_STORAGE_KEY, token)
+    localStorage.setItem(TOKEN_EXPIRY_KEY, expiryTime.toString())
+  } catch (error) {
+    console.error('[GoogleSheets] Error saving token:', error)
+  }
+}
+
+/**
+ * Clear stored token
+ */
+const clearStoredToken = () => {
+  try {
+    localStorage.removeItem(TOKEN_STORAGE_KEY)
+    localStorage.removeItem(TOKEN_EXPIRY_KEY)
+  } catch (error) {
+    console.error('[GoogleSheets] Error clearing token:', error)
+  }
+}
 
 /**
  * Check if Google API is initialized
@@ -55,6 +108,10 @@ const loadGisClient = () => {
  */
 export const initializeGapi = async () => {
   if (gapiInitialized && gisInitialized) {
+    // Try to load stored token
+    if (!accessToken) {
+      loadStoredToken()
+    }
     return
   }
 
@@ -70,6 +127,10 @@ export const initializeGapi = async () => {
             discoveryDocs: ['https://sheets.googleapis.com/$discovery/rest?version=v4'],
           })
           gapiInitialized = true
+          
+          // Try to load stored token after gapi is initialized
+          loadStoredToken()
+          
           resolve()
         } catch (error) {
           reject(error)
@@ -112,7 +173,12 @@ export const signIn = async () => {
         
         accessToken = response.access_token
         window.gapi.client.setToken({ access_token: accessToken })
-        console.log('[GoogleSheets] Sign in successful')
+        
+        // Save token to localStorage (default expires_in is 3600 seconds = 1 hour)
+        const expiresIn = response.expires_in || 3600
+        saveToken(accessToken, expiresIn)
+        
+        console.log('[GoogleSheets] Sign in successful, token saved')
         resolve(true)
       }
 
@@ -140,6 +206,7 @@ export const signOut = async () => {
       })
       accessToken = null
       window.gapi.client.setToken(null)
+      clearStoredToken()
     }
     return true
   } catch (error) {
