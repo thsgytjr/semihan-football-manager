@@ -592,11 +592,13 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
         document.body.style.paddingRight = `${scrollbarWidth}px`
       }
       document.body.style.overflow = 'hidden'
+      document.body.style.overscrollBehavior = 'none' // 트랙패드 스와이프 네비게이션 방지
     }
 
     const handleMouseLeave = () => {
       document.body.style.overflow = ''
       document.body.style.paddingRight = ''
+      document.body.style.overscrollBehavior = ''
     }
 
     container.addEventListener('mouseenter', handleMouseEnter)
@@ -608,6 +610,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       // Cleanup
       document.body.style.overflow = ''
       document.body.style.paddingRight = ''
+      document.body.style.overscrollBehavior = ''
     }
   }, [selectedTab]) // selectedTab 변경 시 재설정
 
@@ -1479,15 +1482,17 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
             active={selectedTab === 'spreadsheet'}
             onClick={() => setSelectedTab('spreadsheet')}
             icon={
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
-                <path d="M3 3h8v8H3V3z" fill="#0F9D58"/>
-                <path d="M13 3h8v8h-8V3z" fill="#F4B400"/>
-                <path d="M3 13h8v8H3v-8z" fill="#4285F4"/>
-                <path d="M13 13h8v8h-8v-8z" fill="#0F9D58"/>
+              <svg className="w-4 h-4" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
+                <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+                <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
+                <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
+                <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+                <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+                <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
               </svg>
             }
           >
-            스프레드시트
+            Google Drive
           </TabButton>
         </div>
       </Card>
@@ -1851,15 +1856,28 @@ VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
             {/* Google 계정 정보 및 로그인 */}
             <div className="flex items-center justify-between pb-3 border-b">
               <div className="flex items-center gap-2">
-                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
-                  <path d="M3 3h8v8H3V3z" fill="#0F9D58"/>
-                  <path d="M13 3h8v8h-8V3z" fill="#F4B400"/>
-                  <path d="M3 13h8v8H3v-8z" fill="#4285F4"/>
-                  <path d="M13 13h8v8h-8v-8z" fill="#0F9D58"/>
+                <svg className="w-5 h-5" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">
+                  <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+                  <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>
+                  <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
+                  <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+                  <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+                  <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
                 </svg>
-                <span className="font-semibold text-gray-800">Google Sheets</span>
+                <span className="font-semibold text-gray-800">Google Drive</span>
               </div>
               <div className="flex items-center gap-3">
+                {isGoogleSignedIn && spreadsheetUrl && (
+                  <a
+                    href={spreadsheetUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3 py-1.5 text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1 border border-green-300 rounded-lg hover:bg-green-50"
+                  >
+                    <ExternalLink size={14} />
+                    새 탭
+                  </a>
+                )}
                 {isGoogleSignedIn && googleUser ? (
                   <>
                     <div className="flex items-center gap-2 text-sm">
@@ -1977,32 +1995,7 @@ VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
               <>
                 {spreadsheetUrl ? (
                   <div className="space-y-4">
-                    {/* 헤더 */}
-                    <div className="flex items-center justify-between pb-3 border-b">
-                      <div className="flex items-center gap-2">
-                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
-                          <path d="M3 3h8v8H3V3z" fill="#0F9D58"/>
-                          <path d="M13 3h8v8h-8V3z" fill="#F4B400"/>
-                          <path d="M3 13h8v8H3v-8z" fill="#4285F4"/>
-                          <path d="M13 13h8v8h-8v-8z" fill="#0F9D58"/>
-                        </svg>
-                        <div>
-                          <h3 className="font-semibold text-gray-800">Google Sheets (전체 기능)</h3>
-                          <p className="text-xs text-gray-500 mt-0.5">편집, 필터, 정렬 등 모든 기능 사용 가능</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <a
-                          href={spreadsheetUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-3 py-1.5 text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1 border border-green-300 rounded-lg hover:bg-green-50"
-                        >
-                          <ExternalLink size={14} />
-                          새 탭에서 열기
-                        </a>
-                      </div>
-                    </div>
+
 
                     {/* Google Sheets iframe 임베드 */}
                     <div 
