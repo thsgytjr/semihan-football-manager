@@ -196,6 +196,51 @@ export const signIn = async () => {
 }
 
 /**
+ * Try silent sign-in (no prompt). Works only if user is already logged in to Google
+ * and has previously granted consent. Fails gracefully without showing a popup.
+ */
+export const trySilentSignIn = async () => {
+  try {
+    if (!gapiInitialized || !gisInitialized) {
+      await initializeGapi()
+    }
+
+    // If token already loaded, no need to re-request
+    if (accessToken) return true
+
+    return new Promise((resolve) => {
+      tokenClient.callback = (response) => {
+        if (response.error) {
+          // consent_required or interaction_required means we need a real prompt later
+          if (['consent_required', 'interaction_required', 'popup_closed_by_user'].includes(response.error)) {
+            resolve(false)
+            return
+          }
+          console.error('[GoogleSheets] Silent token error:', response)
+          resolve(false)
+          return
+        }
+
+        accessToken = response.access_token
+        window.gapi.client.setToken({ access_token: accessToken })
+
+        const expiresIn = response.expires_in || 3600
+        saveToken(accessToken, expiresIn)
+
+        console.log('[GoogleSheets] Silent sign-in successful')
+        resolve(true)
+      }
+
+      // prompt: '' -> silent if possible, will fail with consent_required otherwise
+      tokenClient.requestAccessToken({ prompt: '' })
+    })
+  } catch (error) {
+    console.error('[GoogleSheets] Error in silent sign-in:', error)
+    return false
+  }
+}
+
+/**
  * Sign out from Google
  */
 export const signOut = async () => {

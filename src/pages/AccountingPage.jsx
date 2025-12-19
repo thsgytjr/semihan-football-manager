@@ -24,7 +24,7 @@ import { updateMatchInDB } from '../services/matches.service'
 import { isMember } from '../lib/fees'
 import { DollarSign, Users, Calendar, TrendingUp, Plus, X, Check, AlertCircle, RefreshCw, Trash2, ArrowUpDown, Download, Search, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
 import InitialAvatar from '../components/InitialAvatar'
-import { initializeGapi, signIn, signOut, isSignedIn, getCurrentUser, onAuthChange, extractSpreadsheetId, loadSheetData, saveSheetData, getSpreadsheetInfo, isGapiInitialized } from '../services/googleSheets'
+import { initializeGapi, signIn, signOut, isSignedIn, getCurrentUser, onAuthChange, extractSpreadsheetId, loadSheetData, saveSheetData, getSpreadsheetInfo, isGapiInitialized, trySilentSignIn } from '../services/googleSheets'
 import { listMatchesFromDB, deleteMatchFromDB } from '../services/matches.service'
 import { getAccountingOverrides, updateAccountingOverrides, getAppSettings, saveAppSettingsToServer } from '../lib/appSettings'
 import { calculateMatchFees, calculatePlayerMatchFee } from '../lib/matchFeeCalculator'
@@ -533,10 +533,17 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
         await initializeGapi()
         console.log('[GoogleSheets] Google API initialized')
         
-        const signedIn = isSignedIn()
-        console.log('[GoogleSheets] Signed in:', signedIn)
+        let signedIn = isSignedIn()
+        console.log('[GoogleSheets] Signed in (stored token):', signedIn)
+
+        // If no stored token, try silent sign-in using existing Google session
+        if (!signedIn) {
+          const silent = await trySilentSignIn()
+          signedIn = silent || isSignedIn()
+          console.log('[GoogleSheets] Signed in (silent attempt):', signedIn)
+        }
+
         setIsGoogleSignedIn(signedIn)
-        
         if (signedIn) {
           const user = getCurrentUser()
           console.log('[GoogleSheets] Current user:', user?.email)
@@ -1973,7 +1980,8 @@ VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
                         minHeight: '600px',
                         maxHeight: '800px',
                         overflow: 'hidden',
-                        position: 'relative'
+                        position: 'relative',
+                        overscrollBehavior: 'contain'
                       }}
                     >
                       <iframe
