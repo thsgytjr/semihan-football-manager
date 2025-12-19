@@ -1440,8 +1440,11 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
             active={selectedTab === 'spreadsheet'}
             onClick={() => setSelectedTab('spreadsheet')}
             icon={
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-8 16H5v-4h6v4zm0-6H5v-4h6v4zm0-6H5V5h6v2zm8 12h-6v-4h6v4zm0-6h-6v-4h6v4zm0-6h-6V5h6v2z"/>
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none">
+                <path d="M3 3h8v8H3V3z" fill="#0F9D58"/>
+                <path d="M13 3h8v8h-8V3z" fill="#F4B400"/>
+                <path d="M3 13h8v8H3v-8z" fill="#4285F4"/>
+                <path d="M13 13h8v8h-8v-8z" fill="#0F9D58"/>
               </svg>
             }
           >
@@ -1809,8 +1812,11 @@ VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
             {/* Google 계정 정보 및 로그인 */}
             <div className="flex items-center justify-between pb-3 border-b">
               <div className="flex items-center gap-2">
-                <svg className="w-5 h-5 text-green-600" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-8 16H5v-4h6v4zm0-6H5v-4h6v4zm0-6H5V5h6v2zm8 12h-6v-4h6v4zm0-6h-6v-4h6v4zm0-6h-6V5h6v2z"/>
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
+                  <path d="M3 3h8v8H3V3z" fill="#0F9D58"/>
+                  <path d="M13 3h8v8h-8V3z" fill="#F4B400"/>
+                  <path d="M3 13h8v8H3v-8z" fill="#4285F4"/>
+                  <path d="M13 13h8v8h-8v-8z" fill="#0F9D58"/>
                 </svg>
                 <span className="font-semibold text-gray-800">Google Sheets</span>
               </div>
@@ -1934,9 +1940,17 @@ VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
                   <div className="space-y-4">
                     {/* 헤더 */}
                     <div className="flex items-center justify-between pb-3 border-b">
-                      <div>
-                        <h3 className="font-semibold text-gray-800">Google Sheets (전체 기능)</h3>
-                        <p className="text-xs text-gray-500 mt-0.5">편집, 필터, 정렬 등 모든 기능 사용 가능</p>
+                      <div className="flex items-center gap-2">
+                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none">
+                          <path d="M3 3h8v8H3V3z" fill="#0F9D58"/>
+                          <path d="M13 3h8v8h-8V3z" fill="#F4B400"/>
+                          <path d="M3 13h8v8H3v-8z" fill="#4285F4"/>
+                          <path d="M13 13h8v8h-8v-8z" fill="#0F9D58"/>
+                        </svg>
+                        <div>
+                          <h3 className="font-semibold text-gray-800">Google Sheets (전체 기능)</h3>
+                          <p className="text-xs text-gray-500 mt-0.5">편집, 필터, 정렬 등 모든 기능 사용 가능</p>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <a
@@ -1952,12 +1966,25 @@ VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
                     </div>
 
                     {/* Google Sheets iframe 임베드 */}
-                    <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                    <div 
+                      className="border border-gray-200 rounded-lg bg-white" 
+                      style={{ 
+                        height: 'calc(100vh - 200px)', 
+                        minHeight: '600px',
+                        maxHeight: '800px',
+                        overflow: 'hidden',
+                        position: 'relative'
+                      }}
+                    >
                       <iframe
                         src={spreadsheetUrl.replace('/edit', '/edit?embedded=true')}
-                        className="w-full h-[800px] border-0"
+                        className="w-full h-full border-0"
                         title="Google Sheets"
                         allow="clipboard-read; clipboard-write"
+                        style={{ 
+                          display: 'block',
+                          overflow: 'hidden'
+                        }}
                       />
                     </div>
 
