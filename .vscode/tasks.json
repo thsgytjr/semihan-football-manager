@@ -36,6 +36,19 @@
 			"problemMatcher": [
 				"$tsc"
 			]
+		},
+		{
+			"label": "Build after scroll fix",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"-s",
+				"build"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
 		}
 	]
 }

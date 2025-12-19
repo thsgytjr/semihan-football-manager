@@ -580,18 +580,34 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     }
   }, [])
 
-  // iframe 스크롤 격리: wheel 이벤트 전파 방지
+  // iframe 스크롤 격리: 마우스가 iframe 위에 있을 때 메인 스크롤 잠금 (레이아웃 시프트 방지 포함)
   useEffect(() => {
     const container = iframeContainerRef.current
     if (!container) return
 
-    const handleWheel = (e) => {
-      e.stopPropagation()
+    const handleMouseEnter = () => {
+      // 스크롤바 너비 계산
+      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
+      if (scrollbarWidth > 0) {
+        document.body.style.paddingRight = `${scrollbarWidth}px`
+      }
+      document.body.style.overflow = 'hidden'
     }
 
-    container.addEventListener('wheel', handleWheel, { passive: false })
+    const handleMouseLeave = () => {
+      document.body.style.overflow = ''
+      document.body.style.paddingRight = ''
+    }
+
+    container.addEventListener('mouseenter', handleMouseEnter)
+    container.addEventListener('mouseleave', handleMouseLeave)
+
     return () => {
-      container.removeEventListener('wheel', handleWheel)
+      container.removeEventListener('mouseenter', handleMouseEnter)
+      container.removeEventListener('mouseleave', handleMouseLeave)
+      // Cleanup
+      document.body.style.overflow = ''
+      document.body.style.paddingRight = ''
     }
   }, [selectedTab]) // selectedTab 변경 시 재설정
 
@@ -1998,7 +2014,7 @@ VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
                         maxHeight: '800px',
                         overflow: 'hidden',
                         position: 'relative',
-                        overscrollBehavior: 'contain'
+                        overscrollBehavior: 'none'
                       }}
                     >
                       <iframe
@@ -2008,7 +2024,8 @@ VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
                         allow="clipboard-read; clipboard-write"
                         style={{ 
                           display: 'block',
-                          overflow: 'hidden'
+                          overflow: 'hidden',
+                          overscrollBehavior: 'none'
                         }}
                       />
                     </div>
