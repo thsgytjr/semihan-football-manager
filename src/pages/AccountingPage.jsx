@@ -511,8 +511,10 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
     console.log('[AccountingPage] Selected tab:', selectedTab)
   }, [selectedTab])
 
-  // Google API 초기화
+  // Google API 초기화 (구글 드라이브 탭 클릭 시에만)
   useEffect(() => {
+    if (selectedTab !== 'spreadsheet') return
+    
     let unsubscribe = null
     
     async function initGoogle() {
@@ -578,7 +580,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
         unsubscribe()
       }
     }
-  }, [])
+  }, [selectedTab])
 
   // iframe 스크롤 격리: 마우스가 iframe 위에 있을 때 메인 스크롤 잠금 (레이아웃 시프트 방지 포함)
   useEffect(() => {

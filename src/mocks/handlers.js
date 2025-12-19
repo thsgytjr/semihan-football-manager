@@ -6,6 +6,9 @@ import { logger } from '../lib/logger'
 let mockAuthSession = null
 const mockMoMVotes = []
 
+// Performance: 빠른 응답을 위해 delay 최소화
+const MOCK_DELAY = 50 // ms
+
 // SessionStorage 저장 함수
 function saveMockData() {
   try {
@@ -24,7 +27,7 @@ function saveMockData() {
 export const handlers = [
   // ============ Auth API (Supabase) ============
   http.post('*/auth/v1/signin', async ({ request }) => {
-    await delay(500)
+    await delay(MOCK_DELAY)
     // Mock 로그인: 어떤 이메일이든 성공
     const body = await request.json()
     mockAuthSession = {
@@ -42,13 +45,13 @@ export const handlers = [
   }),
 
   http.post('*/auth/v1/signout', async () => {
-    await delay(300)
+    await delay(MOCK_DELAY)
     mockAuthSession = null
     return HttpResponse.json({ ok: true })
   }),
 
   http.get('*/auth/v1/user', async () => {
-    await delay(300)
+    await delay(MOCK_DELAY)
     if (mockAuthSession) {
       return HttpResponse.json(mockAuthSession.user)
     }
@@ -56,7 +59,7 @@ export const handlers = [
   }),
 
   http.get('*/auth/v1/session', async () => {
-    await delay(300)
+    await delay(MOCK_DELAY)
     if (mockAuthSession) {
       return HttpResponse.json(mockAuthSession.session)
     }
@@ -65,12 +68,12 @@ export const handlers = [
 
   // ============ Players API ============
   http.get('*/rest/v1/players', async () => {
-    await delay(300)
+    await delay(MOCK_DELAY)
     return HttpResponse.json(mockPlayers)
   }),
 
   http.post('*/rest/v1/players', async ({ request }) => {
-    await delay(300)
+    await delay(MOCK_DELAY)
     const body = await request.json()
     const newPlayer = {
       ...body,
@@ -83,24 +86,19 @@ export const handlers = [
   }),
 
   http.patch('*/rest/v1/players*', async ({ request }) => {
-    logger.log('🔵 [MSW] PATCH /players - 선수 업데이트 intercept')
-    await delay(300)
+    await delay(MOCK_DELAY)
     const body = await request.json()
-    logger.log('   - playerId:', body.id)
-    logger.log('   - 업데이트 데이터:', Object.keys(body))
     const index = mockPlayers.findIndex(p => p.id === body.id)
     if (index !== -1) {
       mockPlayers[index] = { ...mockPlayers[index], ...body, lastUpdated: new Date().toISOString() }
       saveMockData()
-      logger.log('✅ [MSW] 선수 업데이트 완료:', body.id)
       return HttpResponse.json(mockPlayers[index])
     }
-    logger.error('❌ [MSW] 선수를 찾을 수 없음:', body.id)
     return HttpResponse.json({ error: 'Player not found' }, { status: 404 })
   }),
 
   http.delete('*/rest/v1/players*', async ({ request }) => {
-    await delay(300)
+    await delay(MOCK_DELAY)
     const url = new URL(request.url)
     const id = url.searchParams.get('id')
     const index = mockPlayers.findIndex(p => p.id === id)
@@ -114,13 +112,12 @@ export const handlers = [
 
   // ============ Matches API ============
   http.get('*/rest/v1/matches', async () => {
-    await delay(300)
+    await delay(MOCK_DELAY)
     return HttpResponse.json(mockMatches)
   }),
 
   http.post('*/rest/v1/matches', async ({ request }) => {
-    logger.log('🔵 [MSW] POST /matches - 매치 생성 intercept')
-    await delay(300)
+    await delay(MOCK_DELAY)
     const body = await request.json()
     const newMatch = {
       ...body,
@@ -129,13 +126,11 @@ export const handlers = [
     }
     mockMatches.push(newMatch)
     saveMockData()
-    logger.log('✅ [MSW] 매치 생성 완료:', newMatch.id)
     return HttpResponse.json(newMatch, { status: 201 })
   }),
 
   http.patch('*/rest/v1/matches*', async ({ request }) => {
-    logger.log('🔵 [MSW] PATCH /matches - 매치 업데이트 intercept')
-    await delay(300)
+    await delay(MOCK_DELAY)
     const url = new URL(request.url)
     const body = await request.json()
     
@@ -151,25 +146,20 @@ export const handlers = [
       matchId = body.id
     }
     
-    logger.log('   - matchId:', matchId)
-    logger.log('   - 업데이트 데이터:', Object.keys(body))
-    
     if (matchId) {
       const index = mockMatches.findIndex(m => m.id === matchId)
       if (index !== -1) {
         mockMatches[index] = { ...mockMatches[index], ...body }
         saveMockData()
-        logger.log('✅ [MSW] 매치 업데이트 완료:', matchId)
         return HttpResponse.json(mockMatches[index])
       }
     }
     
-    logger.error('❌ [MSW] 매치를 찾을 수 없음:', matchId)
     return HttpResponse.json({ error: 'Match not found' }, { status: 404 })
   }),
 
   http.delete('*/rest/v1/matches*', async ({ request }) => {
-    await delay(300)
+    await delay(MOCK_DELAY)
     const url = new URL(request.url)
     
     // 쿼리 파라미터에서 id 추출 (id=eq.xxx 형식)
@@ -195,7 +185,7 @@ export const handlers = [
 
   // ============ Visit Logs API ============
   http.get('*/rest/v1/visit_logs', async ({ request }) => {
-    await delay(300)
+    await delay(MOCK_DELAY)
     const url = new URL(request.url)
     const roomId = url.searchParams.get('room_id')
     
@@ -207,7 +197,7 @@ export const handlers = [
   }),
 
   http.post('*/rest/v1/visit_logs', async ({ request }) => {
-    await delay(300)
+    await delay(MOCK_DELAY)
     const body = await request.json()
     const newLog = {
       ...body,
@@ -220,7 +210,7 @@ export const handlers = [
 
   // ============ AppDB API ============
   http.get('*/rest/v1/appdb*', async ({ request }) => {
-    await delay(300)
+    await delay(MOCK_DELAY)
     const url = new URL(request.url)
     const id = url.searchParams.get('id')
     
@@ -258,7 +248,7 @@ export const handlers = [
   }),
 
   http.post('*/rest/v1/appdb', async ({ request }) => {
-    await delay(300)
+    await delay(MOCK_DELAY)
     try {
       const body = await request.json()
       let id = body.id
@@ -292,7 +282,7 @@ export const handlers = [
   }),
 
   http.patch('*/rest/v1/appdb*', async ({ request }) => {
-    await delay(300)
+    await delay(MOCK_DELAY)
     const body = await request.json()
     let id = body.id
     
@@ -318,7 +308,7 @@ export const handlers = [
 
   // ============ Membership Settings API ============
   http.get('*/rest/v1/membership_settings', async ({ request }) => {
-    await delay(300)
+    await delay(MOCK_DELAY)
     const url = new URL(request.url)
     const id = url.searchParams.get('id')
     
@@ -337,7 +327,7 @@ export const handlers = [
   }),
 
   http.post('*/rest/v1/membership_settings', async ({ request }) => {
-    await delay(300)
+    await delay(MOCK_DELAY)
     const body = await request.json()
     
     // Handle array of memberships (bulk insert)
@@ -372,7 +362,7 @@ export const handlers = [
   }),
 
   http.patch('*/rest/v1/membership_settings*', async ({ request }) => {
-    await delay(300)
+    await delay(MOCK_DELAY)
     const url = new URL(request.url)
     const body = await request.json()
     
@@ -403,7 +393,7 @@ export const handlers = [
   }),
 
   http.delete('*/rest/v1/membership_settings*', async ({ request }) => {
-    await delay(300)
+    await delay(MOCK_DELAY)
     const url = new URL(request.url)
     
     // Extract id from query parameter (id=eq.xxx)

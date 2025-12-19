@@ -81,19 +81,9 @@ const baseClient = (url && anon)
   ? createClient(url, anon)
   : (logger.error('Supabase env missing: VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY'), createMockSupabase())
 
-// 로깅 강화
-if (typeof window !== 'undefined') {
-  logger.log('🔒 [supabaseClient] 초기화 상태:')
-  logger.log('   - isLocalNetwork:', isLocalNetwork)
-  logger.log('   - mockDisabled:', mockDisabled)
-  logger.log('   - allowProdWrite:', allowProdWrite)
-  logger.log('   - blockWrites:', blockWrites)
-  if (blockWrites) {
-    logger.warn('✅ [supabaseClient] PRODUCTION 쓰기 차단됨 - MSW 모드')
-    logger.warn('💡 실제 DB 테스트: ?nomock&VITE_ALLOW_PROD_WRITE=true 사용')
-  } else {
-    logger.warn('⚠️ [supabaseClient] PRODUCTION 쓰기 허용됨!')
-  }
+// 초기화 로깅 (간소화)
+if (typeof window !== 'undefined' && !isLocalNetwork) {
+  logger.warn('⚠️ [supabaseClient] PRODUCTION 쓰기 허용됨!')
 }
 
 export const supabase = blockWrites

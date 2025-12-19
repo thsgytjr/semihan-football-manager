@@ -13,37 +13,20 @@ async function enableMocking() {
   const urlParams = new URLSearchParams(window.location.search)
   const mockDisabledParam = urlParams.has('mockDisabled') || urlParams.has('nomock')
   
-  logger.log('🔍 MSW 초기화 시작...')
-  logger.log('   Hostname:', window.location.hostname)
-  logger.log('   isLocalhost:', isLocalhost)
-  logger.log('   mockDisabled (URL param):', mockDisabledParam)
-  
   if (!isLocalhost || mockDisabledParam) {
-    logger.log('⚠️ Mock API 비활성화 (Production 모드 또는 URL 파라미터)')
     return // production/preview에서는 실제 Supabase 사용
   }
 
   try {
-    logger.log('📦 MSW 모듈 로드 중...')
     const { worker } = await import('./mocks/browser')
-    logger.log('✅ MSW 모듈 로드 완료')
-    logger.log('   Worker:', worker)
-    
-    logger.log('🚀 Service Worker 시작 중...')
-    const result = await worker.start({
-      onUnhandledRequest: 'warn', // bypass에서 warn으로 변경하여 누락된 요청 확인
-      quiet: false,
+    await worker.start({
+      onUnhandledRequest: 'bypass',
+      quiet: true,
       serviceWorker: {
         url: '/mockServiceWorker.js'
       }
     })
-    logger.log('✅ Service Worker 시작 결과:', result)
-    logger.log('✅ Mock Service Worker 활성화됨 (localhost)')
-    logger.log('✨ 모든 API 요청이 Mock 데이터로 처리됩니다!')
-    logger.log('💡 팁: ?nomock 파라미터로 실제 DB 테스트 가능')
-    
-    // 핸들러 목록 출력
-    logger.log('📋 등록된 핸들러:', worker.listHandlers().length, '개')
+    console.log('✅ MSW 활성화 (localhost)')
   } catch (error) {
     logger.error('❌ MSW 초기화 실패:', error)
     logger.error('   에러 스택:', error.stack)
