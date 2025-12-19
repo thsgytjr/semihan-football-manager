@@ -1,5 +1,5 @@
 // src/pages/AccountingPage.jsx
-import React, { useEffect, useState, useMemo, useCallback } from 'react'
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import ConfirmDialog from '../components/ConfirmDialog'
 import Card from '../components/Card'
 import { notify } from '../components/Toast'
@@ -178,6 +178,7 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
   const [showExpenseHistory, setShowExpenseHistory] = useState(false)
   const [selectedPlayer, setSelectedPlayer] = useState(null)
   const [playerStats, setPlayerStats] = useState(null)
+  const iframeContainerRef = useRef(null)
   const [selectedYear, setSelectedYear] = useState(() => readStoredYearFilter())
   const [dateRange, setDateRange] = useState(() => {
     const storedYear = readStoredYearFilter()
@@ -578,6 +579,21 @@ export default function AccountingPage({ players = [], matches = [], upcomingMat
       }
     }
   }, [])
+
+  // iframe 스크롤 격리: wheel 이벤트 전파 방지
+  useEffect(() => {
+    const container = iframeContainerRef.current
+    if (!container) return
+
+    const handleWheel = (e) => {
+      e.stopPropagation()
+    }
+
+    container.addEventListener('wheel', handleWheel, { passive: false })
+    return () => {
+      container.removeEventListener('wheel', handleWheel)
+    }
+  }, [selectedTab]) // selectedTab 변경 시 재설정
 
   // 스프레드시트 URL 로드
   useEffect(() => {
@@ -1974,6 +1990,7 @@ VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
 
                     {/* Google Sheets iframe 임베드 */}
                     <div 
+                      ref={iframeContainerRef}
                       className="border border-gray-200 rounded-lg bg-white" 
                       style={{ 
                         height: 'calc(100vh - 200px)', 
