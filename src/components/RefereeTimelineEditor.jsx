@@ -609,7 +609,70 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
 function TimelineEventItem({ ev, playersById, onEdit, onDelete }) {
   const player = playersById.get(toStr(ev.playerId))
   const assistPlayer = ev.assistedBy ? playersById.get(toStr(ev.assistedBy)) : null
-  
+
+  // Try to resolve a player by name for avatar fallback when playerId doesn't cover everyone
+  const findPlayerByName = (name) => {
+    if (!name) return null
+    const target = name.trim().toLowerCase()
+    for (const p of playersById.values()) {
+      if ((p?.name || '').trim().toLowerCase() === target) return p
+    }
+    return null
+  }
+
+  if (ev.type === 'clean_sheet') {
+    const names = (ev.playerName || '')
+      .split(',')
+      .map(n => n.trim())
+      .filter(Boolean)
+    const hasNames = names.length > 0
+    return (
+      <div className="px-4 py-3 rounded-xl border border-teal-200 bg-teal-50/80 flex items-center gap-3">
+        <div className="w-12 text-right font-mono text-xs text-teal-700 font-bold">FT</div>
+        <div className="flex-shrink-0 rounded-lg px-2 py-1.5 bg-white border border-teal-200 text-teal-700 flex flex-col items-center justify-center min-w-[86px]">
+          <div className="text-xl leading-none mb-0.5">🛡️</div>
+          <div className="text-[9px] font-bold uppercase tracking-tight">Clean Sheet</div>
+          <div className="text-[10px] text-teal-500 font-semibold">경기 후</div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] font-bold text-teal-700 mb-1">클린시트 수상자</div>
+          {hasNames ? (
+            <div className="flex flex-wrap gap-2">
+              {names.map((name, idx) => {
+                const p = findPlayerByName(name) || player
+                return (
+                  <span key={`${name}-${idx}`} className="inline-flex items-center gap-1 bg-white border border-teal-200 rounded-full px-2 py-1 text-[12px] text-teal-800">
+                    <InitialAvatar name={name} photoUrl={p?.photoUrl} size={22} />
+                    <span className="font-semibold truncate max-w-[120px]">{name}</span>
+                  </span>
+                )
+              })}
+            </div>
+          ) : (
+            <span className="text-sm font-semibold text-teal-700">팀 클린시트</span>
+          )}
+        </div>
+
+        <div className="flex-shrink-0 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={() => onEdit(ev)}
+            className="p-1.5 rounded hover:bg-blue-100 text-blue-600 transition-colors"
+            title="수정"
+          >
+            <Edit2 size={16} />
+          </button>
+          <button
+            onClick={() => onDelete(ev.id)}
+            className="p-1.5 rounded hover:bg-red-100 text-red-600 transition-colors"
+            title="삭제"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   const getEventTypeLabel = (type) => {
     const map = {
       goal: { emoji: '⚽', label: '골', color: 'bg-emerald-100 text-emerald-700' },
@@ -648,16 +711,22 @@ function TimelineEventItem({ ev, playersById, onEdit, onDelete }) {
           </span>
         </div>
         <div className="flex items-center gap-2">
-          {player ? (
-            <div className="flex items-center gap-1.5">
-              <InitialAvatar name={player.name} photoUrl={player.photoUrl} size={20} />
-              <span className="text-sm font-semibold text-gray-800 truncate">{player.name}</span>
-            </div>
-          ) : ev.type === 'clean_sheet' ? (
-            <span className="text-sm font-semibold text-teal-700">팀 클린시트</span>
-          ) : (
-            <span className="text-sm text-gray-400 italic">선수 미상</span>
-          )}
+          {(() => {
+            const cleanSheetNames = ev.type === 'clean_sheet' ? (ev.playerName || '') : ''
+            const displayName = cleanSheetNames || player?.name
+            if (displayName) {
+              return (
+                <div className="flex items-center gap-1.5">
+                  <InitialAvatar name={displayName} photoUrl={player?.photoUrl} size={20} />
+                  <span className="text-sm font-semibold text-gray-800 truncate">{displayName}</span>
+                </div>
+              )
+            }
+            if (ev.type === 'clean_sheet') {
+              return <span className="text-sm font-semibold text-teal-700">팀 클린시트</span>
+            }
+            return <span className="text-sm text-gray-400 italic">선수 미상</span>
+          })()}
           
           {assistPlayer && (
             <div className="flex items-center gap-1 text-xs text-gray-500 ml-1 pl-2 border-l border-gray-300">

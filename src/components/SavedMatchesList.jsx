@@ -2759,6 +2759,9 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                         if (eventTypes.has('super_save')) {
                           legends.push({ emoji: '🧤', label: t('matchHistory.legendSuperSave', '슈퍼세이브') })
                         }
+                        if (eventTypes.has('clean_sheet')) {
+                          legends.push({ emoji: '🛡️', label: t('matchHistory.legendCleanSheet', '클린시트') })
+                        }
                         
                         return legends.length > 0 ? (
                           <div className="mt-2 mb-1 flex flex-wrap items-center gap-2 text-[9px] text-gray-500">
@@ -2773,9 +2776,11 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                       })()}
                     <ul className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-100 bg-white/95 text-[11px] text-gray-900">
                       {evs.map(ev => {
+                        const eventType = ev.eventType || 'goal'
+                        const isCleanSheet = eventType === 'clean_sheet'
                         const scorerPlayer = ev.scorerId ? byId.get(String(ev.scorerId)) : null
                         const assistPlayer = ev.assistId ? byId.get(String(ev.assistId)) : null
-                        const scorerName = scorerPlayer?.name || (ev.scorerId ? ev.scorerId : t('matchHistory.ownGoal'))
+                        const scorerName = isCleanSheet ? (ev.playerName || t('matchHistory.scorerUnspecified')) : (scorerPlayer?.name || (ev.scorerId ? ev.scorerId : t('matchHistory.ownGoal')))
                         const assistName = assistPlayer?.name || (ev.assistId ? ev.assistId : '')
                         const scorerPhoto = scorerPlayer?.photoUrl || null
                         const assistPhoto = assistPlayer?.photoUrl || null
@@ -2784,7 +2789,6 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                         const scorerBadges = scorerBadgeInfo?.badge ? [scorerBadgeInfo.badge] : []
                         const assistBadges = assistBadgeInfo?.badge ? [assistBadgeInfo.badge] : []
                         const isOwnGoal = !!ev.ownGoal
-                        const eventType = ev.eventType || 'goal'
                         const isFoul = eventType === 'foul'
                         const isYellow = eventType === 'yellow'
                         const isRed = eventType === 'red'
@@ -2869,12 +2873,13 @@ const MatchCard = React.forwardRef(function MatchCard({ m, players, isAdmin, ena
                                   isRed ? 'bg-red-100' :
                                   isOwnGoal ? 'bg-rose-100' :
                                   isSuperSave ? 'bg-sky-100' :
+                                  isCleanSheet ? 'bg-blue-100' :
                                   'bg-emerald-100'
                                 }`}>
-                                  {isFoul ? '⚠️' : isYellow ? '🟨' : isRed ? '🟥' : isOwnGoal ? '🥅' : isSuperSave ? '🧤' : '⚽'}
+                                  {isFoul ? '⚠️' : isYellow ? '🟨' : isRed ? '🟥' : isOwnGoal ? '🥅' : isSuperSave ? '🧤' : isCleanSheet ? '🛡️' : '⚽'}
                                 </span>
                               </div>
-                              {!isFoul && !isYellow && !isRed && !isSuperSave && assistName && (
+                              {!isFoul && !isYellow && !isRed && !isSuperSave && !isCleanSheet && assistName && (
                                 <div className="text-[10px] text-gray-600 flex items-center gap-1.5">
                                   <span className="flex-shrink-0">
                                     <InitialAvatar 

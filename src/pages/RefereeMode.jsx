@@ -558,8 +558,37 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
   const finishMatch = async (cleanSheetAwardees = cleanSheetSelections) => {
     // Prevent auto-save race condition
     finishingRef.current = true
-    
+
     const taggedEvents = events.map(ev => ({ ...ev, gameIndex: ev.gameIndex ?? (matchNumber - 1) }))
+
+    // Add clean sheet event to timeline
+    if (cleanSheetAwardees && cleanSheetAwardees.length > 0) {
+      const playerNames = cleanSheetAwardees
+        .map(pid => {
+          // Find player in teams
+          for (const team of teams) {
+            const player = team.find(p => p.id === pid)
+            if (player) return player.name
+          }
+          return null
+        })
+        .filter(Boolean)
+      
+      if (playerNames.length > 0) {
+        const cleanSheetEvent = {
+          id: crypto.randomUUID?.() || `cs-${Date.now()}`,
+          type: 'clean_sheet',
+          playerName: playerNames.join(', '),
+          playerId: cleanSheetAwardees[0], // Use first player as reference
+          teamIndex: null, // Not team-specific
+          gameIndex: matchNumber - 1,
+          minute: null,
+          timestamp: Date.now()
+        }
+        taggedEvents.unshift(cleanSheetEvent) // Add at the beginning
+      }
+    }
+    
     const stats = buildStats(cleanSheetAwardees)
 
     const payload = {
@@ -1025,7 +1054,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
               {events.map((ev, idx) => {
                 const scoringTeam = ev.type === 'own_goal' ? (ev.teamIndex === 0 ? 1 : 0) : ev.teamIndex
                 const minDisplay = ev.minute > duration ? `${duration} +${ev.minute - duration}'` : `${ev.minute}'`
-                const badge = ev.type === 'goal' ? '⚽' : ev.type === 'own_goal' ? '🥅' : ev.type === 'yellow' ? '🟨' : ev.type === 'red' ? '🟥' : '⚠️'
+                const badge = ev.type === 'goal' ? '⚽' : ev.type === 'own_goal' ? '🥅' : ev.type === 'yellow' ? '🟨' : ev.type === 'red' ? '🟥' : ev.type === 'super_save' ? '🧤' : ev.type === 'clean_sheet' ? '🛡️' : '⚠️'
                 return (
                   <div key={ev.id || `${ev.timestamp}-${idx}`} className="flex items-center gap-2 text-sm group bg-slate-50/60 hover:bg-slate-100 rounded-lg px-3 py-2">
                     <span className="font-mono text-xs text-gray-500 w-14">{minDisplay}</span>
@@ -1040,6 +1069,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                       {ev.type === 'red' && 'Red Card'}
                       {ev.type === 'foul' && 'Foul'}
                       {ev.type === 'super_save' && 'Super Save'}
+                      {ev.type === 'clean_sheet' && 'Clean Sheet'}
                     </span>
                     <button
                       onClick={() => handleRemoveEvent(ev.id)}
