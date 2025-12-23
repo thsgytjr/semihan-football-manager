@@ -910,23 +910,12 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
   const pulseBackgroundTiles = useMemo(() => {
     if (!verifiedPulsePlayers || verifiedPulsePlayers.length === 0) return []
     
-    // Fisher-Yates shuffle helper
-    const shuffle = (arr) => {
-      const a = [...arr]
-      for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [a[i], a[j]] = [a[j], a[i]];
-      }
-      return a
-    }
-
-    // Start with one full shuffled set to ensure everyone appears at least once
-    let tiles = shuffle(verifiedPulsePlayers)
-    
-    // Repeat shuffled sets until we have enough tiles for a dense grid (min ~50)
-    // This ensures even distribution: everyone appears N times before anyone appears N+1 times
-    while (tiles.length < 50) {
-      tiles = [...tiles, ...shuffle(verifiedPulsePlayers)]
+    // Duplicate the array multiple times for seamless infinite scroll
+    // This ensures smooth looping without visible cuts
+    const repetitions = Math.max(3, Math.ceil(60 / verifiedPulsePlayers.length))
+    let tiles = []
+    for (let i = 0; i < repetitions; i++) {
+      tiles = [...tiles, ...verifiedPulsePlayers]
     }
     
     return tiles
