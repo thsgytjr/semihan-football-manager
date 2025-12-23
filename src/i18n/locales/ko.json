@@ -758,6 +758,7 @@
       "title": "다음 시즌에 또 만나요!",
       "description": "{{season}} 시즌을 벌써부터 기다리고 있어요.\n다음 챕터에서 다시 만나요.",
       "cta": "리캡 닫기",
+      "allPlayers": "함께한 선수 {{count}}명",
       "stats": {
         "matches": "경기",
         "players": "선수",

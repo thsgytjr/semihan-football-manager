@@ -762,6 +762,7 @@
       "title": "See you next season!",
       "description": "Already counting down to the {{season}} season—bring on the next chapter.",
       "cta": "Close Recap",
+      "allPlayers": "{{count}} Players Together",
       "stats": {
         "matches": "Matches",
         "players": "Players",

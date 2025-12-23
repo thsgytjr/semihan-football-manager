@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { X, Users, Activity, Calendar, Star, Target, Sparkles, Flame, Smile, Crown, Handshake, Gamepad2, Shield } from 'lucide-react'
 import { extractStatsByPlayer, extractAttendeeIds, extractDateKey } from '../lib/matchUtils'
 import InitialAvatar from './InitialAvatar'
+import { optimizeImageUrl } from '../utils/imageOptimization'
 import { useTranslation } from 'react-i18next'
 import { TEAM_CONFIG } from '../lib/teamConfig'
 
@@ -136,9 +137,30 @@ const hasRealPhoto = (photoUrl) => {
   if (typeof photoUrl !== 'string') return false
   const trimmed = photoUrl.trim()
   if (!trimmed) return false
+  if (trimmed.length < 10) return false // Too short to be a valid URL
+
+  // Filter out generated initials/placeholder avatar services
+  const placeholderMatches = /(ui-avatars|dicebear|placeholder|identicon|initials|default-avatar|avatar-default|no[-_]?photo|noimage|noface|gravatar)/i
+  if (placeholderMatches.test(trimmed)) return false
+
   if (trimmed.startsWith('data:image')) return true
   if (trimmed.startsWith('blob:')) return true
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return true
+  return false
+}
+
+const isInitialOnlyName = (name) => {
+  if (typeof name !== 'string') return true
+  const trimmed = name.trim()
+  if (!trimmed) return true
+  // Single character of any script (e.g., "A", "이")
+  if (trimmed.length === 1) return true
+  // Pure Latin initials up to 3 chars, optional dots or parentheses: "A", "AB", "A.B", "(KJ)"
+  if (/^\(?[A-Z]{1,3}\)?$/.test(trimmed)) return true
+  if (/^[A-Z](?:\.[A-Z])+$/.test(trimmed)) return true
+  if (/^\(?[A-Z]{1,3}[.)]$/.test(trimmed)) return true
+  // Parenthesized single Hangul initial like "(이)"
+  if (/^\([가-힣]\)$/.test(trimmed)) return true
   return false
 }
 
@@ -155,33 +177,31 @@ const verifyPhotoAsset = (url) => {
   if (photoVerificationInflight.has(trimmed)) {
     return photoVerificationInflight.get(trimmed)
   }
-  if (typeof window === 'undefined' || typeof Image === 'undefined') {
+  if (typeof window === 'undefined' || typeof fetch === 'undefined') {
     photoVerificationCache.set(trimmed, true)
     return Promise.resolve(true)
   }
-  const promise = new Promise((resolve) => {
-    const img = new Image()
-    let settled = false
-    const settle = (result) => {
-      if (settled) return
-      settled = true
+
+  // Use optimized URL to match InitialAvatar behavior (size=52 -> target~104)
+  const optimizedUrl = optimizeImageUrl(trimmed, { width: 104, height: 104, quality: 65, format: 'webp' })
+
+  const promise = fetch(optimizedUrl, { method: 'GET', mode: 'cors', cache: 'default' })
+    .then(async (res) => {
+      if (!res.ok) return false
+      const blob = await res.blob()
+      // Filter out small images (likely tracking pixels or broken placeholders)
+      if (blob.size < 1000) return false 
+      // Filter out text/html responses (sometimes 404 pages return 200 OK with HTML)
+      if (blob.type.includes('text') || blob.type.includes('html')) return false
+      return true
+    })
+    .catch(() => false)
+    .then((result) => {
       photoVerificationCache.set(trimmed, result)
       photoVerificationInflight.delete(trimmed)
-      resolve(result)
-    }
-    const timeout = window.setTimeout(() => settle(false), 8000)
-    img.onload = () => {
-      window.clearTimeout(timeout)
-      settle(true)
-    }
-    img.onerror = () => {
-      window.clearTimeout(timeout)
-      settle(false)
-    }
-    img.crossOrigin = 'anonymous'
-    img.referrerPolicy = 'no-referrer'
-    img.src = trimmed
-  })
+      return result
+    })
+
   photoVerificationInflight.set(trimmed, promise)
   return promise
 }
@@ -849,7 +869,13 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
         if (pid) seen.add(pid)
       })
     })
-    return players.filter((player) => hasRealPhoto(player?.photoUrl) && seen.has(player.id))
+    return players.filter(
+      (player) =>
+        Boolean(player?.photoUrl) &&
+        hasRealPhoto(player?.photoUrl) &&
+        !isInitialOnlyName(player?.name) &&
+        seen.has(player.id)
+    )
   }, [matches, players])
 
   useEffect(() => {
@@ -883,11 +909,26 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
 
   const pulseBackgroundTiles = useMemo(() => {
     if (!verifiedPulsePlayers || verifiedPulsePlayers.length === 0) return []
-    const tiles = [...verifiedPulsePlayers, ...verifiedPulsePlayers]
-    while (tiles.length < 24) {
-      tiles.push(...verifiedPulsePlayers)
-      if (tiles.length > 64) break
+    
+    // Fisher-Yates shuffle helper
+    const shuffle = (arr) => {
+      const a = [...arr]
+      for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+      }
+      return a
     }
+
+    // Start with one full shuffled set to ensure everyone appears at least once
+    let tiles = shuffle(verifiedPulsePlayers)
+    
+    // Repeat shuffled sets until we have enough tiles for a dense grid (min ~50)
+    // This ensures even distribution: everyone appears N times before anyone appears N+1 times
+    while (tiles.length < 50) {
+      tiles = [...tiles, ...shuffle(verifiedPulsePlayers)]
+    }
+    
     return tiles
   }, [verifiedPulsePlayers])
 
@@ -1512,14 +1553,69 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     {
       id: 'outro',
       content: (
-        <div className="relative h-full w-full overflow-hidden">
-          <VideoBackground
-            src={RECAP_OUTRO_VIDEO}
-            overlayClass=""
-          />
+        <div className={`relative h-full w-full overflow-hidden ${verifiedPulsePlayers.length >= 10 ? 'bg-gradient-to-br from-amber-50 via-white to-amber-100' : ''}`}>
+          {verifiedPulsePlayers.length < 10 ? (
+            <VideoBackground
+              src={RECAP_OUTRO_VIDEO}
+              overlayClass=""
+            />
+          ) : (
+            <>
+              {/* Player Avatars Pulse Background */}
+              {pulseBackgroundTiles.length > 0 && (
+                <div className="absolute inset-0 pointer-events-none px-6">
+                  <div
+                    className="grid w-full grid-cols-[repeat(auto-fit,minmax(52px,1fr))] justify-items-center gap-4 opacity-55"
+                    style={{
+                      animation: pulseScrollDuration
+                        ? `pulse-grid-scroll ${pulseScrollDuration}s linear infinite`
+                        : undefined
+                    }}
+                  >
+                    {pulseBackgroundTiles.map((player, idx) => (
+                      <div
+                        key={`${player.id ?? 'pulse'}-${idx}`}
+                        className="relative rounded-full transition-transform duration-1000"
+                        style={{
+                          animation: `pulse-grid-rise 1.4s ease-out ${idx * 0.04}s both`,
+                          transform: `scale(${0.9 + (idx % 3) * 0.1})` // Slight size variation
+                        }}
+                      >
+                        {/* Soft glow behind avatar */}
+                        <div className="absolute inset-0 rounded-full bg-amber-400/20 blur-md" />
+                        <InitialAvatar
+                          id={player.id}
+                          name={player.name}
+                          photoUrl={player.photoUrl}
+                          size={52}
+                          className="ring-1 ring-white/20 shadow-sm"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* Color wash & subtle grain for depth */}
+              <div
+                className="absolute inset-0 opacity-70 mix-blend-multiply animate-[spin_48s_linear_infinite]"
+                style={{
+                  background:
+                    'radial-gradient(circle at 20% 25%, rgba(251,191,36,0.35), transparent 40%),' +
+                    'radial-gradient(circle at 80% 30%, rgba(59,130,246,0.22), transparent 38%),' +
+                    'radial-gradient(circle at 60% 75%, rgba(34,197,94,0.25), transparent 42%)'
+                }}
+                aria-hidden="true"
+              />
+              <div
+                className="absolute inset-0 opacity-25 mix-blend-soft-light"
+                style={{ backgroundImage: 'radial-gradient(rgba(0,0,0,0.08) 1px, transparent 0)', backgroundSize: '10px 10px' }}
+                aria-hidden="true"
+              />
+            </>
+          )}
           <div className="absolute inset-0 champion-aurora" aria-hidden="true" />
           <div className="absolute inset-0 champion-grid" aria-hidden="true" />
-          <div className="relative flex flex-col items-center justify-center h-full text-center p-4">
+          <div className="relative flex flex-col items-center justify-center h-full text-center p-4 z-10">
             <p className="text-[11px] uppercase tracking-[0.4em] text-black/70 mb-2">{t('seasonRecap.finale.label')}</p>
             <h1 className="text-2xl font-bold text-black mb-6 drop-shadow">{t('seasonRecap.finale.title')}</h1>
             <div className="w-full max-w-sm space-y-4 text-left">
@@ -1543,6 +1639,7 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
                     ))}
                 </p>
               </div>
+              
               <button
                 onClick={onClose}
                 className="w-full rounded-2xl border border-white/15 bg-white/15 px-4 py-3 text-sm font-semibold text-black transition hover:bg-white/25"
