@@ -17,11 +17,13 @@ export function MoMPopup({
   onClose,
   onSubmit,
   error,
+  forceShow = false,
 }) {
   const { t, i18n } = useTranslation()
   const [selected, setSelected] = React.useState('')
   const [voterName, setVoterName] = React.useState('')
   const [viewAll, setViewAll] = React.useState(false)
+  const [hiddenForToday, setHiddenForToday] = React.useState(false)
 
   const selectList = viewAll || recommended.length === 0 ? roster : recommended
   const totalVotesLabel = totalVotes > 0
@@ -55,6 +57,37 @@ export function MoMPopup({
     if (fallback) setSelected(fallback)
   }, [recommended, roster, selected])
 
+  const handleHideForToday = () => {
+    setHiddenForToday(true)
+    try {
+      const today = new Date().toDateString()
+      localStorage.setItem('momPopup_hideUntil', today)
+    } catch {
+      // ignore
+    }
+    onClose()
+  }
+
+  React.useEffect(() => {
+    if (forceShow) {
+      setHiddenForToday(false)
+      return
+    }
+    try {
+      const hideUntil = localStorage.getItem('momPopup_hideUntil')
+      if (hideUntil) {
+        const today = new Date().toDateString()
+        if (hideUntil === today) {
+          setHiddenForToday(true)
+        } else {
+          localStorage.removeItem('momPopup_hideUntil')
+        }
+      }
+    } catch {
+      // ignore
+    }
+  }, [forceShow])
+
   React.useEffect(() => {
     if (!match || typeof document === 'undefined') return undefined
     const previous = document.body.style.overflow
@@ -65,7 +98,7 @@ export function MoMPopup({
   }, [match])
 
   const portalTarget = typeof document !== 'undefined' ? document.body : null
-  if (!portalTarget || !match) return null
+  if (!portalTarget || !match || hiddenForToday) return null
 
   const list = selectList
   const matchLabel = new Date(match.dateISO).toLocaleString(i18n.language === 'ko' ? 'ko-KR' : 'en-US', {
@@ -81,12 +114,17 @@ export function MoMPopup({
   const countdownLabel = countdown?.label
 
   const popup = (
-    <div className="fixed inset-0 z-[9999] overflow-y-auto overscroll-contain">
+    <div className="fixed inset-0 z-[100] overflow-y-auto overscroll-contain">
       <div className="absolute inset-0 bg-black/40" onClick={onClose}></div>
-      <div className="relative z-50 flex min-h-full items-end justify-center overflow-y-auto px-3 py-4 sm:items-center sm:px-6">
-        <Card className="w-full max-w-lg sm:max-w-xl border-2 border-amber-200 bg-white shadow-2xl flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden rounded-3xl min-h-[320px]">
-          <div className="flex items-start justify-between gap-4 border-b border-amber-100 px-5 py-4">
-              <div>
+      <div className="relative z-50 flex min-h-full items-start justify-center px-3 py-8 sm:px-6 sm:py-12">
+        <Card className="w-full max-w-lg sm:max-w-xl border-2 border-amber-200 bg-white shadow-2xl flex max-h-[calc(100vh-32px)] sm:max-h-[calc(100vh-64px)] flex-col overflow-hidden rounded-3xl min-h-[320px] mt-6 sm:mt-0">
+          <div className="flex w-full justify-end bg-stone-50 px-4 py-2 border-b border-stone-100">
+             <button onClick={handleHideForToday} className="text-xs text-stone-500 hover:text-stone-800 flex items-center gap-1">
+               <span className="underline">{t('newSeasonBanner.hideForToday')}</span>
+             </button>
+          </div>
+          <div className="relative flex items-start justify-between gap-4 border-b border-amber-100 px-5 py-4">
+              <div className="flex-1">
                 <div className="text-xs uppercase tracking-wide text-amber-600">{t('mom.popup.title')}</div>
                 <div className="text-lg font-bold text-stone-900">{matchLabel}</div>
                 <div className="text-sm text-stone-600">

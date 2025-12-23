@@ -207,6 +207,7 @@ export default function Dashboard({
   // 시즌 필터 상태 (리더보드/히스토리 분리)
   const [leaderboardSeason, setLeaderboardSeason] = useState('all')
   const [historySeason, setHistorySeason] = useState('all')
+  const [newSeasonBannerVisible, setNewSeasonBannerVisible] = useState(false)
   
   // Season Recap 모달 상태
   const [showSeasonRecap, setShowSeasonRecap] = useState(() => seasonRecapEnabled && seasonRecapReady) // 기능 토글 반영
@@ -1417,6 +1418,12 @@ export default function Dashboard({
       notify('이미 투표를 완료했습니다. 리더보드에서 결과를 확인하세요.', 'info')
       return
     }
+    // Clear hide-for-today when user explicitly clicks to vote
+    try {
+      localStorage.removeItem('momPopup_hideUntil')
+    } catch {
+      // ignore
+    }
     setManualMoMOpen(true)
     setShowMoM(true)
   }
@@ -1544,6 +1551,7 @@ export default function Dashboard({
             onClose={handleCloseMoM}
             onSubmit={mom.submitVote}
             error={mom.error}
+            forceShow={manualMoMOpen}
           />
         )}
 
@@ -1566,7 +1574,7 @@ export default function Dashboard({
           />
         )}
 
-        {isMoMEnabled && (
+        {isMoMEnabled && !showSeasonRecap && !newSeasonBannerVisible && (
           <MoMNoticeWidget
             notice={momNotice}
             onOpenMoM={handleOpenMoMFromNotice}
@@ -1578,18 +1586,21 @@ export default function Dashboard({
           currentSeason={leaderboardSeason !== 'all' ? leaderboardSeason : leaderboardDefaultSeason}
           seasonRecapEnabled={seasonRecapEnabled}
           hasSeenRecap={hasSeenRecap}
+          onVisibilityChange={setNewSeasonBannerVisible}
         />
 
-        <UpcomingMatchesWidget
-          upcomingMatches={upcomingMatches}
-          players={players}
-          matches={matches}
-          isAdmin={isAdmin}
-          onSave={onSaveUpcomingMatch}
-          onDeleteUpcomingMatch={onDeleteUpcomingMatch}
-          onUpdateUpcomingMatch={onUpdateUpcomingMatch}
-          onShowTeams={handleShowTeams}
-        />
+        {!newSeasonBannerVisible && (
+          <UpcomingMatchesWidget
+            upcomingMatches={upcomingMatches}
+            players={players}
+            matches={matches}
+            isAdmin={isAdmin}
+            onSave={onSaveUpcomingMatch}
+            onDeleteUpcomingMatch={onDeleteUpcomingMatch}
+            onUpdateUpcomingMatch={onUpdateUpcomingMatch}
+            onShowTeams={handleShowTeams}
+          />
+        )}
 
         {leaderboardVisible && (
           <Card 

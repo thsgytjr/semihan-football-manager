@@ -248,11 +248,8 @@ export function isMatchExpired(dateISO) {
     const matchTime = new Date(dateISO)
     const now = new Date()
     
-    // 매치 시작 시간 + 12시간 후에 만료 (매치 진행 시간 + 여유 시간)
-    // 예: 오전 6시 30분 매치 → 저녁 6시 30분까지 유지
-    const expirationTime = new Date(matchTime.getTime() + 12 * 60 * 60 * 1000)
-    
-    return now > expirationTime
+    // 매치 시작 시간이 지나면 즉시 만료 (배너 제거)
+    return now > matchTime
   } catch (error) {
     logger.error('Error checking match expiration:', error)
     return false

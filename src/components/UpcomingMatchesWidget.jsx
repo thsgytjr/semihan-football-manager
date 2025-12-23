@@ -65,7 +65,7 @@ export default function UpcomingMatchesWidget({
         top: '12px',
         right: isMinimized ? '12px' : 'auto',
         left: isMinimized ? 'auto' : '50%',
-        zIndex: 50,
+        zIndex: 40,
         width: isMinimized ? '48px' : getWidgetWidth(),
         height: isMinimized ? '48px' : 'auto',
         maxWidth: isMinimized ? 'none' : 'calc(100vw - 16px)',

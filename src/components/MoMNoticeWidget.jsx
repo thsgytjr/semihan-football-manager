@@ -24,6 +24,18 @@ export function MoMNoticeWidget({ notice, onOpenMoM, onAlreadyVoted }) {
   const [isMinimized, setIsMinimized] = useState(true)
   const [hasBounced, setHasBounced] = useState(false)
   const [countdownState, setCountdownState] = useState(() => computeCountdownState(notice?.deadlineTs))
+  const [hiddenForToday, setHiddenForToday] = useState(() => {
+    try {
+      const hideUntil = localStorage.getItem('momNotice_hideUntil')
+      if (hideUntil) {
+        const today = new Date().toDateString()
+        return hideUntil === today
+      }
+    } catch {
+      // ignore
+    }
+    return false
+  })
 
   useEffect(() => {
     setCountdownState(computeCountdownState(notice?.deadlineTs))
@@ -42,7 +54,18 @@ export function MoMNoticeWidget({ notice, onOpenMoM, onAlreadyVoted }) {
 
   const memoizedLeaders = useMemo(() => notice?.leaders || [], [notice?.leaders])
 
-  if (!notice?.visible) {
+  const handleHideForToday = () => {
+    setHiddenForToday(true)
+    setIsMinimized(true)
+    try {
+      const today = new Date().toDateString()
+      localStorage.setItem('momNotice_hideUntil', today)
+    } catch {
+      // ignore
+    }
+  }
+
+  if (!notice?.visible || hiddenForToday) {
     return null
   }
 
@@ -80,7 +103,7 @@ export function MoMNoticeWidget({ notice, onOpenMoM, onAlreadyVoted }) {
         top: '12px',
         right: isMinimized ? '12px' : 'auto',
         left: isMinimized ? 'auto' : '50%',
-        zIndex: 55,
+        zIndex: 35,
         width: isMinimized ? '48px' : 'min(360px, calc(100vw - 16px))',
         height: isMinimized ? '48px' : 'auto',
         background: isMinimized ? 'linear-gradient(135deg, #fb923c, #f97316)' : 'white',
@@ -158,7 +181,17 @@ export function MoMNoticeWidget({ notice, onOpenMoM, onAlreadyVoted }) {
         </div>
       ) : (
         <div className="flex flex-col divide-y divide-slate-100 bg-white">
-          <div className="flex items-center justify-between px-5 py-4">
+          <div className="relative flex items-center justify-between px-5 py-4">
+            <button
+              onClick={handleHideForToday}
+              className="absolute left-2 top-2 rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+              title={t('common.hideForToday', 'Hide for today')}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-amber-400 to-orange-500 text-white shadow-lg">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none">

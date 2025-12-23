@@ -1,4 +1,4 @@
-import { http, HttpResponse, delay } from 'msw'
+import { http, HttpResponse, delay, passthrough } from 'msw'
 import { mockPlayers, mockMatches, mockVisitLogs, mockAppDB, mockMembershipSettings, mockTagPresets, mockUpcomingMatches, mockVisitTotals } from './data'
 import { logger } from '../lib/logger'
 
@@ -681,18 +681,16 @@ export const handlers = [
     return fetch(request)
   }),
 
-  http.post('https://accounts.google.com/*', async ({ request }) => {
-    // Passthrough - let the actual request happen
-    return fetch(request)
+  http.post('https://accounts.google.com/*', async () => {
+    return passthrough()
   }),
 
-  http.get('https://www.gstatic.com/*', async ({ request }) => {
-    // Passthrough - let the actual request happen
-    return fetch(request)
+  http.get('https://www.gstatic.com/*', async () => {
+    return passthrough()
   }),
 
-  http.get('https://api.ipify.org/*', async ({ request }) => {
-    // Passthrough - let the actual request happen
-    return fetch(request)
+  http.get('https://api.ipify.org/*', async () => {
+    // Mock IP response to avoid network errors
+    return HttpResponse.json({ ip: '127.0.0.1' })
   })
 ]

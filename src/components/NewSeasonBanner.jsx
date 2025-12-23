@@ -10,7 +10,7 @@ import { Sparkles, X, Calendar, Database } from 'lucide-react'
  * @param {boolean} seasonRecapEnabled - 시즌 리캡이 활성화되어 있는지
  * @param {boolean} hasSeenRecap - 유저가 시즌 리캡을 봤는지 여부
  */
-export default function NewSeasonBanner({ currentSeason, seasonRecapEnabled, hasSeenRecap }) {
+export default function NewSeasonBanner({ currentSeason, seasonRecapEnabled, hasSeenRecap, onVisibilityChange }) {
   const { t } = useTranslation()
   
   // 다음 시즌 계산 (현재 시즌 + 1년)
@@ -78,8 +78,14 @@ export default function NewSeasonBanner({ currentSeason, seasonRecapEnabled, has
     return false
   })()
 
+  const isVisible = seasonRecapEnabled && hasSeenRecap && !isDismissed && !isHiddenForToday
+
+  useEffect(() => {
+    onVisibilityChange?.(isVisible)
+  }, [isVisible, onVisibilityChange])
+
   // 시즌 리캡이 꺼져있거나, 리캡을 아직 안봤거나, 이미 닫혔거나, 오늘 하루 숨김이면 표시 안함
-  if (!seasonRecapEnabled || !hasSeenRecap || isDismissed || isHiddenForToday) {
+  if (!isVisible) {
     return null
   }
 
