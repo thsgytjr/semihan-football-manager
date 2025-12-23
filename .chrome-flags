@@ -1,0 +1,9 @@
+# Chrome flags to prevent crashes during development
+# Add these flags when launching Chrome for localhost development
+
+--disable-dev-shm-usage
+--disable-gpu
+--no-sandbox
+--disable-software-rasterizer
+--disable-extensions
+--js-flags="--max-old-space-size=4096"

@@ -130,13 +130,29 @@ export default defineConfig(({ mode }) => {
           // 파일명에 타임스탬프 해시 포함
           entryFileNames: `assets/[name]-[hash].js`,
           chunkFileNames: `assets/[name]-[hash].js`,
-          assetFileNames: `assets/[name]-[hash].[ext]`
+          assetFileNames: `assets/[name]-[hash].[ext]`,
+          // 수동 청크 분리로 메모리 사용량 최적화
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom'],
+            'charts': ['recharts'],
+            'ui-libs': ['@headlessui/react', '@radix-ui/react-dropdown-menu', '@radix-ui/react-scroll-area', '@radix-ui/react-toggle-group'],
+            'supabase': ['@supabase/supabase-js'],
+            'utils': ['uuid', 'xlsx']
+          }
         }
       },
       // 청크 크기 경고 임계값 (기존 경고 유지)
       chunkSizeWarningLimit: 1000,
       // 소스맵 생성 (프로덕션 디버깅용)
       sourcemap: mode === 'production' ? false : true,
+      // 메모리 최적화
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: mode === 'production',
+          drop_debugger: mode === 'production'
+        }
+      }
     },
     server: {
       headers: {
@@ -144,7 +160,20 @@ export default defineConfig(({ mode }) => {
         'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
         'Pragma': 'no-cache',
         'Expires': '0'
+      },
+      // HMR 최적화
+      hmr: {
+        overlay: true
+      },
+      // 메모리 사용량 최적화
+      watch: {
+        ignored: ['**/node_modules/**', '**/dist/**', '**/.git/**']
       }
+    },
+    // 최적화 설정
+    optimizeDeps: {
+      include: ['react', 'react-dom', '@supabase/supabase-js'],
+      exclude: ['msw']
     }
   }
 })

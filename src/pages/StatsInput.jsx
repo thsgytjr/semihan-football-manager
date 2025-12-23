@@ -1594,14 +1594,13 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
           <div className="mb-2 text-sm font-semibold text-gray-800">
             ⚽ {players.find(p => toStr(p.id) === toStr(addingGoalFor.playerId))?.name}의 골 추가
           </div>
-          <div className="mb-2 text-xs text-gray-600">어시스트한 선수를 선택하세요:</div>
+          <div className="mb-2 text-xs text-gray-600">어시스트한 선수를 선택하세요 (다른 팀 선수도 선택 가능):</div>
           <div className="space-y-3">
             {teamRosters.map((team, teamIdx) => {
               const teamPlayers = team.players.filter(p => toStr(p.id) !== toStr(addingGoalFor.playerId))
               if (teamPlayers.length === 0) return null
 
               const isSameTeam = teamIdx === addingGoalFor.teamIdx
-              if (!isSameTeam) return null
 
               return (
                 <div key={teamIdx} className={isSameTeam ? 'order-first' : ''}>
@@ -1657,14 +1656,13 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
           <div className="mb-2 text-sm font-semibold text-gray-800">
             👉 {players.find(p => toStr(p.id) === toStr(addingAssistFor.playerId))?.name}의 어시스트 추가
           </div>
-          <div className="mb-2 text-xs text-gray-600">골을 넣은 선수를 선택하세요:</div>
+          <div className="mb-2 text-xs text-gray-600">골을 넣은 선수를 선택하세요 (다른 팀 선수도 선택 가능):</div>
           <div className="space-y-3">
             {teamRosters.map((team, teamIdx) => {
               const teamPlayers = team.players.filter(p => toStr(p.id) !== toStr(addingAssistFor.playerId))
               if (teamPlayers.length === 0) return null
 
               const isSameTeam = teamIdx === addingAssistFor.teamIdx
-              if (!isSameTeam) return null
 
               return (
                 <div key={teamIdx} className={isSameTeam ? 'order-first' : ''}>
