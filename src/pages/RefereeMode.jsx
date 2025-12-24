@@ -231,8 +231,64 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     const fullTeams = Array.isArray(activeMatch?.teams) && activeMatch.teams.length > 0
       ? activeMatch.teams
       : [[], []]
+    
+    // Compute suggested next matchup using round-robin
+    const computeSuggestedMatchup = () => {
+      const totalTeams = fullTeams.length
+      if (totalTeams < 2) return fullTeams.map((_, idx) => idx)
+      
+      // Build all possible pairings
+      const pairKey = (a, b) => `${Math.min(a, b)}-${Math.max(a, b)}`
+      const usage = new Map()
+      const allPairs = []
+      
+      for (let i = 0; i < totalTeams; i += 1) {
+        for (let j = i + 1; j < totalTeams; j += 1) {
+          const key = pairKey(i, j)
+          usage.set(key, 0)
+          allPairs.push([i, j])
+        }
+      }
+      
+      if (allPairs.length === 0) return [0, 1]
+      
+      // Count existing games from stats.__games
+      const existingGames = Array.isArray(activeMatch?.stats?.__games) 
+        ? activeMatch.stats.__games 
+        : []
+      
+      existingGames.forEach(game => {
+        if (!game || !Array.isArray(game.teamIndices) || game.teamIndices.length < 2) return
+        const unique = []
+        game.teamIndices.forEach(ti => {
+          if (!unique.includes(ti)) unique.push(ti)
+        })
+        if (unique.length < 2) return
+        const [a, b] = unique
+        const key = pairKey(a, b)
+        if (usage.has(key)) {
+          usage.set(key, (usage.get(key) || 0) + 1)
+        }
+      })
+      
+      // Find least-used pairing
+      let bestPair = allPairs[0]
+      let bestScore = Number.POSITIVE_INFINITY
+      
+      allPairs.forEach(pair => {
+        const key = pairKey(pair[0], pair[1])
+        const count = usage.get(key) ?? 0
+        if (count < bestScore) {
+          bestScore = count
+          bestPair = pair
+        }
+      })
+      
+      return bestPair
+    }
+    
     const defaultSelection = fullTeams.length >= 2
-      ? [0, 1]
+      ? computeSuggestedMatchup()
       : fullTeams.map((_, idx) => idx)
 
     if (inProgress && inProgress.matchNumber === (initialGameIndex + 1)) {

@@ -243,6 +243,53 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
     })
   }, [gameIndices, resolvedParticipantsByGame, teams])
 
+  const suggestedNextGameTeams = useMemo(() => {
+    const totalTeams = Math.max(teams.length, 2)
+    if (totalTeams < 2) return null
+
+    const pairKey = (a, b) => `${Math.min(a, b)}-${Math.max(a, b)}`
+    const usage = new Map()
+    const allPairs = []
+
+    for (let i = 0; i < totalTeams; i += 1) {
+      for (let j = i + 1; j < totalTeams; j += 1) {
+        const key = pairKey(i, j)
+        usage.set(key, 0)
+        allPairs.push([i, j])
+      }
+    }
+
+    if (allPairs.length === 0) return null
+
+    participantsByGame.forEach((teamIndices) => {
+      if (!Array.isArray(teamIndices) || teamIndices.length < 2) return
+      const unique = []
+      teamIndices.forEach((ti) => {
+        if (!unique.includes(ti)) unique.push(ti)
+      })
+      if (unique.length < 2) return
+      const [a, b] = unique
+      const key = pairKey(a, b)
+      if (usage.has(key)) {
+        usage.set(key, (usage.get(key) || 0) + 1)
+      }
+    })
+
+    let bestPair = allPairs[0]
+    let bestScore = Number.POSITIVE_INFINITY
+
+    allPairs.forEach((pair) => {
+      const key = pairKey(pair[0], pair[1])
+      const count = usage.get(key) ?? 0
+      if (count < bestScore) {
+        bestScore = count
+        bestPair = pair
+      }
+    })
+
+    return bestPair
+  }, [participantsByGame, teams])
+
   const getGameScores = (gameIndex) => {
     const gamesMeta = Array.isArray(match?.stats?.__games) ? match.stats.__games : []
     const gameMeta = gamesMeta?.[gameIndex]
@@ -940,6 +987,7 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
           timeline={timeline}
           gameOptions={gameOptions}
           teamsPerGame={teamsPerGame}
+          suggestedTeamsForNextGame={suggestedNextGameTeams}
         />
       )}
 
@@ -1441,7 +1489,7 @@ function EventEditModal({
 }
 
 /* Event Add Modal */
-function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, getGameScores, timeline, gameOptions = [], teamsPerGame = [] }) {
+function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, getGameScores, timeline, gameOptions = [], teamsPerGame = [], suggestedTeamsForNextGame = null }) {
   const initialGameIndex = gameOptions?.[0]?.value ?? 0
   const initialTeamIndex = teamsPerGame?.[initialGameIndex]?.[0]?.teamIndex ?? 0
 
@@ -1483,6 +1531,23 @@ function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, g
       players: team || [],
     }))
   }, [formData.gameIndex, teamsPerGame, teams, newGameTeams, isNewGame])
+
+  React.useEffect(() => {
+    if (!isNewGame) {
+      if (newGameTeams.length) setNewGameTeams([])
+      return
+    }
+    const canSuggest = Array.isArray(suggestedTeamsForNextGame) && suggestedTeamsForNextGame.length === 2
+    if (newGameTeams.length === 0 && canSuggest) {
+      setNewGameTeams(suggestedTeamsForNextGame)
+      setFormData(prev => ({
+        ...prev,
+        teamIndex: suggestedTeamsForNextGame[0],
+        playerId: '',
+        assistedBy: '',
+      }))
+    }
+  }, [isNewGame, suggestedTeamsForNextGame, newGameTeams.length])
 
   React.useEffect(() => {
     if (!availableTeams.length) return
