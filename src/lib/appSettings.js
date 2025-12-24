@@ -8,8 +8,8 @@ const SETTINGS_KEY = 'app_settings'
 const SUPABASE_SETTINGS_KEY = 'app_settings'
 
 const DEFAULT_SETTINGS = {
-  appTitle: 'Semihan-FM',
-  appName: 'Semihan Football Manager',
+  appTitle: import.meta.env.VITE_TEAM_NAME || 'Goalify',
+  appName: import.meta.env.VITE_TEAM_NAME ? `${import.meta.env.VITE_TEAM_NAME} Football Manager` : 'Goalify Football Manager',
   seasonRecapEnabled: false,  // 시즌 리캡 슬라이드쇼 표시 (기본값: 꺼짐)
   maintenanceMode: false, // 유지보수 모드 (개발자만 접근 가능)
   // 선택: 관리자 이메일 화이트리스트(있으면 이 목록만 Admin 허용)
