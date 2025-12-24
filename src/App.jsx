@@ -990,19 +990,33 @@ function App(){
       }
 
       // Persist Referee Mode result to the existing match (or create if new)
+      const { gameTeams: playingTeamsPayload, ...matchDataForSave } = matchData || {}
       const prevGames = activeMatch?.stats?.__games || []
-      const nextGameNumber = matchData?.matchNumber || (prevGames.length + 1)
+      const nextGameNumber = matchDataForSave?.matchNumber || (prevGames.length + 1)
+
+      const teamsForMatch = (Array.isArray(matchDataForSave?.teams) && matchDataForSave.teams.length > 0)
+        ? matchDataForSave.teams
+        : (Array.isArray(activeMatch?.teams) ? activeMatch.teams : [])
+      matchDataForSave.teams = teamsForMatch
+
+      const derivedGameTeams = Array.isArray(matchDataForSave.selectedTeamIndices) && teamsForMatch.length > 0
+        ? matchDataForSave.selectedTeamIndices.map(idx => teamsForMatch[idx]).filter(Boolean)
+        : []
+      const teamsForGame = (Array.isArray(playingTeamsPayload) && playingTeamsPayload.length > 0)
+        ? playingTeamsPayload
+        : (derivedGameTeams.length > 0 ? derivedGameTeams : teamsForMatch)
+
       const gameResult = {
         id: Date.now(),
         matchNumber: nextGameNumber,
-        scores: matchData.scores,
-        duration: matchData.duration,
-        startTime: matchData.startTime,
-        endTime: matchData.endTime,
-        events: matchData.events,
-        teamIndices: Array.isArray(matchData.selectedTeamIndices) ? matchData.selectedTeamIndices : undefined,
-        teams: Array.isArray(matchData.teams) ? matchData.teams : undefined,
-        cleanSheetAwardees: matchData.cleanSheetAwardeesForGame || [],
+        scores: matchDataForSave.scores,
+        duration: matchDataForSave.duration,
+        startTime: matchDataForSave.startTime,
+        endTime: matchDataForSave.endTime,
+        events: matchDataForSave.events,
+        teamIndices: Array.isArray(matchDataForSave.selectedTeamIndices) ? matchDataForSave.selectedTeamIndices : undefined,
+        teams: teamsForGame,
+        cleanSheetAwardees: matchDataForSave.cleanSheetAwardeesForGame || [],
       }
 
       // Check if we're overriding an existing game
@@ -1018,16 +1032,15 @@ function App(){
         // Remove old events for this game and add new ones
         const prevEvents = activeMatch?.stats?.__events || []
         const otherEvents = prevEvents.filter(ev => ev.gameIndex !== (nextGameNumber - 1))
-        updatedEvents = [...otherEvents, ...matchData.events]
+        updatedEvents = [...otherEvents, ...matchDataForSave.events]
       } else {
         // Append new game
         updatedGames = [...prevGames, gameResult]
         const prevEvents = activeMatch?.stats?.__events || []
-        updatedEvents = [...prevEvents, ...matchData.events]
+        updatedEvents = [...prevEvents, ...matchDataForSave.events]
       }
 
       // Pack timeline & game history into stats payload to keep schema compatibility (stats is jsonb)
-      const teamsForGame = matchData?.teams || activeMatch?.teams || []
       // Aggregate cleanSheetAwardees from all games
       const allCleanSheetAwardees = updatedGames.flatMap(g => Array.isArray(g?.cleanSheetAwardees) ? g.cleanSheetAwardees : [])
       const rebuiltStats = rebuildStatsFromEvents(teamsForGame, updatedEvents, allCleanSheetAwardees)
@@ -1036,17 +1049,17 @@ function App(){
         ...rebuiltStats,
         __events: updatedEvents,
         __games: updatedGames,
-        __scores: matchData.scores,
+        __scores: matchDataForSave.scores,
         __matchMeta: {
           matchNumber: nextGameNumber,
-          duration: matchData.duration,
-          startTime: matchData.startTime,
-          endTime: matchData.endTime,
+          duration: matchDataForSave.duration,
+          startTime: matchDataForSave.startTime,
+          endTime: matchDataForSave.endTime,
         },
       }
       
       // Clear in-progress data when match finishes
-      if (matchData.clearInProgress) {
+      if (matchDataForSave.clearInProgress) {
         delete mergedStats.__inProgress
       }
 
@@ -1057,11 +1070,11 @@ function App(){
       ]))
 
       // Draft-only payload (avoid polluting non-draft matches with draft data)
-      const isDraft = isDraftMatch(activeMatch || matchData)
+      const isDraft = isDraftMatch(activeMatch || matchDataForSave)
       // 원본 매치의 전체 팀 수를 사용 (멀티팀 지원)
-      const originalTeamCount = Array.isArray(activeMatch?.teams) ? activeMatch.teams.length : 
-                               Array.isArray(activeMatch?.snapshot) ? activeMatch.snapshot.length :
-                               Number(activeMatch?.teamCount) || 2
+      const originalTeamCount = teamsForMatch.length > 0
+        ? teamsForMatch.length
+        : (Array.isArray(activeMatch?.snapshot) ? activeMatch.snapshot.length : Number(activeMatch?.teamCount) || 2)
       const quarterScores = Array.from({ length: originalTeamCount }, () => [])
       if (isDraft) {
         mergedStats.__games.forEach(g => {
@@ -1096,24 +1109,25 @@ function App(){
 
       const updatedMatch = {
         ...activeMatch,
-        ...matchData,
+        ...matchDataForSave,
         attendeeIds,
         stats: mergedStats,
         ...(isDraft ? { quarterScores, draft: nextDraft } : { quarterScores: null, draft: null }),
       }
+      updatedMatch.teams = teamsForMatch
 
-      if (matchData?.id) {
+      if (matchDataForSave?.id) {
         const patch = isDraft
           ? { stats: mergedStats, quarterScores, draft: nextDraft }
           : { stats: mergedStats, quarterScores: null, draft: null }
-        await handleUpdateMatch(matchData.id, patch)
+        await handleUpdateMatch(matchDataForSave.id, patch)
       } else {
         await handleSaveMatch(updatedMatch)
       }
 
       // Remember last referee match for quick re-entry
       try {
-        if (matchData?.id) localStorage.setItem('sfm:lastRefMatchId', String(matchData.id))
+        if (matchDataForSave?.id) localStorage.setItem('sfm:lastRefMatchId', String(matchDataForSave.id))
       } catch {}
 
       setActiveMatch(null)

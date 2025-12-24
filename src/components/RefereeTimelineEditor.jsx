@@ -167,20 +167,169 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
     return groups
   }, [sortedTimeline, maxGameCount])
 
+  const participantsByGame = useMemo(() => {
+    const byGame = Array.from({ length: maxGameCount }, () => new Set())
+    const addParticipant = (gi, ti) => {
+      if (!Number.isFinite(ti)) return
+      if (!byGame[gi]) byGame[gi] = new Set()
+      byGame[gi].add(Number(ti))
+    }
+
+    const gameMeta = Array.isArray(match?.stats?.__games) ? match.stats.__games : []
+    gameMeta.forEach((g, gi) => {
+      if (!Array.isArray(g?.teamIndices)) return
+      g.teamIndices.forEach(ti => addParticipant(gi, ti))
+    })
+
+    const qsSources = [match?.quarterScores, match?.draft?.quarterScores]
+    qsSources.forEach((qs) => {
+      if (!Array.isArray(qs)) return
+      qs.forEach((teamScores, ti) => {
+        if (!Array.isArray(teamScores)) return
+        teamScores.forEach((score, gi) => {
+          if (score !== null && score !== undefined) addParticipant(gi, ti)
+        })
+      })
+    })
+
+    Object.entries(eventsByGame || {}).forEach(([giStr, evs]) => {
+      const gi = Number(giStr) || 0
+      ;(evs || []).forEach(ev => {
+        const ti = Number(ev.teamIndex ?? 0)
+        if (Number.isFinite(ti)) addParticipant(gi, Math.max(0, ti))
+      })
+    })
+
+    return byGame.map(set => Array.from(set).sort((a, b) => a - b))
+  }, [eventsByGame, match?.draft?.quarterScores, match?.quarterScores, match?.stats?.__games, maxGameCount])
+
   const gameIndices = useMemo(() => {
     return Array.from({ length: maxGameCount }, (_, i) => i)
   }, [maxGameCount])
 
+  const resolvedParticipantsByGame = useMemo(() => {
+    const fallback = Array.from({ length: Math.max(teams.length, 2) }, (_, idx) => idx)
+    return gameIndices.map((gi) => {
+      const participants = participantsByGame[gi]
+      if (participants && participants.length > 0) return participants
+      return fallback
+    })
+  }, [gameIndices, participantsByGame, teams.length])
+
+  const gameOptions = useMemo(() => {
+    return gameIndices.map((gi) => {
+      const labelTeams = resolvedParticipantsByGame[gi]
+        ?.map(ti => `팀 ${ti + 1}`)
+        ?.join(' vs ')
+      const suffix = labelTeams ? ` · ${labelTeams}` : ''
+      return {
+        value: gi,
+        label: `Game ${gi + 1}${suffix}`,
+      }
+    })
+  }, [gameIndices, resolvedParticipantsByGame])
+
+  const teamsPerGame = useMemo(() => {
+    return gameIndices.map((gi) => {
+      const participants = resolvedParticipantsByGame[gi]
+      const entries = participants?.length
+        ? participants
+        : Array.from({ length: teams.length }, (_, idx) => idx)
+      return entries.map((ti) => ({
+        teamIndex: ti,
+        label: `팀 ${ti + 1}`,
+        players: teams[ti] || [],
+      }))
+    })
+  }, [gameIndices, resolvedParticipantsByGame, teams])
+
   const getGameScores = (gameIndex) => {
-    const evs = eventsByGame[gameIndex] || []
-    const t0 = evs.filter(e => (e.type === 'goal' && e.teamIndex === 0) || (e.type === 'own_goal' && e.teamIndex === 1)).length
-    const t1 = evs.filter(e => (e.type === 'goal' && e.teamIndex === 1) || (e.type === 'own_goal' && e.teamIndex === 0)).length
-    return [t0, t1]
+    const gamesMeta = Array.isArray(match?.stats?.__games) ? match.stats.__games : []
+    const gameMeta = gamesMeta?.[gameIndex]
+    const metaParticipants = Array.isArray(gameMeta?.teamIndices) && gameMeta.teamIndices.length > 0
+      ? gameMeta.teamIndices
+      : null
+
+    const fallbackParticipants = participantsByGame[gameIndex]?.length
+      ? participantsByGame[gameIndex]
+      : Array.from({ length: Math.max(teams.length, 2) }, (_, i) => i)
+
+    const orderedParticipants = (metaParticipants && metaParticipants.length > 0)
+      ? metaParticipants
+      : (fallbackParticipants.length > 0 ? fallbackParticipants : [0, 1])
+
+    const scoresFromTimeline = orderedParticipants.map(() => 0)
+    const scoreEvents = (eventsByGame[gameIndex] || []).filter(ev => ev && (ev.type === 'goal' || ev.type === 'own_goal'))
+
+    const canonicalizeTeamIndex = (rawIdx) => {
+      const idx = Number(rawIdx ?? 0)
+      if (!Number.isFinite(idx)) return orderedParticipants[0] ?? 0
+      if (!metaParticipants || metaParticipants.includes(idx)) return idx
+      if (idx >= 0 && idx < metaParticipants.length) {
+        return metaParticipants[idx]
+      }
+      return idx
+    }
+
+    if (scoreEvents.length > 0) {
+      scoreEvents.forEach(ev => {
+        const canonicalTeam = canonicalizeTeamIndex(ev.teamIndex)
+        const participantIdx = orderedParticipants.indexOf(canonicalTeam)
+
+        if (ev.type === 'goal') {
+          if (participantIdx >= 0) {
+            scoresFromTimeline[participantIdx] += 1
+          }
+          return
+        }
+
+        const recipientTeam = orderedParticipants.find(ti => ti !== canonicalTeam) ?? orderedParticipants[0]
+        const recipientIdx = orderedParticipants.indexOf(recipientTeam)
+        if (recipientIdx >= 0) {
+          scoresFromTimeline[recipientIdx] += 1
+        }
+      })
+      return scoresFromTimeline
+    }
+
+    if (Array.isArray(gameMeta?.scores) && gameMeta.scores.length > 0) {
+      return orderedParticipants.map((ti, idx) => {
+        if (metaParticipants) {
+          const mappedIdx = metaParticipants.indexOf(ti)
+          if (mappedIdx >= 0 && mappedIdx < gameMeta.scores.length) {
+            return Number(gameMeta.scores[mappedIdx]) || 0
+          }
+        }
+        if (idx < gameMeta.scores.length) {
+          return Number(gameMeta.scores[idx]) || 0
+        }
+        return 0
+      })
+    }
+
+    const qsSources = [match?.quarterScores, match?.draft?.quarterScores]
+    const quarterScoreFallback = orderedParticipants.map((ti) => {
+      for (const qs of qsSources) {
+        const existing = Array.isArray(qs?.[ti]) ? qs[ti][gameIndex] : null
+        if (existing !== null && existing !== undefined) {
+          return Number(existing) || 0
+        }
+      }
+      return 0
+    })
+
+    if (quarterScoreFallback.some(score => score !== 0)) {
+      return quarterScoreFallback
+    }
+
+    return scoresFromTimeline
   }
 
   const getGameScore = (gameIndex) => {
-    const [t0, t1] = getGameScores(gameIndex)
-    return `${t0} : ${t1}`
+    const scores = getGameScores(gameIndex)
+    const left = scores?.[0] ?? 0
+    const right = scores?.[1] ?? 0
+    return `${left} : ${right}`
   }
 
   const handleDeleteEvent = (eventId) => {
@@ -189,6 +338,7 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
   }
 
   const handleDeleteGame = (gameIdx) => {
+    // Delete events and reindex
     setTimeline(prev => prev
       .filter(ev => Number(ev.gameIndex ?? 0) !== gameIdx)
       .map(ev => {
@@ -197,6 +347,39 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
         return ev
       })
     )
+    
+    // Delete game data from match quarterScores and stats
+    if (match?.id && onSave) {
+      const patch = {}
+
+      if (Array.isArray(match.quarterScores)) {
+        patch.quarterScores = match.quarterScores.map(teamScores => {
+          if (!Array.isArray(teamScores)) return teamScores
+          return teamScores.filter((_, gi) => gi !== gameIdx)
+        })
+      }
+
+      if (match.draft && Array.isArray(match.draft.quarterScores)) {
+        patch.draft = {
+          ...match.draft,
+          quarterScores: match.draft.quarterScores.map(teamScores => {
+            if (!Array.isArray(teamScores)) return teamScores
+            return teamScores.filter((_, gi) => gi !== gameIdx)
+          })
+        }
+      }
+
+      if (match.stats) {
+        const nextStats = { ...match.stats }
+        if (Array.isArray(match.stats.__games)) {
+          nextStats.__games = match.stats.__games.filter((_, gi) => gi !== gameIdx)
+        }
+        patch.stats = nextStats
+      }
+
+      onSave(match.id, patch)
+    }
+    
     setConfirmDeleteGame({ open: false, gameIndex: null })
   }
 
@@ -213,7 +396,7 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
     setEditingEvent(null)
   }
 
-  const handleAddEvent = (newEventOrEvents) => {
+  const handleAddEvent = (newEventOrEvents, newGameTeams = null) => {
     const newEvents = Array.isArray(newEventOrEvents) ? newEventOrEvents : [newEventOrEvents]
     
     const eventsWithIds = newEvents.map(evt => ({
@@ -225,6 +408,31 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
     }))
 
     setTimeline(prev => [...prev, ...eventsWithIds])
+    
+    // If this is a new game with team selection, save the team metadata
+    if (newGameTeams && newGameTeams.length === 2 && eventsWithIds.length > 0 && match?.id && onSave) {
+      const gameIndex = eventsWithIds[0].gameIndex
+      
+      // Clone stats to append game metadata
+      const nextStats = match.stats ? { ...match.stats } : {}
+      if (!Array.isArray(nextStats.__games)) {
+        nextStats.__games = []
+      }
+      
+      // Ensure array is large enough
+      while (nextStats.__games.length <= gameIndex) {
+        nextStats.__games.push(null)
+      }
+      
+      // Save team indices for this game
+      nextStats.__games[gameIndex] = {
+        teamIndices: [...newGameTeams].sort((a, b) => a - b),
+        scores: [0, 0], // Initialize scores
+      }
+      
+      onSave(match.id, { stats: nextStats })
+    }
+    
     setShowAddEvent(false)
     
     // Auto expand the game we just added to
@@ -245,22 +453,174 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
     const createBlankScores = () => Array.from({ length: teamCount }, () => 0)
     const gameScores = Array.from({ length: gameCount }, () => createBlankScores())
 
-    timeline.forEach(ev => {
-      const gi = Math.max(0, Number(ev.gameIndex) || 0)
-      while (gameScores.length <= gi) gameScores.push(createBlankScores())
+    const canonicalParticipants = Array.from({ length: gameCount }, () => new Set())
+    const inferredParticipants = Array.from({ length: gameCount }, () => new Set())
+    const seedParticipant = (gi, ti) => {
+      if (!Number.isFinite(ti)) return
+      const num = Number(ti)
+      canonicalParticipants[gi]?.add(num)
+      inferredParticipants[gi]?.add(num)
+    }
+    const addInferred = (gi, ti) => {
+      if (!Number.isFinite(ti)) return
+      inferredParticipants[gi]?.add(Number(ti))
+    }
 
-      const rawTeamIdx = Number(ev.teamIndex ?? 0)
-      const teamIdx = Number.isFinite(rawTeamIdx) ? Math.max(0, Math.min(teamCount - 1, rawTeamIdx)) : 0
-      const scoringTeam = ev.type === 'own_goal'
-        ? (teamCount > 1 ? (teamIdx === 0 ? 1 : 0) : 0)
-        : teamIdx
+    let existingQS = match?.quarterScores || match?.draft?.quarterScores
 
-      if (ev.type === 'goal' || ev.type === 'own_goal') {
-        gameScores[gi][scoringTeam] = (Number(gameScores[gi][scoringTeam]) || 0) + 1
+    if (!existingQS && match?.stats?.__games && Array.isArray(match.stats.__games)) {
+      const savedGames = match.stats.__games
+      const teamMajor = Array.from({ length: teamCount }, () => [])
+
+      savedGames.forEach((g) => {
+        if (!Array.isArray(g?.scores)) return
+        const teamMap = Array.isArray(g.teamIndices) ? g.teamIndices : null
+
+        if (teamMap && teamMap.length > 0) {
+          for (let ti = 0; ti < teamCount; ti++) {
+            if (!teamMajor[ti]) teamMajor[ti] = []
+            const participantIdx = teamMap.indexOf(ti)
+            if (participantIdx >= 0 && participantIdx < g.scores.length) {
+              teamMajor[ti].push(Number(g.scores[participantIdx]) || 0)
+            } else {
+              teamMajor[ti].push(null)
+            }
+          }
+        } else {
+          g.scores.forEach((val, idx) => {
+            if (!teamMajor[idx]) teamMajor[idx] = []
+            teamMajor[idx].push(Number(val) || 0)
+          })
+        }
+      })
+
+      if (teamMajor.some(arr => arr.length > 0)) {
+        existingQS = teamMajor
+      }
+    }
+
+    if (Array.isArray(existingQS)) {
+      for (let ti = 0; ti < Math.min(teamCount, existingQS.length); ti++) {
+        const teamScores = existingQS[ti]
+        if (!Array.isArray(teamScores)) continue
+        teamScores.forEach((score, gi) => {
+          if (score !== null && score !== undefined) seedParticipant(gi, ti)
+        })
+      }
+    }
+
+    const existingGameMeta = Array.isArray(match?.stats?.__games) ? match.stats.__games : []
+    existingGameMeta.forEach((g, gi) => {
+      const teamMap = Array.isArray(g?.teamIndices) ? g.teamIndices : null
+      if (teamMap && teamMap.length > 0) {
+        teamMap.forEach(ti => seedParticipant(gi, ti))
       }
     })
 
-    const quarterScores = Array.from({ length: teamCount }, (_, ti) => gameScores.map(gs => Number(gs[ti]) || 0))
+    const gamesWithEvents = new Set()
+    timeline.forEach(ev => {
+      if (ev.type === 'goal' || ev.type === 'own_goal') {
+        const gi = Math.max(0, Number(ev.gameIndex) || 0)
+        gamesWithEvents.add(gi)
+      }
+    })
+
+    existingGameMeta.forEach((g, gi) => {
+      if (!Array.isArray(g?.scores)) return
+      if (gamesWithEvents.has(gi)) return
+      const teamMap = Array.isArray(g.teamIndices) && g.teamIndices.length > 0 ? g.teamIndices : null
+      if (teamMap && teamMap.length > 0) {
+        teamMap.forEach((ti, idx) => {
+          addInferred(gi, ti)
+          gameScores[gi][ti] = Number(g.scores[idx]) || 0
+        })
+      } else {
+        g.scores.forEach((val, idx) => {
+          addInferred(gi, idx)
+          if (!canonicalParticipants[gi].has(idx)) {
+            canonicalParticipants[gi].add(idx)
+          }
+          gameScores[gi][idx] = Number(val) || 0
+        })
+      }
+    })
+
+    if (Array.isArray(existingQS)) {
+      for (let ti = 0; ti < Math.min(teamCount, existingQS.length); ti++) {
+        const teamScores = existingQS[ti]
+        if (!Array.isArray(teamScores)) continue
+        teamScores.forEach((score, gi) => {
+          if (score === null || score === undefined) return
+          addInferred(gi, ti)
+          if (!gamesWithEvents.has(gi)) {
+            gameScores[gi][ti] = Number(score) || 0
+          }
+        })
+      }
+    }
+
+    gamesWithEvents.forEach(gi => {
+      if (gameScores[gi]) gameScores[gi] = createBlankScores()
+    })
+
+    const makeEventKey = (ev, idx) => (ev?.id ? `id:${ev.id}` : `idx:${idx}`)
+    const ownGoalRecipients = new Map()
+
+    timeline.forEach((ev, eventIdx) => {
+      const gi = Math.max(0, Number(ev.gameIndex) || 0)
+      if (!gameScores[gi]) gameScores[gi] = createBlankScores()
+
+      const canonicalSet = canonicalParticipants[gi]
+      const hasCanonical = canonicalSet && canonicalSet.size > 0
+      const targetSet = hasCanonical ? canonicalSet : inferredParticipants[gi]
+
+      const rawTeamIdx = Number(ev.teamIndex ?? 0)
+      const teamIdx = Number.isFinite(rawTeamIdx) ? Math.max(0, Math.min(teamCount - 1, rawTeamIdx)) : 0
+
+      if (hasCanonical && !canonicalSet.has(teamIdx)) {
+        console.warn(`[RefereeTimelineEditor] Ignoring event for team ${teamIdx} in game ${gi + 1} (not a participant)`)
+        return
+      }
+
+      if (!hasCanonical) targetSet.add(teamIdx)
+
+      if (ev.type === 'goal') {
+        gameScores[gi][teamIdx] = (Number(gameScores[gi][teamIdx]) || 0) + 1
+      }
+
+      if (ev.type === 'own_goal') {
+        const participants = Array.from(targetSet).sort((a, b) => a - b)
+        let recipient = participants.find(ti => ti !== teamIdx)
+
+        if (recipient === undefined) {
+          for (let candidate = 0; candidate < teamCount; candidate += 1) {
+            if (candidate === teamIdx) continue
+            if (!hasCanonical) targetSet.add(candidate)
+            recipient = candidate
+            break
+          }
+        }
+
+        if (recipient === undefined) recipient = teamIdx
+        gameScores[gi][recipient] = (Number(gameScores[gi][recipient]) || 0) + 1
+        ownGoalRecipients.set(makeEventKey(ev, eventIdx), recipient)
+      }
+    })
+
+    const finalParticipantsByGame = Array.from({ length: gameScores.length }, (_, gi) => {
+      const canonical = canonicalParticipants[gi]
+      if (canonical && canonical.size > 0) return Array.from(canonical).sort((a, b) => a - b)
+      const inferred = inferredParticipants[gi]
+      return inferred && inferred.size > 0 ? Array.from(inferred).sort((a, b) => a - b) : []
+    })
+
+    const participantSets = finalParticipantsByGame.map(arr => new Set(arr))
+    const quarterScores = Array.from({ length: teamCount }, (_, ti) =>
+      finalParticipantsByGame.map((_, gi) => {
+        if (!participantSets[gi]?.has(ti)) return null
+        return Number(gameScores[gi]?.[ti]) || 0
+      })
+    )
     
     // Rebuild per-player stats from timeline
     const statsMap = {}
@@ -336,13 +696,16 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
     const nextGames = Array.from({ length: gameScores.length }, (_, gi) => {
       const prev = prevGames.find(g => Number(g?.matchNumber) === gi + 1) || {}
       const nextEvents = timeline.filter(ev => Number(ev.gameIndex ?? 0) === gi)
+      const teamIndices = finalParticipantsByGame[gi] || []
+      const participantScores = teamIndices.map(ti => Number(gameScores[gi]?.[ti]) || 0)
       return {
         ...prev,
         id: prev.id || `game-${gi + 1}`,
         matchNumber: gi + 1,
-        scores: gameScores[gi] || createBlankScores(),
+        scores: participantScores,
         cleanSheets: cleanSheetMatrix[gi] || [],
         events: nextEvents,
+        teamIndices,
       }
     })
 
@@ -353,24 +716,31 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
       return acc
     }, [])
 
-    const gameEventsPayload = timeline
-      .filter(ev => ev && (ev.type === 'goal' || ev.type === 'own_goal' || ev.type === 'foul' || ev.type === 'yellow' || ev.type === 'red' || ev.type === 'super_save'))
-      .map((ev, idx) => {
-        const baseTeamIdx = Number(ev.teamIndex ?? 0)
-        const scoringTeam = ev.type === 'own_goal'
-          ? (teamCount > 1 ? (baseTeamIdx === 0 ? 1 : 0) : 0)
-          : baseTeamIdx
-        return {
-          id: ev.id || `${ev.gameIndex ?? 0}-${scoringTeam}-${idx}`,
-          gameIndex: Number(ev.gameIndex ?? 0),
-          teamIndex: scoringTeam,
-          scorerId: toStr(ev.playerId),
-          assistId: ev.assistedBy ? toStr(ev.assistedBy) : '',
-          ownGoal: ev.type === 'own_goal',
-          eventType: ev.type,
-          minute: ev.minute ? String(ev.minute) : '',
-        }
+    const scoringEventTypes = new Set(['goal', 'own_goal', 'foul', 'yellow', 'red', 'super_save'])
+    const gameEventsPayload = []
+    timeline.forEach((ev, idx) => {
+      if (!ev || !scoringEventTypes.has(ev.type)) return
+      const baseTeamIdx = Number(ev.teamIndex ?? 0)
+      let scoringTeam = baseTeamIdx
+      if (ev.type === 'own_goal') {
+        const credited = ownGoalRecipients.get(makeEventKey(ev, idx))
+        const participants = finalParticipantsByGame[Math.max(0, Number(ev.gameIndex) || 0)] || []
+        scoringTeam = credited !== undefined
+          ? credited
+          : (participants.find(ti => ti !== baseTeamIdx) ?? baseTeamIdx)
+      }
+
+      gameEventsPayload.push({
+        id: ev.id || `${ev.gameIndex ?? 0}-${scoringTeam}-${idx}`,
+        gameIndex: Number(ev.gameIndex ?? 0),
+        teamIndex: scoringTeam,
+        scorerId: toStr(ev.playerId),
+        assistId: ev.assistedBy ? toStr(ev.assistedBy) : '',
+        ownGoal: ev.type === 'own_goal',
+        eventType: ev.type,
+        minute: ev.minute ? String(ev.minute) : '',
       })
+    })
 
     const mergedStats = {
       ...baseStats,
@@ -553,6 +923,8 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
           onCancel={() => setEditingEvent(null)}
           cardsEnabled={cardsEnabled}
           getGameScores={getGameScores}
+          gameOptions={gameOptions}
+          teamsPerGame={teamsPerGame}
         />
       )}
 
@@ -566,6 +938,8 @@ export default function RefereeTimelineEditor({ match, players, teams: providedT
           cardsEnabled={cardsEnabled}
           getGameScores={getGameScores}
           timeline={timeline}
+          gameOptions={gameOptions}
+          teamsPerGame={teamsPerGame}
         />
       )}
 
@@ -761,22 +1135,111 @@ function TimelineEventItem({ ev, playersById, onEdit, onDelete }) {
 
 /* Event Edit Modal */
 /* Event Edit Modal */
-function EventEditModal({ event, players, teams, onSave, onCancel, cardsEnabled = true }) {
+function EventEditModal({
+  event,
+  players,
+  teams,
+  onSave,
+  onCancel,
+  cardsEnabled = true,
+  getGameScores,
+  gameOptions = [],
+  teamsPerGame = [],
+}) {
   const [formData, setFormData] = useState({
     type: event.type || 'goal',
     playerId: toStr(event.playerId || ''),
-    teamIndex: event.teamIndex ?? 0,
-    gameIndex: String((event.gameIndex ?? 0) + 1),
+    teamIndex: Number(event.teamIndex ?? 0),
+    gameIndex: Number(event.gameIndex ?? 0),
     minute: event.minute || '',
     assistedBy: toStr(event.assistedBy || ''),
   })
+  const [cleanSheetError, setCleanSheetError] = useState('')
 
   const needsAssist = ['goal', 'own_goal'].includes(formData.type)
   const needsPlayer = true // All events now support player selection
+  const isCleanSheet = formData.type === 'clean_sheet'
+
+  const availableGames = React.useMemo(() => {
+    if (Array.isArray(gameOptions) && gameOptions.length > 0) return gameOptions
+    return [{ value: 0, label: 'Game 1' }]
+  }, [gameOptions])
+
+  const availableTeams = React.useMemo(() => {
+    const gi = Number(formData.gameIndex) || 0
+    const gameTeams = Array.isArray(teamsPerGame?.[gi]) ? teamsPerGame[gi] : null
+    if (gameTeams && gameTeams.length > 0) return gameTeams
+    return teams.map((team, idx) => ({
+      teamIndex: idx,
+      label: `팀 ${idx + 1}`,
+      players: team || [],
+    }))
+  }, [formData.gameIndex, teamsPerGame, teams])
+
+  React.useEffect(() => {
+    const hasGame = availableGames.some(opt => Number(opt.value) === Number(formData.gameIndex))
+    if (hasGame) return
+    const fallbackGame = Number(availableGames[0]?.value ?? 0)
+    const fallbackTeam = Number(teamsPerGame?.[fallbackGame]?.[0]?.teamIndex ?? 0)
+    setFormData(prev => ({
+      ...prev,
+      gameIndex: fallbackGame,
+      teamIndex: fallbackTeam,
+      playerId: '',
+      assistedBy: '',
+    }))
+  }, [availableGames, formData.gameIndex, teamsPerGame])
+
+  React.useEffect(() => {
+    if (!availableTeams.length) return
+    const hasSelection = availableTeams.some(teamInfo => teamInfo.teamIndex === Number(formData.teamIndex))
+    if (hasSelection) return
+    const fallbackTeam = availableTeams[0].teamIndex
+    setFormData(prev => ({
+      ...prev,
+      teamIndex: fallbackTeam,
+      playerId: '',
+      assistedBy: '',
+    }))
+  }, [availableTeams, formData.teamIndex])
+
+  React.useEffect(() => {
+    if (!isCleanSheet) {
+      setCleanSheetError('')
+      return
+    }
+    if (typeof getGameScores !== 'function') {
+      setCleanSheetError('')
+      return
+    }
+    const parsedGameIndex = Math.max(0, Number(formData.gameIndex) || 0)
+    const scores = getGameScores(parsedGameIndex) || []
+    const participants = Array.isArray(teamsPerGame?.[parsedGameIndex])
+      ? teamsPerGame[parsedGameIndex].map(teamInfo => teamInfo.teamIndex)
+      : availableTeams.map(teamInfo => teamInfo.teamIndex)
+    const currentIdx = participants.findIndex(idx => Number(idx) === Number(formData.teamIndex))
+    if (currentIdx === -1) {
+      setCleanSheetError('')
+      return
+    }
+    const conceded = participants.some((_, idx) => idx !== currentIdx && (Number(scores?.[idx] ?? 0) > 0))
+    setCleanSheetError(conceded ? '이 팀은 무실점 경기가 아닙니다.' : '')
+  }, [availableTeams, formData.gameIndex, formData.teamIndex, getGameScores, isCleanSheet, teamsPerGame])
+
+  const selectedTeamInfo = availableTeams.find(teamInfo => teamInfo.teamIndex === Number(formData.teamIndex))
+  const selectedTeamPlayers = selectedTeamInfo?.players || []
+  const assistCandidates = selectedTeamPlayers.filter(p => toStr(p.id) !== formData.playerId)
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    const parsedGameIndex = Math.max(0, (parseInt(formData.gameIndex, 10) || 1) - 1)
+    if (isCleanSheet && cleanSheetError) return
+    if (needsPlayer && !formData.playerId) return
+    const parsedGameIndex = Math.max(0, Number(formData.gameIndex) || 0)
+    const player = players.find(p => toStr(p.id) === formData.playerId)
+    const assistPlayer = formData.assistedBy 
+      ? players.find(p => toStr(p.id) === formData.assistedBy)
+      : null
+
     onSave({
       ...event,
       type: formData.type,
@@ -785,16 +1248,10 @@ function EventEditModal({ event, players, teams, onSave, onCancel, cardsEnabled 
       gameIndex: parsedGameIndex,
       minute: formData.minute,
       assistedBy: needsAssist ? (formData.assistedBy || null) : null,
-      assistedName: needsAssist && formData.assistedBy 
-        ? players.find(p => toStr(p.id) === formData.assistedBy)?.name || ''
-        : '',
-      playerName: needsPlayer
-        ? (players.find(p => toStr(p.id) === formData.playerId)?.name || '')
-        : '',
+      assistedName: needsAssist ? (assistPlayer?.name || '') : '',
+      playerName: needsPlayer ? (player?.name || '') : '',
     })
   }
-
-  const selectedTeam = teams[Number(formData.teamIndex)] || []
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-fade-in">
@@ -825,19 +1282,24 @@ function EventEditModal({ event, players, teams, onSave, onCancel, cardsEnabled 
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1.5">게임 번호</label>
-              <div className="relative">
-                <span className="absolute left-3 top-2.5 text-gray-500 font-bold">G</span>
-                <input
-                  type="number"
-                  min="1"
-                  inputMode="numeric"
-                  step="1"
-                  value={formData.gameIndex}
-                  onChange={(e) => setFormData(prev => ({ ...prev, gameIndex: e.target.value }))}
-                  className="w-full pl-8 pr-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                />
-              </div>
+              <label className="block text-sm font-bold text-gray-700 mb-1.5">게임 선택</label>
+              <select
+                value={String(formData.gameIndex)}
+                onChange={(e) => {
+                  const nextGame = Number(e.target.value)
+                  setFormData(prev => ({
+                    ...prev,
+                    gameIndex: nextGame,
+                    playerId: '',
+                    assistedBy: '',
+                  }))
+                }}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              >
+                {availableGames.map(option => (
+                  <option key={option.value} value={String(option.value)}>{option.label}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1.5">시간 (분)</label>
@@ -854,37 +1316,61 @@ function EventEditModal({ event, players, teams, onSave, onCancel, cardsEnabled 
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1.5">팀 선택</label>
             <div className="grid grid-cols-2 gap-2">
-              {teams.map((_, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, teamIndex: idx, playerId: '', assistedBy: '' }))}
-                  className={`px-3 py-2.5 rounded-xl border-2 text-sm font-bold transition-all ${
-                    Number(formData.teamIndex) === idx
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                  }`}
-                >
-                  팀 {idx + 1}
-                </button>
-              ))}
+              {availableTeams.map(teamInfo => {
+                const isSelected = Number(formData.teamIndex) === teamInfo.teamIndex
+                return (
+                  <button
+                    key={teamInfo.teamIndex}
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, teamIndex: teamInfo.teamIndex, playerId: '', assistedBy: '' }))}
+                    className={`px-3 py-2.5 rounded-xl border-2 text-sm font-bold transition-all ${
+                      isSelected
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    {teamInfo.label}
+                  </button>
+                )
+              })}
             </div>
+            {cleanSheetError && (
+              <div className="mt-2 text-xs font-bold text-red-600 bg-red-50 p-2 rounded border border-red-200">
+                ⚠️ {cleanSheetError}
+              </div>
+            )}
           </div>
 
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1.5">선수 선택</label>
-            <select
-              value={formData.playerId}
-              onChange={(e) => setFormData(prev => ({ ...prev, playerId: e.target.value }))}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              required={needsPlayer}
-              disabled={!needsPlayer}
-            >
-              <option value="">선택해주세요...</option>
-              {selectedTeam.map(p => (
-                <option key={p.id} value={toStr(p.id)}>{p.name}</option>
-              ))}
-            </select>
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-60 overflow-y-auto p-1">
+              {selectedTeamPlayers.length === 0 && (
+                <div className="col-span-full text-sm text-gray-500 italic text-center py-4">등록된 선수가 없습니다</div>
+              )}
+              {selectedTeamPlayers.map(p => {
+                const pid = toStr(p.id)
+                const isSelected = formData.playerId === pid
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => setFormData(prev => ({
+                      ...prev,
+                      playerId: pid,
+                      assistedBy: prev.assistedBy === pid ? '' : prev.assistedBy,
+                    }))}
+                    className={`flex flex-col items-center p-2 rounded-xl border-2 transition-all ${
+                      isSelected
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 ring-2 ring-blue-200 ring-offset-1'
+                        : 'border-gray-100 bg-white text-gray-600 hover:border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <InitialAvatar name={p.name} photoUrl={p.photoUrl} size={40} className="mb-1.5 shadow-sm" />
+                    <span className="text-xs font-bold truncate w-full text-center leading-tight">{p.name}</span>
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           {needsAssist && needsPlayer && (
@@ -892,16 +1378,44 @@ function EventEditModal({ event, players, teams, onSave, onCancel, cardsEnabled 
               <label className="block text-sm font-bold text-gray-700 mb-1.5">
                 어시스트 (선택)
               </label>
-              <select
-                value={formData.assistedBy}
-                onChange={(e) => setFormData(prev => ({ ...prev, assistedBy: e.target.value }))}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              >
-                <option value="">없음</option>
-                {selectedTeam.filter(p => toStr(p.id) !== formData.playerId).map(p => (
-                  <option key={p.id} value={toStr(p.id)}>{p.name}</option>
-                ))}
-              </select>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto p-1">
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, assistedBy: '' }))}
+                  className={`flex flex-col items-center p-2 rounded-xl border-2 transition-all ${
+                    !formData.assistedBy
+                      ? 'border-slate-500 bg-slate-50 text-slate-700 ring-2 ring-slate-200 ring-offset-1'
+                      : 'border-gray-100 bg-white text-gray-600 hover:border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-200 text-sm font-bold text-slate-600 mb-1">
+                    없음
+                  </div>
+                  <span className="text-xs font-bold">없음</span>
+                </button>
+                {assistCandidates.length === 0 && (
+                  <div className="col-span-full text-sm text-gray-500 italic text-center py-4">선택 가능한 선수가 없습니다</div>
+                )}
+                {assistCandidates.map(p => {
+                  const pid = toStr(p.id)
+                  const isSelected = formData.assistedBy === pid
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, assistedBy: pid }))}
+                      className={`flex flex-col items-center p-2 rounded-xl border-2 transition-all ${
+                        isSelected
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-2 ring-emerald-200 ring-offset-1'
+                          : 'border-gray-100 bg-white text-gray-600 hover:border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <InitialAvatar name={p.name} photoUrl={p.photoUrl} size={36} className="mb-1 shadow-sm" />
+                      <span className="text-xs font-bold truncate w-full text-center leading-tight">{p.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           )}
 
@@ -927,17 +1441,62 @@ function EventEditModal({ event, players, teams, onSave, onCancel, cardsEnabled 
 }
 
 /* Event Add Modal */
-function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, getGameScores, timeline }) {
+function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, getGameScores, timeline, gameOptions = [], teamsPerGame = [] }) {
+  const initialGameIndex = gameOptions?.[0]?.value ?? 0
+  const initialTeamIndex = teamsPerGame?.[initialGameIndex]?.[0]?.teamIndex ?? 0
+
   const [formData, setFormData] = useState({
     type: 'goal',
     playerId: '',
-    teamIndex: 0,
-    gameIndex: '1',
+    teamIndex: initialTeamIndex ?? 0,
+    gameIndex: initialGameIndex,
     minute: '',
     assistedBy: '',
   })
   const [selectedPlayerIds, setSelectedPlayerIds] = useState(new Set())
   const [cleanSheetError, setCleanSheetError] = useState('')
+  const [newGameTeams, setNewGameTeams] = useState([]) // Track selected teams for new game
+  
+  const isNewGame = React.useMemo(() => {
+    return !Array.isArray(gameOptions) || Number(formData.gameIndex) >= gameOptions.length
+  }, [formData.gameIndex, gameOptions])
+
+  const availableTeams = React.useMemo(() => {
+    const gi = Number(formData.gameIndex) || 0
+    
+    // For new games, use selected teams if available
+    if (isNewGame && newGameTeams.length > 0) {
+      return newGameTeams.map(teamIdx => ({
+        teamIndex: teamIdx,
+        label: `팀 ${teamIdx + 1}`,
+        players: teams[teamIdx] || [],
+      }))
+    }
+    
+    const gameTeams = Array.isArray(teamsPerGame?.[gi]) ? teamsPerGame[gi] : null
+    if (gameTeams && gameTeams.length > 0) return gameTeams
+    
+    // For new games without team selection or fallback, show all teams
+    return teams.map((team, idx) => ({
+      teamIndex: idx,
+      label: `팀 ${idx + 1}`,
+      players: team || [],
+    }))
+  }, [formData.gameIndex, teamsPerGame, teams, newGameTeams, isNewGame])
+
+  React.useEffect(() => {
+    if (!availableTeams.length) return
+    const hasSelection = availableTeams.some(t => t.teamIndex === Number(formData.teamIndex))
+    if (!hasSelection) {
+      const fallbackTeam = availableTeams[0].teamIndex
+      setFormData(prev => ({
+        ...prev,
+        teamIndex: fallbackTeam,
+        playerId: '',
+        assistedBy: '',
+      }))
+    }
+  }, [availableTeams, formData.teamIndex])
 
   const needsAssist = ['goal', 'own_goal'].includes(formData.type)
   const isCleanSheet = formData.type === 'clean_sheet'
@@ -946,7 +1505,7 @@ function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, g
   // Get existing clean sheet players for current game/team
   const existingCleanSheetPlayers = React.useMemo(() => {
     if (!isCleanSheet) return new Set()
-    const gi = Math.max(0, (parseInt(formData.gameIndex, 10) || 1) - 1)
+    const gi = Math.max(0, Number(formData.gameIndex) || 0)
     const ti = Number(formData.teamIndex)
     const existing = new Set()
     if (Array.isArray(timeline)) {
@@ -967,50 +1526,45 @@ function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, g
   // Auto-select team for clean sheet & Validation
   React.useEffect(() => {
     if (formData.type === 'clean_sheet') {
-      const parsedGameIndex = Math.max(0, (parseInt(formData.gameIndex, 10) || 1) - 1)
-      const [s0, s1] = getGameScores ? getGameScores(parsedGameIndex) : [0, 0]
+      const parsedGameIndex = Math.max(0, Number(formData.gameIndex) || 0)
+      // For new games (beyond existing games), there's no score data yet, so allow clean sheet
+      const isNewGame = !Array.isArray(gameOptions) || parsedGameIndex >= gameOptions.length
       
-      // Team 0 clean sheet if s1 (opponent score) is 0
-      const t0Clean = s1 === 0
-      // Team 1 clean sheet if s0 (opponent score) is 0
-      const t1Clean = s0 === 0
-
-      // Only auto-switch if we haven't manually set it yet (or maybe always? user asked "automatically select")
-      // But we also need to validate current selection.
-      // Let's auto-select only when switching TO clean_sheet or changing gameIndex, 
-      // but we are in a single effect.
-      // To avoid fighting user input, maybe we only warn?
-      // User said: "When adding clean sheet, automatically select the team with no goals conceded."
-      
-      // Let's check if current selection is invalid, and if the other one is valid, switch.
-      const currentTeamIdx = Number(formData.teamIndex)
-      const isCurrentClean = currentTeamIdx === 0 ? t0Clean : t1Clean
-      
-      if (!isCurrentClean) {
-        if (currentTeamIdx === 0 && t1Clean) {
-           // Switch to team 1
-           setFormData(prev => ({ ...prev, teamIndex: 1 }))
-        } else if (currentTeamIdx === 1 && t0Clean) {
-           // Switch to team 0
-           setFormData(prev => ({ ...prev, teamIndex: 0 }))
-        }
-      }
-
-      // Re-evaluate error after potential switch (in next render? no, we need immediate feedback)
-      // We can't rely on state update immediately.
-      // Let's just calculate error based on what we *would* have.
-      // Actually, if we switch, the effect will run again? No, setFormData triggers re-render, effect runs again.
-      // So we can just set error based on current state.
-      
-      if (!isCurrentClean) {
-        setCleanSheetError('이 팀은 무실점 경기가 아닙니다.')
-      } else {
+      if (isNewGame) {
+        // New game - no validation needed, no scores yet
         setCleanSheetError('')
+      } else {
+        const [s0, s1] = getGameScores ? getGameScores(parsedGameIndex) : [0, 0]
+        
+        // Team 0 clean sheet if s1 (opponent score) is 0
+        const t0Clean = s1 === 0
+        // Team 1 clean sheet if s0 (opponent score) is 0
+        const t1Clean = s0 === 0
+
+        // Let's check if current selection is invalid, and if the other one is valid, switch.
+        const currentTeamIdx = Number(formData.teamIndex)
+        const isCurrentClean = currentTeamIdx === 0 ? t0Clean : t1Clean
+        
+        if (!isCurrentClean) {
+          if (currentTeamIdx === 0 && t1Clean) {
+             // Switch to team 1
+             setFormData(prev => ({ ...prev, teamIndex: 1 }))
+          } else if (currentTeamIdx === 1 && t0Clean) {
+             // Switch to team 0
+             setFormData(prev => ({ ...prev, teamIndex: 0 }))
+          }
+        }
+        
+        if (!isCurrentClean) {
+          setCleanSheetError('이 팀은 무실점 경기가 아닙니다.')
+        } else {
+          setCleanSheetError('')
+        }
       }
     } else {
       setCleanSheetError('')
     }
-  }, [formData.type, formData.gameIndex, formData.teamIndex, getGameScores])
+  }, [formData.type, formData.gameIndex, formData.teamIndex, getGameScores, gameOptions])
 
   const togglePlayer = (pid) => {
     const newSet = new Set(selectedPlayerIds)
@@ -1019,9 +1573,20 @@ function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, g
     setSelectedPlayerIds(newSet)
   }
 
+  const selectedTeamInfo = availableTeams.find(teamInfo => teamInfo.teamIndex === Number(formData.teamIndex))
+  const selectedTeamPlayers = selectedTeamInfo?.players || []
+  const assistCandidates = selectedTeamPlayers.filter(p => toStr(p.id) !== formData.playerId)
+
   const handleSubmit = (e) => {
     e.preventDefault()
-    const parsedGameIndex = Math.max(0, (parseInt(formData.gameIndex, 10) || 1) - 1)
+    
+    // Validate new game team selection
+    if (isNewGame && newGameTeams.length !== 2) {
+      alert('새 게임에 참가할 팀 2개를 선택해주세요.')
+      return
+    }
+    
+    const parsedGameIndex = Math.max(0, Number(formData.gameIndex) || 0)
 
     if (isCleanSheet) {
       if (cleanSheetError) {
@@ -1044,7 +1609,8 @@ function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, g
           assistedName: '',
         }
       })
-      onAdd(events)
+      // Pass newGameTeams info if it's a new game
+      onAdd(events, isNewGame ? newGameTeams : null)
       return
     }
 
@@ -1055,7 +1621,7 @@ function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, g
       ? players.find(p => toStr(p.id) === formData.assistedBy)
       : null
 
-    onAdd({
+    const newEvent = {
       type: formData.type,
       playerId: needsPlayer ? formData.playerId : '',
       playerName: needsPlayer ? (player?.name || '') : '',
@@ -1064,10 +1630,11 @@ function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, g
       minute: formData.minute,
       assistedBy: needsAssist ? (formData.assistedBy || null) : null,
       assistedName: needsAssist ? (assistPlayer?.name || '') : '',
-    })
+    }
+    
+    // Pass newGameTeams info if it's a new game
+    onAdd(newEvent, isNewGame ? newGameTeams : null)
   }
-
-  const selectedTeam = teams[Number(formData.teamIndex)] || []
 
   return (
     <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-fade-in">
@@ -1097,19 +1664,26 @@ function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, g
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1.5">게임 번호</label>
-              <div className="relative">
-                <span className="absolute left-3 top-2.5 text-gray-500 font-bold">G</span>
-                <input
-                  type="number"
-                  min="1"
-                  inputMode="numeric"
-                  step="1"
-                  value={formData.gameIndex}
-                  onChange={(e) => setFormData(prev => ({ ...prev, gameIndex: e.target.value }))}
-                  className="w-full pl-8 pr-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                />
-              </div>
+              <label className="block text-sm font-bold text-gray-700 mb-1.5">게임 선택</label>
+              <select
+                value={String(formData.gameIndex)}
+                onChange={(e) => {
+                  const nextGame = Number(e.target.value)
+                  setFormData(prev => ({
+                    ...prev,
+                    gameIndex: nextGame,
+                    playerId: '',
+                    assistedBy: '',
+                  }))
+                  setSelectedPlayerIds(new Set())
+                }}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+              >
+                {gameOptions.map(option => (
+                  <option key={option.value} value={String(option.value)}>{option.label}</option>
+                ))}
+                <option value={String(gameOptions.length)}>➕ 새 게임 추가</option>
+              </select>
             </div>
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1.5">시간 (분)</label>
@@ -1123,23 +1697,75 @@ function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, g
             </div>
           </div>
 
+          {isNewGame && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4">
+              <label className="block text-sm font-bold text-gray-700 mb-2">
+                🎮 새 게임 참가 팀 선택 (2개)
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {teams.map((_, idx) => {
+                  const isSelected = newGameTeams.includes(idx)
+                  const isDisabled = !isSelected && newGameTeams.length >= 2
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      disabled={isDisabled}
+                      onClick={() => {
+                        if (isSelected) {
+                          setNewGameTeams(prev => prev.filter(t => t !== idx))
+                        } else if (newGameTeams.length < 2) {
+                          setNewGameTeams(prev => [...prev, idx])
+                          // Auto-select first team as current team if none selected
+                          if (newGameTeams.length === 0) {
+                            setFormData(prev => ({ ...prev, teamIndex: idx }))
+                          }
+                        }
+                      }}
+                      className={`px-3 py-2.5 rounded-xl border-2 text-sm font-bold transition-all ${
+                        isSelected
+                          ? 'border-yellow-500 bg-yellow-100 text-yellow-700 ring-2 ring-yellow-200'
+                          : isDisabled
+                            ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'border-gray-200 bg-white text-gray-600 hover:border-yellow-300'
+                      }`}
+                    >
+                      팀 {idx + 1}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="mt-2 text-xs text-gray-600">
+                {newGameTeams.length === 0 && '⚠️ 새 게임에 참가할 팀 2개를 선택해주세요'}
+                {newGameTeams.length === 1 && '✓ 1개 선택됨 - 1개 더 선택해주세요'}
+                {newGameTeams.length === 2 && '✅ 2개 팀 선택 완료'}
+              </div>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-1.5">팀 선택</label>
             <div className="grid grid-cols-2 gap-2">
-              {teams.map((_, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, teamIndex: idx, playerId: '', assistedBy: '' }))}
-                  className={`px-3 py-2.5 rounded-xl border-2 text-sm font-bold transition-all ${
-                    Number(formData.teamIndex) === idx
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                  }`}
-                >
-                  팀 {idx + 1}
-                </button>
-              ))}
+              {availableTeams.map(teamInfo => {
+                const isSelected = Number(formData.teamIndex) === teamInfo.teamIndex
+                return (
+                  <button
+                    key={teamInfo.teamIndex}
+                    type="button"
+                    onClick={() => {
+                      setFormData(prev => ({ ...prev, teamIndex: teamInfo.teamIndex, playerId: '', assistedBy: '' }))
+                      setSelectedPlayerIds(new Set())
+                    }}
+                    className={`px-3 py-2.5 rounded-xl border-2 text-sm font-bold transition-all ${
+                      isSelected
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    {teamInfo.label}
+                  </button>
+                )
+              })}
             </div>
             {cleanSheetError && (
               <div className="mt-2 text-xs font-bold text-red-600 bg-red-50 p-2 rounded border border-red-200">
@@ -1152,7 +1778,7 @@ function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, g
             <label className="block text-sm font-bold text-gray-700 mb-1.5">선수 선택</label>
             {isCleanSheet ? (
               <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-60 overflow-y-auto p-1">
-                {selectedTeam.map(p => {
+                {selectedTeamPlayers.map(p => {
                   const pid = toStr(p.id)
                   const isSelected = selectedPlayerIds.has(pid)
                   const alreadyHasCleanSheet = existingCleanSheetPlayers.has(pid)
@@ -1181,17 +1807,30 @@ function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, g
                 })}
               </div>
             ) : (
-              <select
-                value={formData.playerId}
-                onChange={(e) => setFormData(prev => ({ ...prev, playerId: e.target.value }))}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                required={needsPlayer}
-              >
-                <option value="">선택해주세요...</option>
-                {selectedTeam.map(p => (
-                  <option key={p.id} value={toStr(p.id)}>{p.name}</option>
-                ))}
-              </select>
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-60 overflow-y-auto p-1">
+                {selectedTeamPlayers.length === 0 && (
+                  <div className="col-span-full text-sm text-gray-500 italic text-center py-4">등록된 선수가 없습니다</div>
+                )}
+                {selectedTeamPlayers.map(p => {
+                  const pid = toStr(p.id)
+                  const isSelected = formData.playerId === pid
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, playerId: pid }))}
+                      className={`flex flex-col items-center p-2 rounded-xl border-2 transition-all ${
+                        isSelected
+                          ? 'border-blue-500 bg-blue-50 text-blue-700 ring-2 ring-blue-200 ring-offset-1'
+                          : 'border-gray-100 bg-white text-gray-600 hover:border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <InitialAvatar name={p.name} photoUrl={p.photoUrl} size={40} className="mb-1.5 shadow-sm" />
+                      <span className="text-xs font-bold truncate w-full text-center leading-tight">{p.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
             )}
             {isCleanSheet && (
                <div className="text-xs text-gray-500 mt-1.5 text-right">
@@ -1200,21 +1839,49 @@ function EventAddModal({ players, teams, onAdd, onCancel, cardsEnabled = true, g
             )}
           </div>
 
-          {needsAssist && needsPlayer && !isCleanSheet && (
+          {needsAssist && needsPlayer && !isCleanSheet && formData.playerId && (
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1.5">
                 어시스트 (선택)
               </label>
-              <select
-                value={formData.assistedBy}
-                onChange={(e) => setFormData(prev => ({ ...prev, assistedBy: e.target.value }))}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              >
-                <option value="">없음</option>
-                {selectedTeam.filter(p => toStr(p.id) !== formData.playerId).map(p => (
-                  <option key={p.id} value={toStr(p.id)}>{p.name}</option>
-                ))}
-              </select>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-h-48 overflow-y-auto p-1">
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, assistedBy: '' }))}
+                  className={`flex flex-col items-center p-2 rounded-xl border-2 transition-all ${
+                    !formData.assistedBy
+                      ? 'border-slate-500 bg-slate-50 text-slate-700 ring-2 ring-slate-200 ring-offset-1'
+                      : 'border-gray-100 bg-white text-gray-600 hover:border-gray-200 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-200 text-sm font-bold text-slate-600 mb-1">
+                    없음
+                  </div>
+                  <span className="text-xs font-bold">없음</span>
+                </button>
+                {assistCandidates.length === 0 && (
+                  <div className="col-span-full text-sm text-gray-500 italic text-center py-4">선택 가능한 선수가 없습니다</div>
+                )}
+                {assistCandidates.map(p => {
+                  const pid = toStr(p.id)
+                  const isSelected = formData.assistedBy === pid
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, assistedBy: pid }))}
+                      className={`flex flex-col items-center p-2 rounded-xl border-2 transition-all ${
+                        isSelected
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 ring-2 ring-emerald-200 ring-offset-1'
+                          : 'border-gray-100 bg-white text-gray-600 hover:border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <InitialAvatar name={p.name} photoUrl={p.photoUrl} size={36} className="mb-1 shadow-sm" />
+                      <span className="text-xs font-bold truncate w-full text-center leading-tight">{p.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           )}
 

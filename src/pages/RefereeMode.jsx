@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Play, Save, X, Clock, ChevronDown } from 'lucide-react'
 import Card from '../components/Card'
@@ -44,7 +44,12 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
   const [gameStatus, setGameStatus] = useState('setup') // setup -> ready -> playing -> finished
   const [startTime, setStartTime] = useState(null)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
-  const [teams, setTeams] = useState(activeMatch?.teams || [[], []])
+  const initialTeams = Array.isArray(activeMatch?.teams) && activeMatch.teams.length > 0
+    ? activeMatch.teams
+    : [[], []]
+
+  const [teams, setTeams] = useState(initialTeams)
+  const [teamSlotMap, setTeamSlotMap] = useState(() => initialTeams.map((_, idx) => idx))
   const [scores, setScores] = useState([0, 0])
   const [events, setEvents] = useState([])
 
@@ -98,12 +103,30 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     { bg: '#facc15', text: '#0f172a', border: '#eab308', label: 'Yellow' }
   ]), [])
 
-  const resolveTeamColor = (teamIndex) => {
-    const color = Array.isArray(activeMatch?.teamColors) && typeof activeMatch.teamColors[teamIndex] === 'object'
+  const actualIndexForSlot = useCallback((slotIndex) => {
+    if (!Array.isArray(teamSlotMap) || teamSlotMap.length === 0) return slotIndex
+    const mapped = teamSlotMap[slotIndex]
+    return typeof mapped === 'number' ? mapped : slotIndex
+  }, [teamSlotMap])
+
+  const slotIndexForActual = useCallback((actualIndex) => {
+    if (!Array.isArray(teamSlotMap) || teamSlotMap.length === 0) {
+      return typeof actualIndex === 'number' ? actualIndex : -1
+    }
+    return teamSlotMap.indexOf(actualIndex)
+  }, [teamSlotMap])
+
+  const resolveTeamColor = useCallback((teamIndex) => {
+    const color = Array.isArray(activeMatch?.teamColors) && typeof activeMatch.teamColors?.[teamIndex] === 'object'
       ? activeMatch.teamColors[teamIndex]
       : kitPalette[teamIndex % kitPalette.length]
     return color || kitPalette[teamIndex % kitPalette.length]
-  }
+  }, [activeMatch?.teamColors, kitPalette])
+
+  const resolveSlotColor = useCallback((slotIndex) => {
+    const actualIdx = actualIndexForSlot(slotIndex)
+    return resolveTeamColor(actualIdx)
+  }, [actualIndexForSlot, resolveTeamColor])
 
   const renderJersey = (color, size = 20) => {
     const label = (color?.label || '').toLowerCase()
@@ -133,7 +156,8 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
   }
 
   const findCaptainPlayer = (teamIndex) => {
-    const captainId = captains?.[teamIndex]
+    const actualIdx = actualIndexForSlot(teamIndex)
+    const captainId = captains?.[actualIdx]
     if (!captainId) return null
     const roster = Array.isArray(teams?.[teamIndex]) ? teams[teamIndex] : []
     return roster.find(p => String(p.id) === String(captainId)) || null
@@ -204,17 +228,37 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
   // Reset when activeMatch changes OR restore in-progress game
   useEffect(() => {
     const inProgress = activeMatch?.stats?.__inProgress
+    const fullTeams = Array.isArray(activeMatch?.teams) && activeMatch.teams.length > 0
+      ? activeMatch.teams
+      : [[], []]
+    const defaultSelection = fullTeams.length >= 2
+      ? [0, 1]
+      : fullTeams.map((_, idx) => idx)
+
     if (inProgress && inProgress.matchNumber === (initialGameIndex + 1)) {
       // Restore in-progress game
       setMatchNumber(inProgress.matchNumber)
       setMatchNumberInput(String(inProgress.matchNumber || initialGameIndex + 1))
       setDuration(inProgress.duration || 20)
       setDurationInput(String(inProgress.duration || 20))
-      setTeams(inProgress.teams || activeMatch?.teams || [[], []])
-      setScores(inProgress.scores || [0, 0])
+      const restoredTeams = Array.isArray(inProgress.teams) && inProgress.teams.length > 0
+        ? inProgress.teams
+        : fullTeams
+      setTeams(restoredTeams)
+      setTeamSlotMap(
+        Array.isArray(inProgress.selectedTeamIndices) && inProgress.selectedTeamIndices.length > 0
+          ? inProgress.selectedTeamIndices
+          : restoredTeams.map((_, idx) => idx)
+      )
+      setScores(inProgress.scores || new Array(Math.max(restoredTeams.length, 2)).fill(0))
       setEvents(inProgress.events || [])
       setGameStatus(inProgress.gameStatus || 'setup')
       setStartTime(inProgress.startTime || null)
+      if (Array.isArray(inProgress.selectedTeamIndices) && inProgress.selectedTeamIndices.length > 0) {
+        setSelectedTeamIndices(inProgress.selectedTeamIndices)
+      } else {
+        setSelectedTeamIndices(defaultSelection)
+      }
       // Sync elapsed time based on actual start time
       if (inProgress.startTime && inProgress.gameStatus === 'playing') {
         const elapsed = Math.floor((Date.now() - inProgress.startTime) / 1000)
@@ -227,8 +271,10 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       setMatchNumber(initialGameIndex + 1)
       setMatchNumberInput(String(initialGameIndex + 1))
       setDuration(20)
-      setTeams(activeMatch?.teams || [[], []])
-      setScores([0, 0])
+      setTeams(fullTeams)
+      setTeamSlotMap(fullTeams.map((_, idx) => idx))
+      setScores(new Array(Math.max(fullTeams.length, 2)).fill(0))
+      setSelectedTeamIndices(defaultSelection)
       setEvents([])
       setGameStatus('setup')
       setElapsedSeconds(0)
@@ -244,25 +290,38 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
   }, [activeMatch, initialGameIndex])
 
   // Recompute scores from events list (e.g., when loading from DB)
-  const recomputeScores = React.useCallback((evts) => {
-    const next = [0, 0]
+  const recomputeScores = React.useCallback((evts = []) => {
+    const slotCount = Math.max(teamSlotMap.length || 0, teams.length || 0, 2)
+    const next = Array.from({ length: slotCount }, () => 0)
+
     evts.forEach(e => {
+      const canonicalTeam = typeof e.teamIndex === 'number'
+        ? e.teamIndex
+        : (typeof e.team_id === 'number' ? e.team_id : e.team)
+      if (!Number.isFinite(canonicalTeam)) return
+
       if (e.type === 'goal') {
-        const t = e.teamIndex ?? e.team_id ?? e.team
-        if (t === 0 || t === 1) next[t] = (next[t] || 0) + 1
+        const slot = slotIndexForActual(canonicalTeam)
+        if (slot >= 0) next[slot] = (next[slot] || 0) + 1
       }
+
       if (e.type === 'own_goal') {
-        const t = e.teamIndex ?? e.team_id ?? e.team
-        const opp = t === 0 ? 1 : 0
-        if (opp === 0 || opp === 1) next[opp] = (next[opp] || 0) + 1
+        const concedingSlot = slotIndexForActual(canonicalTeam)
+        if (concedingSlot === -1) return
+        const recipientSlot = slotCount === 2
+          ? (concedingSlot === 0 ? 1 : 0)
+          : Array.from({ length: slotCount }, (_, idx) => idx).find(idx => idx !== concedingSlot)
+        if (recipientSlot !== undefined && recipientSlot >= 0) {
+          next[recipientSlot] = (next[recipientSlot] || 0) + 1
+        }
       }
     })
+
     setScores(prev => {
-      // Only update if scores actually changed to avoid unnecessary rerenders
-      if (prev[0] === next[0] && prev[1] === next[1]) return prev
+      if (prev.length === next.length && prev.every((val, idx) => val === next[idx])) return prev
       return next
     })
-  }, [])
+  }, [slotIndexForActual, teamSlotMap, teams.length])
 
   useEffect(() => {
     if (gameStatus === 'playing' && startTime) {
@@ -291,7 +350,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     }
     load()
     return () => { cancelled = true }
-  }, [matchIdForRef, gameIndexForRef])
+  }, [matchIdForRef, gameIndexForRef, recomputeScores])
 
   // Subscribe to realtime changes for this match/game
   useEffect(() => {
@@ -331,7 +390,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       }
     )
     return () => sub?.unsubscribe?.()
-  }, [matchIdForRef, gameIndexForRef])
+  }, [matchIdForRef, gameIndexForRef, recomputeScores])
 
   // 세션 시작 시 세션 생성 및 구독
   useEffect(() => {
@@ -430,9 +489,14 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
   const handleStartSetup = () => {
     // Filter teams based on selection
     if (activeMatch?.teams && activeMatch.teams.length > 2) {
-      const filteredTeams = selectedTeamIndices.map(idx => activeMatch.teams[idx])
+      const filteredTeams = selectedTeamIndices.map(idx => activeMatch.teams[idx] || [])
       setTeams(filteredTeams)
-      setScores(new Array(filteredTeams.length).fill(0))
+      setTeamSlotMap(selectedTeamIndices)
+      setScores(new Array(Math.max(filteredTeams.length, 2)).fill(0))
+    } else {
+      const slotCount = teams.length || 2
+      setTeamSlotMap(Array.from({ length: slotCount }, (_, idx) => idx))
+      setScores(prev => prev.length === slotCount ? prev : new Array(Math.max(slotCount, 2)).fill(0))
     }
     setGameStatus('ready')
   }
@@ -455,10 +519,12 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     }
     if (!player) return
 
+    const canonicalTeamIndex = actualIndexForSlot(teamIndex)
+
     const newEvent = {
       id: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
       type, // goal, own_goal, yellow, red, foul
-      teamIndex,
+      teamIndex: canonicalTeamIndex,
       playerId: player.id,
       playerName: player.name,
       minute: currentMinute,
@@ -495,19 +561,28 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     setEvents(prev => prev.filter(e => e.id !== target.id))
     deleteRefEvent(matchIdForRef, gameIndexForRef, target.id)
 
+    const primaryActual = typeof target.teamIndex === 'number'
+      ? target.teamIndex
+      : (typeof target.team_id === 'number' ? target.team_id : target.team)
+    const slot = slotIndexForActual(primaryActual)
+
     if (target.type === 'goal') {
       setScores(prev => {
         const next = [...prev]
-        next[target.teamIndex] = Math.max(0, (next[target.teamIndex] || 0) - 1)
+        if (slot >= 0) {
+          next[slot] = Math.max(0, (next[slot] || 0) - 1)
+        }
         return next
       })
     }
 
     if (target.type === 'own_goal') {
-      const opp = target.teamIndex === 0 ? 1 : 0
+      const opp = slot === 0 ? 1 : 0
       setScores(prev => {
         const next = [...prev]
-        next[opp] = Math.max(0, (next[opp] || 0) - 1)
+        if (opp >= 0 && opp < next.length) {
+          next[opp] = Math.max(0, (next[opp] || 0) - 1)
+        }
         return next
       })
     }
@@ -597,7 +672,8 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       duration,
       startTime: startTime ? new Date(startTime).toISOString() : new Date().toISOString(),
       endTime: new Date().toISOString(),
-      teams,
+      teams: Array.isArray(activeMatch?.teams) && activeMatch.teams.length > 0 ? activeMatch.teams : teams,
+      gameTeams: teams,
       scores,
       quarterScores: [scores],
       events: taggedEvents,
@@ -631,6 +707,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       teams,
       scores,
       events,
+      selectedTeamIndices,
       lastUpdated: Date.now(),
     }
     
@@ -643,7 +720,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
     }, 500)
     
     return () => clearTimeout(timer)
-  }, [duration, matchNumber, gameStatus, startTime, elapsedSeconds, teams, scores, events, onAutoSave])
+  }, [duration, matchNumber, gameStatus, startTime, elapsedSeconds, teams, scores, events, selectedTeamIndices, onAutoSave])
 
   const openPlayerActions = (player, teamIndex) => {
     if (!canRecord) {
@@ -981,7 +1058,8 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       <div className="p-4 pb-40 flex-1 space-y-4">
         <div className="grid grid-cols-2 gap-2">
           {teams.map((team, idx) => {
-            const color = resolveTeamColor(idx)
+            const color = resolveSlotColor(idx)
+            const actualIdx = actualIndexForSlot(idx)
             const captain = findCaptainPlayer(idx)
             const accent = color?.border || color?.bg || '#0f172a'
             return (
@@ -990,7 +1068,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                   {renderJersey(color, 24)}
                   <div>
                     <div className="text-[11px] uppercase font-black tracking-wider" style={{ color: accent }}>
-                      {t('referee.team', 'Team')} {idx + 1}
+                      {t('referee.team', 'Team')} {(actualIdx ?? idx) + 1}
                     </div>
                     <div className="text-xs text-slate-500 font-medium">{color?.label || 'Kit'}</div>
                   </div>
@@ -1052,14 +1130,22 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
             </div>
             <div className="px-4 py-2 space-y-1">
               {events.map((ev, idx) => {
-                const scoringTeam = ev.type === 'own_goal' ? (ev.teamIndex === 0 ? 1 : 0) : ev.teamIndex
+                const primaryActual = typeof ev.teamIndex === 'number'
+                  ? ev.teamIndex
+                  : (typeof ev.team_id === 'number' ? ev.team_id : ev.team)
+                const primarySlot = slotIndexForActual(primaryActual)
+                const safePrimarySlot = primarySlot >= 0 ? primarySlot : 0
+                const scoringSlot = ev.type === 'own_goal'
+                  ? (safePrimarySlot === 0 ? 1 : 0)
+                  : safePrimarySlot
+                const scoringClass = scoringSlot === 0 ? 'text-blue-600' : 'text-red-600'
                 const minDisplay = ev.minute > duration ? `${duration} +${ev.minute - duration}'` : `${ev.minute}'`
                 const badge = ev.type === 'goal' ? '⚽' : ev.type === 'own_goal' ? '🥅' : ev.type === 'yellow' ? '🟨' : ev.type === 'red' ? '🟥' : ev.type === 'super_save' ? '🧤' : ev.type === 'clean_sheet' ? '🛡️' : '⚠️'
                 return (
                   <div key={ev.id || `${ev.timestamp}-${idx}`} className="flex items-center gap-2 text-sm group bg-slate-50/60 hover:bg-slate-100 rounded-lg px-3 py-2">
                     <span className="font-mono text-xs text-gray-500 w-14">{minDisplay}</span>
                     <span className="text-lg" aria-hidden>{badge}</span>
-                    <span className={`font-semibold ${scoringTeam === 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                    <span className={`font-semibold ${scoringClass}`}>
                       {ev.playerName}
                     </span>
                     <span className="text-gray-700 flex-1 truncate">
