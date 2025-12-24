@@ -2,6 +2,20 @@
 -- 기존 camelCase 컬럼들을 snake_case로 변경
 -- Mission FC와 동일한 스키마 구조로 통일
 
+-- Step 0: 기존 테이블 확인
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.tables 
+    WHERE table_schema = 'public' 
+    AND table_name = 'upcoming_matches'
+  ) THEN
+    RAISE NOTICE '⚠️  upcoming_matches 테이블이 존재하지 않습니다. 새로 생성합니다.';
+  ELSE
+    RAISE NOTICE '✅ 기존 upcoming_matches 테이블을 발견했습니다. 마이그레이션을 시작합니다.';
+  END IF;
+END $$;
+
 -- Step 1: 기존 테이블 백업 (optional, 안전을 위해)
 -- CREATE TABLE IF NOT EXISTS upcoming_matches_backup AS SELECT * FROM upcoming_matches;
 
@@ -33,51 +47,89 @@ CREATE TABLE IF NOT EXISTS upcoming_matches_new (
 );
 
 -- Step 3: 기존 데이터 마이그레이션 (camelCase → snake_case)
-INSERT INTO upcoming_matches_new (
-  id,
-  room_id,
-  date_iso,
-  location,
-  participant_ids,
-  formations,
-  team_count,
-  team_colors,
-  criterion,
-  created_at,
-  updated_at
-)
-SELECT 
-  id,
-  COALESCE(room_id, 'DKSC-lite-room-1'),
-  "dateISO",
-  -- location이 TEXT일 수도 있으니 JSONB로 변환
-  CASE 
-    WHEN location IS NULL THEN '{}'::jsonb
-    WHEN pg_typeof(location) = 'jsonb'::regtype THEN location
-    ELSE jsonb_build_object('name', location)
-  END as location,
-  -- attendeeIds가 JSONB라면 array로 변환 필요
-  CASE 
-    WHEN jsonb_typeof("attendeeIds") = 'array' THEN 
-      ARRAY(SELECT jsonb_array_elements_text("attendeeIds"))::uuid[]
-    ELSE '{}'::uuid[]
-  END as participant_ids,
-  formations,
-  COALESCE("teamCount", 2),
-  COALESCE("teamColors", '{}'::jsonb),
-  COALESCE(criterion, 'overall'),
-  COALESCE(created_at, NOW()),
-  COALESCE(updated_at, NOW())
-FROM upcoming_matches
-WHERE EXISTS (
-  SELECT 1 FROM information_schema.columns 
-  WHERE table_name = 'upcoming_matches' 
-  AND column_name = 'dateISO'
-);
+-- 테이블이 존재하고 데이터가 있을 경우에만 실행
+DO $$
+DECLARE
+  table_exists boolean;
+  has_camel_case boolean;
+BEGIN
+  -- 테이블 존재 확인
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.tables 
+    WHERE table_schema = 'public' 
+    AND table_name = 'upcoming_matches'
+  ) INTO table_exists;
+  
+  -- camelCase 컬럼 존재 확인
+  SELECT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public'
+    AND table_name = 'upcoming_matches' 
+    AND column_name = 'dateISO'
+  ) INTO has_camel_case;
+  
+  IF table_exists AND has_camel_case THEN
+    RAISE NOTICE '📦 기존 데이터를 마이그레이션합니다...';
+    
+    INSERT INTO upcoming_matches_new (
+      id,
+      room_id,
+      date_iso,
+      location,
+      participant_ids,
+      formations,
+      team_count,
+      team_colors,
+      criterion,
+      created_at,
+      updated_at
+    )
+    SELECT 
+      id,
+      COALESCE(room_id, 'DKSC-lite-room-1'),
+      "dateISO",
+      -- location이 TEXT일 수도 있으니 JSONB로 변환
+      CASE 
+        WHEN pg_typeof(location) = 'jsonb'::regtype THEN location
+        ELSE jsonb_build_object('name', location::text)
+      END as location,
+      -- attendeeIds가 JSONB라면 array로 변환 필요
+      CASE 
+        WHEN jsonb_typeof("attendeeIds") = 'array' THEN 
+          ARRAY(SELECT jsonb_array_elements_text("attendeeIds"))::uuid[]
+        ELSE '{}'::uuid[]
+      END as participant_ids,
+      formations,
+      COALESCE("teamCount", 2),
+      COALESCE("teamColors", '{}'::jsonb),
+      COALESCE(criterion, 'overall'),
+      COALESCE(created_at, NOW()),
+      COALESCE(updated_at, NOW())
+    FROM upcoming_matches;
+    
+    RAISE NOTICE '✅ 데이터 마이그레이션 완료';
+  ELSIF table_exists THEN
+    RAISE NOTICE '⚠️  기존 테이블이 이미 snake_case 스키마입니다. 데이터 마이그레이션을 건너뜁니다.';
+  ELSE
+    RAISE NOTICE 'ℹ️  기존 테이블이 없습니다. 새 테이블만 생성합니다.';
+  END IF;
+END $$;
 
 -- Step 4: 기존 테이블 삭제 및 새 테이블로 교체
-DROP TABLE IF EXISTS upcoming_matches CASCADE;
-ALTER TABLE upcoming_matches_new RENAME TO upcoming_matches;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables 
+    WHERE table_schema = 'public' 
+    AND table_name = 'upcoming_matches'
+  ) THEN
+    DROP TABLE upcoming_matches CASCADE;
+    RAISE NOTICE '🗑️  기존 테이블 삭제 완료';
+  END IF;
+  
+  ALTER TABLE upcoming_matches_new RENAME TO upcoming_matches;
+  RAISE NOTICE '✅ 새 테이블로 교체 완료';
+END $$;
 
 -- Step 5: 인덱스 생성
 CREATE INDEX IF NOT EXISTS idx_upcoming_matches_room_id ON upcoming_matches(room_id);

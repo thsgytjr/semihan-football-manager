@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabaseClient'
 import { TEAM_CONFIG } from '../lib/teamConfig'
 import { logger } from '../lib/logger'
 import { normalizeDateISO } from '../lib/upcomingMatch'
+import { localDateTimeToUTC } from '../lib/dateUtils'
 
 let ROOM_ID = `${TEAM_CONFIG.shortName}-lite-room-1`
 export function setUpcomingMatchesRoom(id){
@@ -45,9 +46,9 @@ function normalizeMatch(row){
 function buildInsertPayload(payload={}){
   // dateISO를 PostgreSQL TIMESTAMPTZ가 이해할 수 있는 형식으로 변환
   let dateValue = normalizeDateISO(payload.dateISO || payload.date_iso || new Date().toISOString())
-  // YYYY-MM-DDTHH:MM 형식이면 초를 추가 (PostgreSQL TIMESTAMPTZ 호환)
+  // YYYY-MM-DDTHH:MM 형식이면 로컬 시간으로 간주하고 UTC로 변환
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dateValue)) {
-    dateValue += ':00'
+    dateValue = localDateTimeToUTC(dateValue)
   }
   
   return {
@@ -80,8 +81,9 @@ function buildUpdatePayload(payload={}){
   if('note' in payload) row.note = payload.note || null
   if('dateISO' in payload || 'date_iso' in payload) {
     let dateValue = normalizeDateISO(payload.dateISO || payload.date_iso)
+    // YYYY-MM-DDTHH:MM 형식이면 로컬 시간으로 간주하고 UTC로 변환
     if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dateValue)) {
-      dateValue += ':00'
+      dateValue = localDateTimeToUTC(dateValue)
     }
     row.date_iso = dateValue
   }

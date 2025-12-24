@@ -69,6 +69,10 @@ export function normalizeDateISO(v){
   const localPattern=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/
   if(localPattern.test(v)) return v.slice(0,16)
   
+  // YYYY-MM-DDTHH:MM:SS 형식 (초 포함) → 초를 제거하고 반환
+  const localPatternWithSeconds=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/
+  if(localPatternWithSeconds.test(v)) return v.slice(0,16)
+  
   // ISO 8601 형태 (타임존 포함) → Date 객체로 변환 후 로컬 시간대로 표시
   try{
     const d=new Date(v)
