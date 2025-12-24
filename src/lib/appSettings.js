@@ -35,6 +35,12 @@ const DEFAULT_SETTINGS = {
       cs: true,  // 클린시트
       duo: true, // 듀오
       cards: true // 카드(옐/레드)
+    },
+    // 카드 기록 세부 제어
+    cardTypes: {
+      yellow: true,  // 옐로우 카드
+      red: true,     // 레드 카드
+      black: true    // 블랙 카드
     }
   },
   accounting: {

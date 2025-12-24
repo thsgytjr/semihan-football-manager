@@ -185,6 +185,7 @@ export default function Dashboard({
   playerFactsEnabled: legacyPlayerFactsEnabled,
   seasonRecapEnabled = true,
   seasonRecapReady = true,
+  cardTypesEnabled = { yellow: true, red: true, black: true },
 }) {
   const playerStatsEnabled = playerStatsEnabledProp ?? (legacyPlayerFactsEnabled ?? true)
   const playerFactsEnabled = playerStatsEnabled // legacy alias for any stale references
@@ -1724,6 +1725,7 @@ export default function Dashboard({
                   apDateKey={apDateKey}
                   customMemberships={customMemberships}
                   onPlayerSelect={openPlayerStatsModal}
+                  cardTypesEnabled={cardTypesEnabled}
                 />
               ) : (
                 <AttackPointsTable
@@ -2531,7 +2533,7 @@ function CleanSheetTable({ rows, showAll, onToggle, controls, apDateKey, initial
 
 /* ---------------------- Main Component --------------------- */
 
-function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMemberships = [], onPlayerSelect }) {
+function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMemberships = [], onPlayerSelect, cardTypesEnabled = { yellow: true, red: true, black: true } }) {
   const { t } = useTranslation()
   const [sortBy, setSortBy] = useState('r')
 
@@ -2555,10 +2557,16 @@ function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMember
   }, [rows, sortBy])
 
   const data = showAll ? sortedRows : sortedRows.slice(0, 5)
+  
+  // Filter columns based on enabled card types
+  const yellowEnabled = cardTypesEnabled?.yellow !== false
+  const redEnabled = cardTypesEnabled?.red !== false
+  const blackEnabled = cardTypesEnabled?.black !== false
+  
   const columns = [
     { label: t('leaderboard.rank'), px: 1.5, align: 'center', className: 'w-[60px]' },
     { label: t('leaderboard.player'), px: 2 },
-    {
+    ...(redEnabled ? [{
       label: (
         <CardColumnHeader
           label={t('playerStatsModal.labels.red')}
@@ -2571,8 +2579,8 @@ function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMember
       px: 1.5,
       align: 'center',
       className: 'w-[50px]'
-    },
-    {
+    }] : []),
+    ...(yellowEnabled ? [{
       label: (
         <CardColumnHeader
           label={t('playerStatsModal.labels.yellow')}
@@ -2585,8 +2593,8 @@ function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMember
       px: 1.5,
       align: 'center',
       className: 'w-[50px]'
-    },
-    {
+    }] : []),
+    ...(blackEnabled ? [{
       label: (
         <CardColumnHeader
           label={t('playerStatsModal.labels.black')}
@@ -2599,7 +2607,7 @@ function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMember
       px: 1.5,
       align: 'center',
       className: 'w-[50px]'
-    },
+    }] : []),
   ]
 
   const renderRow = (r, tone) => (
@@ -2614,9 +2622,9 @@ function CardsTable({ rows, showAll, onToggle, controls, apDateKey, customMember
         customMemberships={customMemberships}
         onSelect={onPlayerSelect ? () => onPlayerSelect(r) : undefined}
       />
-      <StatCell value={r.r || 0} tone={tone} align="center" width={50} />
-      <StatCell value={r.y || 0} tone={tone} align="center" width={50} />
-      <StatCell value={r.b || 0} tone={tone} align="center" width={50} />
+      {redEnabled && <StatCell value={r.r || 0} tone={tone} align="center" width={50} />}
+      {yellowEnabled && <StatCell value={r.y || 0} tone={tone} align="center" width={50} />}
+      {blackEnabled && <StatCell value={r.b || 0} tone={tone} align="center" width={50} />}
     </>
   )
 

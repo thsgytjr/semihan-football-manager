@@ -121,9 +121,15 @@ function extractStatsByPlayer(m) {
 
 
 /* ======== Main Component ======== */
-export default function StatsInput({ players = [], matches = [], onUpdateMatch, isAdmin, cardsFeatureEnabled = true, onStartRefereeMode }) {
+export default function StatsInput({ players = [], matches = [], onUpdateMatch, isAdmin, cardsFeatureEnabled = true, cardTypesEnabled = {}, onStartRefereeMode }) {
   const { t } = useTranslation()
   const cardsEnabled = cardsFeatureEnabled !== false
+  
+  // Individual card type controls
+  const yellowEnabled = cardTypesEnabled?.yellow !== false
+  const redEnabled = cardTypesEnabled?.red !== false
+  const blackEnabled = cardTypesEnabled?.black !== false
+  
   const sortedMatches = useMemo(() => {
     const arr = Array.isArray(matches) ? [...matches] : []
     return arr.sort((a, b) => getMatchTime(b) - getMatchTime(a))
@@ -1804,9 +1810,9 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
                     )}
                     {statsTab === 'discipline' && cardsEnabled && (
                       <>
-                        <th className="px-2 py-2.5 text-center min-w-[80px]">🟨 Yellow</th>
-                        <th className="px-2 py-2.5 text-center min-w-[80px]">🟥 Red</th>
-                        <th className="px-2 py-2.5 text-center min-w-[80px]">⬛ Black</th>
+                        {yellowEnabled && <th className="px-2 py-2.5 text-center min-w-[80px]">🟨 Yellow</th>}
+                        {redEnabled && <th className="px-2 py-2.5 text-center min-w-[80px]">🟥 Red</th>}
+                        {blackEnabled && <th className="px-2 py-2.5 text-center min-w-[80px]">⬛ Black</th>}
                       </>
                     )}
                   </tr>
@@ -1880,15 +1886,21 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
                         {/* Discipline Tab */}
                         {statsTab === 'discipline' && cardsEnabled && (
                           <>
-                            <td className="px-2 py-2">
-                              <CompactCounterYC player={p} draft={draft} setDraft={setDraft} />
-                            </td>
-                            <td className="px-2 py-2">
-                              <CompactCounterRC player={p} draft={draft} setDraft={setDraft} />
-                            </td>
-                            <td className="px-2 py-2">
-                              <CompactCounterBC player={p} draft={draft} setDraft={setDraft} />
-                            </td>
+                            {yellowEnabled && (
+                              <td className="px-2 py-2">
+                                <CompactCounterYC player={p} draft={draft} setDraft={setDraft} />
+                              </td>
+                            )}
+                            {redEnabled && (
+                              <td className="px-2 py-2">
+                                <CompactCounterRC player={p} draft={draft} setDraft={setDraft} />
+                              </td>
+                            )}
+                            {blackEnabled && (
+                              <td className="px-2 py-2">
+                                <CompactCounterBC player={p} draft={draft} setDraft={setDraft} />
+                              </td>
+                            )}
                           </>
                         )}
                       </tr>

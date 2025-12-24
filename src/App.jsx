@@ -1858,6 +1858,7 @@ function App(){
                   playerStatsEnabled={playerStatsModalEnabled}
                   seasonRecapEnabled={!maintenanceActive && (seasonRecapEnabled ?? false)}
                   seasonRecapReady={appSettingsLoaded}
+                  cardTypesEnabled={featuresEnabled?.cardTypes ?? { yellow: true, red: true, black: true }}
                 />
               )}
               {tab==="players"&&isAdmin&&featuresEnabled.players&&(
@@ -1906,6 +1907,7 @@ function App(){
                     onUpdateMatch={handleUpdateMatch} 
                     isAdmin={isAdmin}
                     cardsFeatureEnabled={featuresEnabled?.cards ?? true}
+                    cardTypesEnabled={featuresEnabled?.cardTypes ?? { yellow: true, red: true, black: true }}
                     onStartRefereeMode={handleStartRefereeMode}
                   />
                 </Suspense>
@@ -2244,6 +2246,12 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,seasonRecapEnable
     cards: '카드(Y/R)'
   }
   
+  const cardTypeLabels = {
+    yellow: '옐로우 카드 (Y)',
+    red: '레드 카드 (R)',
+    black: '블랙 카드 (B)'
+  }
+  
   if(!isOpen)return null;
   
   return(
@@ -2486,6 +2494,46 @@ function SettingsDialog({isOpen,onClose,appTitle,onTitleChange,seasonRecapEnable
                 })}
               </div>
             </div>
+
+            {/* 카드 타입별 기록 제어 */}
+            <div className="border-t border-stone-200 pt-4 mt-4">
+              <div className="mb-3">
+                <h4 className="text-sm font-semibold text-stone-800">카드 기록 타입 제어</h4>
+                <p className="text-xs text-stone-500 mt-0.5">각 카드 타입을 개별적으로 켜고 끌 수 있습니다</p>
+              </div>
+              <div className="grid grid-cols-1 gap-2">
+                {Object.entries(cardTypeLabels).map(([key, label]) => {
+                  const current = featuresEnabled?.cardTypes?.[key]
+                  const isOn = current === undefined ? true : !!current
+                  return (
+                    <div key={key} className="flex items-center justify-between py-2 px-3 rounded-lg bg-stone-50 hover:bg-stone-100 transition-colors">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-stone-700">{label}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-medium">기록</span>
+                      </div>
+                      <button
+                        onClick={() => onFeatureToggle(`cardTypes.${key}`, !isOn)}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+                          isOn ? 'bg-emerald-600' : 'bg-stone-300'
+                        }`}
+                        role="switch"
+                        aria-checked={isOn}
+                      >
+                        <span
+                          className={`inline-block h-3 w-3 transform rounded-full bg-white transition-transform ${
+                            isOn ? 'translate-x-5' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="text-xs text-stone-500 bg-amber-50 rounded-lg p-3 border border-amber-200 mt-3">
+                ℹ️ 카드 타입을 비활성화하면 해당 카드의 기록 입력이 숨겨지지만, 기존 데이터는 유지됩니다.
+              </div>
+            </div>
+
             {canEditBadgeTiers && badgesFeatureOn && (
               <div className="border-t border-stone-200 pt-4 mt-4">
                 <div className="mb-3">
