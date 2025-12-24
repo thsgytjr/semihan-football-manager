@@ -18,9 +18,9 @@ function normalize(row){
     id: row.id,
     roomId: row.room_id,
     name: row.name,
+    tags: row.tags || [],
     color: row.color,
     sortOrder: row.sort_order ?? 0,
-    metadata: row.metadata || {},
     createdAt: row.created_at,
     updatedAt: row.updated_at
   }
@@ -31,9 +31,9 @@ function denormalize(preset={}){
     id: preset.id,
     room_id: preset.roomId || ROOM_ID,
     name: preset.name,
-    color: preset.color || 'stone',
-    sort_order: typeof preset.sortOrder === 'number' ? preset.sortOrder : 0,
-    metadata: preset.metadata || {}
+    tags: preset.tags || [],
+    color: preset.color || 'blue',
+    sort_order: typeof preset.sortOrder === 'number' ? preset.sortOrder : 0
   }
 }
 
