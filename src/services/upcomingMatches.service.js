@@ -22,21 +22,19 @@ function normalizeMatch(row){
     note: row.note || '',
     dateISO: normalizeDateISO(row.dateISO || row.date_iso),
     location: row.location || {},
-    snapshot: row.snapshot || [],
-    participantIds: row.participant_ids || row.participantIds || [],
-    attendeeIds: row.participant_ids || row.participantIds || [],
-    captainIds: row.captain_ids || row.captainIds || [],
+    board: row.board || [],
+    attendeeIds: row.attendeeIds || row.participant_ids || row.participantIds || [],
     formations: row.formations || [],
-    teamCount: row.team_count || row.teamCount || 2,
-    isDraftMode: row.is_draft_mode || row.isDraftMode || false,
-    isDraftComplete: row.is_draft_complete || row.isDraftComplete || false,
-    draftCompletedAt: row.draft_completed_at || row.draftCompletedAt,
-    totalCost: row.total_cost || row.totalCost,
-    feesDisabled: row.fees_disabled || row.feesDisabled || false,
-    teamColors: row.team_colors || row.teamColors || {},
+    teamCount: row.teamCount || row.team_count || 2,
     criterion: row.criterion || 'overall',
-    status: row.status || 'scheduled',
-    metadata: row.metadata || {},
+    mode: row.mode || '7v7',
+    selectionMode: row.selectionMode || row.selection_mode || null,
+    locked: row.locked || false,
+    videos: row.videos || [],
+    teamids: row.teamids || [],
+    stats: row.stats || {},
+    draft: row.draft || null,
+    teamColors: row.teamColors || row.team_colors || {},
     createdAt: row.created_at || row.createdAt,
     updatedAt: row.updated_at || row.updatedAt
   }
@@ -49,20 +47,19 @@ function buildInsertPayload(payload={}){
     note: payload.note || null,
     dateISO: normalizeDateISO(payload.dateISO || payload.date_iso || new Date().toISOString()),
     location: payload.location || {},
-    snapshot: payload.snapshot || [],
-    participantIds: payload.participantIds || payload.attendeeIds || [],
-    captainIds: payload.captainIds || [],
+    board: payload.board || [],
+    attendeeIds: payload.participantIds || payload.attendeeIds || [],
     formations: payload.formations || [],
     teamCount: payload.teamCount || 2,
-    isDraftMode: payload.isDraftMode || false,
-    isDraftComplete: payload.isDraftComplete || false,
-    draftCompletedAt: payload.draftCompletedAt || null,
-    totalCost: payload.totalCost ?? null,
-    feesDisabled: payload.feesDisabled || false,
-    teamColors: payload.teamColors || {},
     criterion: payload.criterion || 'overall',
-    status: payload.status || 'scheduled',
-    metadata: payload.metadata || {}
+    mode: payload.mode || '7v7',
+    selectionMode: payload.selectionMode || null,
+    locked: payload.locked || false,
+    videos: payload.videos || [],
+    teamids: payload.teamids || [],
+    stats: payload.stats || {},
+    draft: payload.draft || null,
+    teamColors: payload.teamColors || {}
   }
 }
 
@@ -73,20 +70,19 @@ function buildUpdatePayload(payload={}){
   if('note' in payload) row.note = payload.note || null
   if('dateISO' in payload || 'date_iso' in payload) row.dateISO = normalizeDateISO(payload.dateISO || payload.date_iso)
   if('location' in payload) row.location = payload.location || {}
-  if('snapshot' in payload) row.snapshot = payload.snapshot || []
-  if('participantIds' in payload || 'attendeeIds' in payload) row.participantIds = payload.participantIds || payload.attendeeIds || []
-  if('captainIds' in payload) row.captainIds = payload.captainIds || []
+  if('board' in payload) row.board = payload.board || []
+  if('participantIds' in payload || 'attendeeIds' in payload) row.attendeeIds = payload.participantIds || payload.attendeeIds || []
   if('formations' in payload) row.formations = payload.formations || []
   if('teamCount' in payload) row.teamCount = payload.teamCount || 2
-  if('isDraftMode' in payload) row.isDraftMode = !!payload.isDraftMode
-  if('isDraftComplete' in payload) row.isDraftComplete = !!payload.isDraftComplete
-  if('draftCompletedAt' in payload) row.draftCompletedAt = payload.draftCompletedAt || null
-  if('totalCost' in payload) row.totalCost = payload.totalCost ?? null
-  if('feesDisabled' in payload) row.feesDisabled = !!payload.feesDisabled
-  if('teamColors' in payload) row.teamColors = payload.teamColors || {}
   if('criterion' in payload) row.criterion = payload.criterion || 'overall'
-  if('status' in payload) row.status = payload.status || 'scheduled'
-  if('metadata' in payload) row.metadata = payload.metadata || {}
+  if('mode' in payload) row.mode = payload.mode || '7v7'
+  if('selectionMode' in payload) row.selectionMode = payload.selectionMode || null
+  if('locked' in payload) row.locked = !!payload.locked
+  if('videos' in payload) row.videos = payload.videos || []
+  if('teamids' in payload) row.teamids = payload.teamids || []
+  if('stats' in payload) row.stats = payload.stats || {}
+  if('draft' in payload) row.draft = payload.draft || null
+  if('teamColors' in payload) row.teamColors = payload.teamColors || {}
   return row
 }
 
