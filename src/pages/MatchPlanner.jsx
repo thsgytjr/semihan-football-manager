@@ -5,7 +5,7 @@ import Card from'../components/Card'
 import ConfirmDialog from'../components/ConfirmDialog'
 import{mkMatch,decideMode,splitKTeams,hydrateMatch}from'../lib/match'
 import { extractSeason } from '../lib/matchUtils'
-import { localDateTimeToISO, getCurrentLocalDateTime, isoToLocalDateTime } from '../lib/dateUtils'
+import { localDateTimeToUTC, getCurrentLocalDateTime, utcToLocalDateTime } from '../lib/dateUtils'
 // ...other imports...
 
 // 포지션 고려 팀 분배 함수 (splitKTeamsPosAware)
@@ -332,10 +332,10 @@ export default function MatchPlanner({
         }
       }
       
-      // UI에서 입력한 그대로 저장 (YYYY-MM-DDTHH:mm)
+      // 로컬 시간을 UTC로 변환하여 저장
       const dateISOFormatted = dateISO && dateISO.length >= 16 
-        ? localDateTimeToISO(dateISO.slice(0,16))
-        : localDateTimeToISO(getCurrentLocalDateTime())
+        ? localDateTimeToUTC(dateISO.slice(0,16))
+        : localDateTimeToUTC(getCurrentLocalDateTime())
       
       const payload={
         ...mkMatch({
@@ -390,8 +390,8 @@ export default function MatchPlanner({
     }
     
     const dateISOFormatted = dateISO && dateISO.length >= 16 
-      ? localDateTimeToISO(dateISO.slice(0,16))
-      : localDateTimeToISO(getCurrentLocalDateTime())
+      ? localDateTimeToUTC(dateISO.slice(0,16))
+      : localDateTimeToUTC(getCurrentLocalDateTime())
     
     const payload={
       ...mkMatch({
@@ -434,10 +434,10 @@ export default function MatchPlanner({
     // 팀 구성 스냅샷 저장 (선수 ID 배열)
     const teamsSnapshot = currentTeams.map(team => team.map(p => p.id))
 
-    // 날짜 문자열을 타임존 정보와 함께 ISO 형식으로 변환
+    // 로컬 시간을 UTC로 변환하여 저장
   const dateISOFormatted = dateISO && dateISO.length >= 16 
-    ? localDateTimeToISO(dateISO.slice(0,16)) 
-    : localDateTimeToISO(getCurrentLocalDateTime())
+    ? localDateTimeToUTC(dateISO.slice(0,16)) 
+    : localDateTimeToUTC(getCurrentLocalDateTime())
 
     const fees = enablePitchFee ? computeFeesAtSave({ baseCostValue: baseCost, attendees: assignedPlayerIds.map(id => players.find(p=>p.id===id)).filter(Boolean), guestSurcharge }) : null
     const upcomingMatch = createUpcomingMatch({
@@ -738,18 +738,11 @@ export default function MatchPlanner({
     // DB에서 timestamptz로 저장된 경우 로컬 시간으로 변환
     if(match.dateISO){
       const dateStr = match.dateISO
-      console.log('[MatchPlanner] Loading match dateISO:', dateStr, 'length:', dateStr.length)
-      // ISO 8601 형식 (타임존 포함)이면 로컬 시간으로 변환
-      if(dateStr.includes('Z') || dateStr.includes('+') || (dateStr.includes('T') && dateStr.length > 16)){
-        console.log('[MatchPlanner] Converting timezone-aware date to local')
-        const d = new Date(dateStr)
-        const local = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
-        console.log('[MatchPlanner] Converted to local:', local)
-        setDateISO(local)
-      } else {
-        console.log('[MatchPlanner] Using date as-is (already local format)')
-        setDateISO(dateStr.slice(0,16))
-      }
+      console.log('[MatchPlanner] Loading match dateISO:', dateStr)
+      // UTC를 로컬 시간으로 변환
+      const localTime = utcToLocalDateTime(dateStr)
+      console.log('[MatchPlanner] Converted to local:', localTime)
+      setDateISO(localTime)
     }
     if(match.fees?.total)setCustomBaseCost(match.fees.total)
     setShuffleSeed(0)
@@ -795,21 +788,13 @@ export default function MatchPlanner({
     setUpcomingDirty(false)
 
     // Load basic match data
-    // DB에서 timestamptz로 저장된 경우 로컬 시간으로 변환
+    // UTC를 로컬 시간으로 변환
     if (upcomingMatch.dateISO) {
       const dateStr = upcomingMatch.dateISO
-      console.log('[MatchPlanner] Loading upcoming match dateISO:', dateStr, 'length:', dateStr.length)
-      // ISO 8601 형식 (타임존 포함)이면 로컬 시간으로 변환
-      if(dateStr.includes('Z') || dateStr.includes('+') || (dateStr.includes('T') && dateStr.length > 16)){
-        console.log('[MatchPlanner] Converting timezone-aware date to local')
-        const d = new Date(dateStr)
-        const local = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}T${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
-        console.log('[MatchPlanner] Converted to local:', local)
-        setDateISO(local)
-      } else {
-        console.log('[MatchPlanner] Using date as-is (already local format)')
-        setDateISO(dateStr.slice(0,16))
-      }
+      console.log('[MatchPlanner] Loading upcoming match dateISO:', dateStr)
+      const localTime = utcToLocalDateTime(dateStr)
+      console.log('[MatchPlanner] Converted to local:', localTime)
+      setDateISO(localTime)
     }
     if (upcomingMatch.location) {
       setLocationName(upcomingMatch.location.name || '')

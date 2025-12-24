@@ -26,7 +26,7 @@ import LanguageSwitcher from"./components/LanguageSwitcherNew"
 import Dashboard from"./pages/Dashboard";import PlayersPage from"./pages/PlayersPage";import MaintenancePage from"./pages/MaintenancePage"
 import logoUrl from"./assets/GoalifyLogo.png"
 import{getAppSettings,loadAppSettingsFromServer,updateAppTitle,updateSeasonRecapEnabled,updateMaintenanceMode,updateFeatureEnabled,updateLeaderboardCategoryEnabled,updateBadgeTierOverrides}from"./lib/appSettings"
-import { localDateTimeToISO } from './lib/dateUtils'
+import { localDateTimeToUTC } from './lib/dateUtils'
 import { getBadgeTierRuleCatalog } from './lib/playerBadgeEngine'
 import { isDraftMatch } from './lib/matchHelpers'
 
@@ -838,9 +838,11 @@ function App(){
     try {
       const normalizeMatchDateISO = (v) => {
         if(!v) return v
+        // \uc774\ubbf8 UTC \ud615\uc2dd\uc774\uba74 \uadf8\ub300\ub85c \uc0ac\uc6a9
         if((v.includes('+')||v.endsWith('Z')) && v.length>16) return v
+        // \ub85c\uceec \uc2dc\uac04\uc744 UTC\ub85c \ubcc0\ud658
         const trimmed = v.length>=16 ? v.slice(0,16) : v
-        return localDateTimeToISO(trimmed)
+        return localDateTimeToUTC(trimmed)
       }
 
       const matchWithDate = {
@@ -1129,9 +1131,11 @@ function App(){
 
     const normalizeMatchDateISO = (v) => {
       if(!v) return v
+      // \uc774\ubbf8 UTC \ud615\uc2dd\uc774\uba74 \uadf8\ub300\ub85c \uc0ac\uc6a9
       if((v.includes('+')||v.endsWith('Z')) && v.length>16) return v
+      // \ub85c\uceec \uc2dc\uac04\uc744 UTC\ub85c \ubcc0\ud658
       const trimmed = v.length>=16 ? v.slice(0,16) : v
-      return localDateTimeToISO(trimmed)
+      return localDateTimeToUTC(trimmed)
     }
 
     const patched = patch?.dateISO ? { ...patch, dateISO: normalizeMatchDateISO(patch.dateISO) } : patch
