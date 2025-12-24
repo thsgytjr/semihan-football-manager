@@ -18,8 +18,6 @@ function normalizeMatch(row){
   return {
     id: row.id,
     roomId: row.room_id || row.roomId,
-    title: row.title || '',
-    note: row.note || '',
     dateISO: normalizeDateISO(row.dateISO || row.date_iso),
     location: row.location || {},
     board: row.board || [],
@@ -41,11 +39,16 @@ function normalizeMatch(row){
 }
 
 function buildInsertPayload(payload={}){
+  // dateISO를 PostgreSQL TIMESTAMPTZ가 이해할 수 있는 형식으로 변환
+  let dateValue = normalizeDateISO(payload.dateISO || payload.date_iso || new Date().toISOString())
+  // YYYY-MM-DDTHH:MM 형식이면 초를 추가 (PostgreSQL TIMESTAMPTZ 호환)
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(dateValue)) {
+    dateValue += ':00'
+  }
+  
   return {
     room_id: payload.roomId || ROOM_ID,
-    title: payload.title || null,
-    note: payload.note || null,
-    dateISO: normalizeDateISO(payload.dateISO || payload.date_iso || new Date().toISOString()),
+    dateISO: dateValue,
     location: payload.location || {},
     board: payload.board || [],
     attendeeIds: payload.participantIds || payload.attendeeIds || [],
@@ -66,8 +69,6 @@ function buildInsertPayload(payload={}){
 function buildUpdatePayload(payload={}){
   const row = {}
   if('roomId' in payload) row.room_id = payload.roomId || ROOM_ID
-  if('title' in payload) row.title = payload.title || null
-  if('note' in payload) row.note = payload.note || null
   if('dateISO' in payload || 'date_iso' in payload) row.dateISO = normalizeDateISO(payload.dateISO || payload.date_iso)
   if('location' in payload) row.location = payload.location || {}
   if('board' in payload) row.board = payload.board || []
@@ -103,13 +104,18 @@ export async function listUpcomingMatches(){
 
 export async function createUpcomingMatch(payload){
   const row = buildInsertPayload(payload)
+  console.log('[upcomingMatches] Attempting to insert:', JSON.stringify(row, null, 2))
   try{
     const { data, error } = await supabase
       .from(TABLE)
       .insert(row)
       .select('*')
       .single()
-    if(error) throw error
+    if(error) {
+      console.error('[upcomingMatches] Supabase error:', error)
+      console.error('[upcomingMatches] Error details:', JSON.stringify(error, null, 2))
+      throw error
+    }
     return normalizeMatch(data)
   }catch(err){
     logger.error('[upcomingMatches] create failed', err)
