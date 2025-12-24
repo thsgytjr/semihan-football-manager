@@ -17,28 +17,28 @@ function normalizeMatch(row){
   if(!row) return null
   return {
     id: row.id,
-    roomId: row.room_id,
+    roomId: row.room_id || row.roomId,
     title: row.title || '',
     note: row.note || '',
-    dateISO: normalizeDateISO(row.date_iso),
+    dateISO: normalizeDateISO(row.dateISO || row.date_iso),
     location: row.location || {},
     snapshot: row.snapshot || [],
-    participantIds: row.participant_ids || [],
-    attendeeIds: row.participant_ids || [],
-    captainIds: row.captain_ids || [],
+    participantIds: row.participant_ids || row.participantIds || [],
+    attendeeIds: row.participant_ids || row.participantIds || [],
+    captainIds: row.captain_ids || row.captainIds || [],
     formations: row.formations || [],
-    teamCount: row.team_count || 2,
-    isDraftMode: row.is_draft_mode || false,
-    isDraftComplete: row.is_draft_complete || false,
-    draftCompletedAt: row.draft_completed_at,
-    totalCost: row.total_cost,
-    feesDisabled: row.fees_disabled || false,
-    teamColors: row.team_colors || {},
+    teamCount: row.team_count || row.teamCount || 2,
+    isDraftMode: row.is_draft_mode || row.isDraftMode || false,
+    isDraftComplete: row.is_draft_complete || row.isDraftComplete || false,
+    draftCompletedAt: row.draft_completed_at || row.draftCompletedAt,
+    totalCost: row.total_cost || row.totalCost,
+    feesDisabled: row.fees_disabled || row.feesDisabled || false,
+    teamColors: row.team_colors || row.teamColors || {},
     criterion: row.criterion || 'overall',
     status: row.status || 'scheduled',
     metadata: row.metadata || {},
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
+    createdAt: row.created_at || row.createdAt,
+    updatedAt: row.updated_at || row.updatedAt
   }
 }
 
@@ -47,19 +47,19 @@ function buildInsertPayload(payload={}){
     room_id: payload.roomId || ROOM_ID,
     title: payload.title || null,
     note: payload.note || null,
-    date_iso: normalizeDateISO(payload.dateISO || payload.date_iso || new Date().toISOString()),
+    dateISO: normalizeDateISO(payload.dateISO || payload.date_iso || new Date().toISOString()),
     location: payload.location || {},
     snapshot: payload.snapshot || [],
-    participant_ids: payload.participantIds || payload.attendeeIds || [],
-    captain_ids: payload.captainIds || [],
+    participantIds: payload.participantIds || payload.attendeeIds || [],
+    captainIds: payload.captainIds || [],
     formations: payload.formations || [],
-    team_count: payload.teamCount || 2,
-    is_draft_mode: payload.isDraftMode || false,
-    is_draft_complete: payload.isDraftComplete || false,
-    draft_completed_at: payload.draftCompletedAt || null,
-    total_cost: payload.totalCost ?? null,
-    fees_disabled: payload.feesDisabled || false,
-    team_colors: payload.teamColors || {},
+    teamCount: payload.teamCount || 2,
+    isDraftMode: payload.isDraftMode || false,
+    isDraftComplete: payload.isDraftComplete || false,
+    draftCompletedAt: payload.draftCompletedAt || null,
+    totalCost: payload.totalCost ?? null,
+    feesDisabled: payload.feesDisabled || false,
+    teamColors: payload.teamColors || {},
     criterion: payload.criterion || 'overall',
     status: payload.status || 'scheduled',
     metadata: payload.metadata || {}
@@ -71,19 +71,19 @@ function buildUpdatePayload(payload={}){
   if('roomId' in payload) row.room_id = payload.roomId || ROOM_ID
   if('title' in payload) row.title = payload.title || null
   if('note' in payload) row.note = payload.note || null
-  if('dateISO' in payload || 'date_iso' in payload) row.date_iso = normalizeDateISO(payload.dateISO || payload.date_iso)
+  if('dateISO' in payload || 'date_iso' in payload) row.dateISO = normalizeDateISO(payload.dateISO || payload.date_iso)
   if('location' in payload) row.location = payload.location || {}
   if('snapshot' in payload) row.snapshot = payload.snapshot || []
-  if('participantIds' in payload || 'attendeeIds' in payload) row.participant_ids = payload.participantIds || payload.attendeeIds || []
-  if('captainIds' in payload) row.captain_ids = payload.captainIds || []
+  if('participantIds' in payload || 'attendeeIds' in payload) row.participantIds = payload.participantIds || payload.attendeeIds || []
+  if('captainIds' in payload) row.captainIds = payload.captainIds || []
   if('formations' in payload) row.formations = payload.formations || []
-  if('teamCount' in payload) row.team_count = payload.teamCount || 2
-  if('isDraftMode' in payload) row.is_draft_mode = !!payload.isDraftMode
-  if('isDraftComplete' in payload) row.is_draft_complete = !!payload.isDraftComplete
-  if('draftCompletedAt' in payload) row.draft_completed_at = payload.draftCompletedAt || null
-  if('totalCost' in payload) row.total_cost = payload.totalCost ?? null
-  if('feesDisabled' in payload) row.fees_disabled = !!payload.feesDisabled
-  if('teamColors' in payload) row.team_colors = payload.teamColors || {}
+  if('teamCount' in payload) row.teamCount = payload.teamCount || 2
+  if('isDraftMode' in payload) row.isDraftMode = !!payload.isDraftMode
+  if('isDraftComplete' in payload) row.isDraftComplete = !!payload.isDraftComplete
+  if('draftCompletedAt' in payload) row.draftCompletedAt = payload.draftCompletedAt || null
+  if('totalCost' in payload) row.totalCost = payload.totalCost ?? null
+  if('feesDisabled' in payload) row.feesDisabled = !!payload.feesDisabled
+  if('teamColors' in payload) row.teamColors = payload.teamColors || {}
   if('criterion' in payload) row.criterion = payload.criterion || 'overall'
   if('status' in payload) row.status = payload.status || 'scheduled'
   if('metadata' in payload) row.metadata = payload.metadata || {}
@@ -96,7 +96,7 @@ export async function listUpcomingMatches(){
       .from(TABLE)
       .select('*')
       .eq('room_id', ROOM_ID)
-      .order('date_iso', { ascending: true })
+      .order('dateISO', { ascending: true })
     if(error) throw error
     return (data||[]).map(normalizeMatch)
   }catch(err){
