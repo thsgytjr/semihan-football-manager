@@ -1301,6 +1301,9 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
                     onSave={save}
                     showSaved={showSaved}
                     cardsEnabled={cardsEnabled}
+                    yellowEnabled={yellowEnabled}
+                    redEnabled={redEnabled}
+                    blackEnabled={blackEnabled}
                   />
                 )}
               </div>
@@ -1350,7 +1353,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
 }
 
 /* ======== Quick Stats Editor Component ======== */
-function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, resetAllRecords = () => {}, onSave, showSaved, cardsEnabled = true }) {
+function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, resetAllRecords = () => {}, onSave, showSaved, cardsEnabled = true, yellowEnabled = true, redEnabled = true, blackEnabled = true }) {
   const [showLinkPanel, setShowLinkPanel] = useState(false)
   const [addingGoalFor, setAddingGoalFor] = useState(null) // { playerId, teamIdx }
   const [addingAssistFor, setAddingAssistFor] = useState(null) // { playerId, teamIdx }

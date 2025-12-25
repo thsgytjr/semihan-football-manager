@@ -570,7 +570,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
 
   const handleEvent = (type, teamIndex, player, extra = {}) => {
     if (!canRecord) {
-      notify(t('referee.kickoffFirst', 'Kick off to start recording'))
+      notify(t('referee.kickoffFirst'))
       return
     }
     if (!player) return
@@ -780,7 +780,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
 
   const openPlayerActions = (player, teamIndex) => {
     if (!canRecord) {
-      notify(t('referee.kickoffFirst', 'Kick off to start recording'))
+      notify(t('referee.kickoffFirst'))
       return
     }
     setSelectedPlayer(player)
@@ -850,28 +850,28 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
   }, [events])
   const describeEvent = (ev) => {
     if (!ev) return ''
-    if (ev.type === 'goal') return ev.assistedName ? `${ev.playerName} (assist ${ev.assistedName})` : `${ev.playerName} goal`
-    if (ev.type === 'own_goal') return `${ev.playerName} own goal`
-    if (ev.type === 'yellow') return `${ev.playerName} yellow card`
-    if (ev.type === 'red') return `${ev.playerName} red card`
-    if (ev.type === 'foul') return `${ev.playerName} foul`
-    return ev.playerName || 'Event'
+    if (ev.type === 'goal') return ev.assistedName ? `${ev.playerName} (${t('referee.goalWithAssist', { assistName: ev.assistedName })})` : `${ev.playerName} ${t('referee.goal')}`
+    if (ev.type === 'own_goal') return `${ev.playerName} ${t('referee.ownGoal')}`
+    if (ev.type === 'yellow') return `${ev.playerName} ${t('referee.yellowCard')}`
+    if (ev.type === 'red') return `${ev.playerName} ${t('referee.redCard')}`
+    if (ev.type === 'foul') return `${ev.playerName} ${t('referee.foul')}`
+    return ev.playerName || t('referee.event', 'Event')
   }
 
   if (gameStatus === 'setup') {
     return (
       <div className="fixed inset-0 bg-slate-100 z-50 overflow-y-auto flex items-center justify-center p-4">
         <div className="w-full max-w-md">
-          <Card title={t('referee.setupTitle', 'Match Setup')}>
+          <Card title={t('referee.setupTitle')}>
             <div className="space-y-4">
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 space-y-1">
-                <div className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Match Info</div>
-                <div className="text-[15px] font-bold text-slate-900 truncate">{activeMatch?.title || activeMatch?.name || t('referee.matchLabel', 'Match')}</div>
+                <div className="text-xs uppercase tracking-wide text-slate-500 font-semibold">{t('referee.matchInfo')}</div>
+                <div className="text-[15px] font-bold text-slate-900 truncate">{activeMatch?.title || activeMatch?.name || t('referee.matchLabel')}</div>
                 <div className="text-xs text-slate-600">
-                  <span className="font-semibold">When:</span>{' '}
+                  <span className="font-semibold">{t('referee.when')}</span>{' '}
                   {activeMatch?.dateISO
                     ? new Date(activeMatch.dateISO).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' })
-                    : 'Not set'}
+                    : t('referee.notSet')}
                 </div>
                 {(() => {
                   const loc = activeMatch?.location || activeMatch?.venue || activeMatch?.place || activeMatch?.address
@@ -880,26 +880,26 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                     : (loc?.name || loc?.address || loc?.preset || '')
                   return (
                     <div className="text-xs text-slate-600">
-                      <span className="font-semibold">Where:</span>{' '}
-                      {locText || 'Not set'}
+                      <span className="font-semibold">{t('referee.where')}</span>{' '}
+                      {locText || t('referee.notSet')}
                     </div>
                   )
                 })()}
                 <div className="text-xs text-slate-600">
-                  <span className="font-semibold">Participants:</span>{' '}
+                  <span className="font-semibold">{t('referee.participants')}</span>{' '}
                   {(() => {
                     const total = Array.isArray(activeMatch?.teams)
                       ? activeMatch.teams.reduce((sum, team) => sum + (Array.isArray(team) ? team.length : 0), 0)
                       : 0
-                    return total > 0 ? `${total} players` : 'Not set'
+                    return total > 0 ? `${total} ${t('referee.players')}` : t('referee.notSet')
                   })()}
                 </div>
-                <div className="text-xs text-slate-500">Recording game {matchNumber} for this match.</div>
+                <div className="text-xs text-slate-500">{t('referee.recordingGame', { number: matchNumber })}</div>
               </div>
 
               {activeMatch?.teams && activeMatch.teams.length > 2 && (
                 <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
-                  <label className="block text-xs font-semibold text-gray-700 mb-2">Select teams to play (2 teams)</label>
+                  <label className="block text-xs font-semibold text-gray-700 mb-2">{t('referee.selectTwoTeams')}</label>
                   <div className="space-y-2">
                     {activeMatch.teams.map((team, idx) => {
                       const isSelected = selectedTeamIndices.includes(idx)
@@ -962,7 +962,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">{t('referee.matchNumber', 'Match Number')}</label>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">{t('referee.matchNumber')}</label>
                   <input
                     type="number"
                     value={matchNumberInput}
@@ -1000,7 +1000,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">{t('referee.duration', 'Duration (minutes)')}</label>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">{t('referee.duration')}</label>
                   <input
                     type="number"
                     value={durationInput}
@@ -1027,7 +1027,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
               </div>
               <div className="pt-2 flex gap-2">
                 <button onClick={onCancel} className="flex-1 py-3 bg-gray-200 rounded-lg font-bold text-gray-700">
-                  Cancel
+                  {t('referee.cancel')}
                 </button>
                 <button
                   onClick={handleStartSetup}
@@ -1039,7 +1039,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                   }`}
                 >
                   <Play size={18} />
-                  {t('referee.start', 'Start')}
+                  {t('referee.start')}
                 </button>
               </div>
             </div>
@@ -1055,7 +1055,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
         <div className="relative flex items-center justify-between">
           <div className="absolute left-0 top-1/2 -translate-y-1/2 flex items-center gap-2 text-sm text-slate-600 font-bold">
             <Clock size={16} className="text-slate-500" />
-            <span className="tracking-tight">Game {matchNumber}</span>
+            <span className="tracking-tight">{t('referee.game')} {matchNumber}</span>
           </div>
 
           <div className="flex-1 flex flex-col items-center gap-1">
@@ -1064,14 +1064,14 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
             }`}>
               {formatTime(elapsedSeconds)}
             </div>
-            <span className="text-xs font-bold text-slate-500 tracking-wide">{displayMinute} / {duration} min</span>
+            <span className="text-xs font-bold text-slate-500 tracking-wide">{displayMinute} / {duration} {t('referee.min')}</span>
             {latestEvent && (
               <button
                 type="button"
                 onClick={() => setShowRecentEvents((prev) => !prev)}
                 className="mt-1 px-3 py-1 rounded-full bg-gradient-to-r from-slate-100 to-slate-50 border border-slate-200/60 text-[11px] text-slate-700 flex items-center gap-2 shadow-sm hover:shadow active:scale-[0.98] transition"
               >
-                <span className="font-bold">Recent Events ({events.length})</span>
+                <span className="font-bold">{t('referee.recentEvents')} ({events.length})</span>
                 <span className="line-clamp-1 font-medium max-w-[120px]">{describeEvent(latestEvent)}</span>
                 <ChevronDown size={14} className={`transition-transform ${showRecentEvents ? 'rotate-180' : ''}`} />
               </button>
@@ -1082,16 +1082,16 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
             <button
               onClick={() => setShowCancelConfirm(true)}
               className="h-8 w-8 rounded-full border border-slate-300 text-slate-700 hover:bg-slate-100 active:scale-[0.98] transition flex items-center justify-center"
-              title="Cancel"
-              aria-label="Cancel"
+              title={t('referee.cancel')}
+              aria-label={t('referee.cancel')}
             >
               <X size={14} />
             </button>
             <button
               onClick={() => setShowSaveConfirm(true)}
               className="h-8 w-8 rounded-full bg-emerald-600 text-white hover:bg-emerald-700 active:scale-[0.98] transition flex items-center justify-center"
-              title="Finish"
-              aria-label="Finish"
+              title={t('referee.finish')}
+              aria-label={t('referee.finish')}
             >
               <Save size={14} />
             </button>
@@ -1104,9 +1104,9 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
               onClick={handleKickOff}
               className="w-full py-6 rounded-2xl bg-gradient-to-br from-emerald-600 via-emerald-600 to-emerald-700 text-white text-2xl font-extrabold shadow-2xl shadow-emerald-300/50 hover:shadow-emerald-400/60 hover:from-emerald-700 hover:to-emerald-800 active:scale-[0.98] transition-all duration-300"
             >
-              {t('referee.kickoff', 'Kick Off')}
+              {t('referee.kickoff')}
             </button>
-            <div className="text-center text-sm text-slate-600 mt-2 font-medium">Press Kick Off to start recording.</div>
+            <div className="text-center text-sm text-slate-600 mt-2 font-medium">{t('referee.pressKickOff')}</div>
           </div>
         )}
       </div>
@@ -1124,9 +1124,9 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                   {renderJersey(color, 24)}
                   <div>
                     <div className="text-[11px] uppercase font-black tracking-wider" style={{ color: accent }}>
-                      {t('referee.team', 'Team')} {(actualIdx ?? idx) + 1}
+                      {t('referee.team')} {(actualIdx ?? idx) + 1}
                     </div>
-                    <div className="text-xs text-slate-500 font-medium">{color?.label || 'Kit'}</div>
+                    <div className="text-xs text-slate-500 font-medium">{color?.label || t('referee.kit')}</div>
                   </div>
                   <div className="flex-1" />
                   <div className="text-3xl font-black text-slate-900 tracking-tight">{scores[idx] || 0}</div>
@@ -1141,7 +1141,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                 >
                   <div className="grid grid-cols-2 gap-1.5">
                     {Array.isArray(team) && team.length > 0 ? team.map(player => renderPlayerCard(player, idx)) : (
-                      <div className="text-sm text-gray-500 italic">{t('referee.noPlayers', 'No players')}</div>
+                      <div className="text-sm text-gray-500 italic">{t('referee.noPlayers')}</div>
                     )}
                   </div>
                 </div>
@@ -1154,16 +1154,16 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       {gameStatus === 'ready' && (
         <div className="fixed inset-0 z-40 bg-black/60 backdrop-blur-md flex items-center justify-center p-6">
           <div className="w-full max-w-md bg-gradient-to-br from-white to-slate-50 rounded-3xl shadow-2xl p-6 text-center space-y-4 border border-slate-200/50">
-            <div className="text-sm font-bold text-slate-500 uppercase tracking-wide">Kick Off Required</div>
-            <div className="text-2xl font-black text-slate-900">Game {matchNumber}</div>
-            <div className="text-sm text-slate-600 font-medium">No actions will be recorded until you press Kick Off.</div>
+            <div className="text-sm font-bold text-slate-500 uppercase tracking-wide">{t('referee.kickOffRequired')}</div>
+            <div className="text-2xl font-black text-slate-900">{t('referee.game')} {matchNumber}</div>
+            <div className="text-sm text-slate-600 font-medium">{t('referee.noActionsRecorded')}</div>
             <button
               onClick={handleKickOff}
               className="w-full py-5 rounded-2xl bg-gradient-to-br from-emerald-600 to-emerald-700 text-white text-xl font-extrabold shadow-xl shadow-emerald-300/50 hover:shadow-2xl hover:from-emerald-700 hover:to-emerald-800 active:scale-[0.98] transition-all duration-300"
             >
-              {t('referee.kickoff', 'Kick Off')}
+              {t('referee.kickoff')}
             </button>
-            <div className="text-xs text-slate-500 font-medium">타이머와 기록이 함께 시작됩니다.</div>
+            <div className="text-xs text-slate-500 font-medium">{t('referee.timerAndRecordingStart')}</div>
           </div>
         </div>
       )}
@@ -1176,7 +1176,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
               onClick={(e) => e.stopPropagation()}
             >
             <div className="sticky top-0 bg-slate-50 border-b px-4 py-2 flex items-center justify-between">
-              <div className="text-xs font-bold text-slate-700 uppercase">All Events ({events.length})</div>
+              <div className="text-xs font-bold text-slate-700 uppercase">{t('referee.allEvents')} ({events.length})</div>
               <button
                 onClick={() => setShowRecentEvents(false)}
                 className="p-1 text-slate-600 hover:bg-slate-200 rounded-full"
@@ -1205,20 +1205,20 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                       {ev.playerName}
                     </span>
                     <span className="text-gray-700 flex-1 truncate">
-                      {ev.type === 'goal' && (ev.assistedName ? `Goal (assist: ${ev.assistedName})` : 'Goal')}
-                      {ev.type === 'own_goal' && 'Own Goal'}
-                      {ev.type === 'yellow' && 'Yellow Card'}
-                      {ev.type === 'red' && 'Red Card'}
-                      {ev.type === 'foul' && 'Foul'}
-                      {ev.type === 'super_save' && 'Super Save'}
-                      {ev.type === 'clean_sheet' && 'Clean Sheet'}
+                      {ev.type === 'goal' && (ev.assistedName ? t('referee.goalWithAssist', { assistName: ev.assistedName }) : t('referee.goal'))}
+                      {ev.type === 'own_goal' && t('referee.ownGoal')}
+                      {ev.type === 'yellow' && t('referee.yellowCard')}
+                      {ev.type === 'red' && t('referee.redCard')}
+                      {ev.type === 'foul' && t('referee.foul')}
+                      {ev.type === 'super_save' && t('referee.superSave')}
+                      {ev.type === 'clean_sheet' && t('referee.cleanSheet')}
                     </span>
                     <button
                       onClick={() => handleRemoveEvent(ev.id)}
                       className="px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 rounded transition"
-                      title="Revert"
+                      title={t('referee.revert')}
                     >
-                      Revert
+                      {t('referee.revert')}
                     </button>
                   </div>
                 )
@@ -1235,7 +1235,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-red-100 text-red-700 flex items-center justify-center font-bold">!</div>
               <div className="flex-1">
-                <div className="text-lg font-bold text-slate-900">Revert this event?</div>
+                <div className="text-lg font-bold text-slate-900">{t('referee.revertEvent')}</div>
                 <div className="text-sm text-slate-600 mt-1 break-words">
                   {revertTarget.playerName} · {revertTarget.type}
                 </div>
@@ -1246,13 +1246,13 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                 onClick={() => setRevertTarget(null)}
                 className="flex-1 py-3 rounded-lg border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 active:scale-[0.98] transition"
               >
-                Cancel
+                {t('referee.cancel')}
               </button>
               <button
                 onClick={() => { applyRemoveEvent(revertTarget); setRevertTarget(null) }}
                 className="flex-1 py-3 rounded-lg bg-gradient-to-br from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-bold shadow-md hover:shadow-lg active:scale-[0.98] transition-all duration-200"
               >
-                Revert
+                {t('referee.revert')}
               </button>
             </div>
           </div>
@@ -1279,7 +1279,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
               <InitialAvatar name={selectedPlayer.name} photoUrl={selectedPlayer.photoUrl || selectedPlayer.avatar} size={48} />
               <div>
                 <div className="font-bold text-lg">{selectedPlayer.name}</div>
-                <div className="text-sm text-gray-500">{t('referee.team', 'Team')} {selectedTeamIndex + 1}</div>
+                <div className="text-sm text-gray-500">{t('referee.team')} {selectedTeamIndex + 1}</div>
               </div>
               <button onClick={() => {
                 setSelectedPlayer(null)
@@ -1297,7 +1297,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
               <div className="fixed inset-0 bg-slate-50/90 z-[60] flex items-center justify-center p-3">
                 <div className="flex-1 max-w-3xl w-full bg-white shadow-2xl rounded-2xl overflow-hidden max-h-[85vh] flex flex-col">
                   <div className="bg-gradient-to-br from-blue-600 to-blue-700 text-white py-2 px-4 shadow-lg">
-                    <h3 className="font-bold text-center text-lg">Select Assist</h3>
+                    <h3 className="font-bold text-center text-lg">{t('referee.selectAssist')}</h3>
                   </div>
                   <div className="flex-1 overflow-y-auto p-3">
                     <div className="grid grid-cols-2 gap-2">
@@ -1305,7 +1305,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                         onClick={() => recordGoalWithAssist(null)}
                         className="col-span-2 p-2.5 bg-yellow-400 hover:bg-yellow-500 rounded-lg font-bold text-gray-900 text-sm active:scale-[0.98] transition border-2 border-yellow-600"
                       >
-                        NO ASSIST
+                        {t('referee.noAssist')}
                       </button>
                       {teams[selectedTeamIndex]
                         .filter(p => p.id !== selectedPlayer.id)
@@ -1326,7 +1326,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                       onClick={() => setAssistSelectionMode(false)}
                       className="w-full py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-bold text-sm active:scale-[0.98] transition"
                     >
-                      Back
+                      {t('referee.back')}
                     </button>
                   </div>
                 </div>
@@ -1335,7 +1335,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
               <div className="fixed inset-0 bg-slate-50/90 z-[60] flex items-center justify-center p-3">
                 <div className="flex-1 max-w-3xl w-full bg-white shadow-2xl rounded-2xl overflow-hidden max-h-[85vh] flex flex-col">
                   <div className="bg-gradient-to-br from-orange-500 to-orange-600 text-white py-2 px-4 shadow-lg">
-                    <h3 className="font-bold text-center text-lg">{t('referee.ownGoalAssistPrompt', 'Did someone force the own goal?')}</h3>
+                    <h3 className="font-bold text-center text-lg">{t('referee.ownGoalAssistPrompt')}</h3>
                   </div>
                   <div className="flex-1 overflow-y-auto p-3">
                     <div className="grid grid-cols-2 gap-2">
@@ -1349,7 +1349,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                         }}
                         className="col-span-2 p-2.5 bg-yellow-400 hover:bg-yellow-500 rounded-lg font-bold text-gray-900 text-sm active:scale-[0.98] transition border-2 border-yellow-600"
                       >
-                        NO ASSIST
+                        {t('referee.noAssist')}
                       </button>
                       {(teams[pendingOwnGoal?.teamIndex === 0 ? 1 : 0] || []).map(teammate => (
                         <button
@@ -1378,7 +1378,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                       onClick={() => { setOwnGoalAssistMode(false); setPendingOwnGoal(null); setSelectedPlayer(null); setSelectedTeamIndex(null) }}
                       className="w-full py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg font-bold text-sm active:scale-[0.98] transition"
                     >
-                      Back
+                      {t('referee.back')}
                     </button>
                   </div>
                 </div>
@@ -1390,14 +1390,14 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                   className="flex flex-col items-center justify-center p-4 bg-gradient-to-br from-green-50 to-emerald-50 hover:from-green-100 hover:to-emerald-100 text-green-700 rounded-xl border border-green-200 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-200"
                 >
                   <span className="text-2xl mb-1">⚽</span>
-                  <span className="font-bold">{t('referee.goal', 'Goal')}</span>
+                  <span className="font-bold">{t('referee.goal')}</span>
                 </button>
                 <button
                   onClick={recordOwnGoal}
                   className="flex flex-col items-center justify-center p-4 bg-gradient-to-br from-orange-50 to-red-50 hover:from-orange-100 hover:to-red-100 text-orange-700 rounded-xl border border-orange-200 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-200"
                 >
                   <span className="text-2xl mb-1">🥅</span>
-                  <span className="font-bold">{t('referee.ownGoal', 'Own Goal')}</span>
+                  <span className="font-bold">{t('referee.ownGoal')}</span>
                 </button>
 
                 {cardsEnabled && (
@@ -1406,7 +1406,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                     className="flex flex-col items-center justify-center p-4 bg-gradient-to-br from-yellow-50 to-amber-50 hover:from-yellow-100 hover:to-amber-100 text-yellow-700 rounded-xl border border-yellow-200 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-200"
                   >
                     <span className="w-6 h-8 bg-yellow-400 rounded-sm mb-1 border border-yellow-500 shadow-sm" />
-                    <span className="font-bold">{t('referee.yellowCard', 'Yellow Card')}</span>
+                    <span className="font-bold">{t('referee.yellowCard')}</span>
                   </button>
                 )}
 
@@ -1416,7 +1416,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                     className="flex flex-col items-center justify-center p-4 bg-gradient-to-br from-red-50 to-rose-50 hover:from-red-100 hover:to-rose-100 text-red-700 rounded-xl border border-red-200 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-200"
                   >
                     <span className="w-6 h-8 bg-red-600 rounded-sm mb-1 border border-red-700 shadow-sm" />
-                    <span className="font-bold">{t('referee.redCard', 'Red Card')}</span>
+                    <span className="font-bold">{t('referee.redCard')}</span>
                   </button>
                 )}
 
@@ -1429,7 +1429,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                   className="flex flex-col items-center justify-center p-4 bg-gradient-to-br from-slate-50 to-gray-50 hover:from-slate-100 hover:to-gray-100 text-slate-700 rounded-xl border border-slate-300 shadow-sm hover:shadow-md active:scale-[0.97] transition-all duration-200"
                 >
                   <span className="text-2xl mb-1">⚠️</span>
-                  <span className="font-bold">{t('referee.foul', 'Foul')}</span>
+                  <span className="font-bold">{t('referee.foul')}</span>
                 </button>
                 {/* Super Save temporarily disabled
                 <button
@@ -1449,7 +1449,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                   onClick={() => setSelectedPlayer(null)}
                   className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-bold"
                 >
-                  Cancel
+                  {t('referee.cancel')}
                 </button>
               </div>
             )}
@@ -1460,10 +1460,10 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       {/* Cancel Confirmation Dialog */}
       <ConfirmDialog
         open={showCancelConfirm}
-        title="Cancel Match"
-        message={`All in-progress records (${events.length} events) will be deleted.\nThis action cannot be undone.\nAre you sure you want to cancel?`}
-        confirmLabel="Cancel Match"
-        cancelLabel="Cancel"
+        title={t('referee.cancelMatch')}
+        message={t('referee.cancelMatchMessage', { count: events.length })}
+        confirmLabel={t('referee.cancelMatch')}
+        cancelLabel={t('referee.cancel')}
         tone="danger"
         onConfirm={async () => {
           setShowCancelConfirm(false)
@@ -1485,10 +1485,10 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       {/* Save Confirmation Dialog */}
       <ConfirmDialog
         open={showSaveConfirm}
-        title="Save Match"
-        message="End the game and save the results?"
-        confirmLabel="Save"
-        cancelLabel="Cancel"
+        title={t('referee.saveMatch')}
+        message={t('referee.saveMatchMessage')}
+        confirmLabel={t('referee.save')}
+        cancelLabel={t('referee.cancel')}
         tone="default"
         onConfirm={() => {
           setShowSaveConfirm(false)
@@ -1515,9 +1515,9 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
           <div className="bg-white w-full max-w-3xl max-h-[80vh] rounded-2xl p-6 space-y-5 shadow-2xl flex flex-col">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs uppercase text-slate-500 font-semibold">클린시트 지정</div>
-                <div className="text-lg font-bold text-slate-900">Select players from the clean-sheet team</div>
-                <p className="text-sm text-slate-600 mt-1">무실점 팀에서 클린시트를 받을 선수들을 선택하세요 (여러 명 가능)</p>
+                <div className="text-xs uppercase text-slate-500 font-semibold">{t('referee.cleanSheetTitle')}</div>
+                <div className="text-lg font-bold text-slate-900">{t('referee.cleanSheetSelectPlayers')}</div>
+                <p className="text-sm text-slate-600 mt-1">{t('referee.cleanSheetDesc')}</p>
               </div>
               <button onClick={() => { setShowCleanSheetPicker(false); setCleanSheetSelections([]); }} className="text-slate-400 hover:text-slate-600"><X size={22} /></button>
             </div>
@@ -1525,7 +1525,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
             <div className="space-y-4 flex-1 overflow-y-auto pr-1">
               {cleanSheetCandidates.map(group => (
                 <div key={group.teamIndex} className="border rounded-xl p-3 bg-slate-50/70">
-                  <div className="text-xs font-semibold text-slate-500 mb-2">Team {group.teamIndex + 1}</div>
+                  <div className="text-xs font-semibold text-slate-500 mb-2">{t('referee.team')} {group.teamIndex + 1}</div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     {(group.players || []).map(p => {
                       const checked = cleanSheetSelections.includes(p.id)
@@ -1566,7 +1566,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                 }}
                 className="flex-1 py-3 rounded-xl bg-emerald-600 text-white font-bold"
               >
-                선택 완료 후 저장
+                {t('referee.selectComplete')}
               </button>
               <button
                 onClick={() => {
@@ -1576,7 +1576,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                 }}
                 className="px-4 py-3 rounded-xl bg-gray-100 text-gray-700 font-semibold"
               >
-                건너뛰기
+                {t('referee.skip')}
               </button>
             </div>
           </div>
@@ -1586,10 +1586,10 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
       {/* Override Warning Dialog */}
       <ConfirmDialog
         open={showOverrideWarning}
-        title="⚠️ Overwrite saved game"
-        message={`Match ${pendingMatchNumber} is already saved.\nOverwrite the existing record?`}
-        confirmLabel="Overwrite"
-        cancelLabel="Cancel"
+        title={t('referee.overwriteWarning')}
+        message={t('referee.overwriteMessage', { number: pendingMatchNumber })}
+        confirmLabel={t('referee.overwrite')}
+        cancelLabel={t('referee.cancel')}
         tone="danger"
         onConfirm={() => {
           setMatchNumber(pendingMatchNumber)
