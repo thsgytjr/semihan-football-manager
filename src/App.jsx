@@ -18,6 +18,7 @@ import{logger}from"./lib/logger"
 const DEVELOPER_EMAIL = 'sonhyosuck@gmail.com'
 import{runMigrations}from"./lib/dbMigration"
 import ToastHub from"./components/Toast";import Card from"./components/Card"
+import ErrorBoundary from "./components/ErrorBoundary"
 import { prefetchSeasonRecapVideos } from './components/SeasonRecap'
 import AdminLoginDialog from"./components/AdminLoginDialog"
 import VisitorStats from"./components/VisitorStats"
@@ -1700,15 +1701,17 @@ function App(){
       <>
         <ToastHub />
         {codeModal}
-        <Suspense fallback={<div className="flex h-screen items-center justify-center bg-stone-900 text-white">Loading Referee Mode...</div>}>
-          <RefereeMode 
-            activeMatch={activeMatch} 
-            onFinish={handleFinishRefereeMode}
-            onAutoSave={handleAutoSaveRefereeMode}
-            onCancel={handleCancelRefereeMode}
-            cardsEnabled={featuresEnabled?.cards ?? true}
-          />
-        </Suspense>
+        <ErrorBoundary componentName="RefereeMode">
+          <Suspense fallback={<div className="flex h-screen items-center justify-center bg-stone-900 text-white">Loading Referee Mode...</div>}>
+            <RefereeMode 
+              activeMatch={activeMatch} 
+              onFinish={handleFinishRefereeMode}
+              onAutoSave={handleAutoSaveRefereeMode}
+              onCancel={handleCancelRefereeMode}
+              cardsEnabled={featuresEnabled?.cards ?? true}
+            />
+          </Suspense>
+        </ErrorBoundary>
       </>
     )
   }
@@ -1855,86 +1858,102 @@ function App(){
           ) : (
             <>
               {tab==="dashboard"&&(
-                <Dashboard
-                  totals={totals}
-                  players={publicPlayers}
-                  matches={matches}
-                  isAdmin={isAdmin}
-                  onUpdateMatch={handleUpdateMatch}
-                  upcomingMatches={db.upcomingMatches}
-                  onSaveUpcomingMatch={handleSaveUpcomingMatch}
-                  onDeleteUpcomingMatch={handleDeleteUpcomingMatch}
-                  onUpdateUpcomingMatch={handleUpdateUpcomingMatch}
-                  membershipSettings={db.membershipSettings||[]}
-                  momFeatureEnabled={featuresEnabled?.mom ?? true}
-                  leaderboardToggles={featuresEnabled?.leaderboards || {}}
-                  badgesEnabled={badgesFeatureEnabled}
-                  playerStatsEnabled={playerStatsModalEnabled}
-                  seasonRecapEnabled={!maintenanceActive && (seasonRecapEnabled ?? false)}
-                  seasonRecapReady={appSettingsLoaded}
-                  cardTypesEnabled={featuresEnabled?.cardTypes ?? { yellow: true, red: true, black: true }}
-                />
+                <ErrorBoundary componentName="Dashboard">
+                  <Dashboard
+                    totals={totals}
+                    players={publicPlayers}
+                    matches={matches}
+                    isAdmin={isAdmin}
+                    onUpdateMatch={handleUpdateMatch}
+                    upcomingMatches={db.upcomingMatches}
+                    onSaveUpcomingMatch={handleSaveUpcomingMatch}
+                    onDeleteUpcomingMatch={handleDeleteUpcomingMatch}
+                    onUpdateUpcomingMatch={handleUpdateUpcomingMatch}
+                    membershipSettings={db.membershipSettings||[]}
+                    momFeatureEnabled={featuresEnabled?.mom ?? true}
+                    leaderboardToggles={featuresEnabled?.leaderboards || {}}
+                    badgesEnabled={badgesFeatureEnabled}
+                    playerStatsEnabled={playerStatsModalEnabled}
+                    seasonRecapEnabled={!maintenanceActive && (seasonRecapEnabled ?? false)}
+                    seasonRecapReady={appSettingsLoaded}
+                    cardTypesEnabled={featuresEnabled?.cardTypes ?? { yellow: true, red: true, black: true }}
+                  />
+                </ErrorBoundary>
               )}
               {tab==="players"&&isAdmin&&featuresEnabled.players&&(
-                <PlayersPage
-                  players={players}
-                  matches={matches}
-                  selectedId={selectedPlayerId}
-                  onSelect={setSelectedPlayerId}
-                  onCreate={handleCreatePlayerFromModal}  // ✅ 여기로 연결
-                  onUpdate={handleUpdatePlayer}
-                  onDelete={handleDeletePlayer}
-                  onImport={handleImportPlayers}
-                  onReset={handleResetPlayers}
-                  tagPresets={db.tagPresets||[]}
-                  onAddTagPreset={handleAddTagPreset}
-                  onUpdateTagPreset={handleUpdateTagPreset}
-                  onDeleteTagPreset={handleDeleteTagPreset}
-                  membershipSettings={db.membershipSettings||[]}
-                  onSaveMembershipSettings={handleSaveMembershipSettings}
-                  isAdmin={isAdmin}
-                  systemAccount={systemAccount}
-                  onEnsureSystemAccount={handleEnsureSystemAccount}
-                />
+                <ErrorBoundary componentName="PlayersPage">
+                  <PlayersPage
+                    players={players}
+                    matches={matches}
+                    selectedId={selectedPlayerId}
+                    onSelect={setSelectedPlayerId}
+                    onCreate={handleCreatePlayerFromModal}  // ✅ 여기로 연결
+                    onUpdate={handleUpdatePlayer}
+                    onDelete={handleDeletePlayer}
+                    onImport={handleImportPlayers}
+                    onReset={handleResetPlayers}
+                    tagPresets={db.tagPresets||[]}
+                    onAddTagPreset={handleAddTagPreset}
+                    onUpdateTagPreset={handleUpdateTagPreset}
+                    onDeleteTagPreset={handleDeleteTagPreset}
+                    membershipSettings={db.membershipSettings||[]}
+                    onSaveMembershipSettings={handleSaveMembershipSettings}
+                    isAdmin={isAdmin}
+                    systemAccount={systemAccount}
+                    onEnsureSystemAccount={handleEnsureSystemAccount}
+                  />
+                </ErrorBoundary>
               )}
               {tab==="planner"&&isAdmin&&featuresEnabled.planner&&(
-                <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.planner')}</div>}>
-                  <MatchPlanner players={publicPlayers} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch} membershipSettings={db.membershipSettings||[]} onStartRefereeMode={handleStartRefereeMode}/>
-                </Suspense>
+                <ErrorBoundary componentName="MatchPlanner">
+                  <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.planner')}</div>}>
+                    <MatchPlanner players={publicPlayers} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch} membershipSettings={db.membershipSettings||[]} onStartRefereeMode={handleStartRefereeMode}/>
+                  </Suspense>
+                </ErrorBoundary>
               )}
 
               {tab==="draft"&&isAdmin&&featuresEnabled.draft&&(
-                <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.draft')}</div>}>
-                  <DraftPage players={publicPlayers} upcomingMatches={db.upcomingMatches} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>
-                </Suspense>
+                <ErrorBoundary componentName="DraftPage">
+                  <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.draft')}</div>}>
+                    <DraftPage players={publicPlayers} upcomingMatches={db.upcomingMatches} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>
+                  </Suspense>
+                </ErrorBoundary>
               )}
               {tab==="formation"&&featuresEnabled.formation&&(
-                <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.formation')}</div>}>
-                  <FormationBoard players={publicPlayers} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>
-                </Suspense>
+                <ErrorBoundary componentName="FormationBoard">
+                  <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.formation')}</div>}>
+                    <FormationBoard players={publicPlayers} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>
+                  </Suspense>
+                </ErrorBoundary>
               )}
               {tab==="stats"&&isAdmin&&featuresEnabled.stats&&(
-                <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.stats')}</div>}>
-                  <StatsInput 
-                    players={publicPlayers} 
-                    matches={matches} 
-                    onUpdateMatch={handleUpdateMatch} 
-                    isAdmin={isAdmin}
-                    cardsFeatureEnabled={featuresEnabled?.cards ?? true}
-                    cardTypesEnabled={featuresEnabled?.cardTypes ?? { yellow: true, red: true, black: true }}
-                    onStartRefereeMode={handleStartRefereeMode}
-                  />
-                </Suspense>
+                <ErrorBoundary componentName="StatsInput">
+                  <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.stats')}</div>}>
+                    <StatsInput 
+                      players={publicPlayers} 
+                      matches={matches} 
+                      onUpdateMatch={handleUpdateMatch} 
+                      isAdmin={isAdmin}
+                      cardsFeatureEnabled={featuresEnabled?.cards ?? true}
+                      cardTypesEnabled={featuresEnabled?.cardTypes ?? { yellow: true, red: true, black: true }}
+                      onStartRefereeMode={handleStartRefereeMode}
+                    />
+                  </Suspense>
+                </ErrorBoundary>
               )}
                 {tab==="accounting"&&isAdmin&&featuresEnabled.accounting&&(
-                  <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.accounting')}</div>}>
-                    <AccountingPage players={players} matches={matches} upcomingMatches={db.upcomingMatches} isAdmin={isAdmin}/>
-                  </Suspense>
+                  <ErrorBoundary componentName="AccountingPage">
+                    <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.accounting')}</div>}>
+                      <AccountingPage players={players} matches={matches} upcomingMatches={db.upcomingMatches} isAdmin={isAdmin}/>
+                    </Suspense>
+                  </ErrorBoundary>
                 )}
               {tab==="analytics"&&isAdmin&&featuresEnabled.analytics&&(
-                <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.analytics')}</div>}>
-                  <AnalyticsPage visits={visits} isAdmin={isAnalyticsAdmin}/>
-                </Suspense>
+                <ErrorBoundary componentName="AnalyticsPage">
+                  <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.analytics')}</div>}>
+                    <AnalyticsPage visits={visits} isAdmin={isAnalyticsAdmin}/>
+                  </Suspense>
+                </ErrorBoundary>
               )}
             </>
           )}
