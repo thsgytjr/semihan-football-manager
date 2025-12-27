@@ -1630,8 +1630,13 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
               </div>
               
               <button
-                onClick={onClose}
-                className="w-full rounded-2xl border border-white/15 bg-white/15 px-4 py-3 text-sm font-semibold text-black transition hover:bg-white/25"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onClose()
+                }}
+                className="relative z-20 w-full rounded-2xl border border-white/15 bg-white/15 px-4 py-3 text-sm font-semibold text-black transition hover:bg-white/25 active:bg-white/30 touch-manipulation"
+                style={{ WebkitTapHighlightColor: 'transparent' }}
+                data-recap-interactive="true"
               >
                 {t('seasonRecap.finale.cta')}
               </button>
