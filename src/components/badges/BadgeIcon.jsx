@@ -112,16 +112,20 @@ function BadgeIcon({ badge, size = 'md', onSelect }) {
       data-badge-id={slug}
       style={Object.keys(cardStyle).length ? cardStyle : undefined}
     >
-      {/* 뷰포트에 있고 tier >= 4일 때만 애니메이션 렌더링 */}
-      {isInView && normalizedTier >= 4 && (
+      {/* tier >= 4 기본 효과는 항상 표시 */}
+      {normalizedTier >= 4 && (
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-2xl">
           <div className="absolute inset-0" style={{background: cardAuraGradient, filter:'blur(6px)', opacity: 0.75}} />
           <div className="absolute inset-[2px] rounded-[1.1rem] border border-white/60 opacity-70" />
-          <div className="absolute inset-0">
-            <span className="absolute left-3 top-2 h-px w-10 bg-gradient-to-r from-transparent via-white to-transparent opacity-40 animate-twinkle"></span>
-            <span className="absolute right-4 bottom-3 h-px w-8 bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-twinkle" style={{ animationDelay: '0.7s' }}></span>
-          </div>
-          {normalizedTier === 5 && (
+          
+          {/* 복잡한 애니메이션은 뷰포트에 있을 때만 렌더링 */}
+          {isInView && (
+            <>
+              <div className="absolute inset-0">
+                <span className="absolute left-3 top-2 h-px w-10 bg-gradient-to-r from-transparent via-white to-transparent opacity-40 animate-twinkle"></span>
+                <span className="absolute right-4 bottom-3 h-px w-8 bg-gradient-to-r from-transparent via-white to-transparent opacity-30 animate-twinkle" style={{ animationDelay: '0.7s' }}></span>
+              </div>
+              {normalizedTier === 5 && (
             <div className="absolute inset-0 rounded-2xl overflow-hidden">
               {/* Stadium floodlight pulse */}
               <div className="absolute inset-0" style={{
@@ -229,44 +233,20 @@ function BadgeIcon({ badge, size = 'md', onSelect }) {
               }} />
             </div>
           )}
-          {normalizedTier === 4 && (
-            <div className="absolute inset-0 rounded-2xl overflow-hidden">
-              {/* Gentle platinum shimmer */}
-              <div className="absolute left-0 top-0 h-full w-1/4 -skew-x-12 animate-shimmer-glow" style={{background:'linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(200,230,255,0.6) 50%, rgba(255,255,255,0) 100%)', mixBlendMode:'screen', animationDuration: '4s'}} />
-              
-              {/* Subtle silver sparkles */}
-              <div className="absolute inset-0">
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <div
-                    key={`plat-sparkle-${i}`}
-                    className="absolute rounded-full"
-                    style={{
-                      width: '3px',
-                      height: '3px',
-                      background: 'radial-gradient(circle, rgba(255,255,255,0.9), rgba(200,230,255,0.6))',
-                      left: `${20 + i * 15}%`,
-                      top: `${15 + (i % 3) * 25}%`,
-                      animation: `platinumSparkle ${2 + i * 0.3}s ease-in-out infinite`,
-                      animationDelay: `${i * 0.4}s`,
-                      boxShadow: '0 0 4px rgba(200,230,255,0.6)',
-                      opacity: 0
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
+            </>
           )}
         </div>
       )}
-      <div className="mx-auto flex items-center justify-center">
         <div className={`relative flex items-center justify-center rounded-full ${isLarge ? 'h-16 w-16 md:h-20 md:w-20' : 'h-12 w-12 md:h-16 md:w-16'}`}>
-          {/* 뷰포트에 있고 tier >= 4일 때만 애니메이션 렌더링 */}
-          {isInView && normalizedTier >= 4 && (
+          {/* tier >= 4 기본 효과는 항상 표시 */}
+          {normalizedTier >= 4 && (
             <div className="pointer-events-none absolute inset-0 rounded-full overflow-hidden">
               {normalizedTier === 4 && (
                 <>
                   <div className="absolute -inset-1 rounded-full" style={{background:'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.9), rgba(213,241,255,0.5), rgba(183,206,255,0.4), transparent 70%)', mixBlendMode:'screen', opacity: 0.85}} />
-                  <div className="absolute -inset-1 rounded-full animate-pulse opacity-55" style={{background:'conic-gradient(from 0deg, rgba(255,255,255,0.75), rgba(186,213,255,0.45), rgba(228,214,255,0.45), rgba(255,255,255,0.75))', filter:'blur(6px)', mixBlendMode:'overlay'}} />
+                  {isInView && (
+                    <div className="absolute -inset-1 rounded-full animate-pulse opacity-55" style={{background:'conic-gradient(from 0deg, rgba(255,255,255,0.75), rgba(186,213,255,0.45), rgba(228,214,255,0.45), rgba(255,255,255,0.75))', filter:'blur(6px)', mixBlendMode:'overlay'}} />
+                  )}
                 </>
               )}
               {normalizedTier === 5 && (

@@ -55,7 +55,10 @@ export default function PlayerBadgeModal({
   onClose
 }) {
   const { t } = useTranslation()
-  const portalTarget = typeof document !== 'undefined' ? document.body : null
+  const portalTarget = useMemo(
+    () => (typeof document !== 'undefined' && document.body) ? document.body : null,
+    []
+  )
   const optimizedPlayerAvatarSrc = player?.photoUrl
     ? optimizeImageUrl(player.photoUrl, { width: 120, height: 120, quality: 70 })
     : null
@@ -83,19 +86,28 @@ export default function PlayerBadgeModal({
     const handleKey = (event) => {
       if (event.key === 'Escape') {
         event.preventDefault()
-        closeModal()
+        // 로딩 중에는 ESC 키 무시
+        if (!loading) {
+          closeModal()
+        }
       }
     }
     document.addEventListener('keydown', handleKey)
     return () => {
       document.removeEventListener('keydown', handleKey)
     }
-  }, [open, closeModal])
+  }, [open, closeModal, loading])
 
   // Hook 먼저 선언 후 렌더 조건 평가 (Hook 순서 문제 예방)
   const [viewMode, setViewMode] = useState('tiers') // categories | all | highTier | tiers
   const [selectedBadge, setSelectedBadge] = useState(null)
   const [seasonFilter, setSeasonFilter] = useState(null)
+  
+  // 뱃지 선택 핸들러 - 로딩 중이면 무시
+  const handleBadgeSelect = useCallback((badge) => {
+    if (loading) return
+    setSelectedBadge(badge)
+  }, [loading])
   
   // useMemo로 비싼 계산 캐싱
   const normalizedBadges = useMemo(() => {
@@ -196,8 +208,13 @@ export default function PlayerBadgeModal({
     }
     return t('badges.season.generic', { season: key, defaultValue: key })
   }, [t])
-  const shouldRender = open && player && portalTarget
-  if (!shouldRender) return null
+  
+  // 모달 렌더링 조건 엄격히 체크
+  if (!open) return null
+  if (!player) return null
+  if (!portalTarget) return null
+  
+  const shouldRender = true
   const tierOrder = [5, 4, 3, 2, 1]
   const tierMeta = {
     5: { key: 'diamond', swatch: 'linear-gradient(135deg,#8df0ff,#d3c7ff)' },
@@ -208,6 +225,7 @@ export default function PlayerBadgeModal({
   }
 
   const handleBackdrop = (event) => {
+    if (loading) return // 로딩 중에는 백드롭 클릭 무시
     if (event.target === event.currentTarget) {
       closeModal()
     }
@@ -215,14 +233,23 @@ export default function PlayerBadgeModal({
 
   const modal = (
     <div className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/60 px-4 py-6" onClick={handleBackdrop}>
-      <div className="relative w-full max-w-3xl rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div 
+        className={`relative w-full max-w-3xl rounded-3xl bg-white shadow-2xl ${loading ? 'pointer-events-none select-none' : ''}`} 
+        onClick={(e) => e.stopPropagation()}
+      >
         <button
           type="button"
+          disabled={loading}
           onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); closeModal() }}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); closeModal() } }}
-          className="absolute right-4 top-4 z-10 rounded-full p-2 text-stone-500 hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+          onClick={(e) => { e.stopPropagation(); if (!loading) closeModal() }}
+          onKeyDown={(e) => { if (!loading && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); closeModal() } }}
+          className={`absolute right-4 top-4 z-10 rounded-full p-2 focus:outline-none ${
+            loading 
+              ? 'cursor-not-allowed text-stone-300 bg-stone-50 pointer-events-auto' 
+              : 'text-stone-500 hover:bg-stone-100 focus:ring-2 focus:ring-emerald-400'
+          }`}
           aria-label={t('badges.closeAria')}
+          aria-disabled={loading}
         >
           <X className="h-5 w-5" />
         </button>
@@ -281,8 +308,15 @@ export default function PlayerBadgeModal({
                         <button
                           key={seasonKey}
                           type="button"
-                          onClick={() => setSeasonFilter(seasonKey)}
-                          className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${seasonFilter === seasonKey ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-stone-200 text-stone-500 hover:border-stone-300'}`}
+                          disabled={loading}
+                          onClick={() => !loading && setSeasonFilter(seasonKey)}
+                          className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                            loading
+                              ? 'cursor-not-allowed opacity-50'
+                              : seasonFilter === seasonKey 
+                                ? 'border-emerald-500 bg-emerald-50 text-emerald-700' 
+                                : 'border-stone-200 text-stone-500 hover:border-stone-300'
+                          }`}
                         >
                           {formatSeasonLabel(seasonKey)}
                         </button>
@@ -308,8 +342,15 @@ export default function PlayerBadgeModal({
                   <button
                     key={mode}
                     type="button"
-                    onClick={() => setViewMode(mode)}
-                    className={`rounded-full px-3 py-1 text-xs font-medium transition ${viewMode === mode ? 'bg-emerald-500 text-white shadow' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'}`}
+                    disabled={loading}
+                    onClick={() => !loading && setViewMode(mode)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+                      loading
+                        ? 'cursor-not-allowed opacity-50'
+                        : viewMode === mode 
+                          ? 'bg-emerald-500 text-white shadow' 
+                          : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                    }`}
                   >
                     {t(`badges.view.${mode}`)}
                   </button>
@@ -331,7 +372,17 @@ export default function PlayerBadgeModal({
             </div>
           </header>
 
-          <div className="flex-1 overflow-y-auto pr-1">
+          <div className="flex-1 overflow-y-auto pr-1 relative">
+            {/* 로딩 오버레이 */}
+            {loading && (
+              <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/80 backdrop-blur-sm">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="h-12 w-12 animate-spin rounded-full border-4 border-emerald-200 border-t-emerald-500"></div>
+                  <p className="text-sm font-medium text-stone-600">{t('badges.loading')}</p>
+                </div>
+              </div>
+            )}
+            
             {loading && (
               <div className="flex items-center justify-center py-10 text-stone-500">{t('badges.loading')}</div>
             )}
@@ -370,7 +421,7 @@ export default function PlayerBadgeModal({
                           <BadgeIcon
                             key={badge.id || `${badge.slug}-${badge.awarded_at}`}
                             badge={badge}
-                            onSelect={setSelectedBadge}
+                            onSelect={handleBadgeSelect}
                           />
                         ))}
                       </div>
@@ -389,7 +440,7 @@ export default function PlayerBadgeModal({
                         <BadgeIcon
                           key={badge.id || `${badge.slug}-${badge.awarded_at}`}
                           badge={badge}
-                          onSelect={setSelectedBadge}
+                          onSelect={handleBadgeSelect}
                         />
                       ))}
                     </div>
@@ -407,7 +458,7 @@ export default function PlayerBadgeModal({
                         <BadgeIcon
                           key={badge.id || `${badge.slug}-${badge.awarded_at}`}
                           badge={badge}
-                          onSelect={setSelectedBadge}
+                          onSelect={handleBadgeSelect}
                         />
                       ))}
                     </div>
@@ -425,7 +476,7 @@ export default function PlayerBadgeModal({
                         <BadgeIcon
                           key={badge.id || `${badge.slug}-${badge.awarded_at}`}
                           badge={badge}
-                          onSelect={setSelectedBadge}
+                          onSelect={handleBadgeSelect}
                         />
                       ))}
                     </div>
@@ -445,5 +496,13 @@ export default function PlayerBadgeModal({
     </div>
   )
 
-  return createPortal(modal, portalTarget)
+  // portalTarget이 없으면 안전하게 return
+  if (!portalTarget) return null
+
+  try {
+    return createPortal(modal, portalTarget)
+  } catch (error) {
+    console.error('[PlayerBadgeModal] Portal error:', error)
+    return null
+  }
 }

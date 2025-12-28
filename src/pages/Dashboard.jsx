@@ -444,6 +444,7 @@ export default function Dashboard({
 
   const [badgeModalPlayer, setBadgeModalPlayer] = useState(null)
   const [badgeModalState, setBadgeModalState] = useState({ badges: [], loading: false, error: null, source: null })
+  const badgeLoadingRef = useRef(false) // 로딩 중 중복 방지
   const [statsModalPlayer, setStatsModalPlayer] = useState(null)
   const [momDetailPlayer, setMoMDetailPlayer] = useState(null)
   const statsModalTipShownRef = useRef(false)
@@ -992,6 +993,10 @@ export default function Dashboard({
       notify('챌린지 뱃지 기능이 비활성화되어 있습니다.', 'info')
       return
     }
+    // 로딩 중이면 중복 요청 차단
+    if (badgeLoadingRef.current) {
+      return
+    }
     if (!player) {
       notify('선수 정보가 없어 뱃지를 볼 수 없어요.', 'warning')
       return
@@ -1009,6 +1014,7 @@ export default function Dashboard({
     }
     setBadgeModalPlayer(modalPlayer)
     setBadgeModalState({ badges: [], loading: true, error: null, source: null })
+    badgeLoadingRef.current = true
     
     // 로딩 중 중복 요청 방지
     const loadBadges = async () => {
@@ -1021,6 +1027,7 @@ export default function Dashboard({
         }
         if (Array.isArray(data) && data.length > 0) {
           setBadgeModalState({ badges: data, loading: false, error: null, source: 'remote' })
+          badgeLoadingRef.current = false
           return
         }
       } catch (err) {
@@ -1038,6 +1045,7 @@ export default function Dashboard({
         error: computed.length === 0 && remoteError ? (remoteError.message || 'BADGE_FETCH_FAILED') : null,
         source: computed.length > 0 ? 'computed' : null,
       })
+      badgeLoadingRef.current = false
     }
 
     loadBadges()
@@ -1058,6 +1066,7 @@ export default function Dashboard({
   const closeBadgeModal = useCallback(() => {
     setBadgeModalPlayer(null)
     setBadgeModalState({ badges: [], loading: false, error: null, source: null })
+    badgeLoadingRef.current = false
   }, [])
 
   const attackRowsBySeason = useMemo(() => {

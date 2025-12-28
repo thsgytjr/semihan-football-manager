@@ -9,6 +9,7 @@ import useCachedImage from '../../hooks/useCachedImage'
 
 export default function BadgeTierDetail({ badge, onClose }) {
   const { t } = useTranslation()
+  
   if (!badge) return null
   const { slug, numeric_value: value, tier: currentTier = 1 } = badge
   const thresholds = getBadgeThresholds(slug)
@@ -42,12 +43,12 @@ export default function BadgeTierDetail({ badge, onClose }) {
 
   return (
     <div 
-      className="absolute inset-0 z-[1400] flex items-center justify-center bg-black/70 p-4"
-      style={{ touchAction: 'manipulation' }}
+      className="absolute inset-0 z-[1400] flex items-center justify-center bg-black/70 p-4 animate-fadeIn"
+      style={{ touchAction: 'manipulation', animationDuration: '150ms' }}
     >
       <div 
-        className="relative w-full max-w-md rounded-3xl bg-white shadow-2xl ring-1 ring-stone-200"
-        style={{ touchAction: 'pan-y' }}
+        className="relative w-full max-w-md rounded-3xl bg-white shadow-2xl ring-1 ring-stone-200 animate-slideUp"
+        style={{ touchAction: 'pan-y', animationDuration: '200ms' }}
       >
         <button
           type="button"
@@ -57,6 +58,8 @@ export default function BadgeTierDetail({ badge, onClose }) {
         >
           <X className="h-5 w-5" />
         </button>
+        
+        {/* 컨텐츠 - 즈시 표시 */}
         <div className="flex flex-col gap-4 p-5">
           <div className="flex items-center gap-4">
             <div className="flex-shrink-0 w-32 h-32 rounded-2xl overflow-hidden ring-2 ring-stone-200 bg-white flex items-center justify-center">
@@ -79,7 +82,12 @@ export default function BadgeTierDetail({ badge, onClose }) {
                   />
                 </button>
               ) : (
-                <div className="text-xs text-stone-400 animate-pulse">Loading...</div>
+                <div className="w-full h-full flex items-center justify-center">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-8 h-8 border-2 border-stone-300 border-t-emerald-500 rounded-full animate-spin"></div>
+                    <span className="text-xs text-stone-400">{t('badges.detail.imageLoading', { defaultValue: '이미지 로딩 중...' })}</span>
+                  </div>
+                </div>
               )}
             </div>
             <div className="flex-1 flex flex-col gap-2">
@@ -142,8 +150,12 @@ export default function BadgeTierDetail({ badge, onClose }) {
           )}
         </div>
       </div>
-      {viewerOpen && cachedViewerSrc && (
-        <BadgeImageViewer src={cachedViewerSrc} alt={badgeName} onClose={() => setViewerOpen(false)} />
+      {viewerOpen && (
+        <BadgeImageViewer 
+          src={cachedViewerSrc || viewerImageSrc || cachedPreviewSrc} 
+          alt={badgeName} 
+          onClose={() => setViewerOpen(false)} 
+        />
       )}
     </div>
   )
