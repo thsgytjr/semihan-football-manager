@@ -150,13 +150,11 @@ function BadgeIcon({ badge, size = 'md', onSelect }) {
                 />
               ))}
               
-              {/* Stadium corner spotlights */}
-              {[0, 1, 2, 3].map((corner) => {
+              {/* Stadium corner spotlights - reduced for performance */}
+              {[0, 1].map((corner) => {
                 const positions = [
-                  { top: '-5%', left: '-5%', background: 'radial-gradient(circle, rgba(255,215,0,0.5) 0%, rgba(255,255,255,0.3) 30%, transparent 60%)' },
-                  { top: '-5%', right: '-5%', background: 'radial-gradient(circle, rgba(255,215,0,0.5) 0%, rgba(255,255,255,0.3) 30%, transparent 60%)' },
-                  { bottom: '-5%', left: '-5%', background: 'radial-gradient(circle, rgba(0,200,80,0.4) 0%, rgba(255,215,0,0.2) 30%, transparent 60%)' },
-                  { bottom: '-5%', right: '-5%', background: 'radial-gradient(circle, rgba(0,200,80,0.4) 0%, rgba(255,215,0,0.2) 30%, transparent 60%)' }
+                  { top: '-5%', left: '-5%', background: 'radial-gradient(circle, rgba(255,215,0,0.4) 0%, rgba(255,255,255,0.2) 30%, transparent 60%)' },
+                  { bottom: '-5%', right: '-5%', background: 'radial-gradient(circle, rgba(0,200,80,0.3) 0%, rgba(255,215,0,0.15) 30%, transparent 60%)' }
                 ]
                 return (
                   <div
@@ -164,30 +162,30 @@ function BadgeIcon({ badge, size = 'md', onSelect }) {
                     className="absolute"
                     style={{
                       ...positions[corner],
-                      width: '35%',
-                      height: '35%',
-                      animation: `spotlightPulse ${2.5 + corner * 0.3}s ease-in-out infinite`,
-                      animationDelay: `${corner * 0.5}s`,
-                      filter: 'blur(10px)',
+                      width: '30%',
+                      height: '30%',
+                      animation: `spotlightPulse ${2.8 + corner * 0.4}s ease-in-out infinite`,
+                      animationDelay: `${corner * 0.6}s`,
+                      filter: 'blur(8px)',
                       mixBlendMode: 'screen'
                     }}
                   />
                 )
               })}
               
-              {/* Golden football sparkles */}
+              {/* Golden football sparkles - reduced for performance */}
               <div className="absolute inset-0">
-                {[...Array(10)].map((_, i) => (
+                {[0, 1, 2].map((i) => (
                   <div
                     key={`sparkle-${i}`}
                     className="absolute"
                     style={{
-                      width: i % 3 === 0 ? '6px' : '4px',
-                      height: i % 3 === 0 ? '6px' : '4px',
-                      left: `${15 + (i * 8)}%`,
-                      top: `${10 + (i % 4) * 23}%`,
-                      animation: `trophyStar ${1.3 + i * 0.2}s ease-in-out infinite`,
-                      animationDelay: `${i * 0.15}s`,
+                      width: '5px',
+                      height: '5px',
+                      left: `${25 + (i * 25)}%`,
+                      top: `${20 + (i * 20)}%`,
+                      animation: `trophyStar ${1.5 + i * 0.3}s ease-in-out infinite`,
+                      animationDelay: `${i * 0.3}s`,
                       filter: 'blur(0.5px)'
                     }}
                   >
@@ -199,29 +197,6 @@ function BadgeIcon({ badge, size = 'md', onSelect }) {
                 ))}
               </div>
 
-              
-              {/* Championship trophy rays */}
-              {[0, 1, 2, 3].map((i) => (
-                <div
-                  key={`ray-${i}`}
-                  className="absolute"
-                  style={{
-                    width: '3px',
-                    height: '45%',
-                    left: `${20 + i * 20}%`,
-                    top: i % 2 === 0 ? '-12%' : 'auto',
-                    bottom: i % 2 === 1 ? '-12%' : 'auto',
-                    background: 'linear-gradient(to bottom, rgba(255,215,0,0) 0%, rgba(255,215,0,0.9) 50%, rgba(255,215,0,0) 100%)',
-                    animation: `trophyRay ${2.5 + i * 0.3}s ease-in-out infinite`,
-                    animationDelay: `${i * 0.5}s`,
-                    transform: `rotate(${-25 + i * 17}deg)`,
-                    filter: 'blur(1.5px)',
-                    boxShadow: '0 0 10px rgba(255,215,0,0.9), 0 0 20px rgba(255,255,255,0.5)',
-                    opacity: 0,
-                    mixBlendMode: 'screen'
-                  }}
-                />
-              ))}
               
               {/* Championship gold border glow */}
               <div className="absolute inset-0 rounded-2xl" style={{
