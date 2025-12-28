@@ -60,9 +60,14 @@ export default function PlayerBadgeModal({
     ? optimizeImageUrl(player.photoUrl, { width: 120, height: 120, quality: 70 })
     : null
   const cachedPlayerAvatarSrc = useCachedImage(optimizedPlayerAvatarSrc)
+  
   const closeModal = useCallback(() => {
+    // 스크롤 먼저 복원
+    if (portalTarget) {
+      portalTarget.style.overflow = ''
+    }
     onClose?.()
-  }, [onClose])
+  }, [onClose, portalTarget])
 
   useEffect(() => {
     if (!open || !portalTarget) return undefined
@@ -91,6 +96,8 @@ export default function PlayerBadgeModal({
   const [viewMode, setViewMode] = useState('tiers') // categories | all | highTier | tiers
   const [selectedBadge, setSelectedBadge] = useState(null)
   const [seasonFilter, setSeasonFilter] = useState(null)
+  
+  // useMemo로 비싼 계산 캐싱
   const normalizedBadges = useMemo(() => {
     if (!Array.isArray(badges)) return []
     return badges.map((badge) => ({ ...badge, seasonKey: deriveBadgeSeasonKey(badge) }))

@@ -387,6 +387,14 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
     }
   }, [])
 
+  const handleClose = useCallback(() => {
+    // 스크롤 복원 후 닫기
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = ''
+    }
+    onClose()
+  }, [onClose])
+
   if (!stats) return null
 
   const {
@@ -1632,7 +1640,7 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
               <button
                 onClick={(e) => {
                   e.stopPropagation()
-                  onClose()
+                  handleClose()
                 }}
                 className="relative z-20 w-full rounded-2xl border border-white/15 bg-white/15 px-4 py-3 text-sm font-semibold text-black transition hover:bg-white/25 active:bg-white/30 touch-manipulation"
                 style={{ WebkitTapHighlightColor: 'transparent' }}
@@ -1712,10 +1720,10 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
   const handleNext = useCallback(() => {
     setActiveSlide((prev) => {
       if (prev < slideCount - 1) return prev + 1
-      onClose()
+      handleClose()
       return prev
     })
-  }, [slideCount, onClose])
+  }, [slideCount, handleClose])
 
   const handlePrev = useCallback(() => {
     setActiveSlide((prev) => (prev > 0 ? prev - 1 : prev))
@@ -1879,7 +1887,7 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
 
         {/* Close Button - Top Right */}
         <button 
-          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          onClick={(e) => { e.stopPropagation(); handleClose(); }}
           className="absolute top-6 right-4 z-20 text-white/50 hover:text-white p-2"
           aria-label={t('common.close')}
         >
@@ -1897,7 +1905,7 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
               } catch {
                 // ignore
               }
-              onClose()
+              handleClose()
             }}
             className="rounded-full bg-black/50 px-4 py-2 text-xs font-medium text-white/90 backdrop-blur-md transition hover:bg-black/70 hover:text-white shadow-lg"
             aria-label={t('seasonRecap.hideForToday')}

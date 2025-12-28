@@ -1,6 +1,6 @@
 // src/components/badges/BadgeArt.jsx
 // Inline SVG artwork for each badge slug (modern illustrated style)
-import React from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 
 // Common gradients & defs reused per artwork
 function GradientDefs() {
@@ -164,10 +164,47 @@ const ART = {
 }
 
 export function BadgeArt({ slug }) {
+  const [isInView, setIsInView] = useState(false)
+  const svgRef = useRef(null)
+  
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // 뷰포트에 들어오면 렌더링
+        setIsInView(entry.isIntersecting)
+      },
+      { 
+        threshold: 0.1,
+        rootMargin: '100px' // 100px 전에 미리 로드
+      }
+    )
+    
+    if (svgRef.current) {
+      observer.observe(svgRef.current)
+    }
+    
+    return () => {
+      if (svgRef.current) {
+        observer.unobserve(svgRef.current)
+      }
+    }
+  }, [])
+  
   const Comp = ART[slug]
+  
+  // 뷰포트에 없으면 placeholder만 렌더링
+  if (!isInView) {
+    return (
+      <svg ref={svgRef} viewBox="0 0 100 100" role="img" aria-label="badge-loading" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="50" cy="50" r="46" fill="#f5f5f5" />
+        <circle cx="50" cy="50" r="18" fill="#d4d4d8" />
+      </svg>
+    )
+  }
+  
   if (!Comp) {
     return (
-      <svg viewBox="0 0 100 100" role="img" aria-label="badge-art" xmlns="http://www.w3.org/2000/svg">
+      <svg ref={svgRef} viewBox="0 0 100 100" role="img" aria-label="badge-art" xmlns="http://www.w3.org/2000/svg">
         <GradientDefs />
         <circle cx="50" cy="50" r="46" fill="#1c1c1c" />
         <circle cx="50" cy="50" r="18" fill="url(#grad-magenta)" />
@@ -175,10 +212,13 @@ export function BadgeArt({ slug }) {
     )
   }
   return (
-    <svg viewBox="0 0 100 100" role="img" aria-label={slug} xmlns="http://www.w3.org/2000/svg">
+    <svg ref={svgRef} viewBox="0 0 100 100" role="img" aria-label={slug} xmlns="http://www.w3.org/2000/svg">
       {Comp()}
     </svg>
   )
 }
 
-export default BadgeArt
+// React.memo로 불필요한 리렌더링 방지
+export default React.memo(BadgeArt, (prevProps, nextProps) => {
+  return prevProps.slug === nextProps.slug
+})

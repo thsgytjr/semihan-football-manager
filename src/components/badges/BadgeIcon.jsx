@@ -1,5 +1,5 @@
 // src/components/badges/BadgeIcon.jsx
-import React from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import BadgeArt from './BadgeArt'
 import { optimizeImageUrl } from '../../utils/imageOptimization'
@@ -15,9 +15,37 @@ const tierThemes = {
 
 const fallbackTheme = tierThemes[1]
 
-export default function BadgeIcon({ badge, size = 'md', onSelect }) {
+function BadgeIcon({ badge, size = 'md', onSelect }) {
   if (!badge) return null
   const { t } = useTranslation()
+  
+  // Intersection Observer로 뷰포트 체크
+  const [isInView, setIsInView] = useState(false)
+  const cardRef = useRef(null)
+  
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // 뷰포트에 들어오면 애니메이션 활성화
+        setIsInView(entry.isIntersecting)
+      },
+      { 
+        threshold: 0.1, // 10%만 보여도 활성화
+        rootMargin: '50px' // 뷰포트 50px 전에 미리 로드
+      }
+    )
+    
+    if (cardRef.current) {
+      observer.observe(cardRef.current)
+    }
+    
+    return () => {
+      if (cardRef.current) {
+        observer.unobserve(cardRef.current)
+      }
+    }
+  }, [])
+  
   const {
     name,
     description,
@@ -77,13 +105,15 @@ export default function BadgeIcon({ badge, size = 'md', onSelect }) {
 
   return (
     <button
+      ref={cardRef}
       type="button"
       onClick={() => onSelect?.(badge)}
       className="relative flex flex-col gap-1 rounded-2xl bg-gradient-to-br from-white via-stone-50 to-stone-100 p-3 md:p-4 text-center shadow-[0_2px_6px_-1px_rgba(0,0,0,0.12)] ring-1 ring-stone-200/70 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-emerald-400"
       data-badge-id={slug}
       style={Object.keys(cardStyle).length ? cardStyle : undefined}
     >
-      {normalizedTier >= 4 && (
+      {/* 뷰포트에 있고 tier >= 4일 때만 애니메이션 렌더링 */}
+      {isInView && normalizedTier >= 4 && (
         <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-2xl">
           <div className="absolute inset-0" style={{background: cardAuraGradient, filter:'blur(6px)', opacity: 0.75}} />
           <div className="absolute inset-[2px] rounded-[1.1rem] border border-white/60 opacity-70" />
@@ -230,7 +260,8 @@ export default function BadgeIcon({ badge, size = 'md', onSelect }) {
       )}
       <div className="mx-auto flex items-center justify-center">
         <div className={`relative flex items-center justify-center rounded-full ${isLarge ? 'h-16 w-16 md:h-20 md:w-20' : 'h-12 w-12 md:h-16 md:w-16'}`}>
-          {normalizedTier >= 4 && (
+          {/* 뷰포트에 있고 tier >= 4일 때만 애니메이션 렌더링 */}
+          {isInView && normalizedTier >= 4 && (
             <div className="pointer-events-none absolute inset-0 rounded-full overflow-hidden">
               {normalizedTier === 4 && (
                 <>
@@ -352,3 +383,15 @@ export default function BadgeIcon({ badge, size = 'md', onSelect }) {
     </button>
   )
 }
+
+// React.memo로 감싸서 불필요한 리렌더링 방지
+export default React.memo(BadgeIcon, (prevProps, nextProps) => {
+  // badge 객체의 주요 속성만 비교
+  if (prevProps.badge?.id !== nextProps.badge?.id) return false
+  if (prevProps.badge?.slug !== nextProps.badge?.slug) return false
+  if (prevProps.badge?.tier !== nextProps.badge?.tier) return false
+  if (prevProps.badge?.numeric_value !== nextProps.badge?.numeric_value) return false
+  if (prevProps.size !== nextProps.size) return false
+  if (prevProps.onSelect !== nextProps.onSelect) return false
+  return true
+})

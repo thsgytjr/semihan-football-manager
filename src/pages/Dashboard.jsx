@@ -1009,6 +1009,8 @@ export default function Dashboard({
     }
     setBadgeModalPlayer(modalPlayer)
     setBadgeModalState({ badges: [], loading: true, error: null, source: null })
+    
+    // 로딩 중 중복 요청 방지
     const loadBadges = async () => {
       let remoteError = null
       try {

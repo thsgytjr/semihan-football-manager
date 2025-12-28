@@ -203,6 +203,17 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
     }
   }, [open, player])
 
+  const handleClose = useCallback(() => {
+    // 스크롤 복원
+    if (typeof document !== 'undefined') {
+      document.body.style.position = ''
+      document.body.style.top = ''
+      document.body.style.width = ''
+      document.body.style.overflow = ''
+    }
+    onClose()
+  }, [onClose])
+
   const nameEmpty = !S(draft?.name).trim()
   const isNew = !player?.id
   const isSystemDraft = (draft?.status || 'active') === SYSTEM_ACCOUNT_STATUS
@@ -340,7 +351,7 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
       if (!nameEmpty && !posMissing) handleSave()
     }
     if (e.key === "Escape") {
-      onClose()
+      handleClose()
     }
   }
 
@@ -364,7 +375,7 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
     <div
       className="fixed inset-0 z-[300] bg-black/60 backdrop-blur-sm animate-fadeIn flex items-center justify-center p-0 md:p-4"
       onKeyDown={onKeyDown}
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div 
         className="bg-white w-full md:max-w-5xl md:rounded-2xl shadow-2xl flex flex-col min-h-0 max-h-[95dvh] md:max-h-[90dvh] animate-slideUp"
@@ -374,7 +385,7 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
         <div className="relative px-6 py-5 border-b border-stone-200 bg-gradient-to-r from-stone-50 to-stone-100">
           <button 
             className="absolute right-4 top-4 p-2 rounded-full hover:bg-stone-200 transition-colors text-stone-500 hover:text-stone-700" 
-            onClick={onClose} 
+            onClick={handleClose} 
             aria-label="닫기"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -436,7 +447,7 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
                   setCreatingSystemAccount(true)
                   try {
                     await onEnsureSystemAccount()
-                    onClose()
+                    handleClose()
                   } catch (err) {
                     notify('시스템 계정 생성에 실패했습니다. 다시 시도해주세요.', 'error')
                   } finally {
@@ -1150,7 +1161,7 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
           <div className="flex items-center justify-between gap-3">
             <button 
               className="px-6 py-3 rounded-xl border-2 border-stone-300 font-semibold text-stone-700 hover:bg-stone-50 transition-all"
-              onClick={onClose}
+              onClick={handleClose}
             >
               취소
             </button>
