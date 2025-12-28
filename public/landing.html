@@ -1,46 +1,148 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Goalify - Modern Football Team Management</title>
-    <meta name="description" content="The all-in-one platform for amateur football teams. Track players, schedule matches, analyze performance, and celebrate achievements." />
+    <title>Goalify - 현대적인 축구팀 관리 플랫폼</title>
+    <meta name="description" content="아마추어 축구팀을 위한 올인원 플랫폼. 선수 관리, 경기 일정, 성과 분석까지 한 번에." />
+    
+    <!-- Pretendard Font -->
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css" />
     
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     
     <style>
+        * {
+            font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+        }
+        
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(20px); }
+            from { opacity: 0; transform: translateY(30px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .animate-fadeIn {
-            animation: fadeIn 0.6s ease-out;
+        
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(40px); }
+            to { opacity: 1; transform: translateY(0); }
         }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+        
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 30px rgba(16, 185, 129, 0.3); }
+            50% { box-shadow: 0 0 60px rgba(16, 185, 129, 0.6); }
+        }
+        
+        .animate-fadeIn {
+            animation: fadeIn 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .animate-slideUp {
+            animation: slideUp 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .animate-float {
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        .animate-glow {
+            animation: glow 2s ease-in-out infinite;
+        }
+        
         .gradient-text {
-            background: linear-gradient(135deg, #10b981 0%, #3b82f6 100%);
+            background: linear-gradient(135deg, #10b981 0%, #059669 50%, #3b82f6 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+            background-size: 200% 200%;
+            animation: gradient-shift 3s ease infinite;
+        }
+        
+        @keyframes gradient-shift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        
+        .soccer-pattern {
+            background-image: 
+                radial-gradient(circle at 20% 30%, rgba(16, 185, 129, 0.1) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
+                url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2310b981' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+        
+        .hero-gradient {
+            background: linear-gradient(135deg, 
+                rgba(16, 185, 129, 0.1) 0%, 
+                rgba(59, 130, 246, 0.1) 50%, 
+                rgba(139, 92, 246, 0.1) 100%);
+        }
+        
+        .card-hover {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .card-hover:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        }
+        
+        .btn-modern {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-modern::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+        
+        .btn-modern:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+        
+        .text-shadow-glow {
+            text-shadow: 0 0 20px rgba(16, 185, 129, 0.5);
         }
     </style>
 </head>
-<body class="antialiased">
+<body class="antialiased bg-stone-50">
     <!-- Navigation -->
-    <nav class="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-lg border-b border-stone-200 shadow-sm">
+    <nav class="fixed top-0 left-0 right-0 z-50 glass-effect shadow-lg">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16">
                 <div class="flex items-center gap-3">
-                    <img src="/GoalifyLogo.png" alt="Goalify" class="h-10 w-10 rounded-lg" />
-                    <span class="text-2xl font-bold gradient-text">Goalify</span>
+                    <img src="/GoalifyLogo.png" alt="Goalify" class="h-10 w-10 rounded-xl shadow-md" />
+                    <span class="text-2xl font-bold gradient-text tracking-tight">Goalify</span>
                 </div>
                 <div class="hidden md:flex items-center gap-8">
-                    <a href="#features" class="text-stone-600 hover:text-emerald-600 transition-colors font-medium">Features</a>
-                    <a href="#pricing" class="text-stone-600 hover:text-emerald-600 transition-colors font-medium">Pricing</a>
-                    <a href="#testimonials" class="text-stone-600 hover:text-emerald-600 transition-colors font-medium">Testimonials</a>
-                    <a href="/" class="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-full font-semibold hover:shadow-lg hover:scale-105 transition-all">Launch App</a>
+                    <a href="#features" class="text-stone-700 hover:text-emerald-600 transition-all font-semibold text-sm tracking-wide">기능</a>
+                    <a href="#pricing" class="text-stone-700 hover:text-emerald-600 transition-all font-semibold text-sm tracking-wide">가격</a>
+                    <a href="#testimonials" class="text-stone-700 hover:text-emerald-600 transition-all font-semibold text-sm tracking-wide">후기</a>
+                    <a href="/" class="btn-modern relative px-6 py-2.5 bg-gradient-to-r from-emerald-500 via-emerald-600 to-green-600 text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-2xl hover:scale-105 transition-all">
+                        앱 시작하기
+                    </a>
                 </div>
-                <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg hover:bg-stone-100">
+                <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg hover:bg-stone-100 transition-colors">
                     <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
                     </svg>
@@ -50,102 +152,110 @@
     </nav>
 
     <!-- Hero Section -->
-    <section class="pt-32 pb-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-emerald-50 via-white to-blue-50">
-        <div class="max-w-7xl mx-auto">
-            <div class="grid lg:grid-cols-2 gap-12 items-center">
+    <section class="pt-32 pb-20 px-4 sm:px-6 lg:px-8 hero-gradient soccer-pattern min-h-screen flex items-center">
+        <div class="max-w-7xl mx-auto w-full">
+            <div class="grid lg:grid-cols-2 gap-16 items-center">
                 <div class="space-y-8 animate-fadeIn">
-                    <div class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-100 text-emerald-700 rounded-full text-sm font-semibold">
-                        <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div class="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-500/20 to-blue-500/20 backdrop-blur-sm border border-emerald-500/30 text-emerald-700 rounded-2xl text-sm font-bold shadow-lg">
+                        <svg class="h-5 w-5 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
-                        The Future of Team Management
+                        못다한 축구선수의 꿈, 여기서 이루세요
                     </div>
                     
-                    <h1 class="text-5xl lg:text-6xl font-bold text-stone-900 leading-tight">
-                        Manage Your Football Team <span class="gradient-text">Like a Pro</span>
+                    <h1 class="text-6xl lg:text-7xl font-black text-stone-900 leading-tight tracking-tight">
+                        당신도<br/>
+                        <span class="gradient-text text-shadow-glow">프로선수</span>처럼<br/>
+                        플레이하세요
                     </h1>
                     
-                    <p class="text-xl text-stone-600 leading-relaxed">
-                        The all-in-one platform for amateur football teams. Track players, schedule matches, analyze performance, and celebrate achievements.
+                    <p class="text-xl text-stone-600 leading-relaxed font-medium">
+                        Pro 선수들만 누리던 특권, 이제 아마추어 선수도 누립니다.<br/>
+                        <span class="text-emerald-600 font-bold">나만의 축구 통계</span>, <span class="text-blue-600 font-bold">성장 기록</span>, <span class="text-purple-600 font-bold">업적 배지</span>까지.<br/>
+                        <span class="text-stone-800 font-black">Goalify와 함께 프로의 꿈을 경험하세요.</span>
                     </p>
 
-                    <form id="signup-form" class="flex flex-col sm:flex-row gap-3">
+                    <form id="signup-form" class="flex flex-col sm:flex-row gap-4">
                         <input
                             type="email"
                             id="email"
-                            placeholder="Enter your email"
+                            placeholder="이메일을 입력하세요"
                             required
-                            class="flex-1 px-6 py-4 rounded-full border-2 border-stone-200 focus:border-emerald-500 focus:outline-none text-lg"
+                            class="flex-1 px-7 py-5 rounded-2xl border-2 border-stone-300 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/20 focus:outline-none text-lg font-medium shadow-lg transition-all"
                         />
                         <button
                             type="submit"
-                            class="px-8 py-4 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-full font-semibold hover:shadow-xl hover:scale-105 transition-all flex items-center justify-center gap-2"
+                            class="btn-modern relative px-10 py-5 bg-gradient-to-r from-emerald-500 via-emerald-600 to-green-600 text-white rounded-2xl font-bold text-lg shadow-2xl hover:shadow-emerald-500/50 hover:scale-105 transition-all flex items-center justify-center gap-3 animate-glow"
                         >
-                            Get Started Free
-                            <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                            내 꿈 시작하기
+                            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                             </svg>
                         </button>
                     </form>
-                    <p class="text-sm text-stone-500">No credit card required • Free forever for small teams</p>
+                    <p class="text-sm text-stone-500 font-medium">
+                        💳 신용카드 불필요 • ⚽ 모든 아마추어 선수 환영 • 🏆 프로급 통계 제공
+                    </p>
 
-                    <div class="grid grid-cols-4 gap-6 pt-8">
-                        <div class="text-center">
-                            <div class="text-3xl font-bold text-emerald-600">10K+</div>
-                            <div class="text-sm text-stone-600 mt-1">Active Players</div>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-8 pt-8">
+                        <div class="text-center transform hover:scale-110 transition-transform">
+                            <div class="text-4xl font-black gradient-text">10K+</div>
+                            <div class="text-sm text-stone-600 mt-2 font-semibold">꿈꾸는 선수</div>
                         </div>
-                        <div class="text-center">
-                            <div class="text-3xl font-bold text-emerald-600">500+</div>
-                            <div class="text-sm text-stone-600 mt-1">Teams</div>
+                        <div class="text-center transform hover:scale-110 transition-transform">
+                            <div class="text-4xl font-black gradient-text">500+</div>
+                            <div class="text-sm text-stone-600 mt-2 font-semibold">팀</div>
                         </div>
-                        <div class="text-center">
-                            <div class="text-3xl font-bold text-emerald-600">50K+</div>
-                            <div class="text-sm text-stone-600 mt-1">Matches</div>
+                        <div class="text-center transform hover:scale-110 transition-transform">
+                            <div class="text-4xl font-black gradient-text">50K+</div>
+                            <div class="text-sm text-stone-600 mt-2 font-semibold">경기 데이터</div>
                         </div>
-                        <div class="text-center">
-                            <div class="text-3xl font-bold text-emerald-600">98%</div>
-                            <div class="text-sm text-stone-600 mt-1">Satisfaction</div>
+                        <div class="text-center transform hover:scale-110 transition-transform">
+                            <div class="text-4xl font-black gradient-text">∞</div>
+                            <div class="text-sm text-stone-600 mt-2 font-semibold">가능성</div>
                         </div>
                     </div>
                 </div>
 
-                <div class="relative">
-                    <div class="absolute inset-0 bg-gradient-to-tr from-emerald-200 to-blue-200 rounded-3xl blur-3xl opacity-30"></div>
-                    <div class="relative bg-white rounded-3xl shadow-2xl p-8 border border-stone-200">
-                        <div class="space-y-4">
-                            <div class="flex items-center justify-between pb-4 border-b border-stone-200">
-                                <h3 class="text-xl font-bold text-stone-900">Team Dashboard</h3>
+                <div class="relative animate-float">
+                    <div class="absolute inset-0 bg-gradient-to-tr from-emerald-400/30 via-blue-400/30 to-purple-400/30 rounded-3xl blur-3xl"></div>
+                    <div class="relative glass-effect rounded-3xl shadow-2xl p-8 border-2 border-white/50">
+                        <div class="space-y-5">
+                            <div class="flex items-center justify-between pb-5 border-b-2 border-stone-200">
+                                <h3 class="text-2xl font-black text-stone-900">나의 프로필</h3>
                                 <div class="flex gap-2">
-                                    <div class="h-3 w-3 rounded-full bg-red-400"></div>
-                                    <div class="h-3 w-3 rounded-full bg-yellow-400"></div>
-                                    <div class="h-3 w-3 rounded-full bg-emerald-400"></div>
+                                    <div class="h-3 w-3 rounded-full bg-red-500 shadow-lg"></div>
+                                    <div class="h-3 w-3 rounded-full bg-yellow-500 shadow-lg"></div>
+                                    <div class="h-3 w-3 rounded-full bg-emerald-500 shadow-lg"></div>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-3 p-4 bg-gradient-to-r from-emerald-50 to-blue-50 rounded-xl">
-                                <svg class="h-8 w-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
-                                </svg>
+                            
+                            <div class="flex items-center gap-4 p-5 bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-red-500/10 rounded-2xl border-2 border-purple-200/50 hover:border-purple-400/80 transition-all card-hover">
+                                <div class="h-12 w-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center text-2xl font-black text-white shadow-lg">
+                                    99
+                                </div>
                                 <div class="flex-1">
-                                    <div class="font-semibold text-stone-900">Next Match</div>
-                                    <div class="text-sm text-stone-600">Sunday, 3:00 PM</div>
+                                    <div class="font-bold text-stone-900 text-lg">종합 능력치</div>
+                                    <div class="text-sm text-stone-600 font-medium">FIFA 스타일 레이팅</div>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-3 p-4 bg-stone-50 rounded-xl">
-                                <svg class="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                            
+                            <div class="flex items-center gap-4 p-5 bg-gradient-to-r from-emerald-500/10 via-emerald-600/10 to-blue-500/10 rounded-2xl border-2 border-emerald-200/50 hover:border-emerald-400/80 transition-all card-hover">
+                                <svg class="h-10 w-10 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                                 </svg>
                                 <div class="flex-1">
-                                    <div class="font-semibold text-stone-900">Active Players</div>
-                                    <div class="text-sm text-stone-600">24 members</div>
+                                    <div class="font-bold text-stone-900 text-lg">시즌 통계</div>
+                                    <div class="text-sm text-stone-600 font-medium">골, 어시스트, 패스 성공률</div>
                                 </div>
                             </div>
-                            <div class="flex items-center gap-3 p-4 bg-stone-50 rounded-xl">
-                                <svg class="h-8 w-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            <div class="flex items-center gap-4 p-5 bg-stone-50/80 rounded-2xl border-2 border-stone-200 hover:border-yellow-300 transition-all card-hover">
+                                <svg class="h-10 w-10 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
                                 </svg>
                                 <div class="flex-1">
-                                    <div class="font-semibold text-stone-900">Win Rate</div>
-                                    <div class="text-sm text-stone-600">73% this season</div>
+                                    <div class="font-bold text-stone-900 text-lg">획득한 배지</div>
+                                    <div class="text-sm text-stone-600 font-medium">해트트릭 히어로 🔥</div>
                                 </div>
                             </div>
                         </div>
@@ -156,138 +266,200 @@
     </section>
 
     <!-- Features Section -->
-    <section id="features" class="py-20 px-4 sm:px-6 lg:px-8 bg-white">
+    <section id="features" class="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-white to-stone-50/50">
         <div class="max-w-7xl mx-auto">
-            <div class="text-center mb-16">
-                <h2 class="text-4xl lg:text-5xl font-bold text-stone-900 mb-4">Everything You Need</h2>
-                <p class="text-xl text-stone-600 max-w-2xl mx-auto">Powerful features designed for amateur football teams</p>
+            <div class="text-center mb-20 animate-fadeIn">
+                <div class="inline-block px-6 py-2.5 bg-gradient-to-r from-emerald-500/10 to-blue-500/10 text-emerald-700 rounded-2xl text-sm font-bold mb-6 border border-emerald-300/50 shadow-lg">
+                    프로선수의 특권
+                </div>
+                <h2 class="text-5xl lg:text-6xl font-black text-stone-900 mb-6 tracking-tight">
+                    당신만의 <span class="gradient-text">프로 통계</span>
+                </h2>
+                <p class="text-xl text-stone-600 max-w-3xl mx-auto leading-relaxed font-medium">
+                    손흥민도, 호날두도 받는 데이터. 이제 아마추어 선수도 받습니다.<br/>
+                    매 경기마다 쌓이는 <span class="font-bold text-emerald-600">나만의 레전드 스토리</span>
+                </p>
             </div>
 
             <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-                <div class="group p-8 bg-gradient-to-br from-stone-50 to-white rounded-2xl border border-stone-200 hover:border-emerald-300 hover:shadow-xl transition-all">
-                    <div class="h-14 w-14 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                        <svg class="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                <div class="glass-effect p-8 rounded-3xl card-hover border-2 border-white/50 hover:border-emerald-300/50 transition-all group shadow-xl">
+                    <div class="inline-flex p-4 bg-gradient-to-br from-emerald-500 to-green-600 rounded-2xl mb-6 shadow-lg transform group-hover:scale-110 group-hover:rotate-3 transition-all">
+                        <svg class="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                         </svg>
                     </div>
-                    <h3 class="text-xl font-bold text-stone-900 mb-3">Player Management</h3>
-                    <p class="text-stone-600 leading-relaxed">Comprehensive player profiles with stats, positions, and performance tracking</p>
+                    <h3 class="text-2xl font-black text-stone-900 mb-4">개인 통계 추적</h3>
+                    <p class="text-stone-600 leading-relaxed font-medium">
+                        골, 어시스트, 패스 성공률, 슈팅 정확도.<br/>
+                        <span class="font-bold text-emerald-600">FIFA처럼 모든 기록이 쌓입니다.</span><br/>
+                        프리미어리그 선수들만 받던 상세 데이터를 경험하세요.
+                    </p>
                 </div>
 
-                <div class="group p-8 bg-gradient-to-br from-stone-50 to-white rounded-2xl border border-stone-200 hover:border-emerald-300 hover:shadow-xl transition-all">
-                    <div class="h-14 w-14 bg-gradient-to-br from-blue-400 to-blue-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                        <svg class="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                <div class="glass-effect p-8 rounded-3xl card-hover border-2 border-white/50 hover:border-blue-300/50 transition-all group shadow-xl">
+                    <div class="inline-flex p-4 bg-gradient-to-br from-blue-500 to-blue-700 rounded-2xl mb-6 shadow-lg transform group-hover:scale-110 group-hover:rotate-3 transition-all">
+                        <svg class="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
                     </div>
-                    <h3 class="text-xl font-bold text-stone-900 mb-3">Match Scheduling</h3>
-                    <p class="text-stone-600 leading-relaxed">Plan matches, track attendance, and manage team lineups effortlessly</p>
+                    <h3 class="text-2xl font-black text-stone-900 mb-4">시즌별 성장 곡선</h3>
+                    <p class="text-stone-600 leading-relaxed font-medium">
+                        작년보다 올해 얼마나 성장했나요?<br/>
+                        <span class="font-bold text-blue-600">시즌별 퍼포먼스를 그래프로 확인</span>하세요.<br/>
+                        당신의 발전을 눈으로 확인하는 짜릿함.
+                    </p>
                 </div>
 
-                <div class="group p-8 bg-gradient-to-br from-stone-50 to-white rounded-2xl border border-stone-200 hover:border-emerald-300 hover:shadow-xl transition-all">
-                    <div class="h-14 w-14 bg-gradient-to-br from-purple-400 to-purple-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                        <svg class="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                <div class="glass-effect p-8 rounded-3xl card-hover border-2 border-white/50 hover:border-purple-300/50 transition-all group shadow-xl">
+                    <div class="inline-flex p-4 bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl mb-6 shadow-lg transform group-hover:scale-110 group-hover:rotate-3 transition-all">
+                        <svg class="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                         </svg>
                     </div>
-                    <h3 class="text-xl font-bold text-stone-900 mb-3">Advanced Analytics</h3>
-                    <p class="text-stone-600 leading-relaxed">Deep insights into team performance, player stats, and game trends</p>
+                    <h3 class="text-2xl font-black text-stone-900 mb-4">프로급 히트맵</h3>
+                    <p class="text-stone-600 leading-relaxed font-medium">
+                        나는 왼쪽에 강할까, 오른쪽에 강할까?<br/>
+                        <span class="font-bold text-purple-600">경기별 활동 영역을 시각화</span>해서 보세요.<br/>
+                        챔피언스리그 중계에서만 보던 그 분석.
+                    </p>
                 </div>
 
-                <div class="group p-8 bg-gradient-to-br from-stone-50 to-white rounded-2xl border border-stone-200 hover:border-emerald-300 hover:shadow-xl transition-all">
-                    <div class="h-14 w-14 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                        <svg class="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+                <div class="glass-effect p-8 rounded-3xl card-hover border-2 border-white/50 hover:border-yellow-300/50 transition-all group shadow-xl">
+                    <div class="inline-flex p-4 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-2xl mb-6 shadow-lg transform group-hover:scale-110 group-hover:rotate-3 transition-all">
+                        <svg class="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
                         </svg>
                     </div>
-                    <h3 class="text-xl font-bold text-stone-900 mb-3">Achievement Badges</h3>
-                    <p class="text-stone-600 leading-relaxed">Reward players with beautiful badges for milestones and accomplishments</p>
+                    <h3 class="text-2xl font-black text-stone-900 mb-4">업적 배지 시스템</h3>
+                    <p class="text-stone-600 leading-relaxed font-medium">
+                        해트트릭, 50골 돌파, 100경기 출전.<br/>
+                        <span class="font-bold text-yellow-600">당신의 모든 업적이 배지로 기록</span>됩니다.<br/>
+                        게임처럼 재밌게, 프로처럼 진지하게.
+                    </p>
                 </div>
 
-                <div class="group p-8 bg-gradient-to-br from-stone-50 to-white rounded-2xl border border-stone-200 hover:border-emerald-300 hover:shadow-xl transition-all">
-                    <div class="h-14 w-14 bg-gradient-to-br from-red-400 to-red-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                        <svg class="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                <div class="glass-effect p-8 rounded-3xl card-hover border-2 border-white/50 hover:border-red-300/50 transition-all group shadow-xl">
+                    <div class="inline-flex p-4 bg-gradient-to-br from-red-500 to-red-700 rounded-2xl mb-6 shadow-lg transform group-hover:scale-110 group-hover:rotate-3 transition-all">
+                        <svg class="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
                     </div>
-                    <h3 class="text-xl font-bold text-stone-900 mb-3">Referee Mode</h3>
-                    <p class="text-stone-600 leading-relaxed">Real-time match recording and stats input during games</p>
+                    <h3 class="text-2xl font-black text-stone-900 mb-4">심판 모드</h3>
+                    <p class="text-stone-600 leading-relaxed font-medium">
+                        경기 중 실시간으로 모든 데이터를 기록.<br/>
+                        <span class="font-bold text-red-600">VAR처럼 정확하게</span> 골, 카드, 교체를 입력하세요.<br/>
+                        경기 후엔 완벽한 통계가 자동 생성됩니다.
+                    </p>
                 </div>
 
-                <div class="group p-8 bg-gradient-to-br from-stone-50 to-white rounded-2xl border border-stone-200 hover:border-emerald-300 hover:shadow-xl transition-all">
-                    <div class="h-14 w-14 bg-gradient-to-br from-emerald-400 to-blue-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-                        <svg class="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                <div class="glass-effect p-8 rounded-3xl card-hover border-2 border-white/50 hover:border-cyan-300/50 transition-all group shadow-xl">
+                    <div class="inline-flex p-4 bg-gradient-to-br from-cyan-500 to-blue-600 rounded-2xl mb-6 shadow-lg transform group-hover:scale-110 group-hover:rotate-3 transition-all">
+                        <svg class="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
                     </div>
-                    <h3 class="text-xl font-bold text-stone-900 mb-3">Real-time Updates</h3>
-                    <p class="text-stone-600 leading-relaxed">Live stats, instant notifications, and synchronized team data</p>
+                    <h3 class="text-2xl font-black text-stone-900 mb-4">팀 리더보드</h3>
+                    <p class="text-stone-600 leading-relaxed font-medium">
+                        우리 팀 득점왕은 누구? 어시스트왕은?<br/>
+                        <span class="font-bold text-cyan-600">순위표로 팀 내 경쟁</span>을 즐기세요.<br/>
+                        건강한 라이벌 의식이 팀을 더 강하게 만듭니다.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+                        <svg class="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-2xl font-black text-stone-900 mb-4">실시간 업데이트</h3>
+                    <p class="text-stone-600 leading-relaxed font-medium">라이브 통계, 즉각적인 알림, 동기화된 팀 데이터</p>
                 </div>
             </div>
         </div>
     </section>
 
     <!-- CTA Section -->
-    <section class="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-emerald-600 to-blue-600">
-        <div class="max-w-4xl mx-auto text-center">
-            <h2 class="text-4xl lg:text-5xl font-bold text-white mb-6">Ready to Transform Your Team?</h2>
-            <p class="text-xl text-emerald-50 mb-8">Join thousands of teams already using Goalify</p>
-            <a href="/" class="inline-flex items-center gap-3 px-10 py-4 bg-white text-emerald-600 rounded-full font-bold text-lg hover:shadow-2xl hover:scale-105 transition-all">
-                Launch App
-                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+    <section class="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-emerald-600 via-emerald-500 to-blue-600 relative overflow-hidden">
+        <!-- Animated background pattern -->
+        <div class="absolute inset-0 opacity-10">
+            <div class="absolute top-0 left-0 w-full h-full" style="background-image: url(&quot;data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E&quot;);"></div>
+        </div>
+        
+        <div class="max-w-4xl mx-auto text-center relative z-10">
+            <div class="inline-block px-6 py-2 bg-white/20 backdrop-blur-sm border border-white/30 text-white rounded-full text-sm font-bold mb-8 animate-pulse">
+                🚀 지금 시작하세요
+            </div>
+            <h2 class="text-5xl lg:text-6xl font-black text-white mb-8 leading-tight tracking-tight">
+                팀을 변화시킬<br/>준비되셨나요?
+            </h2>
+            <p class="text-xl text-emerald-50 mb-12 font-medium">
+                이미 수천 개의 팀이 Goalify를 사용하고 있습니다
+            </p>
+            <a href="/" class="btn-modern inline-flex items-center gap-4 px-12 py-6 bg-white text-emerald-600 rounded-2xl font-black text-xl shadow-2xl hover:shadow-white/30 hover:scale-110 transition-all">
+                앱 시작하기
+                <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>
             </a>
         </div>
     </section>
 
     <!-- Footer -->
-    <footer class="py-12 px-4 sm:px-6 lg:px-8 bg-stone-900 text-stone-400">
+    <footer class="py-16 px-4 sm:px-6 lg:px-8 bg-stone-900 text-stone-400">
         <div class="max-w-7xl mx-auto">
-            <div class="grid md:grid-cols-4 gap-8 mb-8">
+            <div class="grid md:grid-cols-4 gap-12 mb-12">
                 <div>
-                    <div class="flex items-center gap-2 mb-4">
-                        <img src="/GoalifyLogo.png" alt="Goalify" class="h-8 w-8 rounded" />
-                        <span class="text-xl font-bold text-white">Goalify</span>
+                    <div class="flex items-center gap-3 mb-6">
+                        <img src="/GoalifyLogo.png" alt="Goalify" class="h-10 w-10 rounded-xl" />
+                        <span class="text-2xl font-black text-white">Goalify</span>
                     </div>
-                    <p class="text-sm">The future of amateur football team management</p>
+                    <p class="text-sm font-medium leading-relaxed">
+                        아마추어 축구팀 관리의 미래
+                    </p>
                 </div>
                 <div>
-                    <h4 class="text-white font-semibold mb-4">Product</h4>
-                    <ul class="space-y-2 text-sm">
-                        <li><a href="#features" class="hover:text-emerald-400 transition-colors">Features</a></li>
-                        <li><a href="#pricing" class="hover:text-emerald-400 transition-colors">Pricing</a></li>
+                    <h4 class="text-white font-bold mb-6 text-lg">제품</h4>
+                    <ul class="space-y-3 text-sm font-medium">
+                        <li><a href="#features" class="hover:text-emerald-400 transition-colors">기능</a></li>
+                        <li><a href="#pricing" class="hover:text-emerald-400 transition-colors">가격</a></li>
+                        <li><a href="#" class="hover:text-emerald-400 transition-colors">로드맵</a></li>
                     </ul>
                 </div>
                 <div>
-                    <h4 class="text-white font-semibold mb-4">Company</h4>
-                    <ul class="space-y-2 text-sm">
-                        <li><a href="#" class="hover:text-emerald-400 transition-colors">About</a></li>
-                        <li><a href="#" class="hover:text-emerald-400 transition-colors">Contact</a></li>
+                    <h4 class="text-white font-bold mb-6 text-lg">회사</h4>
+                    <ul class="space-y-3 text-sm font-medium">
+                        <li><a href="#" class="hover:text-emerald-400 transition-colors">소개</a></li>
+                        <li><a href="#" class="hover:text-emerald-400 transition-colors">블로그</a></li>
+                        <li><a href="#" class="hover:text-emerald-400 transition-colors">채용</a></li>
                     </ul>
                 </div>
                 <div>
-                    <h4 class="text-white font-semibold mb-4">Support</h4>
-                    <ul class="space-y-2 text-sm">
-                        <li><a href="#" class="hover:text-emerald-400 transition-colors">Help Center</a></li>
-                        <li><a href="#" class="hover:text-emerald-400 transition-colors">Privacy</a></li>
+                    <h4 class="text-white font-bold mb-6 text-lg">지원</h4>
+                    <ul class="space-y-3 text-sm font-medium">
+                        <li><a href="#" class="hover:text-emerald-400 transition-colors">고객센터</a></li>
+                        <li><a href="#" class="hover:text-emerald-400 transition-colors">문의하기</a></li>
+                        <li><a href="#" class="hover:text-emerald-400 transition-colors">개인정보처리방침</a></li>
                     </ul>
                 </div>
             </div>
-            <div class="pt-8 border-t border-stone-800 text-center text-sm">
-                <p>© 2025 Goalify. All rights reserved.</p>
+            <div class="pt-8 border-t border-stone-800 text-center text-sm font-medium">
+                <p>© 2025 Goalify. 모든 권리 보유.</p>
             </div>
         </div>
     </footer>
 
-    <div id="success-message" class="hidden fixed top-4 right-4 bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-6 shadow-xl animate-fadeIn z-50">
-        <div class="flex items-start gap-3">
-            <svg class="h-6 w-6 text-emerald-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+    <div id="success-message" class="hidden fixed top-6 right-6 glass-effect rounded-2xl p-6 shadow-2xl animate-fadeIn z-50 border-2 border-emerald-200">
+        <div class="flex items-start gap-4">
+            <div class="flex-shrink-0 h-12 w-12 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl flex items-center justify-center">
+                <svg class="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
             <div>
-                <p class="font-semibold text-emerald-900">Thank you for signing up!</p>
-                <p class="text-sm text-emerald-700">We'll send you an invite soon.</p>
+                <p class="font-black text-emerald-900 text-lg">가입해주셔서 감사합니다!</p>
+                <p class="text-sm text-emerald-700 font-medium mt-1">곧 초대 메일을 보내드리겠습니다.</p>
             </div>
         </div>
     </div>
@@ -296,7 +468,7 @@
         document.getElementById('signup-form').addEventListener('submit', function(e) {
             e.preventDefault();
             const email = document.getElementById('email').value;
-            console.log('Signup:', email);
+            console.log('가입:', email);
             
             // Show success message
             const successMsg = document.getElementById('success-message');
@@ -304,13 +476,15 @@
             
             // Hide form
             document.getElementById('signup-form').innerHTML = `
-                <div class="flex items-center gap-3 p-6 bg-emerald-50 border-2 border-emerald-200 rounded-2xl">
-                    <svg class="h-6 w-6 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
+                <div class="flex items-center gap-4 p-6 glass-effect border-2 border-emerald-400 rounded-2xl shadow-lg">
+                    <div class="flex-shrink-0 h-12 w-12 bg-gradient-to-br from-emerald-400 to-emerald-600 rounded-xl flex items-center justify-center">
+                        <svg class="h-7 w-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
                     <div>
-                        <p class="font-semibold text-emerald-900">Thank you for signing up!</p>
-                        <p class="text-sm text-emerald-700">We'll send you an invite soon.</p>
+                        <p class="font-black text-emerald-900 text-lg">가입해주셔서 감사합니다!</p>
+                        <p class="text-sm text-emerald-700 font-medium">곧 초대 메일을 보내드리겠습니다.</p>
                     </div>
                 </div>
             `;
@@ -322,7 +496,7 @@
 
         // Mobile menu toggle
         document.getElementById('mobile-menu-btn').addEventListener('click', function() {
-            alert('Mobile menu - integrate with your navigation');
+            alert('모바일 메뉴 - 네비게이션과 통합 필요');
         });
     </script>
 </body>
