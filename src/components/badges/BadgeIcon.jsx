@@ -237,7 +237,7 @@ function BadgeIcon({ badge, size = 'md', onSelect }) {
           )}
         </div>
       )}
-        <div className={`relative flex items-center justify-center rounded-full ${isLarge ? 'h-16 w-16 md:h-20 md:w-20' : 'h-12 w-12 md:h-16 md:w-16'}`}>
+      <div className={`relative flex items-center justify-center rounded-full ${isLarge ? 'h-16 w-16 md:h-20 md:w-20' : 'h-12 w-12 md:h-16 md:w-16'}`}>
           {/* tier >= 4 기본 효과는 항상 표시 */}
           {normalizedTier >= 4 && (
             <div className="pointer-events-none absolute inset-0 rounded-full overflow-hidden">
@@ -327,7 +327,6 @@ function BadgeIcon({ badge, size = 'md', onSelect }) {
             )}
           </div>
         </div>
-      </div>
       <div className="mt-2 text-[13px] md:text-sm font-semibold text-stone-900" title={t(`badges.definitions.${slug}.name`, { defaultValue: name })}>{t(`badges.definitions.${slug}.name`, { defaultValue: name })}</div>
       {category && (
         <div className="text-xs tracking-wide text-stone-400" title={t(`badges.categories.${category}`, { defaultValue: category })}>
