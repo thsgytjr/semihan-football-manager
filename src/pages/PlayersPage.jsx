@@ -1,5 +1,5 @@
 // src/pages/PlayersPage.jsx
-import React, { useMemo, useState, useEffect } from "react"
+import React, { useMemo, useState, useEffect, useCallback } from "react"
 import { createPortal } from "react-dom"
 import { notify } from "../components/Toast"
 import { overall, isUnknownPlayer, isSystemAccount, SYSTEM_ACCOUNT_STATUS } from "../lib/players"
