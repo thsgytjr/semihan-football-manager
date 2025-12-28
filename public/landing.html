@@ -73,6 +73,11 @@
             border: 1px solid rgba(255, 255, 255, 0.3);
         }
         
+        .nav-solid {
+            background: rgba(255, 255, 255, 1);
+            backdrop-filter: blur(20px);
+        }
+        
         .soccer-pattern {
             background-image: 
                 radial-gradient(circle at 20% 30%, rgba(16, 185, 129, 0.1) 0%, transparent 50%),
@@ -127,12 +132,11 @@
 </head>
 <body class="antialiased bg-stone-50">
     <!-- Navigation -->
-    <nav class="fixed top-0 left-0 right-0 z-50 glass-effect shadow-lg">
+    <nav class="fixed top-0 left-0 right-0 z-50 nav-solid shadow-lg border-b border-stone-200">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16">
-                <div class="flex items-center gap-3">
-                    <img src="/GoalifyLogo.png" alt="Goalify" class="h-10 w-10 rounded-xl shadow-md" />
-                    <span class="text-2xl font-bold gradient-text tracking-tight">Goalify</span>
+            <div class="flex items-center justify-between h-20">
+                <div class="flex items-center py-2">
+                    <img src="/GoalifyLogo.png" alt="Goalify" class="h-16 w-28 object-cover object-center hover:scale-105 transition-transform" style="object-position: center; clip-path: inset(11% 0 17% 0);" />
                 </div>
                 <div class="hidden md:flex items-center gap-8">
                     <a href="#features" class="text-stone-700 hover:text-emerald-600 transition-all font-semibold text-sm tracking-wide">기능</a>
@@ -193,10 +197,6 @@
                             </svg>
                         </button>
                     </form>
-                    <p class="text-sm text-stone-500 font-medium">
-                        💳 신용카드 불필요 • ⚽ 모든 아마추어 선수 환영 • 🏆 프로급 통계 제공
-                    </p>
-
                     <div class="grid grid-cols-2 sm:grid-cols-4 gap-8 pt-8">
                         <div class="text-center transform hover:scale-110 transition-transform">
                             <div class="text-4xl font-black gradient-text">10K+</div>
