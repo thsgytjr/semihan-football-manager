@@ -90,15 +90,15 @@ export function MoMPopup({
 
   React.useEffect(() => {
     if (!match || typeof document === 'undefined') return undefined
-    const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
-      document.body.style.overflow = previous
+      // 항상 스크롤을 활성화 (다른 모달의 hidden 상태를 덮어쓰지 않도록)
+      document.body.style.overflow = ''
     }
   }, [match])
 
   const handleClose = React.useCallback(() => {
-    // 스크롤 복원 후 닫기
+    // 스크롤 명시적 복원
     if (typeof document !== 'undefined') {
       document.body.style.overflow = ''
     }

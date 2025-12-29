@@ -379,16 +379,16 @@ export default function SeasonRecap({ matches, players, onClose, seasonName, lea
       window.scrollTo({ top: 0, behavior: 'auto' })
     }
     if (typeof document !== 'undefined') {
-      const prev = document.body.style.overflow
       document.body.style.overflow = 'hidden'
       return () => {
-        document.body.style.overflow = prev
+        // 항상 스크롤을 활성화 (다른 모달의 hidden 상태를 덮어쓰지 않도록)
+        document.body.style.overflow = ''
       }
     }
   }, [])
 
   const handleClose = useCallback(() => {
-    // 스크롤 복원 후 닫기
+    // 스크롤 명시적 복원
     if (typeof document !== 'undefined') {
       document.body.style.overflow = ''
     }
