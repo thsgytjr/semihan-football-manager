@@ -27,6 +27,7 @@ import { ensureStatsObject, clampStat } from "../lib/stats"
 import { calculateAIPower, aiPowerChipClass } from "../lib/aiPower"
 import { uploadPlayerPhoto, deletePlayerPhoto } from "../lib/photoUpload"
 import { randomAvatarDataUrl } from "../utils/avatar"
+import { generateRandomAvatar, isDicebearAvatar } from "../lib/avatarGenerator"
 import PositionChips from "../components/PositionChips"
 import { TEAM_CONFIG } from "../lib/teamConfig"
 import MembershipSettings from "../components/MembershipSettings"
@@ -258,9 +259,11 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
   
   const resetToRandom = async () => {
     // 기존 업로드된 사진이 R2에 있으면 삭제 (TEAM_PATH, player-photos, 또는 R2 도메인 체크)
+    // DiceBear 아바타는 삭제 대상이 아님
     const isUploadedPhoto = draft.photoUrl && 
       !draft.photoUrl.startsWith('RANDOM:') && 
       !draft.photoUrl.startsWith('data:') &&
+      !isDicebearAvatar(draft.photoUrl) &&
       (draft.photoUrl.includes(TEAM_CONFIG.r2.teamPath) || 
        draft.photoUrl.includes('player-photos') ||
        draft.photoUrl.includes('.r2.dev') ||
@@ -275,9 +278,9 @@ function EditPlayerModal({ open, player, onClose, onSave, tagPresets = [], onAdd
       }
     }
     
-    // 랜덤 버튼 클릭 시 RANDOM: prefix와 랜덤 값으로 매번 다른 색상 생성
-    const randomSeed = 'RANDOM:' + Date.now() + Math.random()
-    setDraft(prev => ({...prev, photoUrl: randomSeed}))
+    // 랜덤 DiceBear 아바타 생성 (매번 다른 아바타)
+    const randomAvatarUrl = generateRandomAvatar()
+    setDraft(prev => ({...prev, photoUrl: randomAvatarUrl}))
     notify('랜덤 아바타가 적용되었습니다.')
   }
 

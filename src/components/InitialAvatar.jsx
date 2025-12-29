@@ -3,6 +3,7 @@ import captainIcon from "../assets/Captain.PNG"
 import { getMembershipBadge } from "../lib/membershipConfig"
 import { optimizeImageUrl } from "../utils/imageOptimization"
 import useCachedImage from "../hooks/useCachedImage"
+import { generatePlayerAvatar, isDicebearAvatar } from "../lib/avatarGenerator"
 
 /**
  * InitialAvatar
@@ -19,9 +20,28 @@ function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null, cust
   
   // photoUrl이 RANDOM:으로 시작하면 랜덤 색상 모드
   const isRandomColor = photoUrl && String(photoUrl).startsWith('RANDOM:')
+  
+  // 실제 사진 URL인지 확인 (http/https로 시작하고 dicebear가 아닌 경우)
+  const isRealPhoto = photoUrl && 
+    !isRandomColor && 
+    !isDicebearAvatar(photoUrl) &&
+    (photoUrl.startsWith('http://') || photoUrl.startsWith('https://') || photoUrl.startsWith('data:'))
+  
   let actualPhotoUrl = isRandomColor ? null : photoUrl
 
-  if (actualPhotoUrl) {
+  // photoUrl이 없거나, RANDOM:이거나, 실제 사진이 아니면 DiceBear 아바타 사용
+  if (!actualPhotoUrl && id && name) {
+    actualPhotoUrl = generatePlayerAvatar(id, name)
+  } else if (actualPhotoUrl && isDicebearAvatar(actualPhotoUrl)) {
+    // 이미 DiceBear URL이면 그대로 사용
+    actualPhotoUrl = photoUrl
+  } else if (!isRealPhoto && id && name) {
+    // 실제 사진이 아니면 아바타로 대체
+    actualPhotoUrl = generatePlayerAvatar(id, name)
+  }
+
+  if (actualPhotoUrl && !isDicebearAvatar(actualPhotoUrl)) {
+    // DiceBear 아바타가 아닌 경우에만 최적화 적용
     // 리스트/테이블에서 과도한 픽셀 전송 방지: 렌더 크기 기반 썸네일 요청
     const targetSize = Math.min(128, Math.max(40, size * 2))
     actualPhotoUrl = optimizeImageUrl(actualPhotoUrl, { width: targetSize, height: targetSize, quality: 65, format: 'webp' })
