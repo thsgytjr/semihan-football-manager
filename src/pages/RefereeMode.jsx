@@ -14,6 +14,9 @@ const statShell = () => ({ goals: 0, assists: 0, yellowCards: 0, redCards: 0, fo
 export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSave, cardsEnabled = true }) {
   const { t } = useTranslation()
 
+  // Some legacy data uses playerId / player_id; normalize to a single id for avatars/seeding
+  const getPlayerId = useCallback((p) => p?.id ?? p?.playerId ?? p?.player_id ?? p?.user_id ?? p?.uuid ?? p?._id ?? null, [])
+
   const initialGameIndex = useMemo(() => {
     if (!activeMatch) return 0
     const stats = activeMatch.stats || {}
@@ -832,7 +835,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
         className={`p-1.5 rounded-xl border border-slate-200/60 w-full text-center flex flex-col items-center gap-0 bg-gradient-to-b from-white to-slate-50/30 hover:from-slate-50 hover:to-white hover:border-slate-300/80 hover:shadow-md active:scale-[0.98] transition-all duration-200 shadow-sm h-[78px] ${!canRecord ? 'opacity-60 cursor-not-allowed' : ''}`}
         disabled={!canRecord}
       >
-        <InitialAvatar name={player.name} photoUrl={photo} size={44} />
+        <InitialAvatar name={player.name} photoUrl={photo} size={44} playerId={getPlayerId(player)} />
         <div className="w-full min-h-[14px] flex items-center justify-center">
           <div className="font-semibold text-[11px] text-slate-800 leading-tight break-words whitespace-normal max-h-9 overflow-hidden">
             {player.name}
@@ -944,7 +947,8 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                                   <InitialAvatar 
                                     name={captain.name} 
                                     photoUrl={captain.photoUrl || captain.avatar} 
-                                    size={20} 
+                                    size={20}
+                                    playerId={getPlayerId(captain)}
                                   />
                                   <div className="text-xs text-gray-600 truncate">
                                     <span className="font-semibold">주장:</span> {captain.name}
@@ -1276,7 +1280,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 border-b pb-3">
-              <InitialAvatar name={selectedPlayer.name} photoUrl={selectedPlayer.photoUrl || selectedPlayer.avatar} size={48} />
+              <InitialAvatar name={selectedPlayer.name} photoUrl={selectedPlayer.photoUrl || selectedPlayer.avatar} size={48} playerId={getPlayerId(selectedPlayer)} />
               <div>
                 <div className="font-bold text-lg">{selectedPlayer.name}</div>
                 <div className="text-sm text-gray-500">{t('referee.team')} {selectedTeamIndex + 1}</div>
@@ -1315,7 +1319,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                             onClick={() => recordGoalWithAssist(teammate)}
                             className="p-1.5 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg flex flex-col items-center gap-1 active:scale-[0.98] transition"
                           >
-                            <InitialAvatar name={teammate.name} photoUrl={teammate.photoUrl || teammate.avatar} size={40} />
+                            <InitialAvatar name={teammate.name} photoUrl={teammate.photoUrl || teammate.avatar} size={40} playerId={getPlayerId(teammate)} />
                             <span className="text-xs font-bold text-gray-900 truncate w-full text-center leading-tight px-0.5">{teammate.name}</span>
                           </button>
                         ))}
@@ -1367,7 +1371,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                           }}
                           className="p-1.5 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-lg flex flex-col items-center gap-1 active:scale-[0.98] transition"
                         >
-                          <InitialAvatar name={teammate.name} photoUrl={teammate.photoUrl || teammate.avatar} size={40} />
+                          <InitialAvatar name={teammate.name} photoUrl={teammate.photoUrl || teammate.avatar} size={40} playerId={getPlayerId(teammate)} />
                           <span className="text-xs font-bold text-gray-900 truncate w-full text-center leading-tight px-0.5">{teammate.name}</span>
                         </button>
                       ))}
@@ -1544,7 +1548,7 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
                               })
                             }}
                           />
-                          <InitialAvatar name={p.name} photoUrl={p.photoUrl || p.avatar} size={28} />
+                          <InitialAvatar name={p.name} photoUrl={p.photoUrl || p.avatar} size={28} playerId={getPlayerId(p)} />
                           <div className="min-w-0">
                             <div className="text-sm font-semibold text-slate-900 truncate">{p.name}</div>
                             {(p.position || p.pos) && <div className="text-[11px] text-slate-500 truncate">{p.position || p.pos}</div>}

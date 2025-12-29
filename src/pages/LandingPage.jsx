@@ -7,6 +7,7 @@ import {
   Target, Award, Activity, MessageSquare
 } from 'lucide-react'
 import logoUrl from '../assets/GoalifyLogo.png'
+import LandingDemo from '../components/LandingDemo'
 
 export default function LandingPage({ onGetStarted }) {
   const { t, i18n } = useTranslation()
@@ -442,8 +443,44 @@ export default function LandingPage({ onGetStarted }) {
         </div>
       </section>
 
+      {/* Interactive Demo Section */}
+      <section className="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-stone-50 via-white to-emerald-50/30 relative overflow-hidden">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <div className="inline-block px-6 py-2 bg-gradient-to-r from-emerald-500 to-blue-500 text-white rounded-full text-sm font-bold mb-6 shadow-lg">
+              🎮 인터랙티브 데모
+            </div>
+            <h2 className="text-5xl lg:text-6xl font-black mb-6 bg-gradient-to-r from-stone-900 via-emerald-900 to-blue-900 bg-clip-text text-transparent">
+              직접 체험해보세요
+            </h2>
+            <p className="text-xl text-stone-600 font-medium max-w-3xl mx-auto mb-4">
+              실제 앱과 동일한 인터페이스로 Goalify의 모든 기능을 체험할 수 있습니다.
+            </p>
+            <p className="text-lg text-emerald-600 font-bold">
+              ⬇️ 탭을 클릭해서 각 기능을 둘러보세요
+            </p>
+          </div>
+
+          {/* Demo Component */}
+          <div className="flex justify-center">
+            <LandingDemo />
+          </div>
+
+          {/* Bottom CTA */}
+          <div className="text-center mt-16">
+            <a 
+              href="/" 
+              className="inline-flex items-center gap-3 px-10 py-5 bg-gradient-to-r from-emerald-600 to-blue-600 text-white rounded-2xl font-black text-lg shadow-xl hover:shadow-2xl hover:scale-105 transition-all"
+            >
+              지금 바로 시작하기
+              <ArrowRight className="h-6 w-6" />
+            </a>
+          </div>
+        </div>
+      </section>
+
       {/* CTA Section */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-emerald-600 to-blue-600">
+      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-r from-emerald-600 via-emerald-500 to-blue-600 relative overflow-hidden">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl lg:text-5xl font-bold text-white mb-6">
             {t('landing.cta.title', { defaultValue: 'Ready to Transform Your Team?' })}

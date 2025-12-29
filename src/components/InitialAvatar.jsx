@@ -13,7 +13,10 @@ import { generatePlayerAvatar, isDicebearAvatar } from "../lib/avatarGenerator"
  * - customMemberships: 커스텀 멤버십 설정 배열 (배지 색상 커스터마이징)
  * - badgeInfo: 미리 계산된 배지 정보 객체 (선택적, 성능 최적화용)
  */
-function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null, customMemberships = [], badgeInfo = null }) {
+function InitialAvatar({ id, playerId, name, size = 24, badges = [], photoUrl = null, customMemberships = [], badgeInfo = null }) {
+  // id와 playerId 중 유효한 값 사용 (playerId 우선)
+  const effectiveId = playerId || id
+
   // 한글, 영문 모두 첫 글자 추출 (toUpperCase는 영문에만 적용)
   const firstChar = (name || "?").trim().charAt(0) || "?"
   const initial = /[a-zA-Z]/.test(firstChar) ? firstChar.toUpperCase() : firstChar
@@ -30,14 +33,14 @@ function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null, cust
   let actualPhotoUrl = isRandomColor ? null : photoUrl
 
   // photoUrl이 없거나, RANDOM:이거나, 실제 사진이 아니면 DiceBear 아바타 사용
-  if (!actualPhotoUrl && id && name) {
-    actualPhotoUrl = generatePlayerAvatar(id, name)
+  if (!actualPhotoUrl && effectiveId && name) {
+    actualPhotoUrl = generatePlayerAvatar(effectiveId, name)
   } else if (actualPhotoUrl && isDicebearAvatar(actualPhotoUrl)) {
     // 이미 DiceBear URL이면 그대로 사용
     actualPhotoUrl = photoUrl
-  } else if (!isRealPhoto && id && name) {
+  } else if (!isRealPhoto && effectiveId && name) {
     // 실제 사진이 아니면 아바타로 대체
-    actualPhotoUrl = generatePlayerAvatar(id, name)
+    actualPhotoUrl = generatePlayerAvatar(effectiveId, name)
   }
 
   if (actualPhotoUrl && !isDicebearAvatar(actualPhotoUrl)) {
@@ -59,7 +62,7 @@ function InitialAvatar({ id, name, size = 24, badges = [], photoUrl = null, cust
     colorSeed = String(photoUrl)
   } else {
     // 일반 모드: name + id 조합
-    colorSeed = (name || "") + (id ? String(id) : "")
+    colorSeed = (name || "") + (effectiveId ? String(effectiveId) : "")
   }
   const color = "#" + stringToColor(colorSeed || "seed")
 
