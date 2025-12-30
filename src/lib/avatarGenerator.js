@@ -2,7 +2,7 @@
 // DiceBear 랜덤 아바타 생성기
 
 const openPeepsHeadOptions = [
-  'afro','bangs','bangs2','bantuKnots','bear','bun','bun2','buns','cornrows','cornrows2','dreads1','dreads2','flatTop','flatTopLong','grayBun','grayMedium','grayShort','hatBeanie','hatHip','hijab','long','longAfro','longBangs','longCurly','medium1','medium2','medium3','mediumBangs','mediumBangs2','mediumBangs3','mediumStraight','mohawk','mohawk2','noHair1','noHair2','noHair3','pomp','shaved1','shaved2','shaved3','short1','short2','short3','short4','short5','twists','twists2'
+  'afro','bangs','bangs2','bantuKnots','bear','bun','bun2','buns','cornrows','cornrows2','dreads1','dreads2','flatTop','flatTopLong','grayBun','grayMedium','grayShort','hatBeanie','hatHip','long','longAfro','longBangs','longCurly','medium1','medium2','medium3','mediumBangs','mediumBangs2','mediumBangs3','mediumStraight','mohawk','mohawk2','noHair1','noHair2','noHair3','pomp','shaved1','shaved2','shaved3','short1','short2','short3','short4','short5','twists','twists2'
 ]
 
 function hashStringToInt(str){
