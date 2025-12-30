@@ -345,21 +345,21 @@ export default function PlayerStatsModal({
 
   const modal = (
     <div
-      className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/60 px-4 py-6"
+      className="fixed inset-0 z-[1100] flex items-center justify-center bg-black/60 px-4 py-6 sm:py-8"
       role="dialog"
       aria-modal="true"
       aria-label={t('playerStatsModal.title', { name: player?.name ?? 'Player' })}
       onClick={() => onClose?.()}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-stone-50 shadow-2xl"
+        className="flex max-h-[calc(100vh-3rem)] sm:max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl bg-stone-50 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="relative flex flex-col gap-4 border-b border-stone-200 bg-white px-6 py-5 sm:flex-row sm:items-center sm:justify-between">
           <button
             type="button"
             onClick={() => onClose?.()}
-            className="absolute right-4 top-4 inline-flex items-center justify-center rounded-full bg-white/90 p-2 text-stone-600 shadow-sm ring-1 ring-stone-200 transition hover:bg-stone-100 sm:hidden"
+            className="absolute right-4 top-4 z-10 inline-flex items-center justify-center rounded-full bg-white p-2 text-stone-600 shadow-md ring-1 ring-stone-200 transition hover:bg-stone-100 hover:shadow-lg sm:hidden"
             aria-label={t('playerStatsModal.close')}
           >
             <X className="h-5 w-5" />
