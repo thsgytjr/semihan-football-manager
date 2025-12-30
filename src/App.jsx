@@ -61,7 +61,9 @@ function App(){
   const { t } = useTranslation()
   const isSandboxMode = TEAM_CONFIG.sandboxMode || false
   const[tab,setTab]=useState("dashboard"),[db,setDb]=useState({players:[],matches:[],visits:0,upcomingMatches:[],tagPresets:[],membershipSettings:[]}),[selectedPlayerId,setSelectedPlayerId]=useState(null)
-  const[isAdmin,setIsAdmin]=useState(false),[isAnalyticsAdmin,setIsAnalyticsAdmin]=useState(false),[loginOpen,setLoginOpen]=useState(false)
+  const[isAdmin,setIsAdmin]=useState(false),[isAnalyticsAdmin,setIsAnalyticsAdmin]=useState(false),[isSandboxGuest,setIsSandboxGuest]=useState(()=>{
+    try { return sessionStorage.getItem('sandboxGuest') === '1' } catch { return false }
+  }),[loginOpen,setLoginOpen]=useState(false)
   const[loading,setLoading]=useState(true)
   const[pageLoading,setPageLoading]=useState(false)
   const[loadError,setLoadError]=useState(null)
@@ -185,6 +187,20 @@ function App(){
     // 세션이 업데이트되면 자동으로 isAdmin이 설정됨
     window.location.hash = '' // URL hash 정리
   }
+
+  // 샌드박스 게스트 세션 복원
+  useEffect(() => {
+    if (!isSandboxMode) return
+    try {
+      const flag = sessionStorage.getItem('sandboxGuest') === '1'
+      if (flag) {
+        setIsSandboxGuest(true)
+        setIsAdmin(true)
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [isSandboxMode])
 
   // 사용자가 수동 재시도할 때 호출 (새로고침 없이 재시도)
   const handleRetryLoading = useCallback(() => {
@@ -781,16 +797,17 @@ function App(){
   }, [tab]);
 
   // 메모이제이션된 탭 버튼들
+  const sandboxUnlocked = isAdmin || isSandboxGuest
   const tabButtons = useMemo(() => [
     { key: 'dashboard', icon: <Home size={16}/>, label: t('nav.dashboard'), show: true },
-    { key: 'players', icon: <Users size={16}/>, label: t('nav.players'), show: isSandboxMode || (isAdmin && featuresEnabled.players) },
-    { key: 'planner', icon: <CalendarDays size={16}/>, label: t('nav.planner'), show: isSandboxMode || (isAdmin && featuresEnabled.planner) },
-    { key: 'draft', icon: <Shuffle size={16}/>, label: t('nav.draft'), show: isSandboxMode || (isAdmin && featuresEnabled.draft) },
+    { key: 'players', icon: <Users size={16}/>, label: t('nav.players'), show: sandboxUnlocked && (featuresEnabled.players ?? true) },
+    { key: 'planner', icon: <CalendarDays size={16}/>, label: t('nav.planner'), show: sandboxUnlocked && (featuresEnabled.planner ?? true) },
+    { key: 'draft', icon: <Shuffle size={16}/>, label: t('nav.draft'), show: sandboxUnlocked && (featuresEnabled.draft ?? true) },
     { key: 'formation', icon: <IconPitch size={16}/>, label: t('nav.formation'), show: featuresEnabled.formation },
-    { key: 'stats', icon: <ListChecks size={16}/>, label: t('nav.stats'), show: isSandboxMode || (isAdmin && featuresEnabled.stats) },
-  { key: 'accounting', icon: <DollarSign size={16}/>, label: t('nav.accounting'), show: isAdmin && (featuresEnabled.accounting ?? true) },
+    { key: 'stats', icon: <ListChecks size={16}/>, label: t('nav.stats'), show: sandboxUnlocked && (featuresEnabled.stats ?? true) },
+    { key: 'accounting', icon: <DollarSign size={16}/>, label: t('nav.accounting'), show: isAdmin && (featuresEnabled.accounting ?? true) },
     { key: 'analytics', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, label: t('nav.analytics'), show: isAnalyticsAdmin && featuresEnabled.analytics }
-  ], [isAdmin, isAnalyticsAdmin, featuresEnabled, t]);
+  ], [sandboxUnlocked, isAdmin, isAnalyticsAdmin, featuresEnabled, t]);
 
   const playerStatsModalEnabled = featuresEnabled?.playerStatsModal ?? (featuresEnabled?.playerFunFacts ?? true)
   const badgesFeatureEnabled = playerStatsModalEnabled && (featuresEnabled?.badges ?? true)
@@ -1553,6 +1570,7 @@ function App(){
     await signOut()
     setIsAdmin(false)
     setIsAnalyticsAdmin(false)
+    setIsSandboxGuest(false)
     localStorage.removeItem("isAdmin")
     localStorage.removeItem("isAnalyticsAdmin")
     sessionStorage.removeItem("sandboxGuest") // 샌드박스 게스트 상태 제거
@@ -1565,6 +1583,7 @@ function App(){
     if (email === "sandbox@guest.local" && password === "guest") {
       logger.log('[App] Sandbox guest login: Granting UI access')
       sessionStorage.setItem("sandboxGuest", "1")
+      setIsSandboxGuest(true)
       setIsAdmin(true) // UI 접근 허용
       setLoginOpen(false)
       notify("샌드박스 유저 모드 활성화 (앱 설정 접근 가능)")

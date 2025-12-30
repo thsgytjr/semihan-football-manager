@@ -160,8 +160,8 @@ export default function AdminLoginDialog({
           
           {TEAM_CONFIG.sandboxMode && !useMockAuth && (
             <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 border border-amber-200">
-              📦 샌드박스 모드: <strong>Admin 로그인</strong>으로 모든 기능을 사용할 수 있습니다.<br/>
-              <span className="text-amber-700">또는 아래 &quot;샌드박스 유저로 로그인&quot; 버튼을 눌러 앱 설정을 체험하세요.</span>
+              📦 샌드박스 모드: <strong>샌드박스 유저로 로그인</strong>하면 모든 기능을 체험할 수 있습니다.<br/>
+              <span className="text-amber-700">모든 변경 사항은 브라우저 세션에만 저장되며, 새로고침/탭 종료 시 초기화됩니다. 실제 데이터베이스에는 기록되지 않습니다.</span>
             </div>
           )}
           
