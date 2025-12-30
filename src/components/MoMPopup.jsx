@@ -58,6 +58,10 @@ export function MoMPopup({
   }, [recommended, roster, selected])
 
   const handleHideForToday = () => {
+    // 스크롤을 먼저 복원한 후 닫기
+    if (typeof document !== 'undefined') {
+      document.body.style.overflow = ''
+    }
     setHiddenForToday(true)
     try {
       const today = new Date().toDateString()
@@ -122,9 +126,9 @@ export function MoMPopup({
   const countdownLabel = countdown?.label
 
   const popup = (
-    <div className="fixed inset-0 z-[100] overflow-y-auto overscroll-contain">
+    <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto overscroll-contain">
       <div className="absolute inset-0 bg-black/40" onClick={handleClose}></div>
-      <div className="relative z-50 flex min-h-full items-start justify-center px-3 py-8 sm:px-6 sm:py-12">
+      <div className="relative z-50 w-full px-3 py-8 sm:px-6 sm:py-12 flex justify-center">
         <Card className="w-full max-w-lg sm:max-w-xl border-2 border-amber-200 bg-white shadow-2xl flex max-h-[calc(100vh-32px)] sm:max-h-[calc(100vh-64px)] flex-col overflow-hidden rounded-3xl min-h-[320px] mt-6 sm:mt-0">
           <div className="flex w-full justify-end bg-stone-50 px-4 py-2 border-b border-stone-100">
              <button onClick={handleHideForToday} className="text-xs text-stone-500 hover:text-stone-800 flex items-center gap-1">

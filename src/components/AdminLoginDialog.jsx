@@ -1,7 +1,8 @@
 // src/components/AdminLoginDialog.jsx
 import React, { useEffect, useRef, useState } from "react"
-import { Lock, Eye, EyeOff, ShieldCheck, AlertCircle, CheckCircle2, X } from "lucide-react"
+import { Lock, Eye, EyeOff, ShieldCheck, AlertCircle, CheckCircle2, X, UserCircle } from "lucide-react"
 import { logger } from "../lib/logger"
+import { TEAM_CONFIG } from "../lib/teamConfig"
 
 /**
  * Mock 인증 사용 여부 확인
@@ -103,6 +104,28 @@ export default function AdminLoginDialog({
       setLoading(false)
     }
   }
+  
+  // 샌드박스 게스트 로그인 (앱 설정 접근용)
+  async function submitAsSandboxGuest() {
+    if (loading) return
+    setLoading(true)
+    setErr("")
+    
+    try {
+      logger.log('[AdminLoginDialog] Sandbox guest login')
+      const success = await onSuccess("sandbox@guest.local", "guest")
+      if (success) {
+        setLoading(false)
+      } else {
+        setErr("샌드박스 로그인에 실패했습니다.")
+        setLoading(false)
+      }
+    } catch (error) {
+      logger.error('Sandbox guest login error:', error)
+      setErr("샌드박스 로그인 중 오류가 발생했습니다.")
+      setLoading(false)
+    }
+  }
 
   if (!isOpen) return null
   return (
@@ -135,6 +158,14 @@ export default function AdminLoginDialog({
             </div>
           )}
           
+          {TEAM_CONFIG.sandboxMode && !useMockAuth && (
+            <div className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 border border-amber-200">
+              📦 샌드박스 모드: <strong>Admin 로그인</strong>으로 모든 기능을 사용할 수 있습니다.<br/>
+              <span className="text-amber-700">또는 아래 &quot;샌드박스 유저로 로그인&quot; 버튼을 눌러 앱 설정을 체험하세요.</span>
+            </div>
+          )}
+          
+          {/* Admin 로그인 폼 (항상 표시) */}
           {!useMockAuth && (
             <>
               <label className="block text-xs font-medium text-stone-600">이메일</label>
@@ -189,29 +220,87 @@ export default function AdminLoginDialog({
                   <AlertCircle size={14} /> {err}
                 </div>
               )}
+              
+              <button
+                onClick={submit}
+                disabled={loading || (!email || !pw)}
+                className={`mt-2 flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition ${
+                  loading || (!email || !pw)
+                    ? "cursor-not-allowed bg-stone-200 text-stone-500"
+                    : "bg-emerald-600 text-white hover:bg-emerald-700"
+                }`}
+              >
+                {loading ? (
+                  <>
+                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/50 border-t-transparent" />
+                    확인 중…
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={16} /> Admin 로그인
+                  </>
+                )}
+              </button>
             </>
           )}
-
-          <button
-            onClick={submit}
-            disabled={loading || (!useMockAuth && (!email || !pw))}
-            className={`mt-2 flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition ${
-              loading || (!useMockAuth && (!email || !pw))
-                ? "cursor-not-allowed bg-stone-200 text-stone-500"
-                : "bg-emerald-600 text-white hover:bg-emerald-700"
-            }`}
-          >
-            {loading ? (
-              <>
-                <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/50 border-t-transparent" />
-                확인 중…
-              </>
-            ) : (
-              <>
-                <CheckCircle2 size={16} /> {useMockAuth ? "즉시 로그인" : "로그인"}
-              </>
-            )}
-          </button>
+          
+          {/* Mock Auth: 즉시 로그인 버튼 */}
+          {useMockAuth && (
+            <button
+              onClick={submit}
+              disabled={loading}
+              className={`mt-2 flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition ${
+                loading
+                  ? "cursor-not-allowed bg-stone-200 text-stone-500"
+                  : "bg-emerald-600 text-white hover:bg-emerald-700"
+              }`}
+            >
+              {loading ? (
+                <>
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/50 border-t-transparent" />
+                  확인 중…
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 size={16} /> 즉시 로그인
+                </>
+              )}
+            </button>
+          )}
+          
+          {TEAM_CONFIG.sandboxMode && !useMockAuth && (
+            <>
+              <div className="relative my-4">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-stone-200"></div>
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="bg-white px-2 text-stone-500">또는</span>
+                </div>
+              </div>
+              
+              <button
+                onClick={submitAsSandboxGuest}
+                disabled={loading}
+                className={`flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition ${
+                  loading
+                    ? "cursor-not-allowed bg-stone-200 text-stone-500"
+                    : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
+              >
+                {loading ? (
+                  <>
+                    <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/50 border-t-transparent" />
+                    확인 중…
+                  </>
+                ) : (
+                  <>
+                    <UserCircle size={16} /> 샌드박스 유저로 로그인
+                  </>
+                )}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

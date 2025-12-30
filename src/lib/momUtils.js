@@ -50,6 +50,17 @@ export function getMoMWindow(match) {
   if (!anchorISO) return null
   const anchor = new Date(anchorISO)
   if (Number.isNaN(anchor.getTime())) return null
+
+  // Check for admin force-close override
+  const forceCloseISO = match?.stats?.momVoteEnd || match?.draft?.stats?.momVoteEnd
+  if (forceCloseISO) {
+    const forceClosed = new Date(forceCloseISO)
+    if (!Number.isNaN(forceClosed.getTime())) {
+      const announceEnd = new Date(forceClosed.getTime() + MOM_ANNOUNCE_WINDOW_HOURS * HOUR_MS)
+      return { anchor, voteEnd: forceClosed, announceEnd, matchDayEnd: getMatchDayEnd(match), forceClosed: true }
+    }
+  }
+
   const defaultVoteEnd = new Date(anchor.getTime() + MOM_VOTE_WINDOW_HOURS * HOUR_MS)
   const matchDayEnd = getMatchDayEnd(match)
   const voteEnd = matchDayEnd && matchDayEnd.getTime() < defaultVoteEnd.getTime()
@@ -62,6 +73,14 @@ export function getMoMWindow(match) {
 export function getMoMPhase(match, now = new Date()) {
   const windowMeta = getMoMWindow(match)
   if (!windowMeta) return 'hidden'
+
+  // Force-close always takes precedence
+  if (windowMeta.forceClosed) {
+    const ts = now.getTime()
+    if (ts < windowMeta.voteEnd.getTime()) return 'vote'
+    if (ts < windowMeta.announceEnd.getTime()) return 'announce'
+    return 'closed'
+  }
 
   // Referee Mode Logic: Only open if manually enabled OR 3 hours passed since match time
   if (isRefMatch(match)) {

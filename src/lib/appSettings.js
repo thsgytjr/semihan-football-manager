@@ -3,9 +3,22 @@
 
 import { supabase } from './supabaseClient'
 import { logger } from './logger'
+import { TEAM_CONFIG } from './teamConfig'
 
 const SETTINGS_KEY = 'app_settings'
+const SESSION_SETTINGS_KEY = 'app_settings_session' // 샌드박스용 세션 스토리지
 const SUPABASE_SETTINGS_KEY = 'app_settings'
+
+// 샌드박스 게스트 여부 확인 (동기)
+function isSandboxGuest() {
+  if (!TEAM_CONFIG.sandboxMode) return false
+  try {
+    const sessionData = sessionStorage.getItem('supabase.auth.token')
+    return !sessionData || sessionData === 'null'
+  } catch {
+    return true
+  }
+}
 
 const DEFAULT_SETTINGS = {
   appTitle: import.meta.env.VITE_TEAM_NAME || 'Goalify',
@@ -93,8 +106,9 @@ export async function loadAppSettingsFromServer() {
     }
     
     const settings = mergeSettings(data?.value || {})
-    // 로컬에도 캐시
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+    // Admin: localStorage에 캐시, Guest: sessionStorage에 캐시
+    const storage = isSandboxGuest() ? sessionStorage : localStorage
+    storage.setItem(SETTINGS_KEY, JSON.stringify(settings))
     return settings
   } catch (err) {
     logger.error('Failed to load settings from server:', err)
@@ -105,13 +119,12 @@ export async function loadAppSettingsFromServer() {
 // Supabase에 앱 설정 저장
 export async function saveAppSettingsToServer(settings) {
   // Sandbox Mode: 게스트는 Supabase 쓰기 금지
-  const { TEAM_CONFIG } = await import('./teamConfig')
   if (TEAM_CONFIG.sandboxMode) {
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
         logger.warn('[saveAppSettingsToServer] Sandbox mode: Guest write blocked')
-        return saveAppSettings(settings) // 로컬에만 저장
+        return saveAppSettings(settings) // 세션 스토리지에만 저장
       }
     } catch (e) {
       logger.warn('[saveAppSettingsToServer] Session check failed, blocking write', e)
@@ -145,6 +158,16 @@ export async function saveAppSettingsToServer(settings) {
 // 로컬 스토리지에서 앱 설정 로드 (폴백용)
 export function getAppSettings() {
   try {
+    // Sandbox guest: sessionStorage 우선 확인
+    if (isSandboxGuest()) {
+      const sessionRaw = sessionStorage.getItem(SESSION_SETTINGS_KEY)
+      if (sessionRaw) {
+        const settings = JSON.parse(sessionRaw)
+        return mergeSettings(settings)
+      }
+    }
+    
+    // Admin 또는 sessionStorage 없을 때: localStorage 확인
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (raw) {
       const settings = JSON.parse(raw)
@@ -159,6 +182,13 @@ export function getAppSettings() {
 // 로컬 스토리지에 저장 (폴백용)
 export function saveAppSettings(settings) {
   try {
+    // Sandbox guest: sessionStorage에 저장 (새로고침 시 리셋)
+    if (isSandboxGuest()) {
+      sessionStorage.setItem(SESSION_SETTINGS_KEY, JSON.stringify(settings))
+      return true
+    }
+    
+    // Admin: localStorage에 저장 (영구 보관)
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
     return true
   } catch (err) {

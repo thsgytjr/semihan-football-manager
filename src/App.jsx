@@ -1555,11 +1555,22 @@ function App(){
     setIsAnalyticsAdmin(false)
     localStorage.removeItem("isAdmin")
     localStorage.removeItem("isAnalyticsAdmin")
+    sessionStorage.removeItem("sandboxGuest") // 샌드박스 게스트 상태 제거
     notify("Admin 모드 해제")
   }
   
   // Supabase Auth: 로그인 성공 핸들러
   async function onAdminSuccess(email, password){
+    // 샌드박스 게스트 로그인 (앱 설정 접근용, DB 쓰기는 여전히 차단)
+    if (email === "sandbox@guest.local" && password === "guest") {
+      logger.log('[App] Sandbox guest login: Granting UI access')
+      sessionStorage.setItem("sandboxGuest", "1")
+      setIsAdmin(true) // UI 접근 허용
+      setLoginOpen(false)
+      notify("샌드박스 유저 모드 활성화 (앱 설정 접근 가능)")
+      return true
+    }
+    
     const {user, error} = await signInAdmin(email, password)
     
     if(error){

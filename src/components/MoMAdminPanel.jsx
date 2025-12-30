@@ -37,6 +37,7 @@ export default function MoMAdminPanel({
   isRefMatch = false,
   momManualOpen = false,
   onToggleManualOpen,
+  onForceCloseVoting,
 }) {
   const [selectedPlayerId, setSelectedPlayerId] = useState('')
   const [note, setNote] = useState('')
@@ -144,6 +145,14 @@ export default function MoMAdminPanel({
         setSelectedPlayerId('')
       } finally {
         setResetPending(false)
+        setConfirmState({ open: false, mode: null })
+      }
+      return
+    }
+    if (confirmState.mode === 'force-close') {
+      try {
+        await onForceCloseVoting?.()
+      } finally {
         setConfirmState({ open: false, mode: null })
       }
       return
@@ -278,6 +287,26 @@ export default function MoMAdminPanel({
             </section>
           )}
 
+          {onForceCloseVoting && (
+            <section className="rounded-lg border-2 border-rose-200 bg-rose-50 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex-1">
+                  <div className="text-sm font-bold text-rose-900">🚫 투표 조기 종료</div>
+                  <p className="text-xs text-rose-700 mt-0.5">
+                    투표 기간을 즉시 마감합니다.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setConfirmState({ open: true, mode: 'force-close' })}
+                  className="shrink-0 rounded-lg px-3 py-2 text-xs font-bold shadow-sm transition-all bg-rose-600 text-white hover:bg-rose-700"
+                >
+                  강제 종료
+                </button>
+              </div>
+            </section>
+          )}
+
           <section className="rounded-2xl border-2 border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-50 p-4 shadow-sm">
             <div className="mb-3">
               <div className="text-base font-bold text-amber-900 flex items-center gap-2">
@@ -391,11 +420,27 @@ export default function MoMAdminPanel({
 
       <ConfirmDialog
         open={confirmState.open}
-        title={confirmState.mode === 'override' ? 'MOM 선정 변경' : 'MOM 기록 초기화'}
-        message={confirmState.mode === 'override'
-          ? '기존 기록을 모두 지우고 선택한 선수로 MOM을 확정할까요?'
-          : '모든 MOM 투표 기록을 삭제합니다. 되돌릴 수 없습니다.'}
-        confirmLabel={confirmState.mode === 'override' ? '확정하기' : '삭제하기'}
+        title={
+          confirmState.mode === 'override'
+            ? 'MOM 선정 변경'
+            : confirmState.mode === 'force-close'
+              ? '투표 강제 종료'
+              : 'MOM 기록 초기화'
+        }
+        message={
+          confirmState.mode === 'override'
+            ? '기존 기록을 모두 지우고 선택한 선수로 MOM을 확정할까요?'
+            : confirmState.mode === 'force-close'
+              ? 'MoM 투표를 강제로 종료하시겠습니까? 종료 후에는 투표를 다시 열 수 없습니다.'
+              : '모든 MOM 투표 기록을 삭제합니다. 되돌릴 수 없습니다.'
+        }
+        confirmLabel={
+          confirmState.mode === 'override'
+            ? '확정하기'
+            : confirmState.mode === 'force-close'
+              ? '강제 종료'
+              : '삭제하기'
+        }
         cancelLabel="취소"
         tone={confirmState.mode === 'override' ? 'default' : 'danger'}
         onCancel={() => setConfirmState({ open: false, mode: null })}

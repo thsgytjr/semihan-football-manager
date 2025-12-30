@@ -968,6 +968,25 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
     }
   }
 
+  const handleMomForceCloseVoting = async () => {
+    if (!momMatch) return
+    
+    const updatedStats = {
+      ...(momMatch.stats || {}),
+      momVoteEnd: new Date().toISOString()
+    }
+    
+    try {
+      await onUpdateMatch(momMatch.id, { stats: updatedStats })
+      setAlertState({ open: true, title: '투표 종료', message: '투표가 강제 종료되었습니다.' })
+      notify('투표가 강제 종료되었습니다.', 'success')
+    } catch (err) {
+      console.error(err)
+      setAlertState({ open: true, title: '오류', message: '투표 종료에 실패했습니다.' })
+      notify('투표 종료에 실패했습니다.', 'error')
+    }
+  }
+
   // Generate dynamic placeholder examples based on roster
   const bulkPlaceholder = useMemo(() => {
     if (!editingMatch) return "예시:\n[11/08/2025 9:07AM]goal:assist[득점자 도움자]\n[11/08/2025 9:16AM]goal[득점자]\n[11/08/2025 8:05AM]assist[도움자]\n[11/13/2025 9:16AM]cleansheet[김철수 김영희]"
@@ -1337,6 +1356,7 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
             isRefMatch={isRefMatch(momMatch)}
             momManualOpen={momMatch?.stats?.momManualOpen === true}
             onToggleManualOpen={handleMomManualToggle}
+            onForceCloseVoting={handleMomForceCloseVoting}
             tieBreakMeta={{
               applied: momSummary.tieBreakApplied,
               category: momSummary.tieBreakCategory,
