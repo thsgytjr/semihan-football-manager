@@ -352,104 +352,99 @@
         </div>
     </section>
 
-    <!-- App Screenshots Section -->
+    <!-- Demo Section -->
     <section class="py-24 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-stone-50 via-white to-emerald-50/30 relative overflow-hidden">
-        <div class="max-w-7xl mx-auto">
+        <div class="max-w-5xl mx-auto">
             <div class="text-center mb-16 animate-fadeIn">
                 <div class="inline-block px-6 py-2 bg-gradient-to-r from-emerald-500 to-blue-500 text-white rounded-full text-sm font-bold mb-6 shadow-lg">
-                    📱 실제 화면
+                    🎮 체험하기
                 </div>
                 <h2 class="text-5xl lg:text-6xl font-black mb-6 bg-gradient-to-r from-stone-900 via-emerald-900 to-blue-900 bg-clip-text text-transparent">
-                    직접 확인하세요
+                    직접 체험하세요
                 </h2>
-                <p class="text-xl text-stone-600 font-medium max-w-3xl mx-auto">
-                    프로처럼 기록하고, 프로처럼 분석하는 Goalify의 실제 화면입니다.
+                <p class="text-xl text-stone-600 font-medium max-w-3xl mx-auto mb-12">
+                    데모 버전에서 Goalify의 모든 기능을 직접 사용해보세요.<br/>
+                    <span class="font-bold text-emerald-600">실제 데이터로 프로처럼 기록하고 분석</span>하는 경험을 느껴보실 수 있습니다.
                 </p>
             </div>
 
-            <!-- Screenshot Grid -->
-            <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
-                <!-- Match Scoring -->
-                <div class="glass-effect p-6 rounded-3xl card-hover border-2 border-white/50 hover:border-emerald-300/50 transition-all group shadow-xl animate-slideUp">
-                    <div class="aspect-[9/16] rounded-2xl overflow-hidden mb-6 bg-gradient-to-br from-stone-50 to-stone-100 shadow-inner border-2 border-stone-200/50 flex items-center justify-center">
-                        <img src="https://pub-cf56cce5ad30432d9a1d3d9ad6f1d1be.r2.dev/shared/landing-page-assets/GamesScores.jpg" 
-                             alt="경기 점수 기록" 
-                             class="w-full h-full object-contain transform group-hover:scale-105 transition-transform duration-500"
-                             loading="lazy" />
+            <!-- Demo CTA Card -->
+            <div class="glass-effect p-10 rounded-3xl border-2 border-white/50 shadow-2xl animate-slideUp">
+                <div class="flex flex-col md:flex-row items-center gap-8">
+                    <div class="flex-shrink-0">
+                        <div class="h-24 w-24 bg-gradient-to-br from-emerald-500 via-emerald-600 to-blue-600 rounded-3xl flex items-center justify-center shadow-xl animate-float">
+                            <svg class="h-14 w-14 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        </div>
                     </div>
-                    <h3 class="text-xl font-black text-stone-900 mb-2">⚽ 경기 기록</h3>
-                    <p class="text-stone-600 text-sm font-medium leading-relaxed">
-                        실시간으로 골, 어시스트, 카드를 기록하고 즉시 확인하세요.
-                    </p>
+                    <div class="flex-1 text-center md:text-left">
+                        <h3 class="text-3xl font-black text-stone-900 mb-3">샌드박스 데모 체험</h3>
+                        <p class="text-stone-600 text-lg leading-relaxed font-medium mb-6">
+                            회원가입 없이 바로 시작하세요. 경기 기록, 리더보드, MoM 투표, 배지 시스템까지<br/>
+                            <span class="text-emerald-600 font-bold">Goalify의 모든 핵심 기능</span>을 자유롭게 탐험할 수 있습니다.
+                        </p>
+                        <div class="flex flex-col sm:flex-row gap-4 justify-center md:justify-start">
+                            <a href="/?mode=sandbox" class="btn-modern inline-flex items-center justify-center gap-3 px-8 py-4 bg-gradient-to-r from-emerald-500 via-emerald-600 to-green-600 text-white rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl hover:scale-105 transition-all animate-glow">
+                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                데모 체험 시작하기
+                            </a>
+                            <a href="/" class="inline-flex items-center justify-center gap-3 px-8 py-4 bg-white text-emerald-600 border-2 border-emerald-500 rounded-2xl font-bold text-lg shadow-lg hover:shadow-xl hover:scale-105 transition-all">
+                                실전 앱 사용하기
+                                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                </svg>
+                            </a>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- Leaderboard -->
-                <div class="glass-effect p-6 rounded-3xl card-hover border-2 border-white/50 hover:border-purple-300/50 transition-all group shadow-xl animate-slideUp" style="animation-delay: 0.1s;">
-                    <div class="aspect-[9/16] rounded-2xl overflow-hidden mb-6 bg-gradient-to-br from-stone-50 to-stone-100 shadow-inner border-2 border-stone-200/50 flex items-center justify-center">
-                        <img src="https://pub-cf56cce5ad30432d9a1d3d9ad6f1d1be.r2.dev/shared/landing-page-assets/Leaderboard.jpg" 
-                             alt="리더보드" 
-                             class="w-full h-full object-contain transform group-hover:scale-105 transition-transform duration-500"
-                             loading="lazy" />
+                <!-- Demo Features -->
+                <div class="mt-10 pt-8 border-t-2 border-stone-200">
+                    <p class="text-sm font-bold text-stone-500 uppercase tracking-wide mb-4 text-center">데모에서 체험 가능한 기능</p>
+                    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="flex items-center gap-3 p-3 rounded-xl bg-stone-50 border border-stone-200">
+                            <div class="flex-shrink-0 h-10 w-10 bg-emerald-100 rounded-lg flex items-center justify-center">
+                                <span class="text-lg">⚽</span>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-stone-900">경기 기록</p>
+                                <p class="text-xs text-stone-600">실시간 기록 입력</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 p-3 rounded-xl bg-stone-50 border border-stone-200">
+                            <div class="flex-shrink-0 h-10 w-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                                <span class="text-lg">🏆</span>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-stone-900">리더보드</p>
+                                <p class="text-xs text-stone-600">순위 및 통계</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 p-3 rounded-xl bg-stone-50 border border-stone-200">
+                            <div class="flex-shrink-0 h-10 w-10 bg-cyan-100 rounded-lg flex items-center justify-center">
+                                <span class="text-lg">⭐</span>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-stone-900">MoM 투표</p>
+                                <p class="text-xs text-stone-600">최고 선수 선정</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 p-3 rounded-xl bg-stone-50 border border-stone-200">
+                            <div class="flex-shrink-0 h-10 w-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                                <span class="text-lg">🎖️</span>
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-stone-900">배지 시스템</p>
+                                <p class="text-xs text-stone-600">업적 달성</p>
+                            </div>
+                        </div>
                     </div>
-                    <h3 class="text-xl font-black text-stone-900 mb-2">🏆 리더보드</h3>
-                    <p class="text-stone-600 text-sm font-medium leading-relaxed">
-                        득점왕, 어시스트왕, 클린시트까지 모든 순위를 한눈에.
-                    </p>
                 </div>
-
-                <!-- Match Result -->
-                <div class="glass-effect p-6 rounded-3xl card-hover border-2 border-white/50 hover:border-blue-300/50 transition-all group shadow-xl animate-slideUp" style="animation-delay: 0.2s;">
-                    <div class="aspect-[9/16] rounded-2xl overflow-hidden mb-6 bg-gradient-to-br from-stone-50 to-stone-100 shadow-inner border-2 border-stone-200/50 flex items-center justify-center">
-                        <img src="https://pub-cf56cce5ad30432d9a1d3d9ad6f1d1be.r2.dev/shared/landing-page-assets/MatchResult.jpg" 
-                             alt="경기 결과" 
-                             class="w-full h-full object-contain transform group-hover:scale-105 transition-transform duration-500"
-                             loading="lazy" />
-                    </div>
-                    <h3 class="text-xl font-black text-stone-900 mb-2">📊 경기 결과</h3>
-                    <p class="text-stone-600 text-sm font-medium leading-relaxed">
-                        상세한 통계와 함께 경기 결과를 완벽하게 정리합니다.
-                    </p>
-                </div>
-
-                <!-- MoM Vote -->
-                <div class="glass-effect p-6 rounded-3xl card-hover border-2 border-white/50 hover:border-cyan-300/50 transition-all group shadow-xl animate-slideUp" style="animation-delay: 0.3s;">
-                    <div class="aspect-[9/16] rounded-2xl overflow-hidden mb-6 bg-gradient-to-br from-stone-50 to-stone-100 shadow-inner border-2 border-stone-200/50 flex items-center justify-center">
-                        <img src="https://pub-cf56cce5ad30432d9a1d3d9ad6f1d1be.r2.dev/shared/landing-page-assets/MoMVote.jpg" 
-                             alt="MoM 투표" 
-                             class="w-full h-full object-contain transform group-hover:scale-105 transition-transform duration-500"
-                             loading="lazy" />
-                    </div>
-                    <h3 class="text-xl font-black text-stone-900 mb-2">⭐ MoM 투표</h3>
-                    <p class="text-stone-600 text-sm font-medium leading-relaxed">
-                        팀원들이 직접 뽑는 오늘의 최고 선수, Man of the Match.
-                    </p>
-                </div>
-            </div>
-
-            <!-- Secondary Screenshot - Team Roster & Match Videos -->
-            <div class="max-w-2xl mx-auto mb-12">
-                <div class="glass-effect p-5 rounded-2xl card-hover border-2 border-white/50 hover:border-yellow-300/50 transition-all group shadow-xl animate-slideUp" style="animation-delay: 0.4s;">
-                    <div class="aspect-[9/16] rounded-xl overflow-hidden mb-4 bg-gradient-to-br from-stone-50 to-stone-100 shadow-inner border border-stone-200/50 flex items-center justify-center">
-                        <img src="https://pub-cf56cce5ad30432d9a1d3d9ad6f1d1be.r2.dev/shared/landing-page-assets/TeamRoster.jpg" 
-                             alt="팀 로스터 & 매치 영상" 
-                             class="w-full h-full object-contain transform group-hover:scale-105 transition-transform duration-500"
-                             loading="lazy" />
-                    </div>
-                    <h3 class="text-lg font-black text-stone-900 mb-2">👥 팀 로스터 & 🎥 매치 영상링크</h3>
-                    <p class="text-stone-600 text-sm font-medium leading-relaxed">
-                        선수 프로필과 통계를 관리하고, 경기 영상을 쉽게 공유하세요.
-                    </p>
-                </div>
-            </div>
-
-            <!-- Bottom CTA -->
-            <div class="text-center animate-fadeIn" style="animation-delay: 0.5s;">
-                <a href="/" class="inline-flex items-center gap-3 px-10 py-5 bg-gradient-to-r from-emerald-600 to-blue-600 text-white rounded-2xl font-black text-lg shadow-xl hover:shadow-2xl hover:scale-105 transition-all">
-                    지금 바로 시작하기
-                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
-                </a>
             </div>
         </div>
     </section>
