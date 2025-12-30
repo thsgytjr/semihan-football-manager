@@ -27,7 +27,9 @@
     "adminMode": "Admin Mode",
     "adminModeActive": "Admin Mode Activated",
     "adminModeDisabled": "Admin Mode Disabled",
-    "adminOnly": "Admin only"
+    "adminOnly": "Admin only",
+    "sandboxLoginTitle": "Sandbox tip",
+    "sandboxLoginBody": "Press the top-right Admin Login button to unlock admin features in this sandbox."
   },
   "common": {
     "add": "Add",

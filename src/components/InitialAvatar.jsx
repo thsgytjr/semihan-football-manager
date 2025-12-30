@@ -3,7 +3,7 @@ import captainIcon from "../assets/Captain.PNG"
 import { getMembershipBadge } from "../lib/membershipConfig"
 import { optimizeImageUrl } from "../utils/imageOptimization"
 import useCachedImage from "../hooks/useCachedImage"
-import { generatePlayerAvatar, isDicebearAvatar } from "../lib/avatarGenerator"
+import { generatePlayerAvatar, isDicebearAvatar, sanitizeOpenPeepsUrl } from "../lib/avatarGenerator"
 
 /**
  * InitialAvatar
@@ -36,8 +36,8 @@ function InitialAvatar({ id, playerId, name, size = 24, badges = [], photoUrl = 
   if (!actualPhotoUrl && effectiveId && name) {
     actualPhotoUrl = generatePlayerAvatar(effectiveId, name)
   } else if (actualPhotoUrl && isDicebearAvatar(actualPhotoUrl)) {
-    // 이미 DiceBear URL이면 그대로 사용
-    actualPhotoUrl = photoUrl
+    // 이미 DiceBear URL이면 허용된 head/mask만 유지
+    actualPhotoUrl = sanitizeOpenPeepsUrl(photoUrl, `${effectiveId}-${name||''}`)
   } else if (!isRealPhoto && effectiveId && name) {
     // 실제 사진이 아니면 아바타로 대체
     actualPhotoUrl = generatePlayerAvatar(effectiveId, name)

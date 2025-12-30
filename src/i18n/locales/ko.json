@@ -23,7 +23,9 @@
     "adminMode": "Admin 모드",
     "adminModeActive": "Admin 모드 활성화",
     "adminModeDisabled": "Admin 모드 해제",
-    "adminOnly": "Admin만 가능합니다."
+    "adminOnly": "Admin만 가능합니다.",
+    "sandboxLoginTitle": "샌드박스 안내",
+    "sandboxLoginBody": "Admin 기능을 사용하려면 오른쪽 상단의 Admin 로그인 버튼을 눌러주세요."
   },
   "common": {
     "add": "추가",

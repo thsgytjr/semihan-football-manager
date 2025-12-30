@@ -63,7 +63,7 @@ function App(){
   const[tab,setTab]=useState("dashboard"),[db,setDb]=useState({players:[],matches:[],visits:0,upcomingMatches:[],tagPresets:[],membershipSettings:[]}),[selectedPlayerId,setSelectedPlayerId]=useState(null)
   const[isAdmin,setIsAdmin]=useState(false),[isAnalyticsAdmin,setIsAnalyticsAdmin]=useState(false),[isSandboxGuest,setIsSandboxGuest]=useState(()=>{
     try { return sessionStorage.getItem('sandboxGuest') === '1' } catch { return false }
-  }),[loginOpen,setLoginOpen]=useState(false)
+  }),[loginOpen,setLoginOpen]=useState(false),[showSandboxLoginHint,setShowSandboxLoginHint]=useState(false)
   const[loading,setLoading]=useState(true)
   const[pageLoading,setPageLoading]=useState(false)
   const[loadError,setLoadError]=useState(null)
@@ -188,6 +188,14 @@ function App(){
     window.location.hash = '' // URL hash 정리
   }
 
+  useEffect(()=>{
+    if(!isSandboxMode){
+      setShowSandboxLoginHint(false)
+      return
+    }
+    setShowSandboxLoginHint(!isAdmin && !isSandboxGuest)
+  },[isSandboxMode,isAdmin,isSandboxGuest])
+
   // 샌드박스 게스트 세션 복원
   useEffect(() => {
     if (!isSandboxMode) return
@@ -220,6 +228,10 @@ function App(){
     setShowAuthError(false)
     setLoginOpen(true)
   }
+
+  const handleDismissSandboxLoginHint = useCallback(()=>{
+    setShowSandboxLoginHint(false)
+  },[])
 
   // Supabase Auth: 앱 시작 시 세션 확인
   useEffect(()=>{
@@ -1952,15 +1964,39 @@ function App(){
                   </button>
                 </>
               ):(
-                <button
-                  onClick={()=>setLoginOpen(true)}
-                  aria-label={t('auth.login')}
-                  title={t('auth.login')}
-                  className="inline-flex items-center rounded-lg border border-stone-300 bg-gradient-to-r from-emerald-500 to-emerald-600 p-2.5 sm:p-3 text-sm font-semibold text-white shadow-sm hover:from-emerald-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 min-h-[42px] min-w-[42px] sm:min-h-[44px] sm:min-w-[44px] touch-manipulation transition-all duration-200 active:scale-95"
-                  style={{touchAction: 'manipulation'}}
-                >
-                  <Lock size={16}/>
-                </button>
+                <div className="relative">
+                  <button
+                    onClick={()=>{setLoginOpen(true);setShowSandboxLoginHint(false)}}
+                    aria-label={t('auth.login')}
+                    title={t('auth.login')}
+                    className={`relative inline-flex items-center rounded-lg border border-stone-300 bg-gradient-to-r from-emerald-500 to-emerald-600 p-2.5 sm:p-3 text-sm font-semibold text-white shadow-sm hover:from-emerald-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 min-h-[42px] min-w-[42px] sm:min-h-[44px] sm:min-w-[44px] touch-manipulation transition-all duration-200 active:scale-95 ${showSandboxLoginHint?'ring-2 ring-offset-2 ring-offset-white ring-emerald-300 shadow-lg shadow-emerald-200':''}`}
+                    style={{touchAction: 'manipulation'}}
+                  >
+                    {showSandboxLoginHint && (
+                      <span className="pointer-events-none absolute inset-[-8px] rounded-xl bg-emerald-300/35 blur-md animate-ping" aria-hidden></span>
+                    )}
+                    <Lock size={16}/>
+                  </button>
+                  {showSandboxLoginHint && (
+                    <div className="absolute right-0 top-full mt-2 w-[240px] rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs text-emerald-900 shadow-lg shadow-emerald-100 z-30">
+                      <div className="absolute right-6 -top-1 h-2 w-2 rotate-45 border border-emerald-200 border-b-0 border-r-0 bg-emerald-50"></div>
+                      <button
+                        onClick={handleDismissSandboxLoginHint}
+                        aria-label={t('common.close')}
+                        className="absolute -right-1 -top-1 rounded-full bg-white/80 p-1 text-emerald-600 shadow hover:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                      >
+                        <X size={12}/>
+                      </button>
+                      <div className="flex gap-2 pr-4">
+                        <Lock size={14} className="mt-[2px] text-emerald-600"/>
+                        <div className="space-y-0.5 leading-snug">
+                          <p className="font-semibold">{t('auth.sandboxLoginTitle')}</p>
+                          <p className="text-emerald-800">{t('auth.sandboxLoginBody')}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
