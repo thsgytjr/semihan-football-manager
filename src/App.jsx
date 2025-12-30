@@ -43,6 +43,7 @@ const AccountingPage=lazy(()=>import("./pages/AccountingPage"))
 const AnalyticsPage=lazy(()=>import("./pages/AnalyticsPage"))
 const InviteSetupPage=lazy(()=>import("./pages/InviteSetupPage"))
 const AuthLinkErrorPage=lazy(()=>import("./pages/AuthLinkErrorPage"))
+const SettingsPage=lazy(()=>import("./pages/SettingsPage"))
 
 // 타임아웃 래퍼 유틸리티
 const withTimeout = (promise, ms, label) => {
@@ -70,7 +71,6 @@ function App(){
   const[loadAttempt,setLoadAttempt]=useState(0)
   const[serverOutage,setServerOutage]=useState(false)
   const[appTitle,setAppTitle]=useState(()=>getAppSettings().appTitle)
-  const[settingsOpen,setSettingsOpen]=useState(false)
   const[seasonRecapEnabled,setSeasonRecapEnabled]=useState(()=>getAppSettings().seasonRecapEnabled)
   const[maintenanceMode,setMaintenanceMode]=useState(()=>getAppSettings().maintenanceMode||false)
   const[featuresEnabled,setFeaturesEnabled]=useState(()=>getAppSettings().features||{})
@@ -818,7 +818,8 @@ function App(){
     { key: 'formation', icon: <IconPitch size={16}/>, label: t('nav.formation'), show: featuresEnabled.formation },
     { key: 'stats', icon: <ListChecks size={16}/>, label: t('nav.stats'), show: sandboxUnlocked && (featuresEnabled.stats ?? true) },
     { key: 'accounting', icon: <DollarSign size={16}/>, label: t('nav.accounting'), show: isAdmin && (featuresEnabled.accounting ?? true) },
-    { key: 'analytics', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, label: t('nav.analytics'), show: isAnalyticsAdmin && featuresEnabled.analytics }
+    { key: 'analytics', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, label: t('nav.analytics'), show: isAnalyticsAdmin && featuresEnabled.analytics },
+    { key: 'settings', icon: <Settings size={16}/>, label: t('common.settings'), show: isAdmin }
   ], [sandboxUnlocked, isAdmin, isAnalyticsAdmin, featuresEnabled, t]);
 
   const playerStatsModalEnabled = featuresEnabled?.playerStatsModal ?? (featuresEnabled?.playerFunFacts ?? true)
@@ -1945,7 +1946,7 @@ function App(){
               {isAdmin?(
                 <>
                   <button
-                    onClick={()=>setSettingsOpen(true)}
+                    onClick={()=>handleTabChange('settings')}
                     aria-label={t('common.settings')}
                     title={t('common.settings')}
                     className="inline-flex items-center rounded-lg bg-stone-100 p-2.5 sm:p-3 text-sm font-semibold text-stone-700 shadow-sm hover:bg-stone-200 focus:outline-none focus:ring-2 focus:ring-stone-400 min-h-[42px] min-w-[42px] sm:min-h-[44px] sm:min-w-[44px] touch-manipulation transition-all duration-200 active:scale-95"
@@ -2162,6 +2163,28 @@ function App(){
                   </Suspense>
                 </ErrorBoundary>
               )}
+              {tab==="settings"&&isAdmin&&(
+                <ErrorBoundary componentName="SettingsPage">
+                  <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('common.loading')}</div>}>
+                    <SettingsPage
+                      appTitle={appTitle}
+                      onTitleChange={setAppTitle}
+                      seasonRecapEnabled={seasonRecapEnabled}
+                      onSeasonRecapToggle={handleSeasonRecapToggle}
+                      maintenanceMode={maintenanceMode}
+                      onMaintenanceModeToggle={handleMaintenanceModeToggle}
+                      featuresEnabled={featuresEnabled}
+                      onFeatureToggle={handleFeatureToggle}
+                      onLeaderboardToggle={handleLeaderboardToggle}
+                      badgeTierOverrides={badgeTierOverrides}
+                      onSaveBadgeTierOverrides={handleSaveBadgeTierOverrides}
+                      isAdmin={isAdmin}
+                      isAnalyticsAdmin={isAnalyticsAdmin}
+                      visits={visits}
+                    />
+                  </Suspense>
+                </ErrorBoundary>
+              )}
             </>
           )}
         </div>
@@ -2173,7 +2196,6 @@ function App(){
     </footer>
 
     <AdminLoginDialog isOpen={loginOpen} onClose={()=>setLoginOpen(false)} onSuccess={onAdminSuccess}/>
-  <SettingsDialog isOpen={settingsOpen} onClose={()=>setSettingsOpen(false)} appTitle={appTitle} onTitleChange={setAppTitle} seasonRecapEnabled={seasonRecapEnabled} onSeasonRecapToggle={handleSeasonRecapToggle} maintenanceMode={maintenanceMode} onMaintenanceModeToggle={handleMaintenanceModeToggle} featuresEnabled={featuresEnabled} onFeatureToggle={handleFeatureToggle} onLeaderboardToggle={handleLeaderboardToggle} badgeTierOverrides={badgeTierOverrides} onSaveBadgeTierOverrides={handleSaveBadgeTierOverrides} isAdmin={isAdmin} isAnalyticsAdmin={isAnalyticsAdmin} visits={visits}/>
   </div>)}
 const TabButton = React.memo(function TabButton({icon,label,active,onClick,loading}){return(<button onClick={onClick} disabled={loading} title={label} aria-label={label} className={`flex items-center gap-1.5 rounded-md px-2.5 py-2.5 sm:px-3 sm:py-3 text-sm transition-all duration-200 min-h-[42px] sm:min-h-[44px] touch-manipulation whitespace-nowrap ${active?"bg-emerald-500 text-white shadow-md":"text-stone-700 hover:bg-stone-200 active:bg-stone-300 active:scale-95"} ${loading?"opacity-75 cursor-wait":""}`} style={{touchAction: 'manipulation'}} aria-pressed={active}>{loading && active ? <svg className="w-4 h-4 animate-spin flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" opacity="0.25"/><path fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg> : <span className="w-4 h-4 flex-shrink-0">{icon}</span>}{active && <span className="text-xs font-semibold hidden sm:inline">{label}</span>}</button>)})
 
