@@ -2034,7 +2034,7 @@ function App(){
                     totals={totals}
                     players={publicPlayers}
                     matches={matches}
-                    isAdmin={true}
+                    isAdmin={isAdmin || isSandboxGuest}
                     onUpdateMatch={handleUpdateMatch}
                     upcomingMatches={db.upcomingMatches}
                     onSaveUpcomingMatch={handleSaveUpcomingMatch}
