@@ -13,6 +13,7 @@ import{filterExpiredMatches, normalizeDateISO}from"./lib/upcomingMatch"
 import{getOrCreateVisitorId,getVisitorIP,parseUserAgent,shouldTrackVisit,isPreviewMode,isDevelopmentEnvironment}from"./lib/visitorTracking"
 import{signInAdmin,signOut,getSession,onAuthStateChange,isDeveloperEmail}from"./lib/auth"
 import{logger}from"./lib/logger"
+import{TEAM_CONFIG}from"./lib/teamConfig"
 
 // 개발자 이메일 설정
 const DEVELOPER_EMAIL = 'sonhyosuck@gmail.com'
@@ -58,6 +59,7 @@ const withTimeout = (promise, ms, label) => {
 
 function App(){
   const { t } = useTranslation()
+  const isSandboxMode = TEAM_CONFIG.sandboxMode || false
   const[tab,setTab]=useState("dashboard"),[db,setDb]=useState({players:[],matches:[],visits:0,upcomingMatches:[],tagPresets:[],membershipSettings:[]}),[selectedPlayerId,setSelectedPlayerId]=useState(null)
   const[isAdmin,setIsAdmin]=useState(false),[isAnalyticsAdmin,setIsAnalyticsAdmin]=useState(false),[loginOpen,setLoginOpen]=useState(false)
   const[loading,setLoading]=useState(true)
@@ -438,6 +440,9 @@ function App(){
 
   // 2) 실시간 구독은 최초 1회만 설정 (재시도와 분리)
   useEffect(()=>{
+    // Sandbox Mode: 샌드박스 모드에서는 게스트의 로컬 변경사항을 보존하기 위해 구독 비활성화
+    if (isSandboxMode && !isAdmin) return
+
     const offP=subscribePlayers(list=>setDb(prev=>({...prev,players:list})))
 
     // Matches 구독: USE_MATCHES_TABLE 플래그에 따라 분기
@@ -485,7 +490,7 @@ function App(){
       offVisitTotals?.()
       offMembership?.()
     }
-  },[])
+  },[isAdmin])
 
   const rawPlayers=db.players||[],matches=db.matches||[],visits=typeof db.visits==="number"?db.visits:0,upcomingMatches=db.upcomingMatches||[],membershipSettings=db.membershipSettings||[]
   const players=useMemo(()=>{
@@ -734,6 +739,13 @@ function App(){
       ...prev,
       players:[sysPlayer,...(prev.players||[])]
     }))
+    
+    if(isSandboxMode && !isAdmin) {
+      // Sandbox Mode
+      notify('시스템 계정을 만들었어요. (Demo Mode)')
+      return sysPlayer
+    }
+
     try{
       await upsertPlayer(sysPlayer)
       notify('시스템 계정을 만들었어요. 회계에서 자동으로 사용됩니다.')
@@ -747,7 +759,7 @@ function App(){
       notify('시스템 계정 생성에 실패했습니다. 다시 시도해주세요.', 'error')
       throw err
     }
-  },[systemAccount])
+  },[systemAccount, isAdmin])
 
   // 탭 전환 함수 메모이제이션 (즉시 반영 + 로딩 상태)
   const handleTabChange = useCallback((newTab) => {
@@ -770,11 +782,11 @@ function App(){
   // 메모이제이션된 탭 버튼들
   const tabButtons = useMemo(() => [
     { key: 'dashboard', icon: <Home size={16}/>, label: t('nav.dashboard'), show: true },
-    { key: 'players', icon: <Users size={16}/>, label: t('nav.players'), show: isAdmin && featuresEnabled.players },
-    { key: 'planner', icon: <CalendarDays size={16}/>, label: t('nav.planner'), show: isAdmin && featuresEnabled.planner },
-    { key: 'draft', icon: <Shuffle size={16}/>, label: t('nav.draft'), show: isAdmin && featuresEnabled.draft },
+    { key: 'players', icon: <Users size={16}/>, label: t('nav.players'), show: isSandboxMode || (isAdmin && featuresEnabled.players) },
+    { key: 'planner', icon: <CalendarDays size={16}/>, label: t('nav.planner'), show: isSandboxMode || (isAdmin && featuresEnabled.planner) },
+    { key: 'draft', icon: <Shuffle size={16}/>, label: t('nav.draft'), show: isSandboxMode || (isAdmin && featuresEnabled.draft) },
     { key: 'formation', icon: <IconPitch size={16}/>, label: t('nav.formation'), show: featuresEnabled.formation },
-    { key: 'stats', icon: <ListChecks size={16}/>, label: t('nav.stats'), show: isAdmin && featuresEnabled.stats },
+    { key: 'stats', icon: <ListChecks size={16}/>, label: t('nav.stats'), show: isSandboxMode || (isAdmin && featuresEnabled.stats) },
   { key: 'accounting', icon: <DollarSign size={16}/>, label: t('nav.accounting'), show: isAdmin && (featuresEnabled.accounting ?? true) },
     { key: 'analytics', icon: <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>, label: t('nav.analytics'), show: isAnalyticsAdmin && featuresEnabled.analytics }
   ], [isAdmin, isAnalyticsAdmin, featuresEnabled, t]);
@@ -784,11 +796,19 @@ function App(){
   const maintenanceActive = (maintenanceMode || serverOutage || new URLSearchParams(window.location.search).has('maintenance')) && !isAnalyticsAdmin
 
   // ⬇️ 기존 기본값 생성 방식은 유지(필요시 다른 곳에서 사용)
-  async function handleCreatePlayer(){if(!isAdmin)return notify(t('auth.adminOnly'));const p=mkPlayer(t('player.newPlayer'),"MF");setDb(prev=>({...prev,players:[p,...(prev.players||[])]}));setSelectedPlayerId(p.id);notify(t('player.playerAdded'));try{await upsertPlayer(p)}catch(e){logger.error(e)}}
+  async function handleCreatePlayer(){
+    const p=mkPlayer(t('player.newPlayer'),"MF");
+    setDb(prev=>({...prev,players:[p,...(prev.players||[])]}));
+    setSelectedPlayerId(p.id);
+    notify(t('player.playerAdded'));
+    
+    if(isSandboxMode && !isAdmin) return; // Sandbox mode: Local only
+    
+    try{await upsertPlayer(p)}catch(e){logger.error(e)}
+  }
 
   // ✅ 모달에서 넘어온 patch를 그대로 저장(OVR=50 초기화 문제 해결)
   async function handleCreatePlayerFromModal(patch){
-    if(!isAdmin) return notify(t('auth.adminOnly'));
     const base = mkPlayer(patch?.name || t('player.newPlayer'), patch?.position || "");
     const playerToSave = {
       ...base,
@@ -798,14 +818,27 @@ function App(){
     // 프론트 상태 업데이트
     setDb(prev => ({ ...prev, players: [playerToSave, ...(prev.players||[])] }));
     setSelectedPlayerId(playerToSave.id);
-    notify("새 선수가 추가되었어요.");
+    notify(isSandboxMode && !isAdmin ? "새 선수가 추가되었어요. (Demo Mode)" : "새 선수가 추가되었어요.");
+    
+    if(isSandboxMode && !isAdmin) return; // Sandbox mode: Local only
+
     // DB 반영
     try { await upsertPlayer(playerToSave); }
     catch(e){ logger.error(e); }
   }
 
-  async function handleUpdatePlayer(next){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,players:(prev.players||[]).map(x=>x.id===next.id?next:x)}));try{await upsertPlayer(next)}catch(e){logger.error(e)}}
-  async function handleDeletePlayer(id){if(!isAdmin)return notify("Admin만 가능합니다.");setDb(prev=>({...prev,players:(prev.players||[]).filter(p=>p.id!==id)}));if(selectedPlayerId===id)setSelectedPlayerId(null);try{await deletePlayer(id);notify("선수를 삭제했습니다.")}catch(e){logger.error(e)}}
+  async function handleUpdatePlayer(next){
+    setDb(prev=>({...prev,players:(prev.players||[]).map(x=>x.id===next.id?next:x)}));
+    if(isSandboxMode && !isAdmin) return; // Sandbox mode: Local only
+    try{await upsertPlayer(next)}catch(e){logger.error(e)}
+  }
+  async function handleDeletePlayer(id){
+    setDb(prev=>({...prev,players:(prev.players||[]).filter(p=>p.id!==id)}));
+    if(selectedPlayerId===id)setSelectedPlayerId(null);
+    notify(isSandboxMode && !isAdmin ? "선수를 삭제했습니다. (Demo Mode)" : "선수를 삭제했습니다.");
+    if(isSandboxMode && !isAdmin) return; // Sandbox mode: Local only
+    try{await deletePlayer(id);}catch(e){logger.error(e)}
+  }
   async function handleImportPlayers(list){
     if(!isAdmin)return notify("Admin만 가능합니다.")
     const safe=Array.isArray(list)?list:[]
@@ -834,8 +867,6 @@ function App(){
     }
   }
   async function handleSaveMatch(match){
-    if(!isAdmin)return notify("Admin만 가능합니다.")
-    
     try {
       const normalizeMatchDateISO = (v) => {
         if(!v) return v
@@ -849,6 +880,14 @@ function App(){
       const matchWithDate = {
         ...match,
         dateISO: normalizeMatchDateISO(match?.dateISO)
+      }
+
+      if (isSandboxMode && !isAdmin) {
+        // Sandbox Mode: Local Only
+        const fakeSaved = { ...matchWithDate, id: matchWithDate.id || Date.now() };
+        setDb(prev=>({...prev,matches:[...(prev.matches||[]),fakeSaved]}))
+        notify("매치가 저장되었습니다. (Demo Mode)")
+        return;
       }
 
       if (USE_MATCHES_TABLE) {
@@ -871,9 +910,15 @@ function App(){
   }
   
   async function handleDeleteMatch(id){
-    if(!isAdmin)return notify("Admin만 가능합니다.")
-    
     try {
+      if (isSandboxMode && !isAdmin) {
+        // Sandbox Mode: Local Only
+        const next=(db.matches||[]).filter(m=>m.id!==id)
+        setDb(prev=>({...prev,matches:next}))
+        notify("매치를 삭제했습니다. (Demo Mode)")
+        return;
+      }
+
       if (USE_MATCHES_TABLE) {
         // Supabase matches 테이블에서 삭제
         await deleteMatchFromDB(id)
@@ -1141,9 +1186,6 @@ function App(){
   }
   
   async function handleUpdateMatch(id, patch, silent = false){
-    const canEditMatches = isAdmin || isRefModeLink
-    if(!canEditMatches)return notify("Admin만 가능합니다.")
-
     const normalizeMatchDateISO = (v) => {
       if(!v) return v
       // \uc774\ubbf8 UTC \ud615\uc2dd\uc774\uba74 \uadf8\ub300\ub85c \uc0ac\uc6a9
@@ -1154,6 +1196,18 @@ function App(){
     }
 
     const patched = patch?.dateISO ? { ...patch, dateISO: normalizeMatchDateISO(patch.dateISO) } : patch
+    
+    const canPersist = isAdmin || (isSandboxMode ? false : isRefModeLink);
+
+    if (!canPersist) {
+      // Sandbox Mode: Local Only
+      setDb(prev=>{
+        const next=(prev.matches||[]).map(m=>m.id===id?{...m,...patched}:m)
+        return {...prev,matches:next}
+      })
+      if (!silent) notify(isSandboxMode && !isAdmin ? "업데이트되었습니다. (Demo Mode)" : "업데이트되었습니다.")
+      return;
+    }
     
     try {
       if (USE_MATCHES_TABLE) {
@@ -1197,8 +1251,19 @@ function App(){
   }
   
   async function handleSaveUpcomingMatch(upcomingMatch){
-    if(!isAdmin)return notify("Admin만 가능합니다.");
     const normalized={...upcomingMatch,dateISO:normalizeDateISO(upcomingMatch.dateISO)}
+    
+    if(isSandboxMode && !isAdmin) {
+      // Sandbox Mode
+      const fakeCreated = { ...normalized, id: normalized.id || Date.now() };
+      setDb(prev=>{
+        const next=filterExpiredMatches([...(prev.upcomingMatches||[]),fakeCreated])
+        return {...prev,upcomingMatches:next}
+      })
+      notify("예정된 매치가 저장되었습니다. (Demo Mode)")
+      return;
+    }
+
     try{
       const created=await createUpcomingMatchRecord(normalized)
       setDb(prev=>{
@@ -1212,7 +1277,16 @@ function App(){
     }
   }
   async function handleDeleteUpcomingMatch(id){
-    if(!isAdmin)return notify("Admin만 가능합니다.");
+    if(isSandboxMode && !isAdmin) {
+      // Sandbox Mode
+      setDb(prev=>{
+        const next=(prev.upcomingMatches||[]).filter(m=>m.id!==id)
+        return {...prev,upcomingMatches:next}
+      })
+      notify('예정된 매치를 삭제했습니다. (Demo Mode)')
+      return;
+    }
+
     const target=(db.upcomingMatches||[]).find(m=>m.id===id)
     try{
       await deleteUpcomingMatchRecord(id)
@@ -1228,7 +1302,6 @@ function App(){
     }
   }
   async function handleUpdateUpcomingMatch(id,patch,silent=false){
-    if(!isAdmin)return notify("Admin만 가능합니다.");
     const before=(db.upcomingMatches||[]).find(m=>m.id===id)
     if(!before){console.warn('[UpcomingMatch] update target missing',id);return}
 
@@ -1258,6 +1331,18 @@ function App(){
     // 변경이 없는 경우 조기 종료
     const hasChange=Object.keys(sanitized).length>0
     if(!hasChange){ if(!silent) notify('변경사항이 없습니다.'); return }
+
+    if(isSandboxMode && !isAdmin) {
+      // Sandbox Mode
+      const saved = { ...before, ...sanitized, id };
+      setDb(prev=>{
+        const nextList=(prev.upcomingMatches||[]).map(m=>m.id===id?saved:m)
+        const filtered=filterExpiredMatches(nextList)
+        return {...prev,upcomingMatches:filtered}
+      })
+      if(!silent)notify("예정된 매치가 업데이트되었습니다. (Demo Mode)")
+      return;
+    }
 
     const payload={...before,...sanitized,id}
     try{
@@ -1294,7 +1379,13 @@ function App(){
 
   // 태그 프리셋 관리
   async function handleSaveTagPresets(tagPresets){
-    if(!isAdmin)return notify("Admin만 가능합니다.");
+    if(isSandboxMode && !isAdmin) {
+      // Sandbox Mode
+      setDb(prev=>({...prev,tagPresets:tagPresets}))
+      notify("태그 프리셋이 저장되었습니다. (Demo Mode)")
+      return;
+    }
+
     try{
       await Promise.all((tagPresets||[]).map((preset,index)=>{
         if(preset?.id){
@@ -1311,7 +1402,14 @@ function App(){
     }
   }
   async function handleAddTagPreset(preset){
-    if(!isAdmin)return notify("Admin만 가능합니다.");
+    if(isSandboxMode && !isAdmin) {
+      // Sandbox Mode
+      const fakeCreated = { ...preset, id: Date.now(), sortOrder: (db.tagPresets?.length)||0 };
+      setDb(prev=>({...prev,tagPresets:[...(prev.tagPresets||[]),fakeCreated]}))
+      notify('태그 프리셋이 추가되었습니다. (Demo Mode)')
+      return;
+    }
+
     try{
       const sortOrder=(db.tagPresets?.length)||0
       const created=await createTagPresetRecord({...preset,sortOrder})
@@ -1323,12 +1421,37 @@ function App(){
     }
   }
   async function handleUpdateTagPreset(index,updatedPreset){
-    if(!isAdmin)return notify("Admin만 가능합니다.");
     const tags=db.tagPresets||[]
     const oldPreset=tags[index]
     if(!oldPreset)return
 
     const merged={...oldPreset,...updatedPreset}
+
+    if(isSandboxMode && !isAdmin) {
+      // Sandbox Mode
+      const updatedPlayers=(db.players||[]).map(player=>{
+        if(!player.tags||player.tags.length===0)return player
+        let modified=false
+        const updatedTags=player.tags.map(tag=>{
+          if(tag.name===oldPreset.name&&tag.color===oldPreset.color){
+            modified=true
+            return merged
+          }
+          return tag
+        })
+        if(!modified)return player
+        return {...player,tags:updatedTags}
+      })
+
+      setDb(prev=>({
+        ...prev,
+        tagPresets:(prev.tagPresets||[]).map((p,i)=>i===index?merged:p),
+        players:updatedPlayers
+      }))
+      notify("태그 프리셋이 업데이트되었습니다. (Demo Mode)")
+      return;
+    }
+
     try{
       const saved=await updateTagPresetRecord(oldPreset.id,merged)
       const changedPlayers=[]
@@ -1362,10 +1485,27 @@ function App(){
     }
   }
   async function handleDeleteTagPreset(index){
-    if(!isAdmin)return notify("Admin만 가능합니다.");
     const tagPresets=db.tagPresets||[]
     const deletedPreset=tagPresets[index]
     if(!deletedPreset)return
+
+    if(isSandboxMode && !isAdmin) {
+      // Sandbox Mode
+      const updatedPlayers=(db.players||[]).map(player=>{
+        if(!player.tags||player.tags.length===0)return player
+        const filteredTags=player.tags.filter(tag=>!(tag.name===deletedPreset.name&&tag.color===deletedPreset.color))
+        if(filteredTags.length===player.tags.length)return player
+        return {...player,tags:filteredTags}
+      })
+
+      setDb(prev=>({
+        ...prev,
+        tagPresets:(prev.tagPresets||[]).filter((_,i)=>i!==index),
+        players:updatedPlayers
+      }))
+      notify("태그 프리셋이 삭제되었습니다. (Demo Mode)")
+      return;
+    }
 
     try{
       await deleteTagPresetRecord(deletedPreset.id)
@@ -1863,7 +2003,7 @@ function App(){
                     totals={totals}
                     players={publicPlayers}
                     matches={matches}
-                    isAdmin={isAdmin}
+                    isAdmin={true}
                     onUpdateMatch={handleUpdateMatch}
                     upcomingMatches={db.upcomingMatches}
                     onSaveUpcomingMatch={handleSaveUpcomingMatch}
@@ -1880,7 +2020,7 @@ function App(){
                   />
                 </ErrorBoundary>
               )}
-              {tab==="players"&&isAdmin&&featuresEnabled.players&&(
+              {tab==="players"&&(isSandboxMode || (isAdmin && featuresEnabled.players))&&(
                 <ErrorBoundary componentName="PlayersPage">
                   <PlayersPage
                     players={players}
@@ -1898,21 +2038,21 @@ function App(){
                     onDeleteTagPreset={handleDeleteTagPreset}
                     membershipSettings={db.membershipSettings||[]}
                     onSaveMembershipSettings={handleSaveMembershipSettings}
-                    isAdmin={isAdmin}
+                    isAdmin={true}
                     systemAccount={systemAccount}
                     onEnsureSystemAccount={handleEnsureSystemAccount}
                   />
                 </ErrorBoundary>
               )}
-              {tab==="planner"&&isAdmin&&featuresEnabled.planner&&(
+              {tab==="planner"&&(isSandboxMode || (isAdmin && featuresEnabled.planner))&&(
                 <ErrorBoundary componentName="MatchPlanner">
                   <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.planner')}</div>}>
-                    <MatchPlanner players={publicPlayers} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={isAdmin} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch} membershipSettings={db.membershipSettings||[]} onStartRefereeMode={handleStartRefereeMode}/>
+                    <MatchPlanner players={publicPlayers} matches={matches} onSaveMatch={handleSaveMatch} onDeleteMatch={handleDeleteMatch} onUpdateMatch={handleUpdateMatch} isAdmin={true} upcomingMatches={db.upcomingMatches} onSaveUpcomingMatch={handleSaveUpcomingMatch} onDeleteUpcomingMatch={handleDeleteUpcomingMatch} onUpdateUpcomingMatch={handleUpdateUpcomingMatch} membershipSettings={db.membershipSettings||[]} onStartRefereeMode={handleStartRefereeMode}/>
                   </Suspense>
                 </ErrorBoundary>
               )}
 
-              {tab==="draft"&&isAdmin&&featuresEnabled.draft&&(
+              {tab==="draft"&&(isSandboxMode || (isAdmin && featuresEnabled.draft))&&(
                 <ErrorBoundary componentName="DraftPage">
                   <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.draft')}</div>}>
                     <DraftPage players={publicPlayers} upcomingMatches={db.upcomingMatches} onUpdateUpcomingMatch={handleUpdateUpcomingMatch}/>
@@ -1922,18 +2062,18 @@ function App(){
               {tab==="formation"&&featuresEnabled.formation&&(
                 <ErrorBoundary componentName="FormationBoard">
                   <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.formation')}</div>}>
-                    <FormationBoard players={publicPlayers} isAdmin={isAdmin} fetchMatchTeams={fetchMatchTeams}/>
+                    <FormationBoard players={publicPlayers} isAdmin={true} fetchMatchTeams={fetchMatchTeams}/>
                   </Suspense>
                 </ErrorBoundary>
               )}
-              {tab==="stats"&&isAdmin&&featuresEnabled.stats&&(
+              {tab==="stats"&&(isSandboxMode || (isAdmin && featuresEnabled.stats))&&(
                 <ErrorBoundary componentName="StatsInput">
                   <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.stats')}</div>}>
                     <StatsInput 
                       players={publicPlayers} 
                       matches={matches} 
                       onUpdateMatch={handleUpdateMatch} 
-                      isAdmin={isAdmin}
+                      isAdmin={true}
                       cardsFeatureEnabled={featuresEnabled?.cards ?? true}
                       cardTypesEnabled={featuresEnabled?.cardTypes ?? { yellow: true, red: true, black: true }}
                       onStartRefereeMode={handleStartRefereeMode}
@@ -1941,10 +2081,10 @@ function App(){
                   </Suspense>
                 </ErrorBoundary>
               )}
-                {tab==="accounting"&&isAdmin&&featuresEnabled.accounting&&(
+                {tab==="accounting"&&(isSandboxMode || (isAdmin && (featuresEnabled.accounting ?? true)))&&(
                   <ErrorBoundary componentName="AccountingPage">
                     <Suspense fallback={<div className="p-6 text-sm text-stone-500">{t('skeleton.accounting')}</div>}>
-                      <AccountingPage players={players} matches={matches} upcomingMatches={db.upcomingMatches} isAdmin={isAdmin}/>
+                      <AccountingPage players={players} matches={matches} upcomingMatches={db.upcomingMatches} isAdmin={true}/>
                     </Suspense>
                   </ErrorBoundary>
                 )}

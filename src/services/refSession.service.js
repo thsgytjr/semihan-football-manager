@@ -25,6 +25,20 @@ let sessionTableAvailable = true
 export async function upsertRefSession(matchId, gameIndex, sessionData) {
   if (!matchId || !sessionTableAvailable || blockWrites) return null
   
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger?.warn?.('[upsertRefSession] Sandbox mode: Guest write blocked')
+        return null
+      }
+    } catch (e) {
+      logger?.warn?.('[upsertRefSession] Session check failed, blocking write', e)
+      return null
+    }
+  }
+  
   try {
     const payload = {
       match_id: matchId,
@@ -64,6 +78,20 @@ export async function upsertRefSession(matchId, gameIndex, sessionData) {
 export async function cancelRefSession(matchId, gameIndex) {
   if (!matchId || !sessionTableAvailable || blockWrites) return false
   
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger?.warn?.('[cancelRefSession] Sandbox mode: Guest write blocked')
+        return false
+      }
+    } catch (e) {
+      logger?.warn?.('[cancelRefSession] Session check failed, blocking write', e)
+      return false
+    }
+  }
+  
   try {
     const { error } = await supabase
       .from(TABLE)
@@ -96,6 +124,20 @@ export async function cancelRefSession(matchId, gameIndex) {
 export async function completeRefSession(matchId, gameIndex) {
   if (!matchId || !sessionTableAvailable || blockWrites) return false
   
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger?.warn?.('[completeRefSession] Sandbox mode: Guest write blocked')
+        return false
+      }
+    } catch (e) {
+      logger?.warn?.('[completeRefSession] Session check failed, blocking write', e)
+      return false
+    }
+  }
+  
   try {
     const { error } = await supabase
       .from(TABLE)
@@ -127,6 +169,20 @@ export async function completeRefSession(matchId, gameIndex) {
  */
 export async function updateLastEventTime(matchId, gameIndex) {
   if (!matchId || !sessionTableAvailable || blockWrites) return false
+  
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger?.warn?.('[updateLastEventTime] Sandbox mode: Guest write blocked')
+        return false
+      }
+    } catch (e) {
+      logger?.warn?.('[updateLastEventTime] Session check failed, blocking write', e)
+      return false
+    }
+  }
   
   try {
     const { error } = await supabase

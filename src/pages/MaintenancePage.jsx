@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Wrench, Clock, RefreshCw } from 'lucide-react'
 import { supabase } from '../lib/supabaseClient'
+import { TEAM_CONFIG } from '../lib/teamConfig'
 import runnerRefImg from '../assets/runner_ref.jpg'
 import runnerTackleImg from '../assets/runner_tackle.jpg'
 
@@ -86,6 +87,22 @@ export default function MaintenancePage() {
   const submitScore = async (score, playerNickname) => {
     try {
       console.log('[Runner] Submitting score:', score, 'with nickname:', playerNickname)
+      // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+      if (TEAM_CONFIG.sandboxMode) {
+        console.log('[Runner] Sandbox mode: Guest write blocked, score kept locally')
+        // 로컬 하이스코어 업데이트만 수행
+        try {
+          const key = 'sfm:runner:hs'
+          const prev = Number(localStorage.getItem(key) || 0)
+          const next = Math.max(prev, score)
+          localStorage.setItem(key, String(next))
+          highRef.current = next
+          globalBestRef.current = Math.max(globalBestRef.current || 0, score)
+          userRankRef.current = null
+          topPlayerNicknameRef.current = playerNickname || 'Anonymous'
+        } catch {}
+        return
+      }
       const userId = playerNickname || localStorage.getItem('user') || 'anonymous'
       const { error: insertError } = await supabase.from('runner_scores').insert({ user_id: userId, score })
       console.log('[Runner] Insert result:', insertError)

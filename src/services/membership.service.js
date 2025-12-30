@@ -63,6 +63,22 @@ export async function getMembershipSettings() {
  * 멤버십 설정 추가
  */
 export async function addMembershipSetting(membership) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('../lib/teamConfig')
+  const { supabase: supabaseClient } = await import('../lib/supabaseClient')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabaseClient.auth.getSession()
+      if (!session) {
+        logger.warn('[addMembershipSetting] Sandbox mode: Guest write blocked')
+        return { ...membership, id: Date.now() }
+      }
+    } catch (e) {
+      logger.warn('[addMembershipSetting] Session check failed, blocking write', e)
+      return { ...membership, id: Date.now() }
+    }
+  }
+
   try {
     const { data, error } = await supabase
       .from('membership_settings')
@@ -96,6 +112,22 @@ export async function addMembershipSetting(membership) {
  * 멤버십 설정 수정
  */
 export async function updateMembershipSetting(id, updates) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('../lib/teamConfig')
+  const { supabase: supabaseClient } = await import('../lib/supabaseClient')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabaseClient.auth.getSession()
+      if (!session) {
+        logger.warn('[updateMembershipSetting] Sandbox mode: Guest write blocked')
+        return { id, ...updates }
+      }
+    } catch (e) {
+      logger.warn('[updateMembershipSetting] Session check failed, blocking write', e)
+      return { id, ...updates }
+    }
+  }
+
   try {
     const { data, error } = await supabase
       .from('membership_settings')
@@ -130,6 +162,22 @@ export async function updateMembershipSetting(id, updates) {
  * 멤버십 설정 삭제
  */
 export async function deleteMembershipSetting(id) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('../lib/teamConfig')
+  const { supabase: supabaseClient } = await import('../lib/supabaseClient')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabaseClient.auth.getSession()
+      if (!session) {
+        logger.warn('[deleteMembershipSetting] Sandbox mode: Guest write blocked')
+        return true
+      }
+    } catch (e) {
+      logger.warn('[deleteMembershipSetting] Session check failed, blocking write', e)
+      return true
+    }
+  }
+
   try {
     const { error } = await supabase
       .from('membership_settings')

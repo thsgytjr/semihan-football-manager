@@ -30,6 +30,22 @@ export async function fetchRefEvents(matchId, gameIndex) {
 
 export async function saveRefEvent(matchId, gameIndex, event) {
   if (!matchId || !event?.id || blockWrites) return
+  
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('../lib/teamConfig')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger?.warn?.('[saveRefEvent] Sandbox mode: Guest write blocked')
+        return
+      }
+    } catch (e) {
+      logger?.warn?.('[saveRefEvent] Session check failed, blocking write', e)
+      return
+    }
+  }
+
   const payload = {
     id: event.id,
     match_id: matchId,
@@ -42,6 +58,22 @@ export async function saveRefEvent(matchId, gameIndex, event) {
 
 export async function deleteRefEvent(matchId, gameIndex, eventId) {
   if (!matchId || !eventId || blockWrites) return
+  
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('../lib/teamConfig')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger?.warn?.('[deleteRefEvent] Sandbox mode: Guest write blocked')
+        return
+      }
+    } catch (e) {
+      logger?.warn?.('[deleteRefEvent] Session check failed, blocking write', e)
+      return
+    }
+  }
+
   const { error } = await supabase.from(TABLE).delete().eq('match_id', matchId).eq('game_index', gameIndex).eq('id', eventId)
   if (error) logger?.warn?.('[refEvents] delete error', error)
 }
@@ -49,6 +81,22 @@ export async function deleteRefEvent(matchId, gameIndex, eventId) {
 // 특정 매치/게임의 모든 이벤트 삭제
 export async function deleteAllRefEvents(matchId, gameIndex) {
   if (!matchId || blockWrites) return
+  
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('../lib/teamConfig')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger?.warn?.('[deleteAllRefEvents] Sandbox mode: Guest write blocked')
+        return
+      }
+    } catch (e) {
+      logger?.warn?.('[deleteAllRefEvents] Session check failed, blocking write', e)
+      return
+    }
+  }
+
   const { error } = await supabase.from(TABLE).delete().eq('match_id', matchId).eq('game_index', gameIndex)
   if (error) logger?.warn?.('[refEvents] delete all error', error)
 }

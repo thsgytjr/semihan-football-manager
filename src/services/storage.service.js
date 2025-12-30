@@ -89,6 +89,20 @@ export async function listPlayers() {
 }
 
 export async function upsertPlayer(p) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[upsertPlayer] Sandbox mode: Guest write blocked')
+        return // 조용히 무시
+      }
+    } catch (e) {
+      logger.warn('[upsertPlayer] Session check failed, blocking write', e)
+      return
+    }
+  }
+
   // p: {id, name, position, positions, membership, origin, status, tags, photoUrl, stats}
   const row = {
     id: p.id,
@@ -108,6 +122,20 @@ export async function upsertPlayer(p) {
 }
 
 export async function deletePlayer(id) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[deletePlayer] Sandbox mode: Guest write blocked')
+        return
+      }
+    } catch (e) {
+      logger.warn('[deletePlayer] Session check failed, blocking write', e)
+      return
+    }
+  }
+
   const { error } = await supabase.from('players').delete().eq('id', id)
   if (error) throw error
 }
@@ -252,6 +280,25 @@ export async function saveDB(db) {
     }
   }
 
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지 → 로컬에만 저장
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        try {
+          localStorage.setItem(LS_APPDB_KEY, JSON.stringify(db))
+          logger.warn('[saveDB] Sandbox mode: Guest write blocked, saved locally')
+        } catch (e) {
+          logger.warn('[saveDB] Sandbox local save failed', e)
+        }
+        return
+      }
+    } catch (e) {
+      logger.warn('[saveDB] Sandbox session check failed, blocking write', e)
+      return
+    }
+  }
+
   // Production mode: Supabase 사용
   const payload = {
     id: ROOM_ID,
@@ -324,6 +371,24 @@ export function subscribeDB(callback) {
 
 // Atomic하게 방문자 수만 증가 (race condition 방지)
 export async function incrementVisits() {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지 → 로컬 카운터만 증가
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        const key = `${LS_APPDB_KEY}:visits`
+        const current = Number(localStorage.getItem(key) || 0)
+        const next = current + 1
+        localStorage.setItem(key, String(next))
+        logger.warn('[incrementVisits] Sandbox mode: Guest write blocked, using local counter')
+        return next
+      }
+    } catch (e) {
+      logger.warn('[incrementVisits] Sandbox session check failed, blocking write', e)
+      return 0
+    }
+  }
+
   try {
     // 현재 데이터 조회
     const { data: current } = await supabase
@@ -364,6 +429,20 @@ export async function incrementVisits() {
 
 // 방문 로그 저장
 export async function logVisit({ visitorId, ipAddress, userAgent, deviceType, browser, os, phoneModel }) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지 → no-op
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[logVisit] Sandbox mode: Guest write blocked')
+        return true
+      }
+    } catch (e) {
+      logger.warn('[logVisit] Sandbox session check failed, blocking write', e)
+      return true
+    }
+  }
+
   try {
     const { error } = await supabase
       .from('visit_logs')

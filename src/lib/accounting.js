@@ -93,6 +93,21 @@ function normalizePaymentDate(input) {
 }
 
 export async function addPayment(payment) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('./teamConfig')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[addPayment] Sandbox mode: Guest write blocked')
+        return { id: Date.now(), ...payment } // 가짜 ID 반환
+      }
+    } catch (e) {
+      logger.warn('[addPayment] Session check failed, blocking write', e)
+      return { id: Date.now(), ...payment }
+    }
+  }
+
   try {
     if (isMockMode()) {
       const db = loadLS()
@@ -140,6 +155,21 @@ export async function addPayment(payment) {
  * 결제 내역 수정
  */
 export async function updatePayment(id, updates) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('./teamConfig')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[updatePayment] Sandbox mode: Guest write blocked')
+        return { id, ...updates }
+      }
+    } catch (e) {
+      logger.warn('[updatePayment] Session check failed, blocking write', e)
+      return { id, ...updates }
+    }
+  }
+
   try {
     if (isMockMode()) {
       const db = loadLS()
@@ -166,6 +196,21 @@ export async function updatePayment(id, updates) {
  * 결제 내역 삭제
  */
 export async function deletePayment(id) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('./teamConfig')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[deletePayment] Sandbox mode: Guest write blocked')
+        return { ok: true }
+      }
+    } catch (e) {
+      logger.warn('[deletePayment] Session check failed, blocking write', e)
+      return { ok: true }
+    }
+  }
+
   try {
     if (isMockMode()) {
       const db = loadLS()
@@ -187,6 +232,21 @@ export async function deletePayment(id) {
 
 // 필터 기반 대량 삭제 (전역 삭제 포함)
 export async function deletePaymentsByFilter({ playerId, paymentType, matchId, startDate, endDate } = {}) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('./teamConfig')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[deletePaymentsByFilter] Sandbox mode: Guest write blocked')
+        return { ok: true }
+      }
+    } catch (e) {
+      logger.warn('[deletePaymentsByFilter] Session check failed, blocking write', e)
+      return { ok: true }
+    }
+  }
+
   try {
     if (isMockMode()) {
       const db = loadLS()
@@ -245,6 +305,21 @@ export async function getDuesSettings() {
  * 회비 기본값이 없으면 자동으로 삽입 (가입비 $10, 월 $5, 연 $50)
  */
 export async function ensureDuesDefaults() {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('./teamConfig')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[ensureDuesDefaults] Sandbox mode: Guest write blocked')
+        return true
+      }
+    } catch (e) {
+      logger.warn('[ensureDuesDefaults] Session check failed, blocking write', e)
+      return true
+    }
+  }
+
   try {
     if (isMockMode()) {
       const db = loadLS()
@@ -277,6 +352,21 @@ export async function ensureDuesDefaults() {
  * 회비 설정 업데이트
  */
 export async function updateDuesSetting(settingType, amount, description) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('./teamConfig')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[updateDuesSetting] Sandbox mode: Guest write blocked')
+        return { setting_type: settingType, amount, description }
+      }
+    } catch (e) {
+      logger.warn('[updateDuesSetting] Session check failed, blocking write', e)
+      return { setting_type: settingType, amount, description }
+    }
+  }
+
   try {
     if (isMockMode()) {
       const db = loadLS()
@@ -330,6 +420,21 @@ export async function getMatchPayments(matchId) {
  * 매치 구장비 납부 현황 생성/업데이트
  */
 export async function upsertMatchPayment(matchPayment) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('./teamConfig')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[upsertMatchPayment] Sandbox mode: Guest write blocked')
+        return matchPayment
+      }
+    } catch (e) {
+      logger.warn('[upsertMatchPayment] Session check failed, blocking write', e)
+      return matchPayment
+    }
+  }
+
   try {
     if (isMockMode()) {
       const db = loadLS()
@@ -386,6 +491,21 @@ export async function upsertMatchPayment(matchPayment) {
 
 // 매치 구장비 행 완전 삭제 (match_payments + payments 동시 정리)
 export async function hardDeleteMatchPayment(matchId, playerId) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('./teamConfig')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[hardDeleteMatchPayment] Sandbox mode: Guest write blocked')
+        return { ok: true }
+      }
+    } catch (e) {
+      logger.warn('[hardDeleteMatchPayment] Session check failed, blocking write', e)
+      return { ok: true }
+    }
+  }
+
   try {
     if (isMockMode()) {
       const db = loadLS()
@@ -624,6 +744,21 @@ export async function getAccountingSummary({ startDate, endDate } = {}) {
  * 매치 구장비 자동 생성 (예정된 매치 생성 시 호출)
  */
 export async function createMatchPaymentRecords(matchId, participantIds, feePerPerson, deadline) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('./teamConfig')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[createMatchPaymentRecords] Sandbox mode: Guest write blocked')
+        return [] // 빈 배열 반환
+      }
+    } catch (e) {
+      logger.warn('[createMatchPaymentRecords] Session check failed, blocking write', e)
+      return []
+    }
+  }
+
   try {
     if (isMockMode()) {
       const db = loadLS()
@@ -672,6 +807,21 @@ export async function createMatchPaymentRecords(matchId, participantIds, feePerP
  * 구장비 납부 확인 및 payment 테이블에 기록
  */
 export async function confirmMatchPayment(matchId, playerId, amount, paymentMethod = 'venmo', verifiedBy = null) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('./teamConfig')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[confirmMatchPayment] Sandbox mode: Guest write blocked')
+        return { ok: true }
+      }
+    } catch (e) {
+      logger.warn('[confirmMatchPayment] Session check failed, blocking write', e)
+      return { ok: true }
+    }
+  }
+
   try {
     if (isMockMode()) {
       const db = loadLS()
@@ -749,6 +899,21 @@ export async function confirmMatchPayment(matchId, playerId, amount, paymentMeth
  * 구장비 납부 취소 (실수로 확인한 경우)
  */
 export async function cancelMatchPayment(matchId, playerId) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('./teamConfig')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[cancelMatchPayment] Sandbox mode: Guest write blocked')
+        return { ok: true }
+      }
+    } catch (e) {
+      logger.warn('[cancelMatchPayment] Session check failed, blocking write', e)
+      return { ok: true }
+    }
+  }
+
   try {
     if (isMockMode()) {
       const db = loadLS()
@@ -797,6 +962,21 @@ export async function cancelMatchPayment(matchId, playerId) {
 
 // payments + match_payments 전역 삭제 (필터 없음) — 위험 영역용
 export async function deleteAllPaymentsAndMatchPayments() {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('./teamConfig')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[deleteAllPaymentsAndMatchPayments] Sandbox mode: Guest write blocked')
+        return { ok: true }
+      }
+    } catch (e) {
+      logger.warn('[deleteAllPaymentsAndMatchPayments] Session check failed, blocking write', e)
+      return { ok: true }
+    }
+  }
+
   try {
     if (isMockMode()) {
       const db = loadLS()

@@ -88,6 +88,32 @@ async function putWithRetry(url, file, contentType, retries = 0) {
 
 export async function uploadPlayerPhoto(file, playerId, playerName = null, oldPhotoUrl = null) {
   if (!file) throw new Error('파일이 선택되지 않았습니다.')
+  
+  // Sandbox Mode: 게스트는 로컬 브라우저에만 저장 (Base64 Data URL 반환)
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { supabase } = await import('./supabaseClient')
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[uploadPlayerPhoto] Sandbox mode: Converting to local Data URL')
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = (e) => resolve(e.target.result) // Base64 Data URL 반환
+          reader.onerror = () => reject(new Error('파일 읽기 실패'))
+          reader.readAsDataURL(file)
+        })
+      }
+    } catch (e) {
+      logger.warn('[uploadPlayerPhoto] Session check failed, using local storage', e)
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = (e) => resolve(e.target.result)
+        reader.onerror = () => reject(new Error('파일 읽기 실패'))
+        reader.readAsDataURL(file)
+      })
+    }
+  }
+
   const MAX_SIZE = 5 * 1024 * 1024
   if (file.size > MAX_SIZE) throw new Error(`파일이 너무 큽니다 (${(file.size / 1024 / 1024).toFixed(2)}MB). 5MB 이하 이미지를 사용해주세요.`)
   if (!file.type.startsWith('image/')) throw new Error(`이미지 파일만 업로드 가능합니다. (현재 타입: ${file.type || '알 수 없음'})`)

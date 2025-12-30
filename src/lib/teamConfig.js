@@ -27,7 +27,10 @@ export const TEAM_CONFIG = {
     analytics: import.meta.env.VITE_FEATURE_ANALYTICS !== 'false', // 기본 true
     draft: import.meta.env.VITE_FEATURE_DRAFT !== 'false',
     upcoming: import.meta.env.VITE_FEATURE_UPCOMING !== 'false'
-  }
+  },
+  
+  // 샌드박스 모드 (게스트 접근 허용)
+  sandboxMode: import.meta.env.VITE_SANDBOX_MODE === 'true' // 기본 false
 }
 
 // 로컬스토리지 키 프리픽스

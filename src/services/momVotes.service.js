@@ -33,6 +33,27 @@ export async function fetchMoMVotes(matchId) {
 export async function submitMoMVote({ matchId, playerId, voterLabel = null, ipHash = null, visitorId = null }) {
   if (!matchId || !playerId) throw new Error('matchId and playerId are required')
   
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        console.warn('[submitMoMVote] Sandbox mode: Guest write blocked')
+        const err = new Error('sandbox_mode')
+        err.code = 'sandbox_mode'
+        err.message = 'Demo 모드에서는 투표가 저장되지 않습니다.'
+        throw err
+      }
+    } catch (e) {
+      if (e.code === 'sandbox_mode') throw e
+      console.warn('[submitMoMVote] Session check failed, blocking write', e)
+      const err = new Error('sandbox_mode')
+      err.code = 'sandbox_mode'
+      err.message = 'Demo 모드에서는 투표가 저장되지 않습니다.'
+      throw err
+    }
+  }
+  
   if (!visitorId) {
     const err = new Error('device_id_missing')
     err.code = 'device_id_missing'
@@ -92,6 +113,21 @@ export async function fetchAllMoMVotes(matchIds = null) {
 
 export async function deleteMoMVote(voteId) {
   if (!voteId) return false
+  
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        console.warn('[deleteMoMVote] Sandbox mode: Guest write blocked')
+        return false
+      }
+    } catch (e) {
+      console.warn('[deleteMoMVote] Session check failed, blocking write', e)
+      return false
+    }
+  }
+  
   const { error } = await supabase
     .from(TABLE)
     .delete()
@@ -103,6 +139,21 @@ export async function deleteMoMVote(voteId) {
 
 export async function deleteMoMVotesByMatch(matchId) {
   if (!matchId) return false
+  
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        console.warn('[deleteMoMVotesByMatch] Sandbox mode: Guest write blocked')
+        return false
+      }
+    } catch (e) {
+      console.warn('[deleteMoMVotesByMatch] Session check failed, blocking write', e)
+      return false
+    }
+  }
+  
   const { error } = await supabase
     .from(TABLE)
     .delete()

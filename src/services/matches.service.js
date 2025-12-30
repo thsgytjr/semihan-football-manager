@@ -104,6 +104,20 @@ function toDbFormat(match, userId = null) {
 }
 
 export async function saveMatchToDB(match) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[saveMatchToDB] Sandbox mode: Guest write blocked')
+        return match // 원본 데이터 반환 (로컬에서만 사용)
+      }
+    } catch (e) {
+      logger.warn('[saveMatchToDB] Session check failed, blocking write', e)
+      return match
+    }
+  }
+
   try {
     const user = await getCurrentUser()
     const userId = user?.id || null
@@ -124,6 +138,20 @@ export async function saveMatchToDB(match) {
 }
 
 export async function updateMatchInDB(matchId, patch) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[updateMatchInDB] Sandbox mode: Guest write blocked')
+        return toAppFormat({ id: matchId, ...patch }) // 패치된 데이터 반환
+      }
+    } catch (e) {
+      logger.warn('[updateMatchInDB] Session check failed, blocking write', e)
+      return toAppFormat({ id: matchId, ...patch })
+    }
+  }
+
   try {
     const payload = {}
     
@@ -173,6 +201,20 @@ export async function updateMatchInDB(matchId, patch) {
 }
 
 export async function deleteMatchFromDB(matchId) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[deleteMatchFromDB] Sandbox mode: Guest write blocked')
+        return true // 성공 처럼 처리
+      }
+    } catch (e) {
+      logger.warn('[deleteMatchFromDB] Session check failed, blocking write', e)
+      return true
+    }
+  }
+
   try {
     const { error } = await supabase
       .from('matches')

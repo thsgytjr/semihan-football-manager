@@ -54,6 +54,20 @@ export async function listTagPresets(){
 }
 
 export async function createTagPreset(preset){
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[createTagPreset] Sandbox mode: Guest write blocked')
+        return { ...preset, id: Date.now() }
+      }
+    } catch (e) {
+      logger.warn('[createTagPreset] Session check failed, blocking write', e)
+      return { ...preset, id: Date.now() }
+    }
+  }
+
   const row = denormalize(preset)
   try{
     const { data, error } = await supabase
@@ -71,6 +85,21 @@ export async function createTagPreset(preset){
 
 export async function updateTagPreset(id, patch){
   if(!id) throw new Error('Missing id')
+  
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[updateTagPreset] Sandbox mode: Guest write blocked')
+        return { ...patch, id }
+      }
+    } catch (e) {
+      logger.warn('[updateTagPreset] Session check failed, blocking write', e)
+      return { ...patch, id }
+    }
+  }
+
   const row = denormalize({ ...patch, id })
   try{
     const { data, error } = await supabase
@@ -89,6 +118,21 @@ export async function updateTagPreset(id, patch){
 
 export async function deleteTagPreset(id){
   if(!id) throw new Error('Missing id')
+  
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[deleteTagPreset] Sandbox mode: Guest write blocked')
+        return true
+      }
+    } catch (e) {
+      logger.warn('[deleteTagPreset] Session check failed, blocking write', e)
+      return true
+    }
+  }
+
   try{
     const { error } = await supabase
       .from(TABLE)

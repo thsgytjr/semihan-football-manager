@@ -124,6 +124,20 @@ export async function listUpcomingMatches(){
 }
 
 export async function createUpcomingMatch(payload){
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[createUpcomingMatch] Sandbox mode: Guest write blocked')
+        return { ...payload, id: Date.now() } // 페이크 ID 반환
+      }
+    } catch (e) {
+      logger.warn('[createUpcomingMatch] Session check failed, blocking write', e)
+      return { ...payload, id: Date.now() }
+    }
+  }
+
   const row = buildInsertPayload(payload)
   console.log('[upcomingMatches] Attempting to insert:', JSON.stringify(row, null, 2))
   try{
@@ -146,6 +160,21 @@ export async function createUpcomingMatch(payload){
 
 export async function updateUpcomingMatch(id, patch){
   if(!id) throw new Error('Missing id')
+  
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[updateUpcomingMatch] Sandbox mode: Guest write blocked')
+        return { ...patch, id } // 페이크 반환
+      }
+    } catch (e) {
+      logger.warn('[updateUpcomingMatch] Session check failed, blocking write', e)
+      return { ...patch, id }
+    }
+  }
+
   const row = buildUpdatePayload(patch)
   try{
     const { data, error } = await supabase
@@ -164,6 +193,21 @@ export async function updateUpcomingMatch(id, patch){
 
 export async function deleteUpcomingMatch(id){
   if(!id) throw new Error('Missing id')
+  
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[deleteUpcomingMatch] Sandbox mode: Guest write blocked')
+        return true
+      }
+    } catch (e) {
+      logger.warn('[deleteUpcomingMatch] Session check failed, blocking write', e)
+      return true
+    }
+  }
+
   try{
     const { error } = await supabase
       .from(TABLE)

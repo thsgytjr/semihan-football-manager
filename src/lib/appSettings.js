@@ -104,6 +104,21 @@ export async function loadAppSettingsFromServer() {
 
 // Supabase에 앱 설정 저장
 export async function saveAppSettingsToServer(settings) {
+  // Sandbox Mode: 게스트는 Supabase 쓰기 금지
+  const { TEAM_CONFIG } = await import('./teamConfig')
+  if (TEAM_CONFIG.sandboxMode) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        logger.warn('[saveAppSettingsToServer] Sandbox mode: Guest write blocked')
+        return saveAppSettings(settings) // 로컬에만 저장
+      }
+    } catch (e) {
+      logger.warn('[saveAppSettingsToServer] Session check failed, blocking write', e)
+      return saveAppSettings(settings)
+    }
+  }
+
   try {
     const { error } = await supabase
       .from('settings')
