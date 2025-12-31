@@ -1,6 +1,4 @@
 import React from 'react'
-import * as Sentry from '@sentry/react'
-import { logError } from '../lib/sentry'
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -23,19 +21,7 @@ class ErrorBoundary extends React.Component {
       errorInfo,
     })
 
-    // Sentry로 에러 전송
-    logError(error, {
-      tags: {
-        component: this.props.componentName || 'Unknown',
-        boundary: 'ErrorBoundary',
-      },
-      extra: {
-        componentStack: errorInfo.componentStack,
-        props: this.props,
-      },
-    })
-
-    // 개발 환경에서는 콘솔에도 출력
+    // 개발 환경에서는 콘솔에 출력
     if (import.meta.env.DEV) {
       console.error('🔥 ErrorBoundary caught error:', error, errorInfo)
     }

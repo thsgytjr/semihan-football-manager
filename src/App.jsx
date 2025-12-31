@@ -201,14 +201,15 @@ function App(){
     if (!isSandboxMode) return
     try {
       const flag = sessionStorage.getItem('sandboxGuest') === '1'
-      if (flag) {
+      if (flag && !isAdmin) {
         setIsSandboxGuest(true)
         setIsAdmin(true)
+        localStorage.setItem("isAdmin", "1")
       }
     } catch {
       /* ignore */
     }
-  }, [isSandboxMode])
+  }, [isSandboxMode, isAdmin])
 
   // 사용자가 수동 재시도할 때 호출 (새로고침 없이 재시도)
   const handleRetryLoading = useCallback(() => {

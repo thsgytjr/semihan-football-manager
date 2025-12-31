@@ -4,10 +4,6 @@ import App from './App.jsx'
 import './index.css'
 import './i18n/config' // Initialize i18n
 import { logger } from './lib/logger'
-import { initSentry } from './lib/sentry'
-
-// Sentry 초기화 (가장 먼저 실행)
-initSentry()
 
 // MSW 초기화 (개발 환경에서만)
 async function enableMocking() {
