@@ -5,6 +5,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import Card from '../components/Card'
 import InitialAvatar from '../components/InitialAvatar'
 import MoMAdminPanel from '../components/MoMAdminPanel'
+import PlayerPickerModal from '../components/PlayerPickerModal'
 import { notify } from '../components/Toast'
 import { hydrateMatch } from '../lib/match'
 import MatchHelpers from '../lib/matchHelpers'
@@ -1617,130 +1618,37 @@ function QuickStatsEditor({ players, editingMatch, teams, draft, setDraft, reset
         />
       )}
 
-      {/* Goal/Assist Adding Panel (inline, non-modal) */}
-      {addingGoalFor && (
-        <div className="border-2 border-emerald-300 bg-gradient-to-br from-emerald-50 to-green-50 rounded-lg px-4 py-3">
-          <div className="mb-2 text-sm font-semibold text-gray-800">
-            ⚽ {players.find(p => toStr(p.id) === toStr(addingGoalFor.playerId))?.name}의 골 추가
-          </div>
-          <div className="mb-2 text-xs text-gray-600">어시스트한 선수를 선택하세요 (다른 팀 선수도 선택 가능):</div>
-          <div className="space-y-3">
-            {teamRosters.map((team, teamIdx) => {
-              const teamPlayers = team.players.filter(p => toStr(p.id) !== toStr(addingGoalFor.playerId))
-              if (teamPlayers.length === 0) return null
+      {/* Goal Assist Picker Modal */}
+      <PlayerPickerModal
+        isOpen={!!addingGoalFor}
+        onClose={() => setAddingGoalFor(null)}
+        onSelect={(assisterId) => addGoalWithAssist(addingGoalFor?.playerId, assisterId)}
+        teams={teamRosters}
+        draft={draft}
+        title={`⚽ ${addingGoalFor ? players.find(p => toStr(p.id) === toStr(addingGoalFor.playerId))?.name : ''} 골 추가`}
+        subtitle="어시스트한 선수를 선택하세요 (다른 팀 선수도 선택 가능)"
+        defaultTeamIdx={addingGoalFor?.teamIdx ?? 0}
+        excludePlayerId={addingGoalFor?.playerId}
+        showNoSelectionOption={true}
+        noSelectionLabel="어시스트 없이 추가"
+        statLabel="A"
+      />
 
-              const isSameTeam = teamIdx === addingGoalFor.teamIdx
-
-              return (
-                <div key={teamIdx} className={isSameTeam ? 'order-first' : ''}>
-                  <div className={`text-[10px] font-bold mb-1.5 flex items-center gap-1.5 ${isSameTeam ? 'text-blue-700' : 'text-gray-500'}`}>
-                    {team.name}
-                    {isSameTeam && (
-                      <span className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[9px] font-bold">
-                        ⭐ 같은 팀
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {teamPlayers.map(p => {
-                      const rec = draft[toStr(p.id)] || { goals: 0, assists: 0 }
-                      return (
-                        <button
-                          key={toStr(p.id)}
-                          onClick={() => addGoalWithAssist(addingGoalFor.playerId, p.id)}
-                          className={`rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-colors ${
-                            isSameTeam
-                              ? 'border-blue-500 bg-white hover:bg-blue-50 shadow-sm'
-                              : 'border-gray-400 bg-white hover:bg-gray-50 opacity-75 hover:opacity-100'
-                          }`}
-                        >
-                          {p.name} <span className="ml-1 text-gray-500">(A: {rec.assists})</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })}
-            <div className="flex gap-2 pt-2 border-t border-emerald-200">
-              <button
-                onClick={() => addGoalWithAssist(addingGoalFor.playerId, null)}
-                className="rounded-lg bg-gradient-to-r from-emerald-600 to-green-700 hover:from-emerald-700 hover:to-green-800 px-3 py-1.5 text-xs text-white font-semibold shadow-sm transition-all"
-              >
-                어시스트 없이 추가
-              </button>
-              <button
-                onClick={() => setAddingGoalFor(null)}
-                className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-3 py-1.5 text-xs font-medium transition-colors"
-              >
-                취소
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {addingAssistFor && (
-        <div className="border-2 border-amber-300 bg-gradient-to-br from-amber-50 to-yellow-50 rounded-lg px-4 py-3">
-          <div className="mb-2 text-sm font-semibold text-gray-800">
-            👉 {players.find(p => toStr(p.id) === toStr(addingAssistFor.playerId))?.name}의 어시스트 추가
-          </div>
-          <div className="mb-2 text-xs text-gray-600">골을 넣은 선수를 선택하세요 (다른 팀 선수도 선택 가능):</div>
-          <div className="space-y-3">
-            {teamRosters.map((team, teamIdx) => {
-              const teamPlayers = team.players.filter(p => toStr(p.id) !== toStr(addingAssistFor.playerId))
-              if (teamPlayers.length === 0) return null
-
-              const isSameTeam = teamIdx === addingAssistFor.teamIdx
-
-              return (
-                <div key={teamIdx} className={isSameTeam ? 'order-first' : ''}>
-                  <div className={`text-[10px] font-bold mb-1.5 flex items-center gap-1.5 ${isSameTeam ? 'text-blue-700' : 'text-gray-500'}`}>
-                    {team.name}
-                    {isSameTeam && (
-                      <span className="inline-flex items-center gap-0.5 bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-[9px] font-bold">
-                        ⭐ 같은 팀
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {teamPlayers.map(p => {
-                      const rec = draft[toStr(p.id)] || { goals: 0, assists: 0 }
-                      return (
-                        <button
-                          key={toStr(p.id)}
-                          onClick={() => addAssistForGoal(addingAssistFor.playerId, p.id)}
-                          className={`rounded-lg border-2 px-3 py-1.5 text-xs font-medium transition-colors ${
-                            isSameTeam
-                              ? 'border-emerald-500 bg-white hover:bg-emerald-50 shadow-sm'
-                              : 'border-gray-400 bg-white hover:bg-gray-50 opacity-75 hover:opacity-100'
-                          }`}
-                        >
-                          {p.name} <span className="ml-1 text-gray-500">(G: {rec.goals})</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })}
-            <div className="flex gap-2 pt-2 border-t border-amber-200">
-              <button
-                onClick={() => addAssistForGoal(addingAssistFor.playerId, null)}
-                className="rounded-lg bg-gradient-to-r from-amber-600 to-yellow-700 hover:from-amber-700 hover:to-yellow-800 px-3 py-1.5 text-xs text-white font-semibold shadow-sm transition-all"
-              >
-                골 없이 추가
-              </button>
-              <button
-                onClick={() => setAddingAssistFor(null)}
-                className="rounded-lg border-2 border-gray-300 bg-white hover:bg-gray-50 px-3 py-1.5 text-xs font-medium transition-colors"
-              >
-                취소
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Assist Goal Picker Modal */}
+      <PlayerPickerModal
+        isOpen={!!addingAssistFor}
+        onClose={() => setAddingAssistFor(null)}
+        onSelect={(goalPlayerId) => addAssistForGoal(addingAssistFor?.playerId, goalPlayerId)}
+        teams={teamRosters}
+        draft={draft}
+        title={`👉 ${addingAssistFor ? players.find(p => toStr(p.id) === toStr(addingAssistFor.playerId))?.name : ''} 어시스트 추가`}
+        subtitle="골을 넣은 선수를 선택하세요 (다른 팀 선수도 선택 가능)"
+        defaultTeamIdx={addingAssistFor?.teamIdx ?? 0}
+        excludePlayerId={addingAssistFor?.playerId}
+        showNoSelectionOption={true}
+        noSelectionLabel="골 없이 추가"
+        statLabel="G"
+      />
 
       {/* Stats Grid - Compact Table Layout */}
       <div className={`grid gap-4 ${teamRosters.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'}`}>
