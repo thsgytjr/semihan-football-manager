@@ -995,6 +995,7 @@ function App(){
   async function handleCancelRefereeMode() {
     // Clear active match first to immediately exit referee mode UI
     const matchId = activeMatch?.id
+    const wasNewMatch = activeMatch && !activeMatch.created_at // New match from MatchPlanner not yet saved
     setActiveMatch(null)
     setTab(isRefModeLink ? 'dashboard' : 'stats')
     
@@ -1002,32 +1003,52 @@ function App(){
       try {
         // Sandbox mode: Only update local state, don't query DB
         if (isSandboxMode && !isAdmin) {
-          setDb(prev => ({
-            ...prev,
-            matches: (prev.matches || []).map(m => {
-              if (m.id === matchId) {
-                const cleanedStats = { ...(m.stats || {}) }
-                if (cleanedStats.__inProgress) delete cleanedStats.__inProgress
-                return { ...m, stats: cleanedStats }
+          setDb(prev => {
+            // If this was a new unsaved match, remove it from the list
+            if (wasNewMatch) {
+              return {
+                ...prev,
+                matches: (prev.matches || []).filter(m => m.id !== matchId)
               }
-              return m
-            })
-          }))
+            }
+            
+            // Otherwise just clean up __inProgress
+            return {
+              ...prev,
+              matches: (prev.matches || []).map(m => {
+                if (m.id === matchId) {
+                  const cleanedStats = { ...(m.stats || {}) }
+                  if (cleanedStats.__inProgress) delete cleanedStats.__inProgress
+                  return { ...m, stats: cleanedStats }
+                }
+                return m
+              })
+            }
+          })
         } else {
           // Normal mode: Force reload from DB to get the latest stats with __inProgress
           const freshMatches = await listMatchesFromDB()
           const matchFromDb = freshMatches.find(m => m.id === matchId)
-          const cleanedStats = { ...(matchFromDb?.stats || {}) }
-          if (cleanedStats.__inProgress) delete cleanedStats.__inProgress
-          await handleUpdateMatch(matchId, { stats: cleanedStats }, true) // silent=true
           
-          // Update local state to reflect the cleared __inProgress immediately
-          setDb(prev => ({
-            ...prev,
-            matches: (prev.matches || []).map(m => 
-              m.id === matchId ? { ...m, stats: cleanedStats } : m
-            )
-          }))
+          // If match doesn't exist in DB (new unsaved match), remove it from local state
+          if (!matchFromDb) {
+            setDb(prev => ({
+              ...prev,
+              matches: (prev.matches || []).filter(m => m.id !== matchId)
+            }))
+          } else {
+            const cleanedStats = { ...(matchFromDb?.stats || {}) }
+            if (cleanedStats.__inProgress) delete cleanedStats.__inProgress
+            await handleUpdateMatch(matchId, { stats: cleanedStats }, true) // silent=true
+            
+            // Update local state to reflect the cleared __inProgress immediately
+            setDb(prev => ({
+              ...prev,
+              matches: (prev.matches || []).map(m => 
+                m.id === matchId ? { ...m, stats: cleanedStats } : m
+              )
+            }))
+          }
         }
       } catch (err) {
         console.warn('Failed to clear in-progress data:', err)
