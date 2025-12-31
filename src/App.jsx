@@ -913,6 +913,17 @@ function App(){
         ...match,
         dateISO: normalizeMatchDateISO(match?.dateISO)
       }
+      
+      // Validate match has attendees - prevent saving empty matches
+      const attendeeCount = (Array.isArray(matchWithDate.snapshot) && matchWithDate.snapshot.flat().length) ||
+                           (Array.isArray(matchWithDate.attendeeIds) && matchWithDate.attendeeIds.length) ||
+                           (Array.isArray(matchWithDate.teams) && matchWithDate.teams.flat().filter(Boolean).length) ||
+                           0
+      
+      if (attendeeCount === 0) {
+        notify("빈 매치는 저장할 수 없습니다. 선수를 추가해주세요.", "warning")
+        return
+      }
 
       if (isSandboxMode && !isAdmin) {
         // Sandbox Mode: Local Only
@@ -979,6 +990,14 @@ function App(){
   async function handleAutoSaveRefereeMode(inProgressData) {
     if (!activeMatch?.id) return
     
+    // Skip auto-save if match doesn't exist in db.matches (prevents phantom match creation)
+    const existsInDb = (db.matches || []).some(m => m.id === activeMatch.id)
+    
+    if (!existsInDb) {
+      // Match is temporary (from MatchPlanner startReferee), don't auto-save
+      return
+    }
+    
     try {
       // Save in-progress state to match stats.__inProgress
       const updatedStats = {
@@ -988,7 +1007,6 @@ function App(){
       
       await handleUpdateMatch(activeMatch.id, { stats: updatedStats }, true) // silent=true
     } catch (err) {
-      console.warn('Auto-save failed:', err)
     }
   }
 
@@ -1003,22 +1021,53 @@ function App(){
         // Sandbox mode: Only update local state, don't query DB
         if (isSandboxMode && !isAdmin) {
           setDb(prev => {
+            // Quick attendee counter to prune obviously empty temp matches
+            const attendeeCount = (match) => {
+              if (Array.isArray(match?.snapshot) && match.snapshot.length > 0) {
+                return match.snapshot.flat().length
+              }
+              if (Array.isArray(match?.attendeeIds)) {
+                return match.attendeeIds.flat().length
+              }
+              if (Array.isArray(match?.attendees)) {
+                return match.attendees.length
+              }
+              return 0
+            }
+
             return {
               ...prev,
-              matches: (prev.matches || []).filter(m => {
-                // Remove any matches without created_at (unsaved/temporary matches)
-                // This prevents phantom matches from MatchPlanner or elsewhere
-                if (!m.created_at) return false
-                return true
-              }).map(m => {
-                // Clean up __inProgress for any match (especially the canceled one)
-                if (m.id === matchId || m.stats?.__inProgress) {
-                  const cleanedStats = { ...(m.stats || {}) }
-                  if (cleanedStats.__inProgress) delete cleanedStats.__inProgress
-                  return { ...m, stats: cleanedStats }
-                }
-                return m
-              })
+              matches: (prev.matches || [])
+                .filter(m => {
+                  const count = attendeeCount(m)
+                  const hasStats = m.stats && Object.keys(m.stats).some(k => !k.startsWith('__') && k !== 'undefined' && k !== 'null')
+                  const hasEvents = Array.isArray(m.stats?.__events) && m.stats.__events.length > 0
+                  const isEmpty = count === 0 && !hasStats && !hasEvents
+
+                  // Always remove the currently canceled match if it's empty, even if it has created_at
+                  if (m.id === matchId && isEmpty) {
+                    return false
+                  }
+
+                  // Remove any other matches that are unsaved OR empty
+                  if (!m.created_at) {
+                    return false
+                  }
+                  if (isEmpty) {
+                    return false
+                  }
+                  
+                  return true
+                })
+                .map(m => {
+                  // Clean up __inProgress for any match (especially the canceled one)
+                  if (m.id === matchId || m.stats?.__inProgress) {
+                    const cleanedStats = { ...(m.stats || {}) }
+                    if (cleanedStats.__inProgress) delete cleanedStats.__inProgress
+                    return { ...m, stats: cleanedStats }
+                  }
+                  return m
+                })
             }
           })
         } else {
@@ -1035,7 +1084,13 @@ function App(){
           } else {
             const cleanedStats = { ...(matchFromDb?.stats || {}) }
             if (cleanedStats.__inProgress) delete cleanedStats.__inProgress
-            await handleUpdateMatch(matchId, { stats: cleanedStats }, true) // silent=true
+            
+            // Only update DB if we're NOT in Sandbox mode or guest mode (mock admin should still be blocked)
+            const canWriteToDB = isAdmin && !isSandboxGuest && !isSandboxMode
+            if (canWriteToDB) {
+              await handleUpdateMatch(matchId, { stats: cleanedStats }, true) // silent=true
+            } else {
+            }
             
             // Update local state to reflect the cleared __inProgress immediately
             setDb(prev => ({
@@ -1047,7 +1102,6 @@ function App(){
           }
         }
       } catch (err) {
-        console.warn('Failed to clear in-progress data:', err)
       }
     }
   }
@@ -1226,6 +1280,22 @@ function App(){
       }
       updatedMatch.teams = teamsForMatch
 
+      // Validate before saving
+      const finalAttendeeCount = attendeeIds.length
+      console.log('[handleFinishRefereeMode] 💾 Saving match:', {
+        id: matchDataForSave?.id,
+        attendeeCount: finalAttendeeCount,
+        hasEvents: eventsForStorage.length
+      })
+      
+      if (finalAttendeeCount === 0) {
+        console.error('[handleFinishRefereeMode] ⚠️ BLOCKED: Cannot save match with 0 attendees')
+        notify("경기에 참석자가 없어 저장할 수 없습니다.", "error")
+        setActiveMatch(null)
+        setTab(isRefModeLink ? 'dashboard' : 'stats')
+        return
+      }
+      
       if (matchDataForSave?.id) {
         const patch = isDraft
           ? { stats: mergedStats, quarterScores, draft: nextDraft }
@@ -1284,15 +1354,29 @@ function App(){
           const msg = err?.message || ''
           const isMissing = msg.includes('Row not found') || msg.includes('0 rows') || err?.code === 'PGRST116'
           if (isMissing) {
-            try {
-              const existing = (db.matches||[]).find(m=>m.id===id) || { id }
-              const recovered = await saveMatchToDB({ ...existing, ...patched })
-              const next=(db.matches||[]).map(m=>m.id===id?recovered:m)
-              setDb(prev=>({...prev,matches:next}))
-              if (!silent) notify("기존 매치가 없어 새로 저장했습니다.")
+            // Only attempt recovery save if match exists in local state with valid data
+            const existing = (db.matches||[]).find(m=>m.id===id)
+            const hasAttendees = existing && (
+              (Array.isArray(existing.snapshot) && existing.snapshot.flat().length > 0) ||
+              (Array.isArray(existing.attendeeIds) && existing.attendeeIds.length > 0)
+            )
+            
+            // Block recovery save in Sandbox guest mode
+            const canRecoverySave = !isSandboxGuest
+            
+            if (existing && hasAttendees && canRecoverySave) {
+              try {
+                const recovered = await saveMatchToDB({ ...existing, ...patched })
+                const next=(db.matches||[]).map(m=>m.id===id?recovered:m)
+                setDb(prev=>({...prev,matches:next}))
+                if (!silent) notify("기존 매치가 없어 새로 저장했습니다.")
+                return
+              } catch (saveErr) {
+                logger.error('[handleUpdateMatch] recovery save failed', saveErr)
+              }
+            } else {
+              // Skip recovery save for empty/temporary matches or Sandbox guest mode
               return
-            } catch (saveErr) {
-              logger.error('[handleUpdateMatch] recovery save failed', saveErr)
             }
           }
           throw err

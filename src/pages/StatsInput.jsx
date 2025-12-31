@@ -133,7 +133,15 @@ export default function StatsInput({ players = [], matches = [], onUpdateMatch, 
   
   const sortedMatches = useMemo(() => {
     const arr = Array.isArray(matches) ? [...matches] : []
-    return arr.sort((a, b) => getMatchTime(b) - getMatchTime(a))
+    // Filter out empty matches (0 attendees and no stats) - these are phantom matches
+    const filtered = arr.filter(m => {
+      const attendeeCount = extractAttendeeIds(m).length
+      const hasStats = m.stats && Object.keys(m.stats).some(k => !k.startsWith('__') && k !== 'undefined' && k !== 'null')
+      const hasEvents = Array.isArray(m.stats?.__events) && m.stats.__events.length > 0
+      // Keep match if it has attendees OR stats OR events
+      return attendeeCount > 0 || hasStats || hasEvents
+    })
+    return filtered.sort((a, b) => getMatchTime(b) - getMatchTime(a))
   }, [matches])
 
   const [editingMatchId, setEditingMatchId] = useState('')
