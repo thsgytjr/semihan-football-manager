@@ -1000,20 +1000,35 @@ function App(){
     
     if (matchId) {
       try {
-        // Force reload from DB to get the latest stats with __inProgress
-        const freshMatches = await listMatchesFromDB()
-        const matchFromDb = freshMatches.find(m => m.id === matchId)
-        const cleanedStats = { ...(matchFromDb?.stats || {}) }
-        if (cleanedStats.__inProgress) delete cleanedStats.__inProgress
-        await handleUpdateMatch(matchId, { stats: cleanedStats }, true) // silent=true
-        
-        // Update local state to reflect the cleared __inProgress immediately
-        setDb(prev => ({
-          ...prev,
-          matches: (prev.matches || []).map(m => 
-            m.id === matchId ? { ...m, stats: cleanedStats } : m
-          )
-        }))
+        // Sandbox mode: Only update local state, don't query DB
+        if (isSandboxMode && !isAdmin) {
+          setDb(prev => ({
+            ...prev,
+            matches: (prev.matches || []).map(m => {
+              if (m.id === matchId) {
+                const cleanedStats = { ...(m.stats || {}) }
+                if (cleanedStats.__inProgress) delete cleanedStats.__inProgress
+                return { ...m, stats: cleanedStats }
+              }
+              return m
+            })
+          }))
+        } else {
+          // Normal mode: Force reload from DB to get the latest stats with __inProgress
+          const freshMatches = await listMatchesFromDB()
+          const matchFromDb = freshMatches.find(m => m.id === matchId)
+          const cleanedStats = { ...(matchFromDb?.stats || {}) }
+          if (cleanedStats.__inProgress) delete cleanedStats.__inProgress
+          await handleUpdateMatch(matchId, { stats: cleanedStats }, true) // silent=true
+          
+          // Update local state to reflect the cleared __inProgress immediately
+          setDb(prev => ({
+            ...prev,
+            matches: (prev.matches || []).map(m => 
+              m.id === matchId ? { ...m, stats: cleanedStats } : m
+            )
+          }))
+        }
       } catch (err) {
         console.warn('Failed to clear in-progress data:', err)
       }
