@@ -355,6 +355,7 @@ export default function Dashboard({
 
   const mom = useMoMPrompt({ matches, players })
   const momAwards = useMoMAwardsSummary(matches, { limit: null })
+  const seasonMomAwards = useMoMAwardsSummary(filteredMatches, { limit: null })
 
   // 탭 구조 개편: 1차(종합|draft), 2차(종합: pts/g/a/gp | draft: playerWins/captainWins/attack)
   const [primaryTab, setPrimaryTab] = useState('pts') // 'pts' | 'draft' | 'mom'
@@ -1654,12 +1655,13 @@ export default function Dashboard({
             {primaryTab === 'mom' ? (
               isMoMEnabled ? (
                 <MoMLeaderboard
-                  countsByPlayer={momAwards.countsByPlayer}
+                  countsByPlayer={seasonMomAwards.countsByPlayer}
                   players={players}
                   showAll={showAll}
                   onToggle={() => setShowAll(s => !s)}
                   customMemberships={customMemberships}
                   onPlayerSelect={handleOpenMoMDetails}
+                  seasonLabel={leaderboardSeason === 'all' ? t('leaderboard.allSeasons') : leaderboardSeason}
                 />
               ) : (
                 <div className="rounded-xl border border-dashed border-stone-200 bg-white px-4 py-8 text-center text-sm text-stone-500">

@@ -10,6 +10,7 @@ export function MoMLeaderboard({
   onToggle,
   customMemberships = [],
   onPlayerSelect,
+  seasonLabel = null,
 }) {
   const { t } = useTranslation()
   const playerMap = useMemo(() => {
@@ -69,7 +70,9 @@ export function MoMLeaderboard({
     <div className="overflow-hidden rounded-2xl border border-amber-100 bg-white shadow-sm">
       <div className="flex items-center justify-between border-b border-amber-100 px-4 py-3">
         <div className="text-sm font-semibold text-stone-800">
-          {t('mom.leaderboard.title')} <span className="text-xs font-normal text-stone-500">({t('leaderboard.totalPlayers')} {totalPlayers})</span>
+          {t('mom.leaderboard.title')}
+          {seasonLabel && <span className="ml-2 text-xs font-normal text-amber-600">({seasonLabel})</span>}
+          <span className="text-xs font-normal text-stone-500"> · {t('leaderboard.totalPlayers')} {totalPlayers}</span>
         </div>
         <button
           onClick={() => onToggle?.()}

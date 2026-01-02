@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import InitialAvatar from './InitialAvatar'
 import { getMatchStatus } from '../lib/upcomingMatch'
 import { computeCaptainStatsRows } from '../lib/leaderboardComputations'
+import { extractSeason } from '../lib/matchUtils'
 
 const formatDateDisplay = (dateISO, lang = 'en') => {
   if (!dateISO) return ''
@@ -406,6 +407,7 @@ export default function UpcomingMatchCard({
                   players={players}
                   matches={matches}
                   teamCount={teamCount}
+                  upcomingMatch={upcomingMatch}
                 />
               </div>
             )
@@ -581,11 +583,24 @@ export default function UpcomingMatchCard({
 }
 
 // 주장 대결 표시 컴포넌트
-function CaptainVsDisplay({ captains, players, matches = [], teamCount = 2 }) {
+function CaptainVsDisplay({ captains, players, matches = [], teamCount = 2, upcomingMatch = null }) {
   const { t } = useTranslation()
-  // 개선된 주장 통계 데이터 계산
+  
+  // 예정된 매치의 시즌 추출 (예: 2026년 1월 매치면 "2026" 시즌)
+  const upcomingSeason = useMemo(() => {
+    if (!upcomingMatch) return null
+    return extractSeason(upcomingMatch)
+  }, [upcomingMatch])
+  
+  // 시즌별로 필터링된 매치 (같은 시즌의 기록만 사용)
+  const seasonFilteredMatches = useMemo(() => {
+    if (!upcomingSeason) return matches
+    return matches.filter(m => extractSeason(m) === upcomingSeason)
+  }, [matches, upcomingSeason])
+  
+  // 개선된 주장 통계 데이터 계산 (시즌별 필터링된 매치 사용)
   const captainStats = useMemo(() => {
-    const captainStatsRows = computeCaptainStatsRows(players, matches)
+    const captainStatsRows = computeCaptainStatsRows(players, seasonFilteredMatches)
     const statsMap = new Map()
     
     captainStatsRows.forEach(row => {
@@ -601,7 +616,7 @@ function CaptainVsDisplay({ captains, players, matches = [], teamCount = 2 }) {
     })
     
     return statsMap
-  }, [players, matches])
+  }, [players, seasonFilteredMatches])
   
   // id -> player 매핑 (photoUrl 조회용)
   const idToPlayer = useMemo(() => new Map(players.map(p => [p.id, p])), [players])
