@@ -695,32 +695,35 @@ export default function RefereeMode({ activeMatch, onFinish, onCancel, onAutoSav
 
     const taggedEvents = events.map(ev => ({ ...ev, gameIndex: ev.gameIndex ?? (matchNumber - 1) }))
 
-    // Add clean sheet event to timeline
+    // Add clean sheet event for each awardee
     if (cleanSheetAwardees && cleanSheetAwardees.length > 0) {
-      const playerNames = cleanSheetAwardees
-        .map(pid => {
-          // Find player in teams
-          for (const team of teams) {
-            const player = team.find(p => p.id === pid)
-            if (player) return player.name
+      cleanSheetAwardees.forEach(pid => {
+        // Find player in teams
+        let playerName = null
+        let playerTeamIndex = null
+        for (let teamIdx = 0; teamIdx < teams.length; teamIdx++) {
+          const player = teams[teamIdx].find(p => p.id === pid)
+          if (player) {
+            playerName = player.name
+            playerTeamIndex = teamIdx
+            break
           }
-          return null
-        })
-        .filter(Boolean)
-      
-      if (playerNames.length > 0) {
-        const cleanSheetEvent = {
-          id: crypto.randomUUID?.() || `cs-${Date.now()}`,
-          type: 'clean_sheet',
-          playerName: playerNames.join(', '),
-          playerId: cleanSheetAwardees[0], // Use first player as reference
-          teamIndex: null, // Not team-specific
-          gameIndex: matchNumber - 1,
-          minute: null,
-          timestamp: Date.now()
         }
-        taggedEvents.unshift(cleanSheetEvent) // Add at the beginning
-      }
+        
+        if (playerName) {
+          const cleanSheetEvent = {
+            id: crypto.randomUUID?.() || `cs-${pid}-${Date.now()}`,
+            type: 'clean_sheet',
+            playerName,
+            playerId: pid,
+            teamIndex: playerTeamIndex,
+            gameIndex: matchNumber - 1,
+            minute: null,
+            timestamp: Date.now()
+          }
+          taggedEvents.unshift(cleanSheetEvent) // Add at the beginning
+        }
+      })
     }
     
     const stats = buildStats(cleanSheetAwardees)

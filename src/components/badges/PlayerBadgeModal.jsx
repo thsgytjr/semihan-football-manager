@@ -126,7 +126,7 @@ export default function PlayerBadgeModal({
   }, [normalizedBadges])
   useEffect(() => {
     if (seasonOrder.length === 0) {
-      setSeasonFilter(null)
+      // 비어있을 때는 현재 필터 유지 (다른 시즌 데이터가 있을 수 있음)
       return
     }
     setSeasonFilter((prev) => (prev && seasonOrder.includes(prev)) ? prev : seasonOrder[0])
