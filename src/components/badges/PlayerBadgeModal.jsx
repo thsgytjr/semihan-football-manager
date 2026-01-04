@@ -337,12 +337,12 @@ export default function PlayerBadgeModal({
                       ))}
                     </div>
                   )}
-                  {seasonOrder.length > 0 && seasonFilter && (
+                  {seasonOrder.length > 0 && seasonFilter && filteredBadges.length > 0 && (
                     <p className="text-[11px] text-stone-400">
                       {t('badges.season.activeHint', { season: formatSeasonLabel(seasonFilter), defaultValue: `${formatSeasonLabel(seasonFilter)} 시즌 기록만 보여줘요.` })}
                     </p>
                   )}
-                  {hasAnyBadges && (
+                  {hasAnyBadges && filteredBadges.length > 0 && (
                     <p className="text-[11px] text-stone-400">
                       {t('badges.season.lockedHint', { defaultValue: '시즌별 기준이 바뀌어도 그 시즌에 획득한 뱃지는 그대로 남습니다.' })}
                     </p>
