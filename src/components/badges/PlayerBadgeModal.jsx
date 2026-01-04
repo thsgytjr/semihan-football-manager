@@ -52,7 +52,8 @@ export default function PlayerBadgeModal({
   badges = [],
   loading = false,
   error = null,
-  onClose
+  onClose,
+  preferredSeason = null
 }) {
   const { t } = useTranslation()
   const portalTarget = useMemo(
@@ -124,13 +125,26 @@ export default function PlayerBadgeModal({
     const others = values.filter((key) => !/^\d{4}$/.test(key)).sort((a, b) => a.localeCompare(b))
     return [...numeric, ...others]
   }, [normalizedBadges])
+  
+  // preferredSeason이 제공되면 해당 시즌을 우선적으로 사용
   useEffect(() => {
     if (seasonOrder.length === 0) {
       // 비어있을 때는 현재 필터 유지 (다른 시즌 데이터가 있을 수 있음)
       return
     }
+    
+    // preferredSeason이 있고 유효하면 우선 사용
+    if (preferredSeason && preferredSeason !== 'all') {
+      const preferredKey = String(preferredSeason)
+      if (seasonOrder.includes(preferredKey)) {
+        setSeasonFilter(preferredKey)
+        return
+      }
+    }
+    
+    // preferredSeason이 없거나 유효하지 않으면 기본 로직 사용
     setSeasonFilter((prev) => (prev && seasonOrder.includes(prev)) ? prev : seasonOrder[0])
-  }, [seasonOrder])
+  }, [seasonOrder, preferredSeason])
   const filteredBadges = useMemo(
     () => (seasonFilter ? normalizedBadges.filter((badge) => badge.seasonKey === seasonFilter) : normalizedBadges),
     [normalizedBadges, seasonFilter]

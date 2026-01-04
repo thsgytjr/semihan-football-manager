@@ -499,6 +499,7 @@
     "loading": "Loading badges…",
     "error": "Failed to load badges. Please try again later.",
     "empty": "No challenge badges earned yet.",
+    "emptySeason": "No badges earned in {{season}} season yet.",
     "timelineTitle": "Acquisition Timeline",
     "timelineRecent": "Recent {{count}}",
     "dateUnknown": "Unknown date",

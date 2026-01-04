@@ -445,6 +445,7 @@ export default function Dashboard({
 
   const [badgeModalPlayer, setBadgeModalPlayer] = useState(null)
   const [badgeModalState, setBadgeModalState] = useState({ badges: [], loading: false, error: null, source: null })
+  const [badgeModalPreferredSeason, setBadgeModalPreferredSeason] = useState(null)
   const badgeLoadingRef = useRef(false) // 로딩 중 중복 방지
   const [statsModalPlayer, setStatsModalPlayer] = useState(null)
   const [momDetailPlayer, setMoMDetailPlayer] = useState(null)
@@ -1015,6 +1016,8 @@ export default function Dashboard({
     }
     setBadgeModalPlayer(modalPlayer)
     setBadgeModalState({ badges: [], loading: true, error: null, source: null })
+    // 현재 리더보드 시즌을 preferred season으로 저장
+    setBadgeModalPreferredSeason(leaderboardSeason !== 'all' ? leaderboardSeason : null)
     badgeLoadingRef.current = true
     
     // 로딩 중 중복 요청 방지
@@ -1050,7 +1053,7 @@ export default function Dashboard({
     }
 
     loadBadges()
-  }, [badgesEnabled, playerStatsEnabled, computeSeasonBadgeFallback])
+  }, [badgesEnabled, playerStatsEnabled, computeSeasonBadgeFallback, leaderboardSeason])
 
   useEffect(() => {
     if ((!badgesEnabled || !playerStatsEnabled) && badgeModalPlayer) {
@@ -1067,6 +1070,7 @@ export default function Dashboard({
   const closeBadgeModal = useCallback(() => {
     setBadgeModalPlayer(null)
     setBadgeModalState({ badges: [], loading: false, error: null, source: null })
+    setBadgeModalPreferredSeason(null)
     badgeLoadingRef.current = false
   }, [])
 
@@ -1852,6 +1856,7 @@ export default function Dashboard({
           error={badgeModalState.error}
           onClose={closeBadgeModal}
           onRefresh={refreshBadgeModal}
+          preferredSeason={badgeModalPreferredSeason}
         />
       )}
     </>

@@ -423,6 +423,7 @@
     "loading": "로딩 중…",
     "error": "뱃지를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.",
     "empty": "아직 획득한 챌린지 뱃지가 없습니다.",
+    "emptySeason": "{{season}} 시즌에는 아직 뱃지를 획득하지 못했어요.",
     "timelineTitle": "획득 타임라인",
     "timelineRecent": "최근 {{count}}건",
     "dateUnknown": "날짜 미상",
