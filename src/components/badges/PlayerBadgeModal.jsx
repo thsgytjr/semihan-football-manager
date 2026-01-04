@@ -120,11 +120,17 @@ export default function PlayerBadgeModal({
     normalizedBadges.forEach((badge) => {
       keys.add(badge.seasonKey || LEGACY_SEASON_KEY)
     })
+    
+    // preferredSeason이 있고 연도 형식이면 뱃지가 없어도 시즌 목록에 추가
+    if (preferredSeason && preferredSeason !== 'all' && /^\d{4}$/.test(String(preferredSeason))) {
+      keys.add(String(preferredSeason))
+    }
+    
     const values = Array.from(keys)
     const numeric = values.filter((key) => /^\d{4}$/.test(key)).sort((a, b) => Number(b) - Number(a))
     const others = values.filter((key) => !/^\d{4}$/.test(key)).sort((a, b) => a.localeCompare(b))
     return [...numeric, ...others]
-  }, [normalizedBadges])
+  }, [normalizedBadges, preferredSeason])
   
   // preferredSeason이 제공되면 해당 시즌을 우선적으로 사용
   useEffect(() => {
