@@ -41,6 +41,8 @@
           // 리다이렉트 페이지 표시
           document.addEventListener('DOMContentLoaded', function() {
             const teamName = hostname.includes('semihan') ? 'Semihan FC' : 'DKSC';
+            let countdown = 5;
+            
             document.body.innerHTML = `
               <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;padding:20px;text-align:center;">
                 <div style="background:white;border-radius:20px;padding:40px;max-width:500px;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
@@ -53,12 +55,24 @@
                   <button onclick="window.location.href='${newUrl}'" style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;border:none;padding:16px 48px;font-size:18px;font-weight:600;border-radius:12px;cursor:pointer;transition:transform 0.2s,box-shadow 0.2s;box-shadow:0 4px 14px rgba(102,126,234,0.4);" onmouseover="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(102,126,234,0.6)'" onmouseout="this.style.transform='translateY(0)';this.style.boxShadow='0 4px 14px rgba(102,126,234,0.4)'">
                     새 페이지로 이동하기 →
                   </button>
-                  <p style="font-size:14px;color:#718096;margin:24px 0 0 0;">
-                    5초 후 자동으로 이동됩니다...
+                  <p id="countdown" style="font-size:14px;color:#718096;margin:24px 0 0 0;">
+                    <span id="countdown-number" style="font-weight:700;color:#667eea;font-size:18px;">5</span>초 후 자동으로 이동됩니다...
                   </p>
                 </div>
               </div>
             `;
+            
+            // 카운트다운 업데이트
+            const countdownInterval = setInterval(function() {
+              countdown--;
+              const countdownEl = document.getElementById('countdown-number');
+              if (countdownEl) {
+                countdownEl.textContent = countdown;
+              }
+              if (countdown <= 0) {
+                clearInterval(countdownInterval);
+              }
+            }, 1000);
           });
           
           // 5초 후 자동 리다이렉트
